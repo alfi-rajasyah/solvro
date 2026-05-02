@@ -1,10 +1,11 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Modal } from "./Modal";
 import { ApiError } from "@/lib/api";
 import {
   type CustomerSummary,
   useCreateCustomer,
   useUpdateCustomer,
+  useUsers,
 } from "@/lib/queries";
 
 interface Props {
@@ -17,12 +18,32 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
   const isEdit = Boolean(customer);
   const create = useCreateCustomer();
   const update = useUpdateCustomer(customer?.id ?? 0);
+  const { data: users } = useUsers();
 
   const [name, setName] = useState("");
   const [accountManager, setAccountManager] = useState("");
   const [solutionArchitect, setSolutionArchitect] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
+
+  // Account Manager dropdown = TAM-role users + anyone with "*" permission.
+  // Solution Architect dropdown = SA-role users + anyone with "*" permission.
+  // Wildcard users (admin, custom roles like DIRECTOR/MANAGER with *) are
+  // always eligible for both roles.
+  const accountManagerOptions = useMemo(
+    () =>
+      (users ?? []).filter(
+        (u) => u.role === "TAM" || u.permissions.includes("*"),
+      ),
+    [users],
+  );
+  const solutionArchitectOptions = useMemo(
+    () =>
+      (users ?? []).filter(
+        (u) => u.role === "SA" || u.permissions.includes("*"),
+      ),
+    [users],
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -111,22 +132,40 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Account Manager">
-            <input
-              type="text"
+            <select
               value={accountManager}
               onChange={(e) => setAccountManager(e.target.value)}
-              maxLength={200}
               className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
+            >
+              <option value="">— None —</option>
+              {accountManagerOptions.map((u) => (
+                <option key={u.id} value={u.username}>
+                  {u.username} ({u.role})
+                </option>
+              ))}
+              {accountManager &&
+                !accountManagerOptions.some((u) => u.username === accountManager) && (
+                  <option value={accountManager}>{accountManager} (current)</option>
+                )}
+            </select>
           </Field>
           <Field label="Solution Architect">
-            <input
-              type="text"
+            <select
               value={solutionArchitect}
               onChange={(e) => setSolutionArchitect(e.target.value)}
-              maxLength={200}
               className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
+            >
+              <option value="">— None —</option>
+              {solutionArchitectOptions.map((u) => (
+                <option key={u.id} value={u.username}>
+                  {u.username} ({u.role})
+                </option>
+              ))}
+              {solutionArchitect &&
+                !solutionArchitectOptions.some((u) => u.username === solutionArchitect) && (
+                  <option value={solutionArchitect}>{solutionArchitect} (current)</option>
+                )}
+            </select>
           </Field>
         </div>
 

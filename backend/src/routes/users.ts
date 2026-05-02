@@ -12,16 +12,24 @@ usersRouter.get("/", async (_req, res) => {
       id: true,
       username: true,
       email: true,
-      role: { select: { roleName: true } },
+      role: { select: { roleName: true, permissions: true } },
     },
     orderBy: { username: "asc" },
   });
   res.json(
-    users.map((u) => ({
-      id: u.id,
-      username: u.username,
-      email: u.email,
-      role: u.role.roleName,
-    })),
+    users.map((u) => {
+      const permissions = Array.isArray(u.role.permissions)
+        ? (u.role.permissions as unknown[]).filter(
+            (p): p is string => typeof p === "string",
+          )
+        : [];
+      return {
+        id: u.id,
+        username: u.username,
+        email: u.email,
+        role: u.role.roleName,
+        permissions,
+      };
+    }),
   );
 });
