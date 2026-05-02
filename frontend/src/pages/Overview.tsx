@@ -153,9 +153,6 @@ function RecentProjects({ items }: { items: OverviewProject[] }) {
           >
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <span className="font-mono text-[11px] uppercase tracking-widest text-on-surface-variant">
-                  SOLV-{String(p.id).padStart(3, "0")}
-                </span>
                 <StatusChip status={p.status} />
               </div>
               <p className="mt-0.5 truncate text-sm font-semibold text-on-surface">

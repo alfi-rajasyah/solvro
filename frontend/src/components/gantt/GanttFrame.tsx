@@ -17,6 +17,7 @@ import {
 import {
   type Row,
   type ViewMode,
+  addDays,
   buildRows,
   computeChartEnd,
   computeChartStart,
@@ -26,6 +27,9 @@ import {
   startOfDay,
   toUtcMidnightISO,
 } from "@/lib/gantt/geometry";
+import { useGanttExport } from "@/lib/gantt/exportContext";
+import { exportGanttToExcel } from "@/lib/gantt/exportExcel";
+import { exportGanttToPdf } from "@/lib/gantt/exportPdf";
 import {
   type Task,
   type TaskStatus,
@@ -44,6 +48,7 @@ import type { RowDragData, RowDropData } from "./GanttListRow";
 
 interface GanttFrameProps {
   projectId: number;
+  projectName: string;
   baselineLockedAt: string | null;
   baselineLockedBy: { id: number; username: string } | null;
   onEditTask: (task: Task) => void;
@@ -58,6 +63,7 @@ const VIEW_MODES: { mode: ViewMode; label: string }[] = [
 
 export function GanttFrame({
   projectId,
+  projectName,
   baselineLockedAt,
   baselineLockedBy,
   onEditTask,
@@ -281,6 +287,74 @@ export function GanttFrame({
 
   const scrollToToday = useCallback(() => scrollToTodayPos("smooth"), [scrollToTodayPos]);
 
+  // Register Excel/PDF export handlers in the shared context so the
+  // RightSidebar (mounted by ProjectDetail, not by this component) can show
+  // an Export section while the Gantt is mounted. Re-registers when the
+  // dependent data changes; cleans up to null on unmount so the section
+  // hides when the user switches sub-routes.
+  const { register } = useGanttExport();
+  useEffect(() => {
+    if (!chartStart || !chartEnd) {
+      register(null);
+      return;
+    }
+    // Excel export uses a tight ±7-day window around the actual task range,
+    // not the chart's padded ±1-year window — otherwise the date grid is
+    // dominated by empty columns. Falls back to chartStart/chartEnd when
+    // there are no dated tasks (dateRange is null).
+    const excelStart = dateRange
+      ? startOfDay(addDays(dateRange.min, -7))
+      : chartStart;
+    const excelEnd = dateRange
+      ? startOfDay(addDays(dateRange.max, 7))
+      : chartEnd;
+    register({
+      excel: async () => {
+        try {
+          await exportGanttToExcel({
+            projectName,
+            rows,
+            chartStart: excelStart,
+            chartEnd: excelEnd,
+            holidays: holidays ?? [],
+          });
+        } catch (err) {
+          setActionError(
+            err instanceof Error ? err.message : "Excel export failed.",
+          );
+          throw err;
+        }
+      },
+      pdf: async () => {
+        try {
+          await exportGanttToPdf({
+            projectName,
+            rows,
+            exportStart: excelStart,
+            exportEnd: excelEnd,
+            holidays: holidays ?? [],
+          });
+        } catch (err) {
+          setActionError(
+            err instanceof Error ? err.message : "PDF export failed.",
+          );
+          throw err;
+        }
+      },
+    });
+    return () => register(null);
+  }, [
+    register,
+    projectName,
+    rows,
+    chartStart,
+    chartEnd,
+    dateRange,
+    holidays,
+    viewMode,
+    columnWidth,
+  ]);
+
   // Auto-scroll to today only on first paint of the chart and on view-mode
   // swaps. Intentionally NOT triggered by chartStart / rows.length changes —
   // dragging a bar past the current chart's min or max recomputes chartStart
@@ -471,7 +545,7 @@ export function GanttFrame({
                 width: LIST_PANE_WIDTH + contentWidth,
                 minHeight: AXIS_HEIGHT + rows.length * ROW_HEIGHT,
               }}
-              className="relative flex items-stretch"
+              className="relative flex items-stretch bg-surface-container-lowest"
             >
               <GanttListPane
                 rows={rows}

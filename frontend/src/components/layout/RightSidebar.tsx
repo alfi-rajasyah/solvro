@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
+import { useGanttExport } from "@/lib/gantt/exportContext";
 import type { ProjectStatus } from "@/lib/queries";
 import type { ProjectDetail as ProjectDetailType } from "@/lib/queries";
 
@@ -25,6 +27,25 @@ export function RightSidebar({
   blueprintVersion = "SA Blueprint v2.4",
   blueprintDocsUrl = "https://docs.solvro.dev/blueprints/v2.4",
 }: RightSidebarProps) {
+  const { handlers: exportHandlers } = useGanttExport();
+  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
+
+  async function runExport(kind: "excel" | "pdf") {
+    if (!exportHandlers || exporting) return;
+    setExportError(null);
+    setExporting(kind);
+    try {
+      await exportHandlers[kind]();
+    } catch (err) {
+      setExportError(
+        err instanceof Error ? err.message : "Export failed.",
+      );
+    } finally {
+      setExporting(null);
+    }
+  }
+
   return (
     <>
       {open && (
@@ -59,9 +80,6 @@ export function RightSidebar({
       <div className="space-y-6 overflow-y-auto px-5 py-5">
         <section>
           <div className="flex items-center gap-3">
-            <span className="font-mono text-[13px] font-semibold tracking-tight text-on-surface">
-              SOLV-{String(project.id).padStart(3, "0")}
-            </span>
             <span
               className={[
                 "rounded px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-widest",
@@ -148,6 +166,49 @@ export function RightSidebar({
             </div>
           </dl>
         </section>
+
+        {exportHandlers && (
+          <section>
+            <h3 className="mb-2 font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+              Export schedule
+            </h3>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => runExport("excel")}
+                disabled={exporting !== null}
+                className="inline-flex items-center justify-center gap-1.5 rounded border border-outline-variant bg-surface-container-lowest px-2.5 py-2 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-[16px]">
+                  table_view
+                </span>
+                {exporting === "excel" ? "Exporting…" : "Excel"}
+              </button>
+              <button
+                type="button"
+                onClick={() => runExport("pdf")}
+                disabled={exporting !== null}
+                className="inline-flex items-center justify-center gap-1.5 rounded border border-outline-variant bg-surface-container-lowest px-2.5 py-2 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-[16px]">
+                  picture_as_pdf
+                </span>
+                {exporting === "pdf" ? "Exporting…" : "PDF"}
+              </button>
+            </div>
+            <p className="mt-2 text-[10px] text-on-surface-variant">
+              Excel: tasks + visual date grid · PDF: full Gantt screenshot + task table.
+            </p>
+            {exportError && (
+              <div
+                role="alert"
+                className="mt-2 rounded border border-error/30 bg-error-container px-2 py-1.5 text-[11px] text-on-error-container"
+              >
+                {exportError}
+              </div>
+            )}
+          </section>
+        )}
 
         {project.customer && (
           <section>

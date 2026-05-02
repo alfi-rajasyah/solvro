@@ -4,6 +4,7 @@ import { RightSidebar } from "@/components/layout/RightSidebar";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { GanttExportProvider } from "@/lib/gantt/exportContext";
 import { type ProjectDetail as ProjectDetailType, useProject } from "@/lib/queries";
 
 const TABS = [
@@ -51,6 +52,7 @@ export function ProjectDetail() {
   }
 
   return (
+    <GanttExportProvider>
     <div
       className={[
         "flex h-full min-w-0 flex-col transition-[margin] duration-200 ease-out",
@@ -59,9 +61,6 @@ export function ProjectDetail() {
     >
       <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
         <div className="min-w-0">
-          <p className="font-mono text-[11px] uppercase tracking-widest text-on-surface-variant">
-            SOLV-{String(project.id).padStart(3, "0")}
-          </p>
           <div className="flex items-center gap-3">
             <h1 className="truncate font-display text-h2 text-on-surface">
               {project.name}
@@ -147,6 +146,7 @@ export function ProjectDetail() {
         onClose={() => setContextOpen(false)}
       />
     </div>
+    </GanttExportProvider>
   );
 }
 
