@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-05-02 — Admin can create new users from the Admin → Users tab
+
+- **[backend/src/routes/admin.ts](backend/src/routes/admin.ts)** — new `POST /admin/users` endpoint. Body: `{ email, username, password, role }`. Validates with Zod (email format, username 1–50 chars, password 8–200 chars, role from RoleName enum), rejects duplicate emails with 409, hashes the password with bcrypt, creates the user with the requested role. Returns the created user in the same shape `GET /admin/users` returns (so the frontend can drop it into the existing list cache).
+- **[frontend/src/lib/queries.ts](frontend/src/lib/queries.ts)** — new `useAdminCreateUser()` mutation hook. Invalidates both `adminQueryKeys.users` (admin user list) and `queryKeys.users` (the global lookup list used by assignee dropdowns) on success so the new user appears everywhere immediately.
+- **[frontend/src/pages/Admin.tsx](frontend/src/pages/Admin.tsx)** — added an "Add user" form at the top of the Users tab. Inputs: email, username, password, role (defaults to TAM). Submit button disables until all fields are filled and the password meets the 8-char minimum. Uses the same form layout pattern as the Service Catalogue's add-service form for visual consistency.
+
 ### Removed — 2026-05-02 — Untrack design/product docs from the repo
 
 - **UI Design/, PRD.md, DESIGN.md, .env.example** — `git rm --cached` and added to [.gitignore](.gitignore). Local copies preserved on the maintainer's machine; just no longer tracked. **Why:** these are design/reference assets, not deploy artifacts. The repo is now closer to "just what's needed to build and ship the app." Anyone who actually deploys the app uses `bash <(curl ...setup.sh)` and never browses the file tree, so the trimming is purely cosmetic — but it keeps the repo focused.
