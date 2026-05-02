@@ -3,7 +3,7 @@ import { Link, NavLink, Outlet, useOutletContext, useParams } from "react-router
 import { RightSidebar } from "@/components/layout/RightSidebar";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { ProjectStatusChip } from "@/components/StatusChip";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import { type ProjectDetail as ProjectDetailType, useProject } from "@/lib/queries";
 
 const TABS = [
@@ -26,7 +26,7 @@ export function ProjectDetail() {
 
   const { data: project, isLoading, isError, error } = useProject(projectId);
 
-  const canEdit = user?.role === "TAM" || user?.role === "ADMIN";
+  const canEdit = hasPermission(user, "project:write");
 
   if (isLoading) {
     return (

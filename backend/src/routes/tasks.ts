@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma, Priority, TaskStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, requireRole, type JwtPayload } from "../http/auth.js";
+import { requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { projectVisibilityFilter } from "./projects.js";
@@ -97,7 +97,7 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
 
 tasksRouter.patch(
   "/:id",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("task:write"),
   validate("params", idParamSchema),
   validate("body", updateTaskSchema),
   async (req, res) => {
@@ -150,7 +150,7 @@ tasksRouter.patch(
 
 tasksRouter.delete(
   "/:id",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("task:write"),
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;

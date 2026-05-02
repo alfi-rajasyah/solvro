@@ -21,6 +21,26 @@ export interface AuthUser {
   username: string;
   email: string;
   role: Role;
+  permissions: string[];
+}
+
+/**
+ * Permission check used by UI gates. Wildcard "*" grants everything; a
+ * specific permission grants just that one. Custom roles created in
+ * Admin > Roles can list any permission strings; the built-ins ship
+ * with the four standard ones (project:read|write, task:read|write,
+ * blueprint:* and report:read).
+ */
+export function hasPermission(
+  user: AuthUser | null | undefined,
+  permission: string,
+): boolean {
+  if (!user) return false;
+  // Defensive: a user object cached in localStorage from before the
+  // permissions field was introduced won't have it. Treat missing as empty
+  // so callers don't crash; the user gets fresh permissions on next login.
+  const perms = user.permissions ?? [];
+  return perms.includes("*") || perms.includes(permission);
 }
 
 interface LoginResponse {

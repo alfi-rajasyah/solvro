@@ -29,7 +29,16 @@ authRouter.post("/login", validate("body", loginSchema), async (req, res) => {
     throw new HttpError(403, "account_disabled", "Account has been deactivated");
   }
 
-  const token = signToken({ sub: user.id, role: user.role.roleName });
+  const permissions = Array.isArray(user.role.permissions)
+    ? (user.role.permissions as unknown[]).filter(
+        (p): p is string => typeof p === "string",
+      )
+    : [];
+  const token = signToken({
+    sub: user.id,
+    role: user.role.roleName,
+    permissions,
+  });
   res.json({
     token,
     user: {
@@ -37,6 +46,7 @@ authRouter.post("/login", validate("body", loginSchema), async (req, res) => {
       username: user.username,
       email: user.email,
       role: user.role.roleName,
+      permissions,
     },
   });
 });
@@ -46,11 +56,17 @@ authRouter.get("/me", requireAuth, async (req, res) => {
     where: { id: req.user!.sub },
     include: { role: true },
   });
+  const permissions = Array.isArray(user.role.permissions)
+    ? (user.role.permissions as unknown[]).filter(
+        (p): p is string => typeof p === "string",
+      )
+    : [];
   res.json({
     id: user.id,
     username: user.username,
     email: user.email,
     role: user.role.roleName,
+    permissions,
     createdAt: user.createdAt,
   });
 });

@@ -2,7 +2,12 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma, Priority, ProjectStatus, TaskStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, requireRole, type JwtPayload } from "../http/auth.js";
+import {
+  hasPermission,
+  requireAuth,
+  requirePermission,
+  type JwtPayload,
+} from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 
@@ -56,8 +61,10 @@ const taskListQuerySchema = z.object({
 });
 
 export function projectVisibilityFilter(user: JwtPayload): Prisma.ProjectWhereInput {
+  // Wildcard permission grants global visibility (built-in ADMIN, plus any
+  // custom role configured with "*" by the deployer in Admin > Roles).
+  if (hasPermission(user, "*")) return {};
   switch (user.role) {
-    case "ADMIN":
     case "STAKEHOLDER":
       return {};
     case "TAM":
@@ -65,10 +72,10 @@ export function projectVisibilityFilter(user: JwtPayload): Prisma.ProjectWhereIn
     case "SA":
       return { saId: user.sub };
     default:
-      // Custom (admin-created) roles: no project visibility by default.
-      // Grant access by assigning them as TAM/SA on specific projects, or
-      // extend this switch / move to a permissions-based check.
-      return { id: { in: [] } };
+      // Custom roles without "*": only see projects they're directly
+      // assigned to (as TAM or SA on the project row). Admin can grant
+      // broader access by adding "*" to that role's permissions.
+      return { OR: [{ tamId: user.sub }, { saId: user.sub }] };
   }
 }
 
@@ -95,7 +102,7 @@ projectsRouter.get("/", validate("query", projectListQuerySchema), async (req, r
 
 projectsRouter.post(
   "/",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("project:write"),
   validate("body", createProjectSchema),
   async (req, res) => {
     const body = req.body as z.infer<typeof createProjectSchema>;
@@ -147,7 +154,7 @@ const lockBaselineSchema = z.object({
 
 projectsRouter.post(
   "/:id/baseline",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("project:write"),
   validate("params", idParamSchema),
   validate("body", lockBaselineSchema),
   async (req, res) => {
@@ -204,7 +211,7 @@ projectsRouter.post(
 
 projectsRouter.patch(
   "/:id",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("project:write"),
   validate("params", idParamSchema),
   validate("body", updateProjectSchema),
   async (req, res) => {
@@ -246,7 +253,7 @@ projectsRouter.get(
 
 projectsRouter.post(
   "/:id/tasks",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("project:write"),
   validate("params", idParamSchema),
   validate("body", createTaskSchema),
   async (req, res) => {
@@ -305,7 +312,7 @@ projectsRouter.get(
 
 projectsRouter.post(
   "/:id/sections",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("project:write"),
   validate("params", idParamSchema),
   validate("body", createSectionSchema),
   async (req, res) => {
@@ -347,7 +354,7 @@ projectsRouter.get(
 
 projectsRouter.post(
   "/:id/labels",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("project:write"),
   validate("params", idParamSchema),
   validate("body", createLabelSchema),
   async (req, res) => {

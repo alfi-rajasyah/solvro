@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { ProjectStatusChip } from "@/components/StatusChip";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import { type ProjectSummary, useCustomers, useProjects } from "@/lib/queries";
 
 export function Projects() {
@@ -17,7 +17,7 @@ export function Projects() {
   );
   const [createOpen, setCreateOpen] = useState(false);
 
-  const canCreate = user?.role === "TAM" || user?.role === "ADMIN";
+  const canCreate = hasPermission(user, "project:write");
 
   function setCustomerFilter(id: number | "") {
     const next = new URLSearchParams(searchParams);

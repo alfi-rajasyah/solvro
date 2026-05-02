@@ -4,7 +4,7 @@ import { CustomerFormModal } from "@/components/CustomerFormModal";
 import { EmptyState } from "@/components/EmptyState";
 import { Tabs } from "@/components/Tabs";
 import { ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import {
   type CustomerDetail as CustomerDetailType,
   type CustomerServiceAssignment,
@@ -30,7 +30,7 @@ export function CustomerDetail() {
   const customerId = id ? Number(id) : null;
   const navigate = useNavigate();
   const { user } = useAuth();
-  const canMutate = user?.role === "TAM" || user?.role === "ADMIN";
+  const canMutate = hasPermission(user, "project:write");
 
   const { data: customer, isLoading, isError, error } = useCustomer(customerId);
   const deleteCustomer = useDeleteCustomer();

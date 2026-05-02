@@ -5,7 +5,7 @@ import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { TaskStatusChip } from "@/components/StatusChip";
 import { TaskFormModal } from "@/components/TaskFormModal";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import { type Priority, type Task, type TaskStatus, useProjectTasks, useUpdateTask } from "@/lib/queries";
 
 const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
@@ -18,7 +18,7 @@ export function ProjectTimeline() {
   const updateTask = useUpdateTask(project.id);
   const [editTask, setEditTask] = useState<Task | null>(null);
 
-  const canEdit = user?.role === "TAM" || user?.role === "ADMIN";
+  const canEdit = hasPermission(user, "task:write");
 
   const ordered = useMemo(() => {
     if (!tasks) return [];
