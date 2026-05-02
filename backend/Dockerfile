@@ -27,6 +27,7 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 COPY package*.json ./
 COPY prisma ./prisma
+COPY scripts ./scripts
 RUN npm ci --omit=dev \
     && npx prisma generate \
     && npm cache clean --force
