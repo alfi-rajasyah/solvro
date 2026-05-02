@@ -109,10 +109,6 @@ export function Login() {
           </button>
         </form>
 
-        <p className="mt-6 text-[11px] text-on-surface-variant">
-          Dev seed: <span className="font-mono">tam.charlie@solvro.local</span> /{" "}
-          <span className="font-mono">password123</span>
-        </p>
       </div>
     </div>
   );
