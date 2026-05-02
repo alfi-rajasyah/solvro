@@ -26,7 +26,10 @@ export function createApp(): Express {
   app.use(helmet());
   app.use(
     cors({
-      origin: env.CORS_ORIGIN.split(",").map((s) => s.trim()),
+      origin:
+        env.CORS_ORIGIN.trim() === "*"
+          ? true
+          : env.CORS_ORIGIN.split(",").map((s) => s.trim()),
       credentials: false,
     }),
   );

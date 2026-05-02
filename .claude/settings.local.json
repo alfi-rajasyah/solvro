@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Bash(grep -v \"^$\")",
-      "Bash(sed 's/\"$//')",
-      "Bash(awk '/^## \\\\[Unreleased\\\\]/,/^## \\\\[/ { print NR\": \"$0 }' /Users/alfirajasyah/Documents/Solvro/CHANGELOG.md)"
-    ]
-  }
-}
