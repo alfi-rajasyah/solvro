@@ -26,22 +26,15 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // Account Manager dropdown = TAM-role users + anyone with "*" permission.
-  // Solution Architect dropdown = SA-role users + anyone with "*" permission.
-  // Wildcard users (admin, custom roles like DIRECTOR/MANAGER with *) are
-  // always eligible for both roles.
+  // Account Manager / Solution Architect dropdowns: literal TAM/SA-role
+  // users only. Wildcard-permission users (admin etc.) are kept out so
+  // these pickers stay clean and structural.
   const accountManagerOptions = useMemo(
-    () =>
-      (users ?? []).filter(
-        (u) => u.role === "TAM" || u.permissions.includes("*"),
-      ),
+    () => (users ?? []).filter((u) => u.role === "TAM"),
     [users],
   );
   const solutionArchitectOptions = useMemo(
-    () =>
-      (users ?? []).filter(
-        (u) => u.role === "SA" || u.permissions.includes("*"),
-      ),
+    () => (users ?? []).filter((u) => u.role === "SA"),
     [users],
   );
 
