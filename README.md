@@ -40,24 +40,12 @@ When a Solution Architect finalizes a technical design, Solvro ingests the data,
 ## 🚀 Getting Started (Development)
 
 ### **Prerequisites**
-* Mac with Docker Desktop installed.
-* Go 1.22+ installed locally (for IDE support).
+* Docker Installed
 
 ### **Installation**
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/your-org/solvro.git
-   cd solvro
+1. Oneliner:
    ```
-
-2. Set up environment variables:
-   ```bash
-   cp .env.example .env
-   ```
-
-3. Run the application using Docker Compose:
-   ```bash
-   docker-compose up -d --build
+     bash <(curl -sSL https://raw.githubusercontent.com/alfi-rajasyah/solvro/main/setup.sh)
    ```
 
 4. Access at `http://localhost:8080`.
