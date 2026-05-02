@@ -38,6 +38,17 @@ export function addDays(d: Date, n: number): Date {
   return x;
 }
 
+// Encode a local-timezone Date as the ISO string for UTC midnight on the same
+// calendar date. Plain `startOfDay(d).toISOString()` would shift the date
+// backward in any positive-UTC timezone (e.g. local 2026-05-15T00:00:00+07:00
+// → 2026-05-14T17:00:00Z), and parseISODate splits on "T" so the round-trip
+// would silently lose a day. UTC midnight round-trips losslessly.
+export function toUtcMidnightISO(d: Date): string {
+  return new Date(
+    Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()),
+  ).toISOString();
+}
+
 export function startOfMondayWeek(d: Date): Date {
   const x = startOfDay(d);
   const day = x.getDay();
