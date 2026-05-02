@@ -21,20 +21,20 @@ The full source of truth for product/design intent is three artifacts:
 
 Implementation lives under [backend/](backend/) (Express + Prisma + Postgres) and [frontend/](frontend/) (Vite + React + Tailwind), orchestrated by the root [docker-compose.yml](docker-compose.yml) for dev. Both apps are scaffolded and substantially built — see [CHANGELOG.md](CHANGELOG.md) for the running record of what exists and the configuration decisions behind it.
 
-**Production deployment** is a separate path: [docker-compose.prod.yml](docker-compose.prod.yml) pulls prebuilt images from GHCR (`ghcr.io/${IMAGE_OWNER}/solvro-{backend,frontend}:${IMAGE_TAG}`) published by [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml). The prod backend runs `prisma migrate deploy` on startup; the prod frontend is served by **nginx** (see [frontend/Dockerfile](frontend/Dockerfile) + [frontend/nginx.conf](frontend/nginx.conf)) on port 80, **not** Vite. Env vars for prod (`IMAGE_OWNER`, `IMAGE_TAG`, `POSTGRES_PASSWORD`, `JWT_SECRET`, `CORS_ORIGIN`) come from the host shell or a `.env` next to the compose file. When changing env contracts, update both compose files.
+**Single compose file, prod-shaped.** [docker-compose.yml](docker-compose.yml) is the only compose file in the repo and it pulls prebuilt images from GHCR (`ghcr.io/${IMAGE_OWNER}/solvro-{backend,frontend}:${IMAGE_TAG}`) published by [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml). The backend runs `prisma migrate deploy` on startup; the frontend is served by **nginx** (see [frontend/Dockerfile](frontend/Dockerfile) + [frontend/nginx.conf](frontend/nginx.conf)) on port 80, **not** Vite. Required env (`IMAGE_OWNER`, `IMAGE_TAG`, `POSTGRES_PASSWORD`, `JWT_SECRET`, `CORS_ORIGIN`) comes from a `.env` next to the compose file. **Dev workflow:** there is no dev compose anymore — `docker compose up -d postgres` starts only Postgres in Docker, then run backend and frontend natively with `npm run dev` (see "Common commands" below). Postgres exposes `${POSTGRES_PORT:-5432}` to the host so the native backend can connect.
 
 When the user asks for changes that touch visuals, tokens, or layout, reconcile against **DESIGN.md first, then the mockups** — the mockups occasionally drift from the spec (see "Known design drift" below).
 
 ## Common commands
 
-Local Postgres + backend + frontend, all together:
+Single compose file ([docker-compose.yml](docker-compose.yml)) is prod-shaped: pulls images from GHCR, runs migrations on backend startup, exposes nginx on `:80`. **It is not a dev convenience** — running `docker compose up` will try to pull `ghcr.io/${IMAGE_OWNER}/...` and will fail without credentials/IMAGE_OWNER set. For dev, use the host-side workflow below: only Postgres in Docker, backend and frontend run natively.
 
 ```bash
-cp .env.example .env   # first run only; generate JWT_SECRET as the comment instructs
-docker compose up      # postgres :5432, backend :3000, frontend :5173
+cp .env.example .env                 # first run only; generate JWT_SECRET as the comment instructs
+docker compose up -d postgres        # only Postgres — exposes ${POSTGRES_PORT:-5432} to host
 ```
 
-Host-side dev (recommended when iterating on a single tier — Postgres still runs in Docker):
+Host-side dev (the supported dev workflow — Postgres in Docker, app tiers native):
 
 ```bash
 docker compose up -d postgres
