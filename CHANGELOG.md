@@ -15,6 +15,18 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-05-03 — Risk Management view (Risk Register Table) on Project Detail
+
+New project sub-view at `/projects/:id/risks`, sitting next to **Timeline** in the project tab nav. Implements a full risk register:
+
+- **Schema** — [backend/prisma/schema.prisma](backend/prisma/schema.prisma): new `Risk` model (`description` text, `category` enum, `probability` 1–5, `impact` 1–5, `status` enum, `mitigationPlan` / `contingencyPlan` long text, timestamps) plus two enums `RiskCategory` (EXTERNAL / INTERNAL / TECHNICAL / ORGANIZATIONAL / FINANCIAL) and `RiskStatus` (OPEN / MITIGATED / CLOSED). `Risk` cascades on project delete. Indexed on `projectId`, `status`, `category`. Migration: [20260502185229_add_risks](backend/prisma/migrations/20260502185229_add_risks/). Score is **not stored** — it's a derived field (`probability × impact`) computed in the UI to keep the source of truth single.
+- **Backend routes** — [backend/src/routes/risks.ts](backend/src/routes/risks.ts) for `PATCH /risks/:id` and `DELETE /risks/:id`; project-scoped `GET /projects/:id/risks` and `POST /projects/:id/risks` added to [backend/src/routes/projects.ts](backend/src/routes/projects.ts). Both project-scoped endpoints honour `projectVisibilityFilter` (so SAs/TAMs only see risks on projects they can already see). Item-scoped PATCH/DELETE re-resolve the parent project through the same filter to prevent cross-project access. Writes gated by `requirePermission("project:write")`. Mounted at `/risks` in [backend/src/app.ts](backend/src/app.ts).
+- **Frontend data layer** — [frontend/src/lib/queries.ts](frontend/src/lib/queries.ts): `Risk`, `RiskCategory`, `RiskStatus` types; query key `projectRisks(id)`; hooks `useProjectRisks`, `useCreateRisk`, `useUpdateRisk` (with optimistic update for inline cell edits), `useDeleteRisk`.
+- **Form modal** — [frontend/src/components/RiskFormModal.tsx](frontend/src/components/RiskFormModal.tsx): create/edit modal with description, category, status, probability/impact (1–5 selects with descriptive labels), live-computed score with color band, and the two long-text plans. Exports the `scoreClass` and `scoreLevel` helpers so the table view can reuse them.
+- **View** — [frontend/src/pages/views/ProjectRisks.tsx](frontend/src/pages/views/ProjectRisks.tsx): summary tiles (count by High/Medium/Low + Open), search input (description + plans), category filter, status filter, plus a dense table with inline editable Probability / Impact / Status cells (uses `useUpdateRisk`'s optimistic update to keep the cell snappy). Score cell is color-coded: 1–8 emerald (Low), 9–15 amber (Medium), 16–25 error/red (High). Mobile fallback below `md:` is a stacked card list (matching the project-wide pattern). Tab/route wired in [frontend/src/App.tsx](frontend/src/App.tsx) and [frontend/src/pages/ProjectDetail.tsx](frontend/src/pages/ProjectDetail.tsx).
+
+Why a derived `riskScore` instead of a stored column: any time prob/impact changes the cached score has to be recomputed; storing it would either require a trigger or risk drift between the inputs and the stored score. The UI computes it anywhere it's shown, so there's no source of staleness.
+
 ### Changed — 2026-05-03 — Task editor: drop baseline-date fields; List view shows task description under the title
 
 Two unrelated UX trims to the task surface:

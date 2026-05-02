@@ -158,6 +158,29 @@ export interface OverviewResponse {
   recentTasks: OverviewTask[];
 }
 
+export type RiskCategory =
+  | "EXTERNAL"
+  | "INTERNAL"
+  | "TECHNICAL"
+  | "ORGANIZATIONAL"
+  | "FINANCIAL";
+
+export type RiskStatus = "OPEN" | "MITIGATED" | "CLOSED";
+
+export interface Risk {
+  id: number;
+  projectId: number;
+  description: string;
+  category: RiskCategory;
+  probability: number;
+  impact: number;
+  status: RiskStatus;
+  mitigationPlan: string | null;
+  contingencyPlan: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface TasksFilter {
   status?: TaskStatus;
   priority?: Priority;
@@ -180,6 +203,7 @@ export const queryKeys = {
   projectTasks: (id: number) => ["projects", id, "tasks"] as const,
   projectLabels: (id: number) => ["projects", id, "labels"] as const,
   projectSections: (id: number) => ["projects", id, "sections"] as const,
+  projectRisks: (id: number) => ["projects", id, "risks"] as const,
   customers: ["customers"] as const,
   customer: (id: number) => ["customers", id] as const,
   tasks: (filter?: TasksFilter) => ["tasks", filter ?? {}] as const,
@@ -620,6 +644,78 @@ export function useDeleteSection(projectId: number) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
+    },
+  });
+}
+
+export function useProjectRisks(id: number | null) {
+  return useQuery({
+    queryKey: id ? queryKeys.projectRisks(id) : ["projects", "noop", "risks"],
+    queryFn: ({ signal }) =>
+      apiRequest<Risk[]>(`/projects/${id}/risks`, { signal }),
+    enabled: id !== null,
+  });
+}
+
+export interface CreateRiskInput {
+  description: string;
+  category?: RiskCategory;
+  probability?: number;
+  impact?: number;
+  status?: RiskStatus;
+  mitigationPlan?: string | null;
+  contingencyPlan?: string | null;
+}
+
+export type UpdateRiskInput = Partial<CreateRiskInput>;
+
+export function useCreateRisk(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateRiskInput) =>
+      apiRequest<Risk>(`/projects/${projectId}/risks`, {
+        method: "POST",
+        body: input,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectRisks(projectId) });
+    },
+  });
+}
+
+export function useUpdateRisk(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: number; patch: UpdateRiskInput }) =>
+      apiRequest<Risk>(`/risks/${id}`, { method: "PATCH", body: patch }),
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.projectRisks(projectId) });
+      const prev = qc.getQueryData<Risk[]>(queryKeys.projectRisks(projectId));
+      if (prev) {
+        qc.setQueryData<Risk[]>(
+          queryKeys.projectRisks(projectId),
+          prev.map((r) => (r.id === id ? ({ ...r, ...patch } as Risk) : r)),
+        );
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev)
+        qc.setQueryData(queryKeys.projectRisks(projectId), ctx.prev);
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectRisks(projectId) });
+    },
+  });
+}
+
+export function useDeleteRisk(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiRequest<void>(`/risks/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectRisks(projectId) });
     },
   });
 }

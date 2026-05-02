@@ -17,6 +17,7 @@ import { customersRouter } from "./routes/customers.js";
 import { sectionsRouter } from "./routes/sections.js";
 import { holidaysRouter } from "./routes/holidays.js";
 import { servicesRouter } from "./routes/services.js";
+import { risksRouter } from "./routes/risks.js";
 import { adminRouter } from "./routes/admin.js";
 
 export function createApp(): Express {
@@ -47,6 +48,7 @@ export function createApp(): Express {
   app.use("/sections", sectionsRouter);
   app.use("/holidays", holidaysRouter);
   app.use("/services", servicesRouter);
+  app.use("/risks", risksRouter);
   app.use("/admin", adminRouter);
 
   app.use(notFoundHandler);
