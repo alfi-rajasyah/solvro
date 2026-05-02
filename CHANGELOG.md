@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-05-02 — Untrack design/product docs from the repo
+
+- **UI Design/, PRD.md, DESIGN.md, .env.example** — `git rm --cached` and added to [.gitignore](.gitignore). Local copies preserved on the maintainer's machine; just no longer tracked. **Why:** these are design/reference assets, not deploy artifacts. The repo is now closer to "just what's needed to build and ship the app." Anyone who actually deploys the app uses `bash <(curl ...setup.sh)` and never browses the file tree, so the trimming is purely cosmetic — but it keeps the repo focused.
+
 ### Fixed — 2026-05-02 — Runtime image now ships `scripts/create-admin.ts`
 
 - **[backend/Dockerfile](backend/Dockerfile)** — added `COPY scripts ./scripts` to the runtime stage. Without it, `docker compose exec backend npx tsx scripts/create-admin.ts` (run by setup.sh after the backend is healthy) failed with `ERR_MODULE_NOT_FOUND` because the runtime image only had `prisma/` and `dist/`. The dev stage was unaffected (it does a full `COPY . .` for hot reload).

@@ -26,3 +26,9 @@ backend/prisma/migrations/dev.db*
 # Claude Code working files (local-only, not for the public repo)
 CLAUDE.md
 .claude/
+
+# Design / product docs — kept locally for reference, not needed in the repo
+UI Design/
+PRD.md
+DESIGN.md
+.env.example
