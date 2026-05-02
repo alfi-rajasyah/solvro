@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-05-02 — Stale cached user blocks UI permission gates after upgrade
+
+- **[frontend/src/lib/auth.tsx](frontend/src/lib/auth.tsx)** — `AuthProvider` now calls `GET /auth/me` on boot whenever a token is present, and overwrites the cached user with the fresh response. Symptom this fixes: deployments upgraded from a pre-`permissions` bundle had `user` objects in localStorage without a `permissions` array, so `hasPermission(user, "project:write")` returned false and the "+ New Customer" / "+ New Project" buttons were hidden even for admins with `*`. Previously the only workaround was to log out and back in. If `/auth/me` 401s (token expired/invalid), the user is logged out cleanly.
+
 ### Added — 2026-05-02 — Admin can permanently delete users
 
 - **[backend/src/routes/admin.ts](backend/src/routes/admin.ts)** — new `DELETE /admin/users/:id` endpoint. Refuses self-delete (admin cannot delete themselves). Pre-checks all FK relations: if the target user has any projects (as TAM or SA), locked baselines, assigned tasks, or comments, returns 400 with a list of blockers (e.g. `"3 project(s) as TAM, 12 assigned task(s)"`). Admin must reassign or clear those first. If clean, hard-deletes the row.
