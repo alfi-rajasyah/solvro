@@ -40,7 +40,7 @@ export function Admin() {
 
   return (
     <div className="flex h-full flex-col">
-      <header className="border-b border-outline-variant px-6 py-4">
+      <header className="border-b border-outline-variant px-4 py-4 md:px-6">
         <h1 className="font-display text-2xl font-bold tracking-tight text-on-surface">
           Admin
         </h1>
@@ -48,11 +48,11 @@ export function Admin() {
           Manage users, force-reassign project ownership, and curate the global service
           catalogue.
         </p>
-        <div className="mt-4">
+        <div className="mt-4 overflow-x-auto">
           <Tabs items={TAB_ITEMS} active={tab} onChange={setTab} />
         </div>
       </header>
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-4 md:p-6">
         {tab === "users" && <UsersTab />}
         {tab === "roles" && <RolesTab />}
         {tab === "projects" && <ProjectsTab />}
@@ -189,7 +189,7 @@ function UsersTab() {
         onSubmit={handleCreate}
         className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
       >
-        <label className="flex-1 min-w-[160px]">
+        <label className="w-full md:flex-1 md:min-w-[160px]">
           <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Email
           </span>
@@ -201,7 +201,7 @@ function UsersTab() {
             className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
           />
         </label>
-        <label className="flex-1 min-w-[120px]">
+        <label className="w-full md:flex-1 md:min-w-[120px]">
           <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Username
           </span>
@@ -214,7 +214,7 @@ function UsersTab() {
             className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
           />
         </label>
-        <label className="flex-1 min-w-[140px]">
+        <label className="w-full md:flex-1 md:min-w-[140px]">
           <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Password (min 8)
           </span>
@@ -226,7 +226,7 @@ function UsersTab() {
             className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
           />
         </label>
-        <label className="min-w-[120px]">
+        <label className="w-full md:w-auto md:min-w-[120px]">
           <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Role
           </span>
@@ -250,7 +250,7 @@ function UsersTab() {
             !newUsername.trim() ||
             newPassword.length < 8
           }
-          className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+          className="w-full rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
         >
           {createUser.isPending ? "Adding…" : "Add user"}
         </button>
@@ -450,7 +450,7 @@ function RolesTab() {
         onSubmit={handleCreate}
         className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
       >
-        <label className="flex-1 min-w-[160px]">
+        <label className="w-full md:flex-1 md:min-w-[160px]">
           <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Role name (uppercase)
           </span>
@@ -463,7 +463,7 @@ function RolesTab() {
             className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm uppercase focus:border-primary focus:outline-none"
           />
         </label>
-        <label className="flex-[2] min-w-[240px]">
+        <label className="w-full md:flex-[2] md:min-w-[240px]">
           <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Permissions (comma-separated, optional)
           </span>
@@ -478,7 +478,7 @@ function RolesTab() {
         <button
           type="submit"
           disabled={createRole.isPending || !newName.trim()}
-          className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+          className="w-full rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
         >
           {createRole.isPending ? "Adding…" : "Add role"}
         </button>
@@ -792,7 +792,7 @@ function ServicesTab() {
         onSubmit={handleAdd}
         className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
       >
-        <label className="flex-1 min-w-[160px]">
+        <label className="w-full md:flex-1 md:min-w-[160px]">
           <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Name
           </span>
@@ -805,7 +805,7 @@ function ServicesTab() {
             className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
           />
         </label>
-        <label className="flex-[2] min-w-[240px]">
+        <label className="w-full md:flex-[2] md:min-w-[240px]">
           <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Description
           </span>
@@ -821,7 +821,7 @@ function ServicesTab() {
         <button
           type="submit"
           disabled={create.isPending || !newName.trim()}
-          className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+          className="w-full rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
         >
           {create.isPending ? "Adding…" : "Add service"}
         </button>

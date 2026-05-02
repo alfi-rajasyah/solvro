@@ -35,14 +35,14 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-inverse-surface/40 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-[100] flex items-stretch justify-center bg-inverse-surface/40 p-0 backdrop-blur-sm md:items-center md:p-4"
       onMouseDown={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`w-full ${widthClass} rounded-lg border border-outline-variant bg-surface-container-lowest shadow-xl`}
+        className={`flex w-full ${widthClass} flex-col rounded-none border-outline-variant bg-surface-container-lowest shadow-xl md:h-auto md:rounded-lg md:border`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         <header className="flex items-center justify-between border-b border-outline-variant px-5 py-4">
@@ -56,7 +56,7 @@ export function Modal({
             <span className="material-symbols-outlined text-base">close</span>
           </button>
         </header>
-        <div className="px-5 py-4">{children}</div>
+        <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
           <footer className="flex justify-end gap-2 border-t border-outline-variant bg-surface-container-low px-5 py-3">
             {footer}

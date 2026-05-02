@@ -11,7 +11,7 @@ interface TabsProps<K extends string> {
 
 export function Tabs<K extends string>({ items, active, onChange }: TabsProps<K>) {
   return (
-    <nav className="flex gap-1 border-b border-outline-variant">
+    <nav className="flex gap-1 whitespace-nowrap border-b border-outline-variant">
       {items.map((item) => {
         const isActive = item.key === active;
         return (

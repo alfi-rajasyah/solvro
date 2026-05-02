@@ -3,6 +3,7 @@ import { GanttFrame } from "@/components/gantt/GanttFrame";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import type { Task } from "@/lib/queries";
 import { useProjectContext } from "../ProjectDetail";
+import { ProjectList } from "./ProjectList";
 
 export function ProjectGantt() {
   const { project } = useProjectContext();
@@ -14,13 +15,18 @@ export function ProjectGantt() {
 
   return (
     <>
-      <GanttFrame
-        projectId={project.id}
-        baselineLockedAt={project.baselineLockedAt}
-        baselineLockedBy={project.baselineLockedBy}
-        onEditTask={setEditTask}
-        onCreateTaskOpen={(sectionId) => setCreateState({ open: true, sectionId })}
-      />
+      <div className="hidden min-h-0 min-w-0 flex-1 md:block">
+        <GanttFrame
+          projectId={project.id}
+          baselineLockedAt={project.baselineLockedAt}
+          baselineLockedBy={project.baselineLockedBy}
+          onEditTask={setEditTask}
+          onCreateTaskOpen={(sectionId) => setCreateState({ open: true, sectionId })}
+        />
+      </div>
+      <div className="md:hidden">
+        <ProjectList />
+      </div>
 
       {editTask && (
         <TaskFormModal

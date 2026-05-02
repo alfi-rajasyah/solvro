@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme";
+import { useSidebar } from "./SidebarContext";
 
 const PAGE_TITLES: Record<string, string> = {
   overview: "Overview",
@@ -14,6 +15,7 @@ const PAGE_TITLES: Record<string, string> = {
 export function TopBar() {
   const { user, logout } = useAuth();
   const { resolved, toggle } = useTheme();
+  const { toggle: toggleSidebar } = useSidebar();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -35,13 +37,21 @@ export function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-40 ml-16 flex h-16 items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-6 font-display">
-      <div className="flex items-center gap-8">
-        <span className="text-lg font-bold text-on-surface">{title}</span>
+    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-4 font-display md:ml-16 md:px-6">
+      <div className="flex min-w-0 items-center gap-3 md:gap-8">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          aria-label="Open navigation"
+          className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface md:hidden"
+        >
+          <span className="material-symbols-outlined">menu</span>
+        </button>
+        <span className="truncate text-lg font-bold text-on-surface">{title}</span>
       </div>
 
-      <div className="flex items-center gap-4">
-        <div className="relative">
+      <div className="flex items-center gap-2 md:gap-4">
+        <div className="relative hidden md:block">
           <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant">
             search
           </span>

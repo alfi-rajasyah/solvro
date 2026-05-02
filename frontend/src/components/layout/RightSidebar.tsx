@@ -26,10 +26,19 @@ export function RightSidebar({
   blueprintDocsUrl = "https://docs.solvro.dev/blueprints/v2.4",
 }: RightSidebarProps) {
   return (
-    <aside
+    <>
+      {open && (
+        <button
+          type="button"
+          onClick={onClose}
+          aria-label="Close project context"
+          className="fixed inset-0 z-30 bg-black/40 backdrop-blur-[1px] md:hidden"
+        />
+      )}
+      <aside
       aria-hidden={!open}
       className={[
-        "fixed right-0 top-16 bottom-0 z-30 w-80 transform border-l border-outline-variant bg-surface-container-low/95 font-display backdrop-blur-md transition-transform duration-200 ease-out",
+        "fixed right-0 top-16 bottom-0 z-40 w-full transform border-l border-outline-variant bg-surface-container-low/95 font-display backdrop-blur-md transition-transform duration-200 ease-out md:z-30 md:w-context-panel",
         open ? "translate-x-0" : "translate-x-full",
       ].join(" ")}
     >
@@ -174,5 +183,6 @@ export function RightSidebar({
         )}
       </div>
     </aside>
+    </>
   );
 }
