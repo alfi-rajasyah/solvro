@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-05-02 — Runtime image now ships `scripts/create-admin.ts`
+
+- **[backend/Dockerfile](backend/Dockerfile)** — added `COPY scripts ./scripts` to the runtime stage. Without it, `docker compose exec backend npx tsx scripts/create-admin.ts` (run by setup.sh after the backend is healthy) failed with `ERR_MODULE_NOT_FOUND` because the runtime image only had `prisma/` and `dist/`. The dev stage was unaffected (it does a full `COPY . .` for hot reload).
+
 ### Fixed — 2026-05-02 — Backend image's `dist/index.js` was at the wrong path (longstanding latent bug)
 
 - **[backend/tsconfig.json](backend/tsconfig.json)** — `rootDir` changed from `"."` to `"src"`, and `include` reduced from `["prisma/**/*.ts", "src/**/*.ts"]` to `["src/**/*.ts"]`. **Why:** with the previous config, tsc preserved the project structure when emitting and produced `dist/src/index.js` + `dist/prisma/seed.js`. The Dockerfile's runtime `CMD ["node", "dist/index.js"]` looked at the wrong path — there was never a `dist/index.js` at the top of `dist/`. The container died at startup with `Error: Cannot find module '/app/dist/index.js'`. Earlier deploys never noticed because the backend was crashing earlier in its startup chain (P1000 from postgres password mismatch) before it ever reached `node dist/index.js`. Once setup.sh fixed the postgres state, this latent bug surfaced. After the fix, `npm run build` emits `dist/index.js` directly. **`prisma/seed.ts` and `scripts/create-admin.ts` are unaffected** — both run via `tsx` (which interprets TypeScript at runtime) and don't need to be in tsc's compile set.
