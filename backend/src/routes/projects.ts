@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Prisma, Priority, ProjectStatus, TaskStatus } from "@prisma/client";
+import { Prisma, Priority, ProjectStatus, RiskCategory, RiskStatus, TaskStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import {
   hasPermission,
@@ -330,6 +330,68 @@ projectsRouter.post(
       },
     });
     res.status(201).json(section);
+  },
+);
+
+// Project-scoped risks
+const createRiskSchema = z.object({
+  description: z.string().min(1).max(2000),
+  category: z.nativeEnum(RiskCategory).optional(),
+  probability: z.number().int().min(1).max(5).optional(),
+  impact: z.number().int().min(1).max(5).optional(),
+  status: z.nativeEnum(RiskStatus).optional(),
+  mitigationPlan: z.string().max(4000).nullable().optional(),
+  contingencyPlan: z.string().max(4000).nullable().optional(),
+});
+
+projectsRouter.get(
+  "/:id/risks",
+  validate("params", idParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
+    const project = await prisma.project.findFirst({
+      where: { id, ...filter },
+      select: { id: true },
+    });
+    if (!project) throw new HttpError(404, "not_found", "Project not found");
+
+    const risks = await prisma.risk.findMany({
+      where: { projectId: id },
+      orderBy: [{ status: "asc" }, { id: "desc" }],
+    });
+    res.json(risks);
+  },
+);
+
+projectsRouter.post(
+  "/:id/risks",
+  requirePermission("project:write"),
+  validate("params", idParamSchema),
+  validate("body", createRiskSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
+    const project = await prisma.project.findFirst({
+      where: { id, ...filter },
+      select: { id: true },
+    });
+    if (!project) throw new HttpError(404, "not_found", "Project not found");
+
+    const body = req.body as z.infer<typeof createRiskSchema>;
+    const risk = await prisma.risk.create({
+      data: {
+        projectId: id,
+        description: body.description,
+        category: body.category ?? "INTERNAL",
+        probability: body.probability ?? 1,
+        impact: body.impact ?? 1,
+        status: body.status ?? "OPEN",
+        mitigationPlan: body.mitigationPlan ?? null,
+        contingencyPlan: body.contingencyPlan ?? null,
+      },
+    });
+    res.status(201).json(risk);
   },
 );
 
