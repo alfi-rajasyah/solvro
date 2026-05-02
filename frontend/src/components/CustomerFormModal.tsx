@@ -26,13 +26,9 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // Account Manager / Solution Architect dropdowns: literal TAM/SA-role
-  // users only. Wildcard-permission users (admin etc.) are kept out so
-  // these pickers stay clean and structural.
-  const accountManagerOptions = useMemo(
-    () => (users ?? []).filter((u) => u.role === "TAM"),
-    [users],
-  );
+  // Solution Architect is a dropdown of literal SA-role users.
+  // Account Manager is a free-text field — AMs may not have user
+  // accounts in this system at all (external sales contacts, etc.).
   const solutionArchitectOptions = useMemo(
     () => (users ?? []).filter((u) => u.role === "SA"),
     [users],
@@ -125,22 +121,14 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
 
         <div className="grid grid-cols-2 gap-3">
           <Field label="Account Manager">
-            <select
+            <input
+              type="text"
               value={accountManager}
               onChange={(e) => setAccountManager(e.target.value)}
+              maxLength={200}
+              placeholder="Free text — anyone, internal or external"
               className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-            >
-              <option value="">— None —</option>
-              {accountManagerOptions.map((u) => (
-                <option key={u.id} value={u.username}>
-                  {u.username} ({u.role})
-                </option>
-              ))}
-              {accountManager &&
-                !accountManagerOptions.some((u) => u.username === accountManager) && (
-                  <option value={accountManager}>{accountManager} (current)</option>
-                )}
-            </select>
+            />
           </Field>
           <Field label="Solution Architect">
             <select
