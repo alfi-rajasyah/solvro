@@ -1,15 +1,15 @@
 import { Router } from "express";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, type JwtPayload } from "../http/auth.js";
+import { hasPermission, requireAuth, type JwtPayload } from "../http/auth.js";
 
 export const overviewRouter = Router();
 
 overviewRouter.use(requireAuth);
 
 function projectScope(user: JwtPayload): Prisma.ProjectWhereInput {
+  if (hasPermission(user, "*")) return {};
   switch (user.role) {
-    case "ADMIN":
     case "STAKEHOLDER":
       return {};
     case "TAM":
@@ -17,7 +17,7 @@ function projectScope(user: JwtPayload): Prisma.ProjectWhereInput {
     case "SA":
       return { saId: user.sub };
     default:
-      return { id: { in: [] } };
+      return { OR: [{ tamId: user.sub }, { saId: user.sub }] };
   }
 }
 

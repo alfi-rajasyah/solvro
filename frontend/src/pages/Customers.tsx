@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { CustomerFormModal } from "@/components/CustomerFormModal";
 import { EmptyState } from "@/components/EmptyState";
 import { ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import {
   type CustomerSummary,
   useCustomers,
@@ -18,7 +18,7 @@ export function Customers() {
   const [editing, setEditing] = useState<CustomerSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const canMutate = user?.role === "TAM" || user?.role === "ADMIN";
+  const canMutate = hasPermission(user, "project:write");
 
   async function handleDelete(c: CustomerSummary) {
     if (!confirm(`Delete customer "${c.name}"? Linked projects keep their tasks but lose the customer link.`)) return;

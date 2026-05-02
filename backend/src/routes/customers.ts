@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { requireAuth, requireRole } from "../http/auth.js";
+import { requireAuth, requirePermission } from "../http/auth.js";
 // services router lives in ./services.ts; this file owns the customer-side mapping.
 import { validate } from "../http/validate.js";
 
@@ -69,7 +69,7 @@ const assignServicesSchema = z.object({
 
 customersRouter.put(
   "/:id/services",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("project:write"),
   validate("params", idParamSchema),
   validate("body", assignServicesSchema),
   async (req, res) => {
@@ -108,7 +108,7 @@ customersRouter.put(
 
 customersRouter.post(
   "/",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("project:write"),
   validate("body", createCustomerSchema),
   async (req, res) => {
     const body = req.body as z.infer<typeof createCustomerSchema>;
@@ -126,7 +126,7 @@ customersRouter.post(
 
 customersRouter.patch(
   "/:id",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("project:write"),
   validate("params", idParamSchema),
   validate("body", updateCustomerSchema),
   async (req, res) => {
@@ -146,7 +146,7 @@ customersRouter.patch(
 
 customersRouter.delete(
   "/:id",
-  requireRole("TAM", "ADMIN"),
+  requirePermission("project:write"),
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;

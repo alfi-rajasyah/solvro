@@ -4,7 +4,7 @@ import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { InlineDateRangeEditor } from "@/components/InlineDateRangeEditor";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import {
   type Section,
   type Task,
@@ -19,7 +19,7 @@ import {
 export function ProjectList() {
   const { project } = useProjectContext();
   const { user } = useAuth();
-  const canEdit = user?.role === "TAM" || user?.role === "ADMIN";
+  const canEdit = hasPermission(user, "task:write");
 
   const { data: tasks, isLoading: tasksLoading, isError, error } = useProjectTasks(project.id);
   const { data: sections, isLoading: sectionsLoading } = useProjectSections(project.id);

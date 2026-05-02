@@ -7,7 +7,7 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import {
   AXIS_HEIGHT,
   COLUMN_DEFAULT_WIDTH,
@@ -63,7 +63,7 @@ export function GanttFrame({
   onCreateTaskOpen,
 }: GanttFrameProps) {
   const { user } = useAuth();
-  const canEdit = user?.role === "TAM" || user?.role === "ADMIN";
+  const canEdit = hasPermission(user, "task:write");
 
   const { data: tasks, isLoading, isError, error } = useProjectTasks(projectId);
   const { data: sections } = useProjectSections(projectId);
