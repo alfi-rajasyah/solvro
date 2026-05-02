@@ -45,7 +45,7 @@ When a Solution Architect finalizes a technical design, Solvro ingests the data,
 ### **Installation**
 1. Oneliner:
    ```
-     bash <(curl -sSL https://raw.githubusercontent.com/alfi-rajasyah/solvro/main/setup.sh)
+   bash <(curl -sSL https://raw.githubusercontent.com/alfi-rajasyah/solvro/main/setup.sh)
    ```
 
 4. Access at `http://localhost:8080`.
