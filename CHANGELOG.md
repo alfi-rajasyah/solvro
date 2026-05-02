@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-05-03 — Task editor: drop baseline-date fields; List view shows task description under the title
+
+Two unrelated UX trims to the task surface:
+
+- **[frontend/src/components/TaskFormModal.tsx](frontend/src/components/TaskFormModal.tsx)** — removed the entire "Baseline Dates" subsection (the dashed-border block with `baselineStartDate` / `baselineDueDate` inputs and the explanatory caption), along with the four supporting locals (`baselineStartDate`, `baselineDueDate` state, the two `setBaseline*` reset paths in the open-effect, and the `baselineStartIso` / `baselineDueIso` payload fields on the update mutation). Baseline planning is conceptually a *Gantt-only* concern — it's the visual delta between planned vs. actual that only makes sense in the bar-chart context. Mixing it into a per-task editor invited stale baselines and clutter. Schedule edits in the editor still use the regular `startDate` / `dueDate` fields. The backend still accepts `baselineStartDate` / `baselineDueDate` patches; the editor simply no longer writes to them. When a Gantt-side baseline UI is wired up (separate task), it can re-introduce these fields in the right place.
+- **[frontend/src/pages/views/ProjectList.tsx](frontend/src/pages/views/ProjectList.tsx)** — task description now renders **inline to the right** of the title (separated by an em-dash, single-line truncated) in all four row variants (top-level desktop, top-level mobile, subtask desktop, subtask mobile). Title is `shrink-0 truncate` so it never collapses; description gets the remaining space (`min-w-0 truncate`) and is clipped if the row is narrow. Picked inline over the original "stacked under title" layout because the row is already a single-line grid — stacking pushed the row height up and broke vertical rhythm with neighbouring rows. Description only renders when present, so empty-description rows look identical to before. Helps users scan the list view without needing to open every task to see what it's actually about.
+
 ### Removed — 2026-05-03 — `SOLV-XXX` ID badges everywhere; `T-XXX` from low-value sites
 
 The `SOLV-XXX` and `T-XXX` strings were pure frontend renderings of the database autoincrement integer IDs (`String(id).padStart(3, "0")` with a hardcoded prefix). Audit confirmed they were never used in routing (URLs key off raw int), never sent to the backend API (purely cosmetic), not searchable (TopBar search non-functional), and not in PRD.md / DESIGN.md as product requirements. They came from the mockups as visual filler. Cleaned up the noise:
