@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Prisma, Priority, ProjectStatus, RoleName, TaskStatus } from "@prisma/client";
+import { Prisma, Priority, ProjectStatus, TaskStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { requireAuth, requireRole, type JwtPayload } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
@@ -64,6 +64,11 @@ export function projectVisibilityFilter(user: JwtPayload): Prisma.ProjectWhereIn
       return { tamId: user.sub };
     case "SA":
       return { saId: user.sub };
+    default:
+      // Custom (admin-created) roles: no project visibility by default.
+      // Grant access by assigning them as TAM/SA on specific projects, or
+      // extend this switch / move to a permissions-based check.
+      return { id: { in: [] } };
   }
 }
 

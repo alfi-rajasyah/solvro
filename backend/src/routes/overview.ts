@@ -16,6 +16,8 @@ function projectScope(user: JwtPayload): Prisma.ProjectWhereInput {
       return { tamId: user.sub };
     case "SA":
       return { saId: user.sub };
+    default:
+      return { id: { in: [] } };
   }
 }
 

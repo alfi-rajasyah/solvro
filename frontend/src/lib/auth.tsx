@@ -9,7 +9,12 @@ import {
 } from "react";
 import { apiRequest, getToken, setToken } from "./api";
 
-export type Role = "SA" | "TAM" | "ADMIN" | "STAKEHOLDER";
+// Built-in role names referenced structurally by backend (project visibility,
+// requireAdmin gate). Custom roles created via Admin > Roles tab use other
+// strings; the type is `string` to allow them.
+export type Role = string;
+export const BUILTIN_ROLES = ["SA", "TAM", "ADMIN", "STAKEHOLDER"] as const;
+export type BuiltinRole = (typeof BUILTIN_ROLES)[number];
 
 export interface AuthUser {
   id: number;

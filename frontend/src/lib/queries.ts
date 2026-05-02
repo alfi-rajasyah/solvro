@@ -654,7 +654,60 @@ export interface AdminProject {
 export const adminQueryKeys = {
   users: ["admin", "users"] as const,
   projects: ["admin", "projects"] as const,
+  roles: ["admin", "roles"] as const,
 };
+
+export interface AdminRole {
+  id: number;
+  roleName: string;
+  permissions: string[];
+  userCount: number;
+  builtIn: boolean;
+}
+
+export function useAdminRoles() {
+  return useQuery({
+    queryKey: adminQueryKeys.roles,
+    queryFn: ({ signal }) => apiRequest<AdminRole[]>("/admin/roles", { signal }),
+  });
+}
+
+export function useAdminCreateRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: { roleName: string; permissions: string[] }) =>
+      apiRequest<AdminRole>("/admin/roles", { method: "POST", body: input }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminQueryKeys.roles });
+    },
+  });
+}
+
+export function useAdminUpdateRolePermissions() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, permissions }: { id: number; permissions: string[] }) =>
+      apiRequest<AdminRole>(`/admin/roles/${id}`, {
+        method: "PATCH",
+        body: { permissions },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminQueryKeys.roles });
+    },
+  });
+}
+
+export function useAdminDeleteRole() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiRequest<void>(`/admin/roles/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminQueryKeys.roles });
+      qc.invalidateQueries({ queryKey: adminQueryKeys.users });
+    },
+  });
+}
 
 export function useAdminUsers() {
   return useQuery({

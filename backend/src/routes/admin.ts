@@ -2,7 +2,6 @@ import { Router } from "express";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcrypt";
 import { z } from "zod";
-import { RoleName } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { requireAuth, requireAdmin } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
@@ -15,6 +14,13 @@ export const adminRouter = Router();
 adminRouter.use(requireAuth, requireAdmin);
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+// Built-in roles cannot be deleted or renamed: backend code (visibility
+// filters in routes/projects.ts, requireAdmin gate, requireRole guards)
+// references these names structurally. Custom roles created via
+// POST /admin/roles can have arbitrary names but won't trigger those
+// hardcoded code paths.
+const BUILTIN_ROLES = new Set(["ADMIN", "SA", "TAM", "STAKEHOLDER"]);
 
 // ---- Users ----------------------------------------------------------------
 
@@ -49,7 +55,7 @@ const createUserSchema = z.object({
   email: z.string().email(),
   username: z.string().min(1).max(50),
   password: z.string().min(8).max(200),
-  role: z.nativeEnum(RoleName),
+  role: z.string().min(1).max(50),
 });
 
 adminRouter.post(
@@ -65,9 +71,12 @@ adminRouter.post(
       throw new HttpError(409, "email_in_use", "A user with that email already exists");
     }
 
-    const targetRole = await prisma.role.findUniqueOrThrow({
+    const targetRole = await prisma.role.findUnique({
       where: { roleName: role },
     });
+    if (!targetRole) {
+      throw new HttpError(400, "role_not_found", `Role "${role}" does not exist`);
+    }
     const passwordHash = await bcrypt.hash(password, 10);
 
     const created = await prisma.user.create({
@@ -95,7 +104,7 @@ adminRouter.post(
   },
 );
 
-const updateRoleSchema = z.object({ role: z.nativeEnum(RoleName) });
+const updateRoleSchema = z.object({ role: z.string().min(1).max(50) });
 
 adminRouter.patch(
   "/users/:id/role",
@@ -108,7 +117,10 @@ adminRouter.patch(
     if (req.user!.sub === id) {
       throw new HttpError(400, "self_demote", "Admins cannot change their own role");
     }
-    const target = await prisma.role.findUniqueOrThrow({ where: { roleName: role } });
+    const target = await prisma.role.findUnique({ where: { roleName: role } });
+    if (!target) {
+      throw new HttpError(400, "role_not_found", `Role "${role}" does not exist`);
+    }
     const updated = await prisma.user.update({
       where: { id },
       data: { roleId: target.id },
@@ -163,6 +175,141 @@ adminRouter.post(
     const passwordHash = await bcrypt.hash(tempPassword, 10);
     await prisma.user.update({ where: { id }, data: { passwordHash } });
     res.json({ tempPassword });
+  },
+);
+
+// ---- Roles -----------------------------------------------------------------
+
+adminRouter.get("/roles", async (_req, res) => {
+  const roles = await prisma.role.findMany({
+    orderBy: { roleName: "asc" },
+    select: {
+      id: true,
+      roleName: true,
+      permissions: true,
+      _count: { select: { users: true } },
+    },
+  });
+  res.json(
+    roles.map((r) => ({
+      id: r.id,
+      roleName: r.roleName,
+      permissions: r.permissions,
+      userCount: r._count.users,
+      builtIn: BUILTIN_ROLES.has(r.roleName),
+    })),
+  );
+});
+
+const createRoleSchema = z.object({
+  roleName: z
+    .string()
+    .min(1)
+    .max(50)
+    .regex(/^[A-Z0-9_]+$/, "Role name must be uppercase letters, digits, or underscores"),
+  permissions: z.array(z.string().min(1).max(100)).max(50).default([]),
+});
+
+adminRouter.post(
+  "/roles",
+  validate("body", createRoleSchema),
+  async (req, res) => {
+    const { roleName, permissions } = req.body as z.infer<typeof createRoleSchema>;
+
+    if (BUILTIN_ROLES.has(roleName)) {
+      throw new HttpError(
+        409,
+        "role_builtin",
+        `"${roleName}" is a built-in role and already exists`,
+      );
+    }
+    const existing = await prisma.role.findUnique({ where: { roleName } });
+    if (existing) {
+      throw new HttpError(409, "role_exists", `Role "${roleName}" already exists`);
+    }
+
+    const created = await prisma.role.create({
+      data: { roleName, permissions },
+      select: {
+        id: true,
+        roleName: true,
+        permissions: true,
+      },
+    });
+    res
+      .status(201)
+      .json({ ...created, userCount: 0, builtIn: false });
+  },
+);
+
+const updateRolePermissionsSchema = z.object({
+  permissions: z.array(z.string().min(1).max(100)).max(50),
+});
+
+adminRouter.patch(
+  "/roles/:id",
+  validate("params", idParamSchema),
+  validate("body", updateRolePermissionsSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const { permissions } = req.body as z.infer<typeof updateRolePermissionsSchema>;
+
+    const existing = await prisma.role.findUnique({ where: { id } });
+    if (!existing) throw new HttpError(404, "role_not_found", "Role not found");
+    if (existing.roleName === "ADMIN") {
+      throw new HttpError(
+        400,
+        "role_admin_immutable",
+        "ADMIN role permissions cannot be changed (always full access)",
+      );
+    }
+
+    const updated = await prisma.role.update({
+      where: { id },
+      data: { permissions },
+      select: {
+        id: true,
+        roleName: true,
+        permissions: true,
+        _count: { select: { users: true } },
+      },
+    });
+    res.json({
+      id: updated.id,
+      roleName: updated.roleName,
+      permissions: updated.permissions,
+      userCount: updated._count.users,
+      builtIn: BUILTIN_ROLES.has(updated.roleName),
+    });
+  },
+);
+
+adminRouter.delete(
+  "/roles/:id",
+  validate("params", idParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const role = await prisma.role.findUnique({
+      where: { id },
+      include: { _count: { select: { users: true } } },
+    });
+    if (!role) throw new HttpError(404, "role_not_found", "Role not found");
+    if (BUILTIN_ROLES.has(role.roleName)) {
+      throw new HttpError(
+        400,
+        "role_builtin",
+        "Built-in roles cannot be deleted",
+      );
+    }
+    if (role._count.users > 0) {
+      throw new HttpError(
+        400,
+        "role_in_use",
+        `Role "${role.roleName}" still has ${role._count.users} user(s); reassign them first`,
+      );
+    }
+    await prisma.role.delete({ where: { id } });
+    res.status(204).end();
   },
 );
 

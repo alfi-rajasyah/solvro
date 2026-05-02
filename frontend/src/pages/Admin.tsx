@@ -3,14 +3,19 @@ import { Tabs } from "@/components/Tabs";
 import { ApiError } from "@/lib/api";
 import {
   type AdminProject,
+  type AdminRole,
   type AdminUser,
   type Service,
+  useAdminCreateRole,
   useAdminCreateUser,
+  useAdminDeleteRole,
   useAdminProjects,
   useAdminReassignProject,
   useAdminResetPassword,
+  useAdminRoles,
   useAdminSetActive,
   useAdminUpdateRole,
+  useAdminUpdateRolePermissions,
   useAdminUsers,
   useCreateService,
   useDeleteService,
@@ -20,15 +25,14 @@ import {
 import type { Role } from "@/lib/auth";
 import { useAuth } from "@/lib/auth";
 
-type Tab = "users" | "projects" | "services";
+type Tab = "users" | "roles" | "projects" | "services";
 
 const TAB_ITEMS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: "users", label: "Users" },
+  { key: "roles", label: "Roles" },
   { key: "projects", label: "Project Override" },
   { key: "services", label: "Service Catalogue" },
 ];
-
-const ROLE_OPTIONS: Role[] = ["SA", "TAM", "ADMIN", "STAKEHOLDER"];
 
 export function Admin() {
   const [tab, setTab] = useState<Tab>("users");
@@ -49,6 +53,7 @@ export function Admin() {
       </header>
       <div className="flex-1 overflow-auto p-6">
         {tab === "users" && <UsersTab />}
+        {tab === "roles" && <RolesTab />}
         {tab === "projects" && <ProjectsTab />}
         {tab === "services" && <ServicesTab />}
       </div>
@@ -61,6 +66,7 @@ export function Admin() {
 function UsersTab() {
   const { user: currentUser } = useAuth();
   const { data: users, isLoading, isError } = useAdminUsers();
+  const { data: roles } = useAdminRoles();
   const createUser = useAdminCreateUser();
   const updateRole = useAdminUpdateRole();
   const setActive = useAdminSetActive();
@@ -73,6 +79,11 @@ function UsersTab() {
   const [newUsername, setNewUsername] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState<Role>("TAM");
+
+  const roleOptions = useMemo<Role[]>(
+    () => (roles ?? []).map((r) => r.roleName),
+    [roles],
+  );
 
   if (isLoading) return <p className="text-on-surface-variant">Loading users…</p>;
   if (isError || !users) return <p className="text-error">Failed to load users.</p>;
@@ -206,7 +217,7 @@ function UsersTab() {
             onChange={(e) => setNewRole(e.target.value as Role)}
             className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-none"
           >
-            {ROLE_OPTIONS.map((r) => (
+            {roleOptions.map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>
@@ -262,7 +273,7 @@ function UsersTab() {
                       className="rounded border border-outline-variant bg-surface px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
                       title={isSelf ? "You cannot change your own role" : undefined}
                     >
-                      {ROLE_OPTIONS.map((r) => (
+                      {roleOptions.map((r) => (
                         <option key={r} value={r}>
                           {r}
                         </option>
@@ -302,6 +313,246 @@ function UsersTab() {
                       >
                         Reset password
                       </button>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+// ---- Roles tab ------------------------------------------------------------
+
+function RolesTab() {
+  const { data: roles, isLoading, isError } = useAdminRoles();
+  const createRole = useAdminCreateRole();
+  const updatePerms = useAdminUpdateRolePermissions();
+  const deleteRole = useAdminDeleteRole();
+  const [error, setError] = useState<string | null>(null);
+  const [newName, setNewName] = useState("");
+  const [newPerms, setNewPerms] = useState("");
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editPerms, setEditPerms] = useState("");
+
+  if (isLoading) return <p className="text-on-surface-variant">Loading roles…</p>;
+  if (isError || !roles) return <p className="text-error">Failed to load roles.</p>;
+
+  function parsePerms(raw: string): string[] {
+    return raw
+      .split(/[,\n]/)
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0);
+  }
+
+  async function handleCreate(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    const trimmed = newName.trim().toUpperCase();
+    if (!trimmed) return;
+    if (!/^[A-Z0-9_]+$/.test(trimmed)) {
+      setError("Role name must be uppercase letters, digits, or underscores.");
+      return;
+    }
+    try {
+      await createRole.mutateAsync({
+        roleName: trimmed,
+        permissions: parsePerms(newPerms),
+      });
+      setNewName("");
+      setNewPerms("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not create role.");
+    }
+  }
+
+  function startEdit(r: AdminRole) {
+    setEditingId(r.id);
+    setEditPerms(r.permissions.join(", "));
+    setError(null);
+  }
+
+  async function saveEdit() {
+    if (editingId === null) return;
+    setError(null);
+    try {
+      await updatePerms.mutateAsync({
+        id: editingId,
+        permissions: parsePerms(editPerms),
+      });
+      setEditingId(null);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save permissions.");
+    }
+  }
+
+  async function handleDelete(r: AdminRole) {
+    if (!confirm(`Delete role "${r.roleName}"? It currently has no users.`)) return;
+    setError(null);
+    try {
+      await deleteRole.mutateAsync(r.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not delete role.");
+    }
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-on-surface-variant">
+        Built-in roles (ADMIN, SA, TAM, STAKEHOLDER) are referenced by name in
+        backend code and cannot be deleted or renamed. Custom roles you create
+        here can be assigned to users but won't trigger built-in code paths
+        (e.g. project visibility filters) — grant access by assigning users
+        directly as TAM/SA on specific projects.
+      </p>
+
+      {error && (
+        <div className="rounded border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
+          {error}
+        </div>
+      )}
+
+      <form
+        onSubmit={handleCreate}
+        className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
+      >
+        <label className="flex-1 min-w-[160px]">
+          <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Role name (uppercase)
+          </span>
+          <input
+            type="text"
+            value={newName}
+            onChange={(e) => setNewName(e.target.value)}
+            maxLength={50}
+            placeholder="e.g. MANAGER"
+            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm uppercase focus:border-primary focus:outline-none"
+          />
+        </label>
+        <label className="flex-[2] min-w-[240px]">
+          <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Permissions (comma-separated, optional)
+          </span>
+          <input
+            type="text"
+            value={newPerms}
+            onChange={(e) => setNewPerms(e.target.value)}
+            placeholder="project:read, task:write"
+            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+          />
+        </label>
+        <button
+          type="submit"
+          disabled={createRole.isPending || !newName.trim()}
+          className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+        >
+          {createRole.isPending ? "Adding…" : "Add role"}
+        </button>
+      </form>
+
+      <div className="overflow-x-auto rounded border border-outline-variant bg-surface">
+        <table className="w-full text-left text-sm">
+          <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+            <tr>
+              <th className="px-3 py-2">Role</th>
+              <th className="px-3 py-2">Permissions</th>
+              <th className="px-3 py-2 text-right">Users</th>
+              <th className="px-3 py-2 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {roles.map((r) => {
+              const isAdmin = r.roleName === "ADMIN";
+              const isEditing = editingId === r.id;
+              return (
+                <tr
+                  key={r.id}
+                  className="border-b border-outline-variant/60 last:border-0"
+                >
+                  <td className="px-3 py-2 align-top">
+                    <span className="font-mono font-medium text-on-surface">
+                      {r.roleName}
+                    </span>
+                    {r.builtIn && (
+                      <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 font-display text-[9px] font-bold uppercase tracking-wider text-primary">
+                        Built-in
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 align-top text-on-surface-variant">
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editPerms}
+                        onChange={(e) => setEditPerms(e.target.value)}
+                        className="w-full rounded border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                      />
+                    ) : r.permissions.length === 0 ? (
+                      <span className="text-on-surface-variant/60">—</span>
+                    ) : (
+                      <span className="font-mono text-[12px]">
+                        {r.permissions.join(", ")}
+                      </span>
+                    )}
+                  </td>
+                  <td className="px-3 py-2 align-top text-right font-mono text-[12px] text-on-surface-variant">
+                    {r.userCount}
+                  </td>
+                  <td className="px-3 py-2 align-top">
+                    <div className="flex items-center justify-end gap-1">
+                      {isEditing ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={saveEdit}
+                            disabled={updatePerms.isPending}
+                            className="rounded bg-primary px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
+                          >
+                            Save
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                            className="rounded px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+                          >
+                            Cancel
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => startEdit(r)}
+                            disabled={isAdmin}
+                            className="rounded px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
+                            title={
+                              isAdmin
+                                ? "ADMIN permissions are always full access"
+                                : undefined
+                            }
+                          >
+                            Edit perms
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDelete(r)}
+                            disabled={r.builtIn || r.userCount > 0}
+                            className="rounded px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
+                            title={
+                              r.builtIn
+                                ? "Built-in role"
+                                : r.userCount > 0
+                                  ? "Reassign users first"
+                                  : undefined
+                            }
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
                     </div>
                   </td>
                 </tr>

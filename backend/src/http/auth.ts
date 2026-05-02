@@ -1,12 +1,11 @@
 import type { RequestHandler } from "express";
 import jwt, { type SignOptions } from "jsonwebtoken";
-import { RoleName } from "@prisma/client";
 import { env } from "../env.js";
 import { HttpError } from "./errors.js";
 
 export interface JwtPayload {
   sub: number;
-  role: RoleName;
+  role: string;
 }
 
 declare module "express-serve-static-core" {
@@ -27,10 +26,10 @@ export function verifyToken(token: string): JwtPayload {
   }
   const sub = decoded.sub;
   const role = (decoded as { role?: unknown }).role;
-  if (typeof sub !== "number" || typeof role !== "string" || !(role in RoleName)) {
+  if (typeof sub !== "number" || typeof role !== "string" || role.length === 0) {
     throw new HttpError(401, "invalid_token", "Invalid token payload");
   }
-  return { sub, role: role as RoleName };
+  return { sub, role };
 }
 
 export const requireAuth: RequestHandler = (req, _res, next) => {
@@ -47,7 +46,7 @@ export const requireAuth: RequestHandler = (req, _res, next) => {
   }
 };
 
-export function requireRole(...roles: RoleName[]): RequestHandler {
+export function requireRole(...roles: string[]): RequestHandler {
   return (req, _res, next) => {
     if (!req.user) return next(new HttpError(401, "unauthenticated", "Not authenticated"));
     if (!roles.includes(req.user.role)) {
