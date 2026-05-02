@@ -224,7 +224,7 @@ export function GanttBar({
     <>
       {baselineRect && (
         <div
-          className="absolute pointer-events-none rounded-full border border-dashed border-slate-500/70 bg-slate-300/15"
+          className="absolute pointer-events-none rounded border border-dashed border-slate-500/70 bg-slate-300/15"
           style={{
             left: baselineRect.left,
             width: baselineRect.width,
@@ -238,7 +238,7 @@ export function GanttBar({
       )}
     <div
       className={[
-        "absolute select-none rounded-full overflow-hidden",
+        "absolute select-none rounded overflow-hidden",
         STATUS_FILL[status],
         canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
         ghost ? "ring-2 ring-primary/60 shadow-md" : "shadow-sm",

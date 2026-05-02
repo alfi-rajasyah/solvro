@@ -52,8 +52,8 @@ const config: Config = {
         xl: "0.75rem",
       },
       fontFamily: {
-        display: ['"Space Grotesk"', "system-ui", "sans-serif"],
-        body: ["Inter", "system-ui", "sans-serif"],
+        display: ['"Source Sans 3"', "system-ui", "sans-serif"],
+        body: ['"Source Sans 3"', "system-ui", "sans-serif"],
       },
       fontSize: {
         h1: ["32px", { lineHeight: "1.2", fontWeight: "600" }],

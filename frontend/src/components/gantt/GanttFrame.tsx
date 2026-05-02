@@ -24,6 +24,7 @@ import {
   positionFor,
   rowsDateRange,
   startOfDay,
+  toUtcMidnightISO,
 } from "@/lib/gantt/geometry";
 import {
   type Task,
@@ -163,8 +164,8 @@ export function GanttFrame({
         await updateTask.mutateAsync({
           id: taskId,
           patch: {
-            startDate: startOfDay(startDate).toISOString(),
-            dueDate: startOfDay(dueDate).toISOString(),
+            startDate: toUtcMidnightISO(startDate),
+            dueDate: toUtcMidnightISO(dueDate),
           },
         });
       } catch (err) {
@@ -280,13 +281,24 @@ export function GanttFrame({
 
   const scrollToToday = useCallback(() => scrollToTodayPos("smooth"), [scrollToTodayPos]);
 
-  // Auto-scroll to today on first paint of the chart and whenever the
-  // chart's coordinate system changes (view mode swap rebuilds the axis).
+  // Auto-scroll to today only on first paint of the chart and on view-mode
+  // swaps. Intentionally NOT triggered by chartStart / rows.length changes —
+  // dragging a bar past the current chart's min or max recomputes chartStart
+  // (since chartStart is padded around the rows' date range), which would
+  // otherwise yank the user back to today every time they reschedule a task
+  // outside the visible window.
+  const didInitialScrollRef = useRef(false);
+  const lastScrolledViewModeRef = useRef<ViewMode | null>(null);
   useEffect(() => {
     if (!chartStart || rows.length === 0) return;
+    const isFirst = !didInitialScrollRef.current;
+    const viewModeChanged = lastScrolledViewModeRef.current !== viewMode;
+    if (!isFirst && !viewModeChanged) return;
+    didInitialScrollRef.current = true;
+    lastScrolledViewModeRef.current = viewMode;
     const id = requestAnimationFrame(() => scrollToTodayPos("auto"));
     return () => cancelAnimationFrame(id);
-  }, [chartStart, viewMode, columnWidth, rows.length, scrollToTodayPos]);
+  }, [chartStart, viewMode, rows.length, scrollToTodayPos]);
 
   const handleAddSection = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
