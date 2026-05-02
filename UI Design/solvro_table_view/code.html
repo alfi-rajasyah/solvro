@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&amp;family=Inter:wght@300;400;500;600&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "surface-container-highest": "#e1e2ec",
+                      "surface": "#f9f9ff",
+                      "error-container": "#ffdad6",
+                      "outline-variant": "#c2c6d6",
+                      "on-secondary-fixed": "#131b2e",
+                      "primary": "#0058be",
+                      "primary-fixed": "#d8e2ff",
+                      "on-primary": "#ffffff",
+                      "on-error": "#ffffff",
+                      "outline": "#727785",
+                      "on-secondary-container": "#5c647a",
+                      "secondary": "#565e74",
+                      "on-primary-container": "#fefcff",
+                      "inverse-surface": "#2e3038",
+                      "tertiary-fixed-dim": "#c3c7cb",
+                      "secondary-container": "#dae2fd",
+                      "inverse-on-surface": "#eff0fa",
+                      "on-background": "#191b23",
+                      "primary-container": "#2170e4",
+                      "on-tertiary-container": "#fbfcff",
+                      "on-surface-variant": "#424754",
+                      "surface-container-lowest": "#ffffff",
+                      "surface-bright": "#f9f9ff",
+                      "on-surface": "#191b23",
+                      "on-secondary-fixed-variant": "#3f465c",
+                      "on-error-container": "#93000a",
+                      "surface-container": "#ecedf7",
+                      "surface-container-high": "#e6e7f2",
+                      "on-tertiary": "#ffffff",
+                      "on-primary-fixed-variant": "#004395",
+                      "tertiary": "#585d60",
+                      "surface-container-low": "#f2f3fd",
+                      "tertiary-container": "#707579",
+                      "on-tertiary-fixed": "#171c1f",
+                      "surface-tint": "#005ac2",
+                      "secondary-fixed-dim": "#bec6e0",
+                      "primary-fixed-dim": "#adc6ff",
+                      "surface-variant": "#e1e2ec",
+                      "error": "#ba1a1a",
+                      "on-tertiary-fixed-variant": "#43474b",
+                      "on-primary-fixed": "#001a42",
+                      "secondary-fixed": "#dae2fd",
+                      "inverse-primary": "#adc6ff",
+                      "background": "#f9f9ff",
+                      "tertiary-fixed": "#dfe3e7",
+                      "surface-dim": "#d8d9e3",
+                      "on-secondary": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.125rem",
+                      "lg": "0.25rem",
+                      "xl": "0.5rem",
+                      "full": "0.75rem"
+              },
+              "spacing": {
+                      "stack_sm": "4px",
+                      "gutter": "16px",
+                      "stack_md": "8px",
+                      "context_panel_width": "320px",
+                      "margin": "24px",
+                      "stack_lg": "16px",
+                      "sidebar_width": "260px"
+              },
+              "fontFamily": {
+                      "h2": ["Space Grotesk"],
+                      "body-lg": ["Inter"],
+                      "h1": ["Space Grotesk"],
+                      "label-caps": ["Space Grotesk"],
+                      "data-mono": ["Inter"],
+                      "body-sm": ["Inter"]
+              },
+              "fontSize": {
+                      "h2": ["24px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                      "body-lg": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                      "h1": ["32px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                      "label-caps": ["11px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                      "data-mono": ["13px", {"lineHeight": "1.4", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                      "body-sm": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}]
+              }
+            },
+          },
+        }
+    </script>
+<style>
+        body { background-color: #f9f9ff; }
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+            font-size: 20px;
+        }
+        .ai-breakdown-card {
+            border-left: 4px solid #f59e0b;
+            box-shadow: inset 0 0 12px rgba(245, 158, 11, 0.05);
+        }
+    </style>
+</head>
+<body class="font-body-sm text-on-background antialiased overflow-hidden">
+<!-- SideNavBar (Fixed Left) -->
+<aside class="flex flex-col h-full w-[260px] bg-slate-900 dark:bg-slate-950 fixed left-0 top-0 border-r border-slate-800 z-50 font-space-grotesk antialiased tracking-tight">
+<div class="p-6 flex items-center gap-3">
+<div class="w-8 h-8 bg-blue-600 rounded flex items-center justify-center">
+<span class="material-symbols-outlined text-white" style="font-variation-settings: 'FILL' 1;">terminal</span>
+</div>
+<div>
+<h1 class="text-xl font-bold text-white tracking-tighter">Solvro TAM</h1>
+<p class="text-[10px] text-slate-500 uppercase tracking-widest">Command Center</p>
+</div>
+</div>
+<nav class="flex-1 px-3 space-y-1">
+<a class="text-slate-400 hover:text-slate-100 px-4 py-3 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-slate-800/50" href="#">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span class="text-sm font-medium">Overview</span>
+</a>
+<a class="bg-blue-600/10 text-blue-400 border-l-2 border-blue-500 px-4 py-3 flex items-center gap-3 duration-150 ease-in-out" href="#">
+<span class="material-symbols-outlined" data-icon="assignment">assignment</span>
+<span class="text-sm font-medium">Active Projects</span>
+</a>
+<a class="text-slate-400 hover:text-slate-100 px-4 py-3 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-slate-800/50" href="#">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span class="text-sm font-medium">Team Workload</span>
+</a>
+<a class="text-slate-400 hover:text-slate-100 px-4 py-3 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-slate-800/50" href="#">
+<span class="material-symbols-outlined" data-icon="bar_chart">bar_chart</span>
+<span class="text-sm font-medium">Reports</span>
+</a>
+<a class="text-slate-400 hover:text-slate-100 px-4 py-3 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-slate-800/50" href="#">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span class="text-sm font-medium">Client Health</span>
+</a>
+<a class="text-slate-400 hover:text-slate-100 px-4 py-3 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-slate-800/50" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="text-sm font-medium">Settings</span>
+</a>
+</nav>
+<div class="mt-auto border-t border-slate-800 p-4 space-y-1">
+<a class="text-slate-400 hover:text-slate-100 px-4 py-2 flex items-center gap-3 transition-colors duration-150 ease-in-out text-xs" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="terminal">terminal</span>
+<span>Go Backend</span>
+</a>
+<a class="text-slate-400 hover:text-slate-100 px-4 py-2 flex items-center gap-3 transition-colors duration-150 ease-in-out text-xs" href="#">
+<span class="material-symbols-outlined text-sm" data-icon="sync">sync</span>
+<span>PostgreSQL Sync</span>
+</a>
+</div>
+</aside>
+<!-- TopAppBar (Sticky Top) -->
+<header class="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 sticky top-0 z-40 flex items-center justify-between px-6 ml-[260px] mr-[320px] transition-all duration-200">
+<div class="flex items-center gap-8">
+<h2 class="text-lg font-bold text-slate-900 dark:text-white font-space-grotesk">My Projects</h2>
+<nav class="flex items-center gap-6 h-16 pt-5">
+<a class="text-slate-500 dark:text-slate-400 pb-5 hover:text-slate-800 dark:hover:text-slate-200 font-space-grotesk font-medium text-sm transition-all duration-200" href="#">Project View</a>
+<a class="text-slate-500 dark:text-slate-400 pb-5 hover:text-slate-800 dark:hover:text-slate-200 font-space-grotesk font-medium text-sm transition-all duration-200" href="#">Active Kanban</a>
+<a class="text-blue-600 dark:text-blue-400 border-b-2 border-blue-600 pb-5 font-space-grotesk font-medium text-sm transition-all duration-200" href="#">Table View</a>
+<a class="text-slate-500 dark:text-slate-400 pb-5 hover:text-slate-800 dark:hover:text-slate-200 font-space-grotesk font-medium text-sm transition-all duration-200" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded text-xs focus:ring-2 focus:ring-blue-600 focus:outline-none w-48 transition-all" placeholder="Quick find..." type="text"/>
+</div>
+<button class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-xs font-bold font-space-grotesk transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-xs">add</span>
+                Create New Project
+            </button>
+</div>
+</header>
+<!-- NavigationDrawer (Fixed Right Context Panel) -->
+<aside class="w-[320px] h-screen bg-slate-50/80 dark:bg-slate-900/80 backdrop-blur-md fixed right-0 top-0 border-l border-slate-200 dark:border-slate-800 z-50 flex flex-col p-6 shadow-[-4px_0_12px_rgba(0,0,0,0.05)] ease-out duration-300">
+<div class="mb-8">
+<h3 class="text-xs uppercase tracking-widest font-bold text-blue-600 font-space-grotesk mb-1">Project Context</h3>
+<div class="flex items-center gap-2">
+<span class="text-sm font-semibold text-slate-700 dark:text-slate-300 font-space-grotesk">SOLV-402</span>
+<span class="px-1.5 py-0.5 rounded bg-blue-100 text-blue-700 text-[10px] font-bold">ACTIVE</span>
+</div>
+</div>
+<div class="space-y-6">
+<!-- Source Link -->
+<section>
+<h4 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Blueprint Reference</h4>
+<a class="flex items-center gap-3 p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg group hover:border-blue-300 transition-colors" href="#">
+<span class="material-symbols-outlined text-blue-500" data-icon="architecture">architecture</span>
+<div class="flex-1 overflow-hidden">
+<p class="text-xs font-bold text-slate-700 dark:text-slate-200 truncate">SA Blueprint v2.4</p>
+<p class="text-[10px] text-slate-500">View source documentation</p>
+</div>
+<span class="material-symbols-outlined text-slate-300 group-hover:text-blue-500 text-sm">open_in_new</span>
+</a>
+</section>
+<!-- AI Subtasks -->
+<section>
+<div class="flex items-center justify-between mb-3">
+<h4 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">AI Agent Analysis</h4>
+<span class="text-[10px] font-bold text-amber-600 bg-amber-50 px-2 py-0.5 rounded">BETA</span>
+</div>
+<div class="ai-breakdown-card p-4 bg-white dark:bg-slate-800 rounded-lg space-y-3">
+<p class="text-xs text-slate-600 dark:text-slate-300 leading-relaxed">Generated 4 critical paths based on PostgreSQL sync requirements:</p>
+<ul class="space-y-2">
+<li class="flex items-start gap-2 group">
+<span class="material-symbols-outlined text-amber-500 text-sm mt-0.5">auto_awesome</span>
+<span class="text-xs text-slate-700 dark:text-slate-200">Validate schema parity for V3 migrations.</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-amber-500 text-sm mt-0.5">auto_awesome</span>
+<span class="text-xs text-slate-700 dark:text-slate-200">Optimize WAL logs for high-throughput nodes.</span>
+</li>
+<li class="flex items-start gap-2">
+<span class="material-symbols-outlined text-amber-500 text-sm mt-0.5">auto_awesome</span>
+<span class="text-xs text-slate-700 dark:text-slate-200">Check security group egress on port 5432.</span>
+</li>
+</ul>
+<button class="w-full py-2 border border-amber-200 text-amber-700 text-[11px] font-bold rounded bg-amber-50/50 hover:bg-amber-100 transition-colors uppercase tracking-tight">Sync Tasks to Kanban</button>
+</div>
+</section>
+<!-- Detailed Metrics -->
+<section>
+<h4 class="text-[11px] font-bold text-slate-400 uppercase tracking-widest mb-3">Execution Stats</h4>
+<div class="grid grid-cols-2 gap-3">
+<div class="p-3 bg-slate-100 dark:bg-slate-800/50 rounded">
+<p class="text-[10px] text-slate-500 uppercase">Latency</p>
+<p class="text-sm font-bold text-slate-900 dark:text-white font-data-mono">24ms</p>
+</div>
+<div class="p-3 bg-slate-100 dark:bg-slate-800/50 rounded">
+<p class="text-[10px] text-slate-500 uppercase">Uptime</p>
+<p class="text-sm font-bold text-green-600 font-data-mono">99.98%</p>
+</div>
+</div>
+</section>
+</div>
+</aside>
+<!-- Main Content Canvas -->
+<main class="ml-[260px] mr-[320px] p-6 h-[calc(100vh-64px)] overflow-y-auto">
+<!-- Table Control Bar -->
+<div class="flex items-center justify-between mb-6">
+<div class="flex items-center gap-2">
+<button class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-sm">filter_list</span>
+                    Filters
+                </button>
+<button class="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-slate-200 rounded text-xs font-medium text-slate-700 hover:bg-slate-50 transition-colors">
+<span class="material-symbols-outlined text-sm">sort</span>
+                    Sort
+                </button>
+<div class="h-4 w-[1px] bg-slate-200 mx-2"></div>
+<span class="text-xs text-slate-400 font-medium">8 Tasks Total</span>
+</div>
+<div class="flex items-center gap-2">
+<button class="p-1.5 text-slate-400 hover:text-blue-600 transition-colors"><span class="material-symbols-outlined">download</span></button>
+<button class="p-1.5 text-slate-400 hover:text-blue-600 transition-colors"><span class="material-symbols-outlined">settings_suggest</span></button>
+</div>
+</div>
+<!-- Technical Data Grid -->
+<div class="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded overflow-hidden">
+<table class="w-full text-left border-collapse">
+<thead class="bg-slate-50 dark:bg-slate-800/50">
+<tr>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800">ID</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800">Title</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800">Priority</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800">Status</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800">Assignee</th>
+<th class="px-4 py-3 text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-200 dark:border-slate-800">Go-Live Date</th>
+</tr>
+</thead>
+<tbody class="divide-y divide-slate-100 dark:divide-slate-800">
+<!-- Row 1 (Active/Selected) -->
+<tr class="bg-blue-50/30 dark:bg-blue-900/10 hover:bg-blue-50 transition-colors group cursor-pointer">
+<td class="px-4 py-3 text-[13px] font-data-mono text-blue-600 font-semibold">SOLV-402</td>
+<td class="px-4 py-3 text-[13px] font-medium text-slate-900 dark:text-slate-100">Implement PostgreSQL Real-time Sync</td>
+<td class="px-4 py-3">
+<span class="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold border border-red-100 uppercase">High</span>
+</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-blue-500"></div>
+<span class="text-xs text-slate-600 dark:text-slate-400">In Progress</span>
+</div>
+</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<img class="w-6 h-6 rounded-full border border-white shadow-sm" data-alt="Close-up headshot of a technical lead engineer with a focused expression, wearing glasses and a minimalist dark sweater. The background is a blurred, high-tech office environment with soft blue and white accent lighting, conveying a professional and high-performance corporate atmosphere consistent with the Solvro brand." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDrmy4iJ0Jda8ZetsNmqCJPIi1rwtvhUJnEAMfDrsGJfj9gvsT1R2ZbjA5lGfYn5vDJKsGEeXqtvurTzMZQ_xGlSqDadkxejzvOkmJbKy8HoBNXd3jIYVym1USvmAEzLVfC1tMBp5OpILWnzZtwKLkUcHiPkcKquklp_WC7AWX2P3MZfsKP13ulRvp0elKclaRBQs1NY9vi4lNlTGKzSvw3fa9eO8xaAjzQWrgNJBYOHIMWYsIECAaHtuHrfzSrR7dahOlZVCGZMPTf"/>
+<span class="text-xs text-slate-700 dark:text-slate-300">Alex Rivera</span>
+</div>
+</td>
+<td class="px-4 py-3 text-[13px] font-data-mono text-slate-500">2024-10-12</td>
+</tr>
+<!-- Row 2 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
+<td class="px-4 py-3 text-[13px] font-data-mono text-slate-500">SOLV-389</td>
+<td class="px-4 py-3 text-[13px] font-medium text-slate-900 dark:text-slate-100">Refactor Go Middleware for Auth</td>
+<td class="px-4 py-3">
+<span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 text-[10px] font-bold border border-amber-100 uppercase">Med</span>
+</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-slate-300"></div>
+<span class="text-xs text-slate-600 dark:text-slate-400">Backlog</span>
+</div>
+</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<img class="w-6 h-6 rounded-full border border-white shadow-sm" data-alt="Professional portrait of a senior software architect with a neutral, confident expression. The lighting is bright and clean, reflecting a modern corporate aesthetic with a palette of whites and soft greys. The image matches the bare-metal technical style of the dashboard, emphasizing transparency and functional elegance." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCaaKAtSXeBucFVYMRncquckETSaBItk1BiuxpQwe4XsdNNFgOlAZ34RE0fuaIhaW8A0D3Tf9IGa1A-AAUEwph-EtC5-X6XKD_cFCObV-TtNYbmpuYhFphT7Pqa15Sumz8jT2_R3_t9JhRI1dtuevNXutmp9hzOzpcIFrskBTpz_w4QC88FZNM5yb7DO-g8otxrHxCB4k_TLvQ1GYQ7zvyeahCf2fBdC1WX_4BJ-syPATJGnZ32STVQOKlnib8RIMGKKObBDIfAm9_c"/>
+<span class="text-xs text-slate-700 dark:text-slate-300">Sarah Chen</span>
+</div>
+</td>
+<td class="px-4 py-3 text-[13px] font-data-mono text-slate-500">2024-10-20</td>
+</tr>
+<!-- Row 3 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
+<td class="px-4 py-3 text-[13px] font-data-mono text-slate-500">SOLV-415</td>
+<td class="px-4 py-3 text-[13px] font-medium text-slate-900 dark:text-slate-100">Security Audit: Egress Filter Optimization</td>
+<td class="px-4 py-3">
+<span class="px-2 py-0.5 rounded-full bg-red-50 text-red-600 text-[10px] font-bold border border-red-100 uppercase">High</span>
+</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-green-500"></div>
+<span class="text-xs text-slate-600 dark:text-slate-400">Completed</span>
+</div>
+</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<img class="w-6 h-6 rounded-full border border-white shadow-sm" data-alt="Close-up photograph of a systems operator in a minimalist setting with high-key lighting. The style is unapologetically functional and direct, with a focus on professional clarity. The color scheme is dominated by cool tones and sharp outlines, consistent with the precision-instrument feel of the Solvro dashboard." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCsX80UyhPj1WWu8yC_Rv0oQsyUjFiRcCjFQFbdZdJpwLbWnK8HLZKsPaDdJaTcryeoQ5w9jXwM2o43VEdGs0zbD6CmtYG17e09diiLE8hKvOu_lUdXjvVLtsudNLjy5iZLJEgyJ8pYHnj18z8hGA7LXornorKeNmuyitS20TNmHPxU9Txv_i-4dQDVSMjtrupzc0CouDa7dOm_ElhK4-xE4minOMTsIz1EFiB4tToqP77o-qFXXKDQDg3SOuSI7yMvZDUGZ7xbAveL"/>
+<span class="text-xs text-slate-700 dark:text-slate-300">Marcus Wright</span>
+</div>
+</td>
+<td class="px-4 py-3 text-[13px] font-data-mono text-slate-500">2024-09-30</td>
+</tr>
+<!-- Row 4 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
+<td class="px-4 py-3 text-[13px] font-data-mono text-slate-500">SOLV-421</td>
+<td class="px-4 py-3 text-[13px] font-medium text-slate-900 dark:text-slate-100">UI: Dashboard Bento Grid Layout</td>
+<td class="px-4 py-3">
+<span class="px-2 py-0.5 rounded-full bg-blue-50 text-blue-600 text-[10px] font-bold border border-blue-100 uppercase">Low</span>
+</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-blue-500"></div>
+<span class="text-xs text-slate-600 dark:text-slate-400">In Progress</span>
+</div>
+</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<img class="w-6 h-6 rounded-full border border-white shadow-sm" data-alt="Detailed portrait of a female UI designer with a creative yet disciplined look. The setting is a bright, modern studio with soft diffuse lighting that highlights clean lines and a professional atmosphere. The visual style uses a palette of muted greys and vibrant blue accents, perfectly aligning with the Solvro design language." src="https://lh3.googleusercontent.com/aida-public/AB6AXuC-jxUiJpA8_G-evp8qKqfg6nD_32wZRSrM7sKW9ORRUdrPk1CENenwHO-uwfwtjIKTOITUJuSq_4l52Y-7dHUq__49A80nfeFGUPdSmQ7v7o5EpN-wGdvYfjzzpGLS6yc3aC1_J6CqgEDRPeU1FPBGdm-13GWtW3BHQkjxO3zLPHsKEbQaPhmQyjmFNOsoENaMOyx0kk61I1BOdlMooaV-up_515RjigCXdpemusv_QAZZ08u9LrdlDgjO8jQIi8bze0W0QNzA7Rsu"/>
+<span class="text-xs text-slate-700 dark:text-slate-300">Elena Novak</span>
+</div>
+</td>
+<td class="px-4 py-3 text-[13px] font-data-mono text-slate-500">2024-11-05</td>
+</tr>
+<!-- Row 5 -->
+<tr class="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer">
+<td class="px-4 py-3 text-[13px] font-data-mono text-slate-500">SOLV-430</td>
+<td class="px-4 py-3 text-[13px] font-medium text-slate-900 dark:text-slate-100">K8s Cluster Node Scaling Policy</td>
+<td class="px-4 py-3">
+<span class="px-2 py-0.5 rounded-full bg-amber-50 text-amber-600 text-[10px] font-bold border border-amber-100 uppercase">Med</span>
+</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-slate-300"></div>
+<span class="text-xs text-slate-600 dark:text-slate-400">Backlog</span>
+</div>
+</td>
+<td class="px-4 py-3">
+<div class="flex items-center gap-2 text-slate-400">
+<span class="material-symbols-outlined text-sm">person_add</span>
+<span class="text-xs italic">Unassigned</span>
+</div>
+</td>
+<td class="px-4 py-3 text-[13px] font-data-mono text-slate-500">2024-12-01</td>
+</tr>
+</tbody>
+</table>
+</div>
+<!-- Footer / Pagination -->
+<div class="mt-4 flex items-center justify-between">
+<div class="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Page 1 of 4</div>
+<div class="flex gap-1">
+<button class="p-1 px-3 border border-slate-200 rounded bg-white text-xs font-bold text-slate-400 cursor-not-allowed">PREV</button>
+<button class="p-1 px-3 border border-slate-200 rounded bg-white text-xs font-bold text-blue-600 hover:bg-slate-50">NEXT</button>
+</div>
+</div>
+</main>
+</body></html>

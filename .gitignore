@@ -1,0 +1,22 @@
+node_modules/
+dist/
+backend/dist/
+frontend/dist/
+*.tsbuildinfo
+.vite/
+
+.env
+.env.local
+.env.*.local
+
+# Local Docker overrides
+docker-compose.override.yml
+
+# Prisma
+backend/prisma/migrations/dev.db*
+
+# Editor / OS
+.DS_Store
+.vscode/
+.idea/
+*.log

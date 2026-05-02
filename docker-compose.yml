@@ -1,0 +1,63 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: solvro-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-solvro}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-solvro_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-solvro}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - solvro_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-solvro} -d ${POSTGRES_DB:-solvro}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    container_name: solvro-backend
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      DATABASE_URL: postgresql://${POSTGRES_USER:-solvro}:${POSTGRES_PASSWORD:-solvro_dev}@postgres:5432/${POSTGRES_DB:-solvro}?schema=public
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:5173}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./backend:/app
+      - solvro_backend_node_modules:/app/node_modules
+
+  frontend:
+    build:
+      context: ./frontend
+      target: dev
+    container_name: solvro-frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:3000}
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - solvro_frontend_node_modules:/app/node_modules
+
+volumes:
+  solvro_pgdata:
+    name: solvro_pgdata
+  solvro_backend_node_modules:
+  solvro_frontend_node_modules:

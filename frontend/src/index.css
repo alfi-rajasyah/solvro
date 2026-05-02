@@ -1,0 +1,109 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Light theme — ported from DESIGN.md frontmatter. */
+  :root {
+    --surface: 249 249 255;
+    --surface-dim: 216 217 227;
+    --surface-bright: 249 249 255;
+    --surface-container-lowest: 255 255 255;
+    --surface-container-low: 242 243 253;
+    --surface-container: 236 237 247;
+    --surface-container-high: 230 231 242;
+    --surface-container-highest: 225 226 236;
+    --on-surface: 25 27 35;
+    --on-surface-variant: 66 71 84;
+    --inverse-surface: 46 48 56;
+    --inverse-on-surface: 239 240 250;
+    --outline: 114 119 133;
+    --outline-variant: 194 198 214;
+    --primary: 0 88 190;
+    --on-primary: 255 255 255;
+    --primary-container: 33 112 228;
+    --on-primary-container: 254 252 255;
+    --inverse-primary: 173 198 255;
+    --secondary: 86 94 116;
+    --on-secondary: 255 255 255;
+    --secondary-container: 218 226 253;
+    --on-secondary-container: 92 100 122;
+    --tertiary: 88 93 96;
+    --on-tertiary: 255 255 255;
+    --error: 186 26 26;
+    --on-error: 255 255 255;
+    --error-container: 255 218 214;
+    --on-error-container: 147 0 10;
+    --background: 249 249 255;
+    --on-background: 25 27 35;
+  }
+
+  /* Dark theme — derived from MD3 dark scheme for the same #0058be primary. */
+  .dark {
+    --surface: 16 18 24;
+    --surface-dim: 16 18 24;
+    --surface-bright: 55 56 65;
+    --surface-container-lowest: 11 13 18;
+    --surface-container-low: 25 27 35;
+    --surface-container: 29 31 39;
+    --surface-container-high: 39 41 49;
+    --surface-container-highest: 50 52 60;
+    --on-surface: 225 226 236;
+    --on-surface-variant: 194 198 214;
+    --inverse-surface: 225 226 236;
+    --inverse-on-surface: 46 48 56;
+    --outline: 140 145 160;
+    --outline-variant: 66 71 84;
+    --primary: 173 198 255;
+    --on-primary: 0 48 99;
+    --primary-container: 0 70 141;
+    --on-primary-container: 216 226 255;
+    --inverse-primary: 0 88 190;
+    --secondary: 190 198 220;
+    --on-secondary: 40 48 65;
+    --secondary-container: 62 71 89;
+    --on-secondary-container: 218 226 253;
+    --tertiary: 192 199 203;
+    --on-tertiary: 42 49 52;
+    --error: 255 180 171;
+    --on-error: 105 0 5;
+    --error-container: 147 0 10;
+    --on-error-container: 255 218 214;
+    --background: 16 18 24;
+    --on-background: 225 226 236;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    @apply bg-background text-on-surface font-body text-body-sm antialiased;
+    transition: background-color 150ms ease, color 150ms ease;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display;
+  }
+
+  /* Native form controls follow the theme. */
+  .dark input[type="date"],
+  .dark input[type="text"],
+  .dark input[type="email"],
+  .dark input[type="password"],
+  .dark input[type="number"],
+  .dark input[type="search"],
+  .dark textarea,
+  .dark select {
+    color-scheme: dark;
+  }
+}
+
+@layer components {
+  .material-symbols-outlined {
+    font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  }
+}

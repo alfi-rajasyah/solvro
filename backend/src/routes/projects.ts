@@ -1,0 +1,360 @@
+import { Router } from "express";
+import { z } from "zod";
+import { Prisma, Priority, ProjectStatus, RoleName, TaskStatus } from "@prisma/client";
+import { prisma } from "../prisma.js";
+import { requireAuth, requireRole, type JwtPayload } from "../http/auth.js";
+import { HttpError } from "../http/errors.js";
+import { validate } from "../http/validate.js";
+
+const createProjectSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  saId: z.number().int().positive(),
+  tamId: z.number().int().positive().optional(),
+  customerId: z.number().int().positive(),
+  status: z.nativeEnum(ProjectStatus).optional(),
+});
+
+const updateProjectSchema = z.object({
+  name: z.string().min(1).max(200).optional(),
+  description: z.string().max(2000).nullable().optional(),
+  status: z.nativeEnum(ProjectStatus).optional(),
+  saId: z.number().int().positive().optional(),
+  tamId: z.number().int().positive().optional(),
+  customerId: z.number().int().positive().optional(),
+});
+
+const projectListQuerySchema = z.object({
+  customerId: z.coerce.number().int().positive().optional(),
+});
+
+const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
+
+const createTaskSchema = z.object({
+  title: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  status: z.nativeEnum(TaskStatus).optional(),
+  priority: z.nativeEnum(Priority).optional(),
+  startDate: z.coerce.date().nullable().optional(),
+  dueDate: z.coerce.date().nullable().optional(),
+  assignedToId: z.number().int().positive().nullable().optional(),
+  parentTaskId: z.number().int().positive().nullable().optional(),
+  sectionId: z.number().int().positive().nullable().optional(),
+  labelIds: z.array(z.number().int().positive()).optional(),
+});
+
+const createSectionSchema = z.object({
+  name: z.string().min(1).max(100),
+  position: z.number().int().min(0).optional(),
+});
+
+const taskListQuerySchema = z.object({
+  status: z.nativeEnum(TaskStatus).optional(),
+  parentTaskId: z
+    .union([z.literal("null"), z.coerce.number().int().positive()])
+    .optional(),
+});
+
+export function projectVisibilityFilter(user: JwtPayload): Prisma.ProjectWhereInput {
+  switch (user.role) {
+    case "ADMIN":
+    case "STAKEHOLDER":
+      return {};
+    case "TAM":
+      return { tamId: user.sub };
+    case "SA":
+      return { saId: user.sub };
+  }
+}
+
+export const projectsRouter = Router();
+
+projectsRouter.use(requireAuth);
+
+projectsRouter.get("/", validate("query", projectListQuerySchema), async (req, res) => {
+  const { customerId } = req.query as unknown as z.infer<typeof projectListQuerySchema>;
+  const where: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
+  if (customerId) where.customerId = customerId;
+  const projects = await prisma.project.findMany({
+    where,
+    orderBy: { updatedAt: "desc" },
+    include: {
+      _count: { select: { tasks: true } },
+      sa: { select: { id: true, username: true } },
+      tam: { select: { id: true, username: true } },
+      customer: { select: { id: true, name: true } },
+    },
+  });
+  res.json(projects);
+});
+
+projectsRouter.post(
+  "/",
+  requireRole("TAM", "ADMIN"),
+  validate("body", createProjectSchema),
+  async (req, res) => {
+    const body = req.body as z.infer<typeof createProjectSchema>;
+    const tamId = body.tamId ?? req.user!.sub;
+
+    const project = await prisma.project.create({
+      data: {
+        name: body.name,
+        description: body.description,
+        saId: body.saId,
+        tamId,
+        customerId: body.customerId,
+        status: body.status ?? "PLANNING",
+      },
+    });
+    res.status(201).json(project);
+  },
+);
+
+projectsRouter.get("/:id", validate("params", idParamSchema), async (req, res) => {
+  const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+  const project = await prisma.project.findUnique({
+    where: { id },
+    include: {
+      sa: { select: { id: true, username: true, email: true } },
+      tam: { select: { id: true, username: true, email: true } },
+      customer: { select: { id: true, name: true } },
+      baselineLockedBy: { select: { id: true, username: true } },
+      _count: { select: { tasks: true, blueprints: true } },
+    },
+  });
+  if (!project) throw new HttpError(404, "not_found", "Project not found");
+
+  const filter = projectVisibilityFilter(req.user!);
+  if ("tamId" in filter && project.tamId !== filter.tamId) {
+    throw new HttpError(403, "forbidden", "Project not visible to caller");
+  }
+  if ("saId" in filter && project.saId !== filter.saId) {
+    throw new HttpError(403, "forbidden", "Project not visible to caller");
+  }
+
+  res.json(project);
+});
+
+const lockBaselineSchema = z.object({
+  asOfDate: z.coerce.date().optional(),
+  clear: z.boolean().optional(),
+});
+
+projectsRouter.post(
+  "/:id/baseline",
+  requireRole("TAM", "ADMIN"),
+  validate("params", idParamSchema),
+  validate("body", lockBaselineSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const { asOfDate, clear } = req.body as z.infer<typeof lockBaselineSchema>;
+    const lockedAt = asOfDate ?? new Date();
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (clear) {
+        await tx.$executeRaw`
+          UPDATE tasks
+          SET baseline_start_date = NULL,
+              baseline_due_date = NULL
+          WHERE project_id = ${id}
+        `;
+        return tx.project.update({
+          where: { id },
+          data: { baselineLockedAt: null, baselineLockedById: null },
+          include: {
+            sa: { select: { id: true, username: true, email: true } },
+            tam: { select: { id: true, username: true, email: true } },
+            customer: { select: { id: true, name: true } },
+            baselineLockedBy: { select: { id: true, username: true } },
+            _count: { select: { tasks: true, blueprints: true } },
+          },
+        });
+      }
+      // Column-to-column copy: live → baseline for every task in the project.
+      // Prisma's updateMany can't reference other columns, so raw SQL.
+      await tx.$executeRaw`
+        UPDATE tasks
+        SET baseline_start_date = start_date,
+            baseline_due_date = due_date
+        WHERE project_id = ${id}
+      `;
+      return tx.project.update({
+        where: { id },
+        data: {
+          baselineLockedAt: lockedAt,
+          baselineLockedById: req.user!.sub,
+        },
+        include: {
+          sa: { select: { id: true, username: true, email: true } },
+          tam: { select: { id: true, username: true, email: true } },
+          customer: { select: { id: true, name: true } },
+          baselineLockedBy: { select: { id: true, username: true } },
+          _count: { select: { tasks: true, blueprints: true } },
+        },
+      });
+    });
+    res.json(updated);
+  },
+);
+
+projectsRouter.patch(
+  "/:id",
+  requireRole("TAM", "ADMIN"),
+  validate("params", idParamSchema),
+  validate("body", updateProjectSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const updated = await prisma.project.update({
+      where: { id },
+      data: req.body as z.infer<typeof updateProjectSchema>,
+    });
+    res.json(updated);
+  },
+);
+
+projectsRouter.get(
+  "/:id/tasks",
+  validate("params", idParamSchema),
+  validate("query", taskListQuerySchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const { status, parentTaskId } = req.query as unknown as z.infer<typeof taskListQuerySchema>;
+
+    const where: Prisma.TaskWhereInput = { projectId: id };
+    if (status) where.status = status;
+    if (parentTaskId === "null") where.parentTaskId = null;
+    else if (typeof parentTaskId === "number") where.parentTaskId = parentTaskId;
+
+    const tasks = await prisma.task.findMany({
+      where,
+      orderBy: { id: "asc" },
+      include: {
+        assignedTo: { select: { id: true, username: true, email: true } },
+        labels: true,
+        section: { select: { id: true, name: true, position: true } },
+        _count: { select: { subtasks: true, comments: true } },
+      },
+    });
+    res.json(tasks);
+  },
+);
+
+projectsRouter.post(
+  "/:id/tasks",
+  requireRole("TAM", "ADMIN"),
+  validate("params", idParamSchema),
+  validate("body", createTaskSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const body = req.body as z.infer<typeof createTaskSchema>;
+
+    if (body.parentTaskId) {
+      const parent = await prisma.task.findUnique({
+        where: { id: body.parentTaskId },
+        select: { projectId: true },
+      });
+      if (!parent || parent.projectId !== id) {
+        throw new HttpError(400, "invalid_parent", "Parent task must belong to this project");
+      }
+    }
+
+    const task = await prisma.task.create({
+      data: {
+        projectId: id,
+        title: body.title,
+        description: body.description,
+        status: body.status ?? "TODO",
+        priority: body.priority ?? "MEDIUM",
+        startDate: body.startDate ?? null,
+        dueDate: body.dueDate ?? null,
+        assignedToId: body.assignedToId ?? null,
+        parentTaskId: body.parentTaskId ?? null,
+        sectionId: body.sectionId ?? null,
+        labels: body.labelIds && body.labelIds.length > 0
+          ? { connect: body.labelIds.map((lid) => ({ id: lid })) }
+          : undefined,
+      },
+      include: {
+        assignedTo: { select: { id: true, username: true, email: true } },
+        labels: true,
+        section: { select: { id: true, name: true, position: true } },
+        _count: { select: { subtasks: true, comments: true } },
+      },
+    });
+    res.status(201).json(task);
+  },
+);
+
+projectsRouter.get(
+  "/:id/sections",
+  validate("params", idParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const sections = await prisma.section.findMany({
+      where: { projectId: id },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
+    });
+    res.json(sections);
+  },
+);
+
+projectsRouter.post(
+  "/:id/sections",
+  requireRole("TAM", "ADMIN"),
+  validate("params", idParamSchema),
+  validate("body", createSectionSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const body = req.body as z.infer<typeof createSectionSchema>;
+    const max = await prisma.section.aggregate({
+      where: { projectId: id },
+      _max: { position: true },
+    });
+    const section = await prisma.section.create({
+      data: {
+        projectId: id,
+        name: body.name,
+        position: body.position ?? (max._max.position ?? -1) + 1,
+      },
+    });
+    res.status(201).json(section);
+  },
+);
+
+// Project-scoped labels (kept on the projects router for the nested URL)
+const createLabelSchema = z.object({
+  name: z.string().min(1).max(50),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+});
+
+projectsRouter.get(
+  "/:id/labels",
+  validate("params", idParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const labels = await prisma.label.findMany({
+      where: { projectId: id },
+      orderBy: { name: "asc" },
+    });
+    res.json(labels);
+  },
+);
+
+projectsRouter.post(
+  "/:id/labels",
+  requireRole("TAM", "ADMIN"),
+  validate("params", idParamSchema),
+  validate("body", createLabelSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const body = req.body as z.infer<typeof createLabelSchema>;
+    const label = await prisma.label.create({
+      data: {
+        projectId: id,
+        name: body.name,
+        color: body.color ?? "#0058be",
+      },
+    });
+    res.status(201).json(label);
+  },
+);

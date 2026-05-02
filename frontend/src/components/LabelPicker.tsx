@@ -1,0 +1,144 @@
+import { useState, type FormEvent } from "react";
+import { LabelChip } from "./LabelChip";
+import { useCreateLabel, useProjectLabels, type Label } from "@/lib/queries";
+
+const PALETTE = [
+  "#0058be",
+  "#10b981",
+  "#f59e0b",
+  "#ba1a1a",
+  "#7c3aed",
+  "#0ea5e9",
+  "#ec4899",
+  "#64748b",
+];
+
+export function LabelPicker({
+  projectId,
+  selectedIds,
+  onChange,
+}: {
+  projectId: number;
+  selectedIds: number[];
+  onChange: (ids: number[]) => void;
+}) {
+  const { data: labels } = useProjectLabels(projectId);
+  const createLabel = useCreateLabel(projectId);
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const [newColor, setNewColor] = useState(PALETTE[0]);
+
+  function toggle(label: Label) {
+    if (selectedIds.includes(label.id)) {
+      onChange(selectedIds.filter((id) => id !== label.id));
+    } else {
+      onChange([...selectedIds, label.id]);
+    }
+  }
+
+  async function handleCreate(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = newName.trim();
+    if (!trimmed) return;
+    try {
+      const created = await createLabel.mutateAsync({ name: trimmed, color: newColor });
+      onChange([...selectedIds, created.id]);
+      setNewName("");
+      setNewColor(PALETTE[0]);
+      setCreating(false);
+    } catch {
+      // surfaced via mutation error state below
+    }
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        {(labels ?? []).map((l) => {
+          const active = selectedIds.includes(l.id);
+          return (
+            <button
+              key={l.id}
+              type="button"
+              onClick={() => toggle(l)}
+              className={[
+                "rounded transition-opacity",
+                active ? "ring-2 ring-primary ring-offset-1" : "opacity-60 hover:opacity-100",
+              ].join(" ")}
+            >
+              <LabelChip label={l} />
+            </button>
+          );
+        })}
+        {!creating && (
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="rounded border border-dashed border-outline-variant px-1.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+          >
+            + Label
+          </button>
+        )}
+      </div>
+
+      {creating && (
+        <form
+          onSubmit={handleCreate}
+          className="rounded border border-outline-variant bg-surface-container-low p-2"
+        >
+          <div className="flex items-center gap-2">
+            <input
+              autoFocus
+              type="text"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              placeholder="Label name"
+              maxLength={50}
+              className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={createLabel.isPending || !newName.trim()}
+              className="rounded bg-primary px-2 py-1 font-display text-[10px] font-bold uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
+            >
+              {createLabel.isPending ? "…" : "Add"}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setCreating(false);
+                setNewName("");
+              }}
+              className="rounded px-2 py-1 text-[10px] text-on-surface-variant hover:bg-surface-container"
+            >
+              Cancel
+            </button>
+          </div>
+          <div className="mt-2 flex items-center gap-1">
+            <span className="text-[10px] uppercase tracking-wider text-on-surface-variant">
+              Color
+            </span>
+            {PALETTE.map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setNewColor(c)}
+                aria-label={`Pick color ${c}`}
+                className={[
+                  "h-4 w-4 rounded-full border",
+                  newColor === c ? "ring-2 ring-primary ring-offset-1" : "border-outline-variant",
+                ].join(" ")}
+                style={{ backgroundColor: c }}
+              />
+            ))}
+          </div>
+          {createLabel.error && (
+            <p className="mt-1 text-[10px] text-error">
+              {(createLabel.error as Error).message}
+            </p>
+          )}
+        </form>
+      )}
+    </div>
+  );
+}

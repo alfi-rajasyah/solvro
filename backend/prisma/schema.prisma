@@ -1,0 +1,218 @@
+// Solvro data model — see PRD §6.4 for the conceptual schema.
+// Naming: camelCase in TS via Prisma client; snake_case in SQL via @map.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum RoleName {
+  SA
+  TAM
+  ADMIN
+  STAKEHOLDER
+}
+
+enum ProjectStatus {
+  PLANNING
+  ACTIVE
+  ON_HOLD
+  COMPLETED
+  CANCELLED
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+model Role {
+  id          Int      @id @default(autoincrement())
+  roleName    RoleName @unique @map("role_name")
+  permissions Json     @default("[]") @db.JsonB
+  users       User[]
+
+  @@map("roles")
+}
+
+model User {
+  id                     Int       @id @default(autoincrement())
+  username               String    @unique
+  email                  String    @unique
+  passwordHash           String    @map("password_hash")
+  roleId                 Int       @map("role_id")
+  role                   Role      @relation(fields: [roleId], references: [id])
+  active                 Boolean   @default(true)
+  createdAt              DateTime  @default(now()) @map("created_at")
+  projectsAsSA           Project[] @relation("ProjectSA")
+  projectsAsTAM          Project[] @relation("ProjectTAM")
+  projectBaselinesLocked Project[] @relation("ProjectBaselineLockedBy")
+  assignedTasks          Task[]
+  comments               Comment[]
+
+  @@index([roleId])
+  @@map("users")
+}
+
+model Project {
+  id                 Int           @id @default(autoincrement())
+  name               String
+  description        String?
+  saId               Int           @map("sa_id")
+  tamId              Int           @map("tam_id")
+  customerId         Int?          @map("customer_id")
+  sa                 User          @relation("ProjectSA", fields: [saId], references: [id])
+  tam                User          @relation("ProjectTAM", fields: [tamId], references: [id])
+  customer           Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  status             ProjectStatus @default(PLANNING)
+  baselineLockedAt   DateTime?     @map("baseline_locked_at")
+  baselineLockedById Int?          @map("baseline_locked_by_id")
+  baselineLockedBy   User?         @relation("ProjectBaselineLockedBy", fields: [baselineLockedById], references: [id])
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+  tasks              Task[]
+  blueprints         Blueprint[]
+  labels             Label[]
+  sections           Section[]
+
+  @@index([saId])
+  @@index([tamId])
+  @@index([customerId])
+  @@index([status])
+  @@map("projects")
+}
+
+model Customer {
+  id                Int               @id @default(autoincrement())
+  name              String            @unique
+  accountManager    String?           @map("account_manager")
+  solutionArchitect String?           @map("solution_architect")
+  description       String            @db.Text
+  createdAt         DateTime          @default(now()) @map("created_at")
+  projects          Project[]
+  services          CustomerService[]
+
+  @@map("customers")
+}
+
+model Service {
+  id          Int               @id @default(autoincrement())
+  name        String            @unique
+  description String?           @db.Text
+  active      Boolean           @default(true)
+  createdAt   DateTime          @default(now()) @map("created_at")
+  customers   CustomerService[]
+
+  @@map("services")
+}
+
+model CustomerService {
+  id         Int      @id @default(autoincrement())
+  customerId Int      @map("customer_id")
+  serviceId  Int      @map("service_id")
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  service    Service  @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+  tools      String[] @default([]) // free-text tool names per assignment, e.g. ["Acronis", "Veeam"]
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@unique([customerId, serviceId])
+  @@index([customerId])
+  @@index([serviceId])
+  @@map("customer_services")
+}
+
+model Task {
+  id                Int        @id @default(autoincrement())
+  projectId         Int        @map("project_id")
+  project           Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  sectionId         Int?       @map("section_id")
+  section           Section?   @relation(fields: [sectionId], references: [id], onDelete: SetNull)
+  title             String
+  description       String?
+  status            TaskStatus @default(TODO)
+  priority          Priority   @default(MEDIUM)
+  startDate         DateTime?  @map("start_date")
+  dueDate           DateTime?  @map("due_date")
+  baselineStartDate DateTime?  @map("baseline_start_date")
+  baselineDueDate   DateTime?  @map("baseline_due_date")
+  assignedToId      Int?       @map("assigned_to")
+  assignedTo        User?      @relation(fields: [assignedToId], references: [id])
+  parentTaskId      Int?       @map("parent_task_id")
+  parent            Task?      @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
+  subtasks          Task[]     @relation("TaskSubtasks")
+  labels            Label[]
+  comments          Comment[]
+
+  @@index([projectId])
+  @@index([sectionId])
+  @@index([assignedToId])
+  @@index([status])
+  @@index([priority])
+  @@index([dueDate])
+  @@index([parentTaskId])
+  @@map("tasks")
+}
+
+model Section {
+  id        Int      @id @default(autoincrement())
+  projectId Int      @map("project_id")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  position  Int      @default(0)
+  createdAt DateTime @default(now()) @map("created_at")
+  tasks     Task[]
+
+  @@index([projectId])
+  @@map("sections")
+}
+
+model Label {
+  id        Int     @id @default(autoincrement())
+  projectId Int     @map("project_id")
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name      String
+  color     String  @default("#0058be")
+  tasks     Task[]
+
+  @@unique([projectId, name])
+  @@index([projectId])
+  @@map("labels")
+}
+
+model Comment {
+  id        Int      @id @default(autoincrement())
+  taskId    Int      @map("task_id")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  authorId  Int      @map("author_id")
+  author    User     @relation(fields: [authorId], references: [id])
+  body      String   @db.Text
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([taskId])
+  @@index([authorId])
+  @@map("comments")
+}
+
+model Blueprint {
+  id         Int      @id @default(autoincrement())
+  projectId  Int      @map("project_id")
+  project    Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  payload    Json     @db.JsonB
+  version    Int      @default(1)
+  receivedAt DateTime @default(now()) @map("received_at")
+
+  @@unique([projectId, version])
+  @@map("blueprints")
+}

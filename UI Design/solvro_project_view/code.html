@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=Space+Grotesk:wght@500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "surface-container-highest": "#e1e2ec",
+                    "surface": "#f9f9ff",
+                    "error-container": "#ffdad6",
+                    "outline-variant": "#c2c6d6",
+                    "on-secondary-fixed": "#131b2e",
+                    "primary": "#0058be",
+                    "primary-fixed": "#d8e2ff",
+                    "on-primary": "#ffffff",
+                    "on-error": "#ffffff",
+                    "outline": "#727785",
+                    "on-secondary-container": "#5c647a",
+                    "secondary": "#565e74",
+                    "on-primary-container": "#fefcff",
+                    "inverse-surface": "#2e3038",
+                    "tertiary-fixed-dim": "#c3c7cb",
+                    "secondary-container": "#dae2fd",
+                    "inverse-on-surface": "#eff0fa",
+                    "on-background": "#191b23",
+                    "primary-container": "#2170e4",
+                    "on-tertiary-container": "#fbfcff",
+                    "on-surface-variant": "#424754",
+                    "surface-container-lowest": "#ffffff",
+                    "surface-bright": "#f9f9ff",
+                    "on-surface": "#191b23",
+                    "on-secondary-fixed-variant": "#3f465c",
+                    "on-error-container": "#93000a",
+                    "surface-container": "#ecedf7",
+                    "surface-container-high": "#e6e7f2",
+                    "on-tertiary": "#ffffff",
+                    "on-primary-fixed-variant": "#004395",
+                    "tertiary": "#585d60",
+                    "surface-container-low": "#f2f3fd",
+                    "tertiary-fixed": "#dfe3e7",
+                    "surface-dim": "#d8d9e3",
+                    "on-secondary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.125rem",
+                    "lg": "0.25rem",
+                    "xl": "0.5rem",
+                    "full": "0.75rem"
+            },
+            "spacing": {
+                    "stack_sm": "4px",
+                    "gutter": "16px",
+                    "stack_md": "8px",
+                    "context_panel_width": "320px",
+                    "margin": "24px",
+                    "stack_lg": "16px",
+                    "sidebar_width": "260px"
+            },
+            "fontFamily": {
+                    "h2": ["Space Grotesk"],
+                    "body-lg": ["Inter"],
+                    "h1": ["Space Grotesk"],
+                    "label-caps": ["Space Grotesk"],
+                    "data-mono": ["Inter"],
+                    "body-sm": ["Inter"]
+            },
+            "fontSize": {
+                    "h2": ["24px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                    "body-lg": ["16px", {"lineHeight": "1.5", "fontWeight": "400"}],
+                    "h1": ["32px", {"lineHeight": "1.2", "fontWeight": "600"}],
+                    "label-caps": ["11px", {"lineHeight": "1", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "data-mono": ["13px", {"lineHeight": "1.4", "letterSpacing": "-0.01em", "fontWeight": "500"}],
+                    "body-sm": ["14px", {"lineHeight": "1.5", "fontWeight": "400"}]
+            }
+          },
+        },
+      }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body class="bg-surface font-body-sm text-on-surface antialiased overflow-hidden">
+<!-- SideNavBar -->
+<aside class="bg-slate-900 dark:bg-slate-950 w-[260px] h-screen fixed left-0 top-0 border-r border-slate-800 flex flex-col z-50 font-space-grotesk antialiased tracking-tight">
+<div class="p-6">
+<div class="flex items-center gap-3">
+<div class="w-8 h-8 bg-blue-600 rounded-sm flex items-center justify-center">
+<span class="material-symbols-outlined text-white text-lg" data-icon="terminal">terminal</span>
+</div>
+<div>
+<h1 class="text-xl font-bold text-white tracking-tighter">Solvro TAM</h1>
+<p class="text-[10px] uppercase tracking-widest text-slate-500 font-bold">Command Center</p>
+</div>
+</div>
+</div>
+<nav class="flex-1 px-4 space-y-1 mt-4">
+<div class="bg-blue-600/10 text-blue-400 border-l-2 border-blue-500 px-4 py-3 flex items-center gap-3 duration-150 ease-in-out">
+<span class="material-symbols-outlined" data-icon="dashboard">dashboard</span>
+<span>Overview</span>
+</div>
+<div class="text-slate-400 hover:text-slate-100 px-4 py-3 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-slate-800/50">
+<span class="material-symbols-outlined" data-icon="assignment">assignment</span>
+<span>Active Projects</span>
+</div>
+<div class="text-slate-400 hover:text-slate-100 px-4 py-3 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-slate-800/50">
+<span class="material-symbols-outlined" data-icon="groups">groups</span>
+<span>Team Workload</span>
+</div>
+<div class="text-slate-400 hover:text-slate-100 px-4 py-3 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-slate-800/50">
+<span class="material-symbols-outlined" data-icon="bar_chart">bar_chart</span>
+<span>Reports</span>
+</div>
+<div class="text-slate-400 hover:text-slate-100 px-4 py-3 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-slate-800/50">
+<span class="material-symbols-outlined" data-icon="favorite">favorite</span>
+<span>Client Health</span>
+</div>
+<div class="text-slate-400 hover:text-slate-100 px-4 py-3 flex items-center gap-3 transition-colors duration-150 ease-in-out hover:bg-slate-800/50">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span>Settings</span>
+</div>
+</nav>
+<div class="p-4 border-t border-slate-800 space-y-1">
+<div class="text-slate-400 hover:text-slate-100 px-4 py-2 flex items-center gap-3 text-sm transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="terminal">terminal</span>
+<span>Go Backend</span>
+</div>
+<div class="text-slate-400 hover:text-slate-100 px-4 py-2 flex items-center gap-3 text-sm transition-colors">
+<span class="material-symbols-outlined text-sm" data-icon="sync">sync</span>
+<span>PostgreSQL Sync</span>
+</div>
+</div>
+</aside>
+<!-- TopAppBar -->
+<header class="h-16 border-b border-slate-200 bg-white sticky top-0 z-40 flex items-center justify-between px-6 ml-[260px] mr-[320px] font-space-grotesk font-medium text-sm transition-all duration-200">
+<div class="flex items-center gap-8">
+<span class="text-lg font-bold text-slate-900">My Projects</span>
+<nav class="flex gap-6 h-16 items-end">
+<a class="text-blue-600 border-b-2 border-blue-600 pb-5" href="#">Project View</a>
+<a class="text-slate-500 pb-5 hover:text-slate-800" href="#">Active Kanban</a>
+<a class="text-slate-500 pb-5 hover:text-slate-800" href="#">Table View</a>
+<a class="text-slate-500 pb-5 hover:text-slate-800" href="#">Settings</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<div class="relative">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" data-icon="search">search</span>
+<input class="pl-10 pr-4 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs w-64 focus:ring-2 focus:ring-blue-600 focus:border-transparent outline-none transition-all" placeholder="Search parameters..." type="text"/>
+</div>
+<button class="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-xs font-bold hover:bg-blue-700 transition-colors">Create New Project</button>
+<button class="text-blue-600 hover:bg-slate-50 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors">Integrate SA Design</button>
+</div>
+</header>
+<!-- Main Canvas -->
+<main class="ml-[260px] mr-[320px] p-6 min-h-[calc(100vh-64px)] overflow-y-auto custom-scrollbar">
+<!-- Dashboard Header -->
+<div class="flex justify-between items-center mb-8">
+<div>
+<h2 class="font-h2 text-h2 text-on-surface">Active Strategic Projects</h2>
+<p class="text-on-surface-variant font-body-sm mt-1">Real-time status monitoring of 12 active infrastructure initiatives.</p>
+</div>
+<div class="flex gap-2">
+<button class="p-2 border border-outline-variant hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="filter_list">filter_list</span>
+</button>
+<button class="p-2 border border-outline-variant hover:bg-surface-container transition-colors">
+<span class="material-symbols-outlined text-on-surface-variant" data-icon="sort">sort</span>
+</button>
+</div>
+</div>
+<!-- High-Density Project Grid -->
+<div class="grid grid-cols-2 gap-6">
+<!-- Project Card 1 (Selected) -->
+<div class="bg-surface-container-lowest border-2 border-primary p-6 relative group transition-all">
+<div class="absolute top-4 right-4 flex items-center gap-2">
+<div class="bg-error-container text-on-error-container px-2 py-0.5 rounded-full font-label-caps text-[10px]">CRITICAL</div>
+</div>
+<div class="mb-4">
+<h3 class="font-h2 text-[18px] text-on-surface">Orion Core Migration</h3>
+<p class="text-on-surface-variant text-xs mt-1">Client: Quantum Dynamics Ltd.</p>
+</div>
+<div class="flex items-center gap-3 mb-6">
+<img class="w-8 h-8 rounded-full border border-outline-variant" data-alt="A professional headshot of a senior technical lead in a modern, high-tech workspace. The lighting is crisp and cool, highlighting his expertise and focused demeanor. He is wearing a dark, minimalist professional attire. The background is slightly blurred, showing a high-tech server room with soft blue indicator lights." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDi9oP_-_XRr_u_ol9rYKo9ymcCKaFnPkD_o2rMkYVQykJ-O7Wk_3w4s3KgqSpLxzBmwFsoaqirHc2QjHggu12XBva_7iAg-8lq_NXvTQizmx3Hn2TfqPXFmdwRHn3JzmsY2B5jhj2BUzdfs9gUj9f_rDUabRKRUdPP_AT7QAAPd58kNFHsrLwgbL0Q86Nc-FWPsowMQL4g7j_X7S0xYQ30AqCzIN5AAuMC-xJtsscxueNDvDqIBxQXBokEXOI_QRFCjvbhjwFmv5Wp"/>
+<div>
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold">LEAD TAM</p>
+<p class="font-body-sm text-on-surface font-medium leading-none">Marcus Thorne</p>
+</div>
+</div>
+<div class="space-y-4">
+<div>
+<div class="flex justify-between text-[11px] mb-1 font-bold">
+<span class="text-outline uppercase">MIGRATION PROGRESS</span>
+<span class="text-on-surface">68%</span>
+</div>
+<div class="h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[68%]"></div>
+</div>
+</div>
+<div class="flex items-center justify-between py-3 border-y border-outline-variant/30">
+<div>
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold">HEALTH SCORE</p>
+<p class="text-h2 text-on-surface">42<span class="text-sm font-normal text-outline">/100</span></p>
+</div>
+<div class="text-right">
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold text-right">NEXT MILESTONE</p>
+<p class="font-data-mono text-on-surface">OCT 24, 2023</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Project Card 2 -->
+<div class="bg-surface-container-lowest border border-outline-variant p-6 hover:border-outline transition-all group">
+<div class="absolute top-4 right-4 flex items-center gap-2">
+<div class="bg-secondary-container text-on-secondary-container px-2 py-0.5 rounded-full font-label-caps text-[10px]">STABLE</div>
+</div>
+<div class="mb-4">
+<h3 class="font-h2 text-[18px] text-on-surface">Solaris Edge Deployment</h3>
+<p class="text-on-surface-variant text-xs mt-1">Client: Helios Global Systems</p>
+</div>
+<div class="flex items-center gap-3 mb-6">
+<img class="w-8 h-8 rounded-full border border-outline-variant" data-alt="A professional headshot of a technical account manager. She has a confident and intelligent expression, set against a bright, minimalist office background. The lighting is soft and natural, emphasizing a professional yet approachable corporate modern aesthetic. She is wearing a simple, high-quality white blouse." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDfYf_Tz1M81SQE_e8z-LQmr1AUKzuYvJcSN85ecb_DLB2YqDIh9r-iyvTvB2yLVR19J4VqhFyPAmi-nefcj1AOC7YGvkCx2tGz8EoooVePxwDDQrcmPdmIoSm9RGKCbSREJu6F46Kb1ZJh2PIKnWA0BWT04ulrGYHHXB9hYzz5utN7PYMl-FRzQYBO2keS2eY6kasl9r_eHUqxyr_BuI5yfs__9Bga_EGeEhZMw52v5chq69h8gfYPaPLBhtVt1eYD30cJzdsZj_7d"/>
+<div>
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold">LEAD TAM</p>
+<p class="font-body-sm text-on-surface font-medium leading-none">Elena Rodriguez</p>
+</div>
+</div>
+<div class="space-y-4">
+<div>
+<div class="flex justify-between text-[11px] mb-1 font-bold">
+<span class="text-outline uppercase">DEPLOYMENT PROGRESS</span>
+<span class="text-on-surface">92%</span>
+</div>
+<div class="h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-secondary w-[92%]"></div>
+</div>
+</div>
+<div class="flex items-center justify-between py-3 border-y border-outline-variant/30">
+<div>
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold">HEALTH SCORE</p>
+<p class="text-h2 text-on-surface">94<span class="text-sm font-normal text-outline">/100</span></p>
+</div>
+<div class="text-right">
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold text-right">NEXT MILESTONE</p>
+<p class="font-data-mono text-on-surface">NOV 02, 2023</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Project Card 3 -->
+<div class="bg-surface-container-lowest border border-outline-variant p-6 hover:border-outline transition-all">
+<div class="mb-4">
+<h3 class="font-h2 text-[18px] text-on-surface">Nebula Security Audit</h3>
+<p class="text-on-surface-variant text-xs mt-1">Client: Aether FinTech</p>
+</div>
+<div class="flex items-center gap-3 mb-6">
+<img class="w-8 h-8 rounded-full border border-outline-variant" data-alt="A portrait of a male cyber security analyst in a high-tech environment. He is focused and professional, wearing dark technical gear. The setting is a dimly lit, high-performance operations center with multiple monitor screens displaying complex data visualizations in the background. The lighting is moody with subtle cyan and magenta accents." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDkwkrzLX2UHp8v20eIf7g5AF9d8Lk966GTAssVolgq0jvkcJ321i92yCNtu33BqlE4XaCwhKA0FtHboj4fC07Y2TwkHe5IHrjB5n8FiJ8GJaOB4J5qZMNWWKL6R_TBtnesEFMFkt_u21YKVZ8_HoHwlkZXKUyd0cwYY95A05CKnFNNp7DDO4VWIWwU3jQoo9ADvjNRsvXK6J3h_aADrXOqqrK05nL8_8SI3uV5yLxDKxa6aX-dvOMksdkJ0wdan0AahvoAjs6qQDYW"/>
+<div>
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold">LEAD TAM</p>
+<p class="font-body-sm text-on-surface font-medium leading-none">Jameson Vane</p>
+</div>
+</div>
+<div class="space-y-4">
+<div>
+<div class="flex justify-between text-[11px] mb-1 font-bold">
+<span class="text-outline uppercase">AUDIT COMPLETION</span>
+<span class="text-on-surface">15%</span>
+</div>
+<div class="h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-tertiary w-[15%]"></div>
+</div>
+</div>
+<div class="flex items-center justify-between py-3 border-y border-outline-variant/30">
+<div>
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold">HEALTH SCORE</p>
+<p class="text-h2 text-on-surface">78<span class="text-sm font-normal text-outline">/100</span></p>
+</div>
+<div class="text-right">
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold text-right">NEXT MILESTONE</p>
+<p class="font-data-mono text-on-surface">OCT 30, 2023</p>
+</div>
+</div>
+</div>
+</div>
+<!-- Project Card 4 -->
+<div class="bg-surface-container-lowest border border-outline-variant p-6 hover:border-outline transition-all">
+<div class="mb-4">
+<h3 class="font-h2 text-[18px] text-on-surface">Atlas Data Lake</h3>
+<p class="text-on-surface-variant text-xs mt-1">Client: Terracorp Industries</p>
+</div>
+<div class="flex items-center gap-3 mb-6">
+<img class="w-8 h-8 rounded-full border border-outline-variant" data-alt="A high-quality portrait of a female data engineer in a modern industrial setting. She has a sharp, analytical gaze and is wearing casual professional clothing. The background features architectural lines and a bright, clean industrial aesthetic with large windows letting in natural light. The overall mood is intelligent and focused." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAy0dBjrpcOaPi3k_H9JVt1XUaybXyZqwyHg5O_U3JFitTSKtwnEMixJODxDRYbySENySL2Wb7CtHl5AzMfaIwDUU1-KoxKO_gQFFQ8BQQT7Af43D3WfTgcOCUhejNdIIJor6qudY3GVY7j-0R5HPmq5YqWBYCVO15WNLFIuIp5tyeMGhUyGUcdwUC7-rQoivyLOi3xTvlSIuoAfVjwDdx9neWqdUhUxGuCX_RNsY9sUiDcLpCCq3YhDGHDpfeZPHCfnxM4FHIKvcuH"/>
+<div>
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold">LEAD TAM</p>
+<p class="font-body-sm text-on-surface font-medium leading-none">Sarah Jenkins</p>
+</div>
+</div>
+<div class="space-y-4">
+<div>
+<div class="flex justify-between text-[11px] mb-1 font-bold">
+<span class="text-outline uppercase">INGESTION STATUS</span>
+<span class="text-on-surface">45%</span>
+</div>
+<div class="h-1.5 bg-surface-container rounded-full overflow-hidden">
+<div class="h-full bg-primary-container w-[45%]"></div>
+</div>
+</div>
+<div class="flex items-center justify-between py-3 border-y border-outline-variant/30">
+<div>
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold">HEALTH SCORE</p>
+<p class="text-h2 text-on-surface">82<span class="text-sm font-normal text-outline">/100</span></p>
+</div>
+<div class="text-right">
+<p class="text-[10px] uppercase tracking-wider text-outline font-bold text-right">NEXT MILESTONE</p>
+<p class="font-data-mono text-on-surface">NOV 15, 2023</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- AI Breakdown Alert -->
+<div class="mt-8 bg-surface-container-low border-l-4 border-[#F59E0B] p-6 shadow-[inset_0_0_12px_rgba(245,158,11,0.1)]">
+<div class="flex gap-4 items-start">
+<span class="material-symbols-outlined text-[#F59E0B]" data-icon="auto_awesome">auto_awesome</span>
+<div>
+<h4 class="font-h2 text-[16px] text-[#F59E0B] mb-2 uppercase tracking-tight">AI Diagnostic Overview</h4>
+<p class="text-on-surface-variant font-body-sm">Orion Core Migration is flagged due to unexpected latency in the PostgreSQL synchronization layer. Recommend immediate review of architectural debt in the legacy connector modules.</p>
+</div>
+</div>
+</div>
+</main>
+<!-- NavigationDrawer (Right Panel) -->
+<aside class="w-[320px] h-screen fixed right-0 top-0 border-l border-slate-200 bg-slate-50/80 backdrop-blur-md flex flex-col z-50 shadow-[-4px_0_12px_rgba(0,0,0,0.05)] ease-out duration-300">
+<div class="p-6 border-b border-slate-200">
+<h3 class="font-space-grotesk text-xs uppercase tracking-widest font-bold text-slate-500">Project Context</h3>
+<h2 class="text-lg font-semibold text-slate-700 mt-1">Orion Core Migration</h2>
+</div>
+<div class="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-8">
+<!-- Architectural Debt Section -->
+<section>
+<div class="flex items-center justify-between mb-4">
+<h4 class="font-space-grotesk text-[11px] uppercase tracking-widest font-bold text-blue-600">Architectural Debt</h4>
+<span class="text-[11px] font-bold text-error">High Impact</span>
+</div>
+<div class="space-y-4">
+<div class="p-3 bg-white border border-slate-200 rounded">
+<div class="flex justify-between mb-2">
+<span class="text-xs font-semibold text-slate-700">Legacy API Wrappers</span>
+<span class="text-xs font-data-mono text-slate-400">82%</span>
+</div>
+<div class="h-1 bg-slate-100 rounded-full overflow-hidden">
+<div class="h-full bg-error w-[82%]"></div>
+</div>
+</div>
+<div class="p-3 bg-white border border-slate-200 rounded">
+<div class="flex justify-between mb-2">
+<span class="text-xs font-semibold text-slate-700">Database Normalization</span>
+<span class="text-xs font-data-mono text-slate-400">45%</span>
+</div>
+<div class="h-1 bg-slate-100 rounded-full overflow-hidden">
+<div class="h-full bg-[#F59E0B] w-[45%]"></div>
+</div>
+</div>
+<div class="p-3 bg-white border border-slate-200 rounded">
+<div class="flex justify-between mb-2">
+<span class="text-xs font-semibold text-slate-700">Auth Middleware</span>
+<span class="text-xs font-data-mono text-slate-400">12%</span>
+</div>
+<div class="h-1 bg-slate-100 rounded-full overflow-hidden">
+<div class="h-full bg-primary w-[12%]"></div>
+</div>
+</div>
+</div>
+</section>
+<!-- Risk Assessment Metrics -->
+<section>
+<h4 class="font-space-grotesk text-[11px] uppercase tracking-widest font-bold text-blue-600 mb-4">Risk Assessment</h4>
+<div class="grid grid-cols-2 gap-4">
+<div class="bg-white border border-slate-200 p-3 rounded text-center">
+<span class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Operational</span>
+<span class="text-xl font-bold text-slate-700">7.2</span>
+</div>
+<div class="bg-white border border-slate-200 p-3 rounded text-center">
+<span class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Security</span>
+<span class="text-xl font-bold text-error">9.1</span>
+</div>
+<div class="bg-white border border-slate-200 p-3 rounded text-center">
+<span class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Compliance</span>
+<span class="text-xl font-bold text-slate-700">3.4</span>
+</div>
+<div class="bg-white border border-slate-200 p-3 rounded text-center">
+<span class="block text-[10px] text-slate-400 uppercase font-bold mb-1">Timeline</span>
+<span class="text-xl font-bold text-[#F59E0B]">6.5</span>
+</div>
+</div>
+</section>
+<!-- Activity Log (Compact) -->
+<section>
+<h4 class="font-space-grotesk text-[11px] uppercase tracking-widest font-bold text-blue-600 mb-4">Live Execution Trace</h4>
+<div class="space-y-3 font-data-mono text-[11px]">
+<div class="flex gap-3 text-slate-600 border-l border-slate-200 pl-3 relative">
+<div class="absolute -left-1 top-1 w-2 h-2 bg-slate-300 rounded-full"></div>
+<span class="text-slate-400 shrink-0">14:02:11</span>
+<span>PostgreSQL node sync failed on cluster-alpha</span>
+</div>
+<div class="flex gap-3 text-slate-600 border-l border-slate-200 pl-3 relative">
+<div class="absolute -left-1 top-1 w-2 h-2 bg-slate-300 rounded-full"></div>
+<span class="text-slate-400 shrink-0">13:45:00</span>
+<span>Marcus Thorne updated technical roadmap</span>
+</div>
+<div class="flex gap-3 text-slate-600 border-l border-slate-200 pl-3 relative">
+<div class="absolute -left-1 top-1 w-2 h-2 bg-blue-500 rounded-full"></div>
+<span class="text-slate-400 shrink-0">13:12:04</span>
+<span class="text-blue-600">AI Diagnosis completed for legacy connectors</span>
+</div>
+</div>
+</section>
+</div>
+<div class="p-6 border-t border-slate-200 bg-white">
+<button class="w-full bg-slate-900 text-white py-3 font-bold text-xs rounded hover:bg-slate-800 transition-colors uppercase tracking-widest">
+                Initiate Risk Mitigation
+            </button>
+</div>
+</aside>
+</body></html>
