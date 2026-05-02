@@ -18,6 +18,7 @@ export interface UserSummary {
   username: string;
   email: string;
   role: Role;
+  permissions: string[];
 }
 
 export interface Label {

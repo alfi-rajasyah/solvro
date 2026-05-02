@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-05-02 — Customer form picks AM/SA from user dropdowns; wildcard users eligible for SA/TAM
+
+- **[backend/src/routes/users.ts](backend/src/routes/users.ts)** — `GET /users` now returns each user's `permissions: string[]` alongside their role. Lets the frontend filter dropdowns by capability (e.g. "anyone with `*`") instead of only by literal role name.
+- **[frontend/src/lib/queries.ts](frontend/src/lib/queries.ts)** — `UserSummary.permissions: string[]` added to match.
+- **[frontend/src/components/CustomerFormModal.tsx](frontend/src/components/CustomerFormModal.tsx)** — replaced the free-text "Account Manager" and "Solution Architect" inputs with `<select>` dropdowns populated from `useUsers()`. AM list = users with `TAM` role OR `*` permission; SA list = users with `SA` role OR `*` permission. If the customer was created earlier with a free-text AM/SA value that doesn't match any current user, that legacy value is preserved as a `(current)` option so editing the customer doesn't silently lose it. Field still stored as a string (no schema change).
+- **[frontend/src/components/ProjectFormModal.tsx](frontend/src/components/ProjectFormModal.tsx)** — SA and TAM dropdowns now include any user with `*` permission, not just literal SA/TAM-role users. So an admin (or any custom-role-with-`*`) user can be selected as the project's SA or TAM, and admins can self-assign when no SA/TAM-role users exist yet on a fresh deployment. `canPickTam` switched from `user.role === "ADMIN"` to `user.permissions.includes("*")` so DIRECTOR/MANAGER-equivalents can also reassign.
+
 ### Changed — 2026-05-02 — RBAC switched from role-name gates to permission gates
 
 - **[backend/src/http/auth.ts](backend/src/http/auth.ts)** — `JwtPayload` now carries `permissions: string[]` alongside `role`. New helper `hasPermission(payload, perm)` returns `true` if the user has `*` (full access) or the specific permission. New middleware `requirePermission(perm)` for action-level authorization. `verifyToken` parses `permissions` from the JWT defensively (old tokens issued before this change get `[]` and re-acquire perms on next login). `requireRole` and `requireAdmin` are kept for the admin-only namespace.

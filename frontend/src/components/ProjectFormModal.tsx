@@ -64,9 +64,16 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
     }
   }, [open, project, user]);
 
-  const sas = (users ?? []).filter((u) => u.role === "SA");
-  const tams = (users ?? []).filter((u) => u.role === "TAM");
-  const canPickTam = user?.role === "ADMIN";
+  // SA / TAM dropdowns include literal SA/TAM-role users PLUS any user
+  // whose role has the "*" wildcard permission (built-in ADMIN and any
+  // custom role like DIRECTOR/MANAGER configured with full access).
+  const sas = (users ?? []).filter(
+    (u) => u.role === "SA" || u.permissions.includes("*"),
+  );
+  const tams = (users ?? []).filter(
+    (u) => u.role === "TAM" || u.permissions.includes("*"),
+  );
+  const canPickTam = user?.permissions?.includes("*") ?? false;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
