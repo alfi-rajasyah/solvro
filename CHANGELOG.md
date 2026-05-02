@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-05-02 — setup.sh prompts now work under `curl | bash`
+
+- **[setup.sh](setup.sh)** — all `read` calls now redirect from `/dev/tty` instead of stdin (`read ... </dev/tty`). When the script is invoked via `curl -sSL .../setup.sh | bash`, the script's stdin is the curl pipe, not the terminal — so the previous `read -p "Admin email: "` immediately returned empty and failed validation with `invalid email.`. Reading from `/dev/tty` bypasses stdin entirely and reaches the user's terminal directly. Added a guard at the top that prints a fallback instruction (`curl ... -o setup.sh && bash setup.sh`) if `/dev/tty` is also unavailable (rare — happens in some unattended/CI shells).
+
 ### Changed — 2026-05-02 — Per-deployment admin via setup.sh; demo seed users removed
 
 - **[setup.sh](setup.sh)** — NEW. The one-shot deploy script. Pasted onto a fresh Ubuntu server (with Docker + Docker Compose installed), it prompts for an admin email and password, generates random `POSTGRES_PASSWORD` and `JWT_SECRET` via `openssl`, writes `~/solvro/.env` (`chmod 600`) and `~/solvro/docker-compose.yml`, wipes any prior `solvro_pgdata` volume to clear stale postgres state, brings the stack up, polls `/health` until ready, then runs the new `create-admin.ts` script to create the admin user. **Idempotent**: re-running on a server that already has `~/solvro/.env` skips prompts and just does `docker compose pull && up -d` — that's the update flow. Distributes via terminal paste — no scp, no git clone, no PAT required.
