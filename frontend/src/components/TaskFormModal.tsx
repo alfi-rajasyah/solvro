@@ -3,11 +3,13 @@ import { Modal } from "./Modal";
 import { LabelPicker } from "./LabelPicker";
 import { CommentThread } from "./CommentThread";
 import { ApiError } from "@/lib/api";
+import { hasPermission, useAuth } from "@/lib/auth";
 import {
   type Priority,
   type Task,
   type TaskStatus,
   useCreateTask,
+  useDeleteTask,
   useProjectSections,
   useProjectTasks,
   useUpdateTask,
@@ -47,8 +49,11 @@ export function TaskFormModal(props: TaskFormModalProps) {
   const { open, onClose, projectId } = props;
   const isEdit = props.mode === "edit";
 
+  const { user } = useAuth();
+  const canEdit = hasPermission(user, "task:write");
   const create = useCreateTask(projectId);
   const update = useUpdateTask(projectId);
+  const remove = useDeleteTask(projectId);
   const { data: users } = useUsers();
   const { data: projectTasks } = useProjectTasks(open ? projectId : null);
   const { data: sections } = useProjectSections(open ? projectId : null);
@@ -169,19 +174,48 @@ export function TaskFormModal(props: TaskFormModalProps) {
     }
   }
 
-  const submitting = create.isPending || update.isPending;
+  const submitting = create.isPending || update.isPending || remove.isPending;
   const subtasks = editingTask
     ? (projectTasks ?? []).filter((t) => t.parentTaskId === editingTask.id)
     : [];
+
+  async function handleDelete() {
+    if (!isEdit || !editingTask) return;
+    const subtaskWarning =
+      subtasks.length > 0
+        ? `\n\nThis task has ${subtasks.length} subtask(s) which will also be deleted.`
+        : "";
+    const ok = window.confirm(
+      `Delete task "${editingTask.title}"? This cannot be undone.${subtaskWarning}`,
+    );
+    if (!ok) return;
+    setError(null);
+    try {
+      await remove.mutateAsync(editingTask.id);
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Delete failed.");
+    }
+  }
 
   return (
     <Modal
       open={open}
       onClose={onClose}
-      title={isEdit ? `Edit task · T-${String(editingTask!.id).padStart(3, "0")}` : "New task"}
+      title={isEdit ? "Edit task" : "New task"}
       widthClass="max-w-3xl"
       footer={
         <>
+          {isEdit && canEdit && (
+            <button
+              type="button"
+              onClick={handleDelete}
+              disabled={submitting}
+              className="mr-auto rounded border border-error/40 px-3 py-1.5 text-xs font-medium text-error hover:bg-error/10 disabled:opacity-50"
+            >
+              {remove.isPending ? "Deleting…" : "Delete task"}
+            </button>
+          )}
           <button
             type="button"
             onClick={onClose}
@@ -237,27 +271,22 @@ export function TaskFormModal(props: TaskFormModalProps) {
               ) : (
                 <ul className="divide-y divide-outline-variant rounded border border-outline-variant">
                   {subtasks.map((s) => (
-                    <li key={s.id} className="flex items-center justify-between gap-2 px-3 py-2">
-                      <span className="flex items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={s.status === "DONE"}
-                          onChange={() =>
-                            update.mutate({
-                              id: s.id,
-                              patch: { status: s.status === "DONE" ? "TODO" : "DONE" },
-                            })
-                          }
-                          className="h-3.5 w-3.5 accent-primary"
-                        />
-                        <span
-                          className={`text-xs ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
-                        >
-                          {s.title}
-                        </span>
-                      </span>
-                      <span className="font-mono text-[10px] text-on-surface-variant">
-                        T-{String(s.id).padStart(3, "0")}
+                    <li key={s.id} className="flex items-center gap-2 px-3 py-2">
+                      <input
+                        type="checkbox"
+                        checked={s.status === "DONE"}
+                        onChange={() =>
+                          update.mutate({
+                            id: s.id,
+                            patch: { status: s.status === "DONE" ? "TODO" : "DONE" },
+                          })
+                        }
+                        className="h-3.5 w-3.5 accent-primary"
+                      />
+                      <span
+                        className={`text-xs ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
+                      >
+                        {s.title}
                       </span>
                     </li>
                   ))}

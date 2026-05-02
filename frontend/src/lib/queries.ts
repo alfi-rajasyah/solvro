@@ -490,6 +490,19 @@ export function useUpdateTask(projectId: number) {
   });
 }
 
+export function useDeleteTask(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiRequest<void>(`/tasks/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: queryKeys.overview });
+    },
+  });
+}
+
 export interface CreateTaskInput {
   title: string;
   description?: string;

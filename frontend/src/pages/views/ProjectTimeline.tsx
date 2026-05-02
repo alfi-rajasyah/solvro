@@ -130,9 +130,6 @@ function TimelineItem({
       <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary/40">
         <div className="mb-1 flex items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
-              T-{String(task.id).padStart(3, "0")}
-            </span>
             <TaskStatusChip status={task.status} />
             <PriorityBadge priority={task.priority} compact />
             {task.labels.slice(0, 4).map((l) => (
@@ -166,7 +163,7 @@ function TimelineItem({
                 key={s.id}
                 className={`text-[11px] ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
               >
-                {s.status === "DONE" ? "✓" : "·"} T-{String(s.id).padStart(3, "0")} {s.title}
+                {s.status === "DONE" ? "✓" : "·"} {s.title}
               </li>
             ))}
           </ul>

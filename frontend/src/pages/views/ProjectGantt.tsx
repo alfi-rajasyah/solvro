@@ -18,6 +18,7 @@ export function ProjectGantt() {
       <div className="hidden min-h-0 min-w-0 flex-1 md:block">
         <GanttFrame
           projectId={project.id}
+          projectName={project.name}
           baselineLockedAt={project.baselineLockedAt}
           baselineLockedBy={project.baselineLockedBy}
           onEditTask={setEditTask}

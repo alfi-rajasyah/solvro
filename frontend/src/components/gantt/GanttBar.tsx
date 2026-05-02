@@ -13,7 +13,8 @@ import {
   RESIZE_HANDLE_PX,
   ROW_HEIGHT,
 } from "@/lib/gantt/constants";
-import type { Priority, TaskStatus } from "@/lib/queries";
+import { PRIORITY_BORDER_HEX } from "@/lib/gantt/palette";
+import type { TaskStatus } from "@/lib/queries";
 
 type DragMode = "move" | "resize-start" | "resize-end";
 
@@ -31,19 +32,6 @@ const STATUS_FILL: Record<TaskStatus, string> = {
   TODO: "bg-sky-200/90",
   IN_PROGRESS: "bg-blue-400",
   DONE: "bg-emerald-400",
-};
-
-const STATUS_TEXT: Record<TaskStatus, string> = {
-  TODO: "text-sky-900",
-  IN_PROGRESS: "text-white",
-  DONE: "text-white",
-};
-
-const PRIORITY_BORDER_COLOR: Record<Priority, string> = {
-  LOW: "#94a3b8",
-  MEDIUM: "#3b82f6",
-  HIGH: "#f59e0b",
-  URGENT: "#ef4444",
 };
 
 const STATUS_PROGRESS: Record<TaskStatus, number> = {
@@ -249,7 +237,7 @@ export function GanttBar({
         top,
         height: barHeight,
         zIndex: 2,
-        borderLeft: `3px solid ${PRIORITY_BORDER_COLOR[priority]}`,
+        borderLeft: `3px solid ${PRIORITY_BORDER_HEX[priority]}`,
       }}
       onPointerDown={(e) => handlePointerDown(e, "move")}
       onPointerMove={handlePointerMove}
@@ -264,14 +252,6 @@ export function GanttBar({
           aria-hidden="true"
         />
       )}
-      <div
-        className={[
-          "relative flex h-full items-center px-2 text-[11px] font-medium",
-          STATUS_TEXT[status],
-        ].join(" ")}
-      >
-        <span className="truncate">{row.name}</span>
-      </div>
       {canEdit && (
         <>
           <div
@@ -292,6 +272,18 @@ export function GanttBar({
           />
         </>
       )}
+    </div>
+    <div
+      className="pointer-events-none absolute flex items-center whitespace-nowrap text-[11px] font-medium text-on-surface"
+      style={{
+        left: left + width + 6,
+        top,
+        height: barHeight,
+        zIndex: 2,
+      }}
+      aria-hidden="true"
+    >
+      {row.name}
     </div>
     </>
   );

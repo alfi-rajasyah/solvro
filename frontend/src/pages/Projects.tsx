@@ -124,10 +124,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
       to={`/projects/${project.id}`}
       className="group flex flex-col gap-3 rounded border border-outline-variant bg-surface-container-lowest p-5 transition-all hover:border-primary"
     >
-      <div className="flex items-start justify-between gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
-          SOLV-{String(project.id).padStart(3, "0")}
-        </span>
+      <div className="flex items-start justify-end gap-2">
         <ProjectStatusChip status={project.status} />
       </div>
 
