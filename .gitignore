@@ -5,6 +5,12 @@ frontend/dist/
 *.tsbuildinfo
 .vite/
 
+# tsc occasionally compiles top-level config files (vite.config.ts ->
+# vite.config.{js,d.ts}); those win over the .ts at runtime and ship a
+# stale config. Keep them out of the working tree.
+frontend/vite.config.js
+frontend/vite.config.d.ts
+
 .env
 .env.local
 .env.*.local
