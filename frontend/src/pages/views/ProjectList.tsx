@@ -517,21 +517,28 @@ function TaskRow({
           >
             <span className="material-symbols-outlined text-[12px]">check</span>
           </button>
-          <span
-            className={[
-              "truncate text-sm",
-              node.task.status === "DONE"
-                ? "text-on-surface-variant line-through"
-                : "text-on-surface",
-            ].join(" ")}
-          >
-            {node.task.title}
-          </span>
-          {node.subtasks.length > 0 && (
-            <span className="shrink-0 font-mono text-[10px] text-on-surface-variant">
-              {node.subtasks.length} subtask{node.subtasks.length === 1 ? "" : "s"}
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span
+              className={[
+                "shrink-0 truncate text-sm",
+                node.task.status === "DONE"
+                  ? "text-on-surface-variant line-through"
+                  : "text-on-surface",
+              ].join(" ")}
+            >
+              {node.task.title}
             </span>
-          )}
+            {node.subtasks.length > 0 && (
+              <span className="shrink-0 font-mono text-[10px] text-on-surface-variant">
+                {node.subtasks.length} subtask{node.subtasks.length === 1 ? "" : "s"}
+              </span>
+            )}
+            {node.task.description && (
+              <span className="min-w-0 truncate text-[11px] text-on-surface-variant">
+                — {node.task.description}
+              </span>
+            )}
+          </span>
         </button>
         <span>
           <AssigneeAvatar user={node.task.assignedTo} size="xs" />
@@ -595,17 +602,26 @@ function TaskRow({
           <button
             type="button"
             onClick={() => onEdit(node.task)}
-            className={[
-              "min-w-0 flex-1 truncate text-left text-sm",
-              node.task.status === "DONE"
-                ? "text-on-surface-variant line-through"
-                : "text-on-surface",
-            ].join(" ")}
+            className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
           >
-            <span className="mr-2 font-mono text-[10px] text-on-surface-variant">
-              #{index}
+            <span
+              className={[
+                "shrink-0 truncate text-sm",
+                node.task.status === "DONE"
+                  ? "text-on-surface-variant line-through"
+                  : "text-on-surface",
+              ].join(" ")}
+            >
+              <span className="mr-2 font-mono text-[10px] text-on-surface-variant">
+                #{index}
+              </span>
+              {node.task.title}
             </span>
-            {node.task.title}
+            {node.task.description && (
+              <span className="min-w-0 truncate text-[11px] text-on-surface-variant">
+                — {node.task.description}
+              </span>
+            )}
           </button>
           {node.subtasks.length > 0 && (
             <button
@@ -748,15 +764,22 @@ function SubtaskRow({
           >
             <span className="material-symbols-outlined text-[12px]">check</span>
           </button>
-          <span
-            className={[
-              "truncate text-xs",
-              task.status === "DONE"
-                ? "text-on-surface-variant line-through"
-                : "text-on-surface",
-            ].join(" ")}
-          >
-            {task.title}
+          <span className="flex min-w-0 items-baseline gap-2">
+            <span
+              className={[
+                "shrink-0 truncate text-xs",
+                task.status === "DONE"
+                  ? "text-on-surface-variant line-through"
+                  : "text-on-surface",
+              ].join(" ")}
+            >
+              {task.title}
+            </span>
+            {task.description && (
+              <span className="min-w-0 truncate text-[11px] text-on-surface-variant">
+                — {task.description}
+              </span>
+            )}
           </span>
         </button>
         <span>
@@ -820,17 +843,26 @@ function SubtaskRow({
           <button
             type="button"
             onClick={() => onEdit(task)}
-            className={[
-              "min-w-0 flex-1 truncate text-left text-xs",
-              task.status === "DONE"
-                ? "text-on-surface-variant line-through"
-                : "text-on-surface",
-            ].join(" ")}
+            className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
           >
-            <span className="mr-2 font-mono text-[10px] text-on-surface-variant">
-              {index}
+            <span
+              className={[
+                "shrink-0 truncate text-xs",
+                task.status === "DONE"
+                  ? "text-on-surface-variant line-through"
+                  : "text-on-surface",
+              ].join(" ")}
+            >
+              <span className="mr-2 font-mono text-[10px] text-on-surface-variant">
+                {index}
+              </span>
+              {task.title}
             </span>
-            {task.title}
+            {task.description && (
+              <span className="min-w-0 truncate text-[11px] text-on-surface-variant">
+                — {task.description}
+              </span>
+            )}
           </button>
         </div>
         <div className="flex items-center justify-between gap-2 pl-6">

@@ -64,8 +64,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
   const [priority, setPriority] = useState<Priority>("MEDIUM");
   const [startDate, setStartDate] = useState<string>("");
   const [dueDate, setDueDate] = useState<string>("");
-  const [baselineStartDate, setBaselineStartDate] = useState<string>("");
-  const [baselineDueDate, setBaselineDueDate] = useState<string>("");
   const [assignedToId, setAssignedToId] = useState<number | "">("");
   const [parentTaskId, setParentTaskId] = useState<number | "">("");
   const [sectionId, setSectionId] = useState<number | "">("");
@@ -83,8 +81,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
       setPriority(t.priority);
       setStartDate(t.startDate ? t.startDate.slice(0, 10) : "");
       setDueDate(t.dueDate ? t.dueDate.slice(0, 10) : "");
-      setBaselineStartDate(t.baselineStartDate ? t.baselineStartDate.slice(0, 10) : "");
-      setBaselineDueDate(t.baselineDueDate ? t.baselineDueDate.slice(0, 10) : "");
       setAssignedToId(t.assignedToId ?? "");
       setParentTaskId(t.parentTaskId ?? "");
       setSectionId(t.sectionId ?? "");
@@ -97,8 +93,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
       setPriority("MEDIUM");
       setStartDate("");
       setDueDate("");
-      setBaselineStartDate("");
-      setBaselineDueDate("");
       setAssignedToId("");
       setParentTaskId(cp.initialParentTaskId ?? "");
       setSectionId(cp.initialSectionId ?? "");
@@ -125,12 +119,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
 
     const startIso = startDate ? new Date(startDate).toISOString() : null;
     const dueIso = dueDate ? new Date(dueDate).toISOString() : null;
-    const baselineStartIso = baselineStartDate
-      ? new Date(baselineStartDate).toISOString()
-      : null;
-    const baselineDueIso = baselineDueDate
-      ? new Date(baselineDueDate).toISOString()
-      : null;
     const parent = parentTaskId === "" ? null : Number(parentTaskId);
     const sec = sectionId === "" ? null : Number(sectionId);
     const assignee = assignedToId === "" ? null : Number(assignedToId);
@@ -146,8 +134,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
             priority,
             startDate: startIso,
             dueDate: dueIso,
-            baselineStartDate: baselineStartIso,
-            baselineDueDate: baselineDueIso,
             assignedToId: assignee,
             parentTaskId: parent,
             sectionId: sec,
@@ -351,37 +337,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
               />
             </Field>
           </div>
-
-          {isEdit && (
-            <div className="space-y-1.5 rounded border border-dashed border-outline-variant bg-surface-container-low/40 p-2">
-              <div className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-                <span className="material-symbols-outlined text-[14px]">bookmark</span>
-                Baseline Dates
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <Field label="Baseline Start">
-                  <input
-                    type="date"
-                    value={baselineStartDate}
-                    onChange={(e) => setBaselineStartDate(e.target.value)}
-                    className="w-full rounded border border-outline-variant bg-surface-container-lowest px-2 py-2 text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </Field>
-                <Field label="Baseline Due">
-                  <input
-                    type="date"
-                    value={baselineDueDate}
-                    onChange={(e) => setBaselineDueDate(e.target.value)}
-                    className="w-full rounded border border-outline-variant bg-surface-container-lowest px-2 py-2 text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-                  />
-                </Field>
-              </div>
-              <p className="text-[10px] text-on-surface-variant">
-                Override only if project scope officially changes — does not affect the
-                live schedule.
-              </p>
-            </div>
-          )}
 
           <Field label="Assignee">
             <select
