@@ -10,13 +10,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-enum RoleName {
-  SA
-  TAM
-  ADMIN
-  STAKEHOLDER
-}
-
 enum ProjectStatus {
   PLANNING
   ACTIVE
@@ -40,7 +33,7 @@ enum Priority {
 
 model Role {
   id          Int      @id @default(autoincrement())
-  roleName    RoleName @unique @map("role_name")
+  roleName    String   @unique @map("role_name")
   permissions Json     @default("[]") @db.JsonB
   users       User[]
 

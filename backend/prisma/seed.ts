@@ -1,8 +1,12 @@
-import { PrismaClient, RoleName } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
-const ROLE_PERMISSIONS: Record<RoleName, string[]> = {
+// The four built-in roles. These are seeded on every container start
+// (idempotent upsert). Admins can create additional custom roles at
+// runtime via POST /admin/roles, but these four are protected from
+// deletion because backend code references them by name.
+const ROLE_PERMISSIONS: Record<string, string[]> = {
   ADMIN: ["*"],
   SA: ["blueprint:create", "blueprint:read", "project:read"],
   TAM: ["project:read", "project:write", "task:read", "task:write"],
@@ -10,7 +14,7 @@ const ROLE_PERMISSIONS: Record<RoleName, string[]> = {
 };
 
 async function main() {
-  for (const roleName of Object.keys(ROLE_PERMISSIONS) as RoleName[]) {
+  for (const roleName of Object.keys(ROLE_PERMISSIONS)) {
     await prisma.role.upsert({
       where: { roleName },
       update: { permissions: ROLE_PERMISSIONS[roleName] },

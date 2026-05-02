@@ -15,6 +15,28 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-05-02 — Admin can create custom roles (RoleName enum → free-text + CRUD)
+
+- **Schema migration** — [backend/prisma/migrations/20260502140000_dynamic_roles/migration.sql](backend/prisma/migrations/20260502140000_dynamic_roles/migration.sql) converts `roles.role_name` from the `RoleName` Postgres enum to plain `TEXT` and drops the enum type. The four built-in role rows (ADMIN, SA, TAM, STAKEHOLDER) are preserved as text values, so no data loss. Migration is idempotent under `prisma migrate deploy`. **Why:** the old enum locked the role set to those four at schema-time; admins can now create custom roles at runtime.
+- **[backend/prisma/schema.prisma](backend/prisma/schema.prisma)** — dropped the `RoleName` enum block; `Role.roleName` is now `String @unique`.
+- **[backend/src/http/auth.ts](backend/src/http/auth.ts)** — `JwtPayload.role` is `string` instead of `RoleName`. JWT verifier no longer checks `role in RoleName` (just non-empty string). `requireRole(...roles: string[])` keeps working — string compare. `requireAdmin` keeps working (compares `role === "ADMIN"`).
+- **[backend/src/routes/admin.ts](backend/src/routes/admin.ts)** — new endpoints under `/admin/roles`:
+  - `GET /admin/roles` — list with `{ id, roleName, permissions, userCount, builtIn }`.
+  - `POST /admin/roles` — create with `{ roleName, permissions: string[] }`. roleName must match `^[A-Z0-9_]+$` and not collide with built-ins.
+  - `PATCH /admin/roles/:id` — update permissions only (name is immutable). Refuses to touch ADMIN (always full access).
+  - `DELETE /admin/roles/:id` — refuses built-ins and any role with users still attached.
+  - `createUserSchema` and `updateRoleSchema` switched from `z.nativeEnum(RoleName)` to `z.string().min(1).max(50)` and validate against the Role table at runtime.
+- **[backend/src/routes/projects.ts](backend/src/routes/projects.ts), [backend/src/routes/overview.ts](backend/src/routes/overview.ts)** — `projectVisibilityFilter` and `projectScope` switches added a `default:` case returning `{ id: { in: [] } }` (no rows match) for custom roles. Built-in roles still get their existing visibility behavior. **Custom roles default to no project visibility**; admin grants access by assigning users as TAM/SA on specific projects.
+- **[backend/prisma/seed.ts](backend/prisma/seed.ts)** — `Record<RoleName, string[]>` → `Record<string, string[]>`. Still upserts the four built-in roles on every container start (idempotent).
+- **[frontend/src/lib/auth.tsx](frontend/src/lib/auth.tsx)** — `Role` type changed from `"SA" | "TAM" | "ADMIN" | "STAKEHOLDER"` to `string`. New `BUILTIN_ROLES` constant for code that needs to differentiate.
+- **[frontend/src/lib/queries.ts](frontend/src/lib/queries.ts)** — new `AdminRole` interface and four hooks: `useAdminRoles`, `useAdminCreateRole`, `useAdminUpdateRolePermissions`, `useAdminDeleteRole`. `adminQueryKeys.roles` added.
+- **[frontend/src/pages/Admin.tsx](frontend/src/pages/Admin.tsx)** — new "Roles" tab between Users and Project Override. Lists all roles with built-in badge and user count. Form to create role (name uppercased automatically, permissions as comma-separated input). Edit perms inline (disabled for ADMIN). Delete (disabled for built-ins or in-use roles). The Users tab's Add User form and the per-row role dropdown now read the role list dynamically via `useAdminRoles` instead of the previous hardcoded `ROLE_OPTIONS` constant — custom roles appear immediately.
+- **Built-in protections** (enforced both in backend and visually in UI):
+  - ADMIN, SA, TAM, STAKEHOLDER cannot be deleted or renamed.
+  - ADMIN's permissions are always `["*"]` (PATCH refused).
+  - Cannot delete a role that still has users attached.
+  - Custom role names must match `^[A-Z0-9_]+$`.
+
 ### Changed — 2026-05-02 — Same-origin /api proxy (Cloudflare Tunnel / TLS-friendly)
 
 - **[frontend/nginx.conf](frontend/nginx.conf)** — added a `location /api/ { proxy_pass http://backend:3000/; ... }` block (placed before the SPA fallback so it matches first). Forwards `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto` headers; sets `proxy_http_version 1.1` and `client_max_body_size 1m` to match Express's `json({ limit: "1mb" })`. The trailing slash on `proxy_pass` strips the `/api` prefix so `/api/auth/login` → `http://backend:3000/auth/login` (backend routes don't have an `/api` prefix per CLAUDE.md). nginx is now the same-origin gateway: the browser only ever talks to whatever hostname serves the page.
