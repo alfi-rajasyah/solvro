@@ -109,21 +109,28 @@ fi
 echo "Fresh install. You'll be asked for the admin email and password."
 echo
 
-read -r -p "Admin email: " ADMIN_EMAIL
+# Read from /dev/tty explicitly so prompts work even when the script is
+# invoked via `curl ... | bash` (stdin is the pipe, not the terminal).
+if [[ ! -t 0 ]] && [[ ! -r /dev/tty ]]; then
+  echo "ERROR: cannot read from /dev/tty. Re-run as: curl -sSL <url> -o setup.sh && bash setup.sh"
+  exit 1
+fi
+
+read -r -p "Admin email: " ADMIN_EMAIL </dev/tty
 [[ -n "$ADMIN_EMAIL" && "$ADMIN_EMAIL" == *"@"* ]] || {
   echo "ERROR: invalid email."
   exit 1
 }
 
 # Read password without echoing it
-read -r -s -p "Admin password (min 8 chars): " ADMIN_PASSWORD
+read -r -s -p "Admin password (min 8 chars): " ADMIN_PASSWORD </dev/tty
 echo
 [[ ${#ADMIN_PASSWORD} -ge 8 ]] || {
   echo "ERROR: password must be at least 8 characters."
   exit 1
 }
 
-read -r -s -p "Confirm password: " ADMIN_PASSWORD_CONFIRM
+read -r -s -p "Confirm password: " ADMIN_PASSWORD_CONFIRM </dev/tty
 echo
 [[ "$ADMIN_PASSWORD" == "$ADMIN_PASSWORD_CONFIRM" ]] || {
   echo "ERROR: passwords do not match."
