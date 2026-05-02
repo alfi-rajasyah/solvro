@@ -80,6 +80,31 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     else localStorage.removeItem(USER_STORAGE_KEY);
   }, [user]);
 
+  // Rehydrate from /auth/me on boot when we have a token. This refreshes the
+  // cached user (notably the `permissions` array, which may be missing or
+  // stale on bundles upgraded from before that field existed). If the token
+  // is invalid/expired the call 401s and we log the user out cleanly.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    apiRequest<AuthUser>("/auth/me")
+      .then((fresh) => {
+        if (cancelled) return;
+        setUser(fresh);
+        setStatus("authenticated");
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setToken(null);
+        setTokenState(null);
+        setUser(null);
+        setStatus("unauthenticated");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   const login = useCallback(async (email: string, password: string) => {
     setStatus("loading");
     try {
