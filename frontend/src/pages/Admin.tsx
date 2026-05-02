@@ -5,6 +5,7 @@ import {
   type AdminProject,
   type AdminUser,
   type Service,
+  useAdminCreateUser,
   useAdminProjects,
   useAdminReassignProject,
   useAdminResetPassword,
@@ -60,6 +61,7 @@ export function Admin() {
 function UsersTab() {
   const { user: currentUser } = useAuth();
   const { data: users, isLoading, isError } = useAdminUsers();
+  const createUser = useAdminCreateUser();
   const updateRole = useAdminUpdateRole();
   const setActive = useAdminSetActive();
   const resetPassword = useAdminResetPassword();
@@ -67,9 +69,33 @@ function UsersTab() {
     { username: string; tempPassword: string } | null
   >(null);
   const [error, setError] = useState<string | null>(null);
+  const [newEmail, setNewEmail] = useState("");
+  const [newUsername, setNewUsername] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [newRole, setNewRole] = useState<Role>("TAM");
 
   if (isLoading) return <p className="text-on-surface-variant">Loading users…</p>;
   if (isError || !users) return <p className="text-error">Failed to load users.</p>;
+
+  async function handleCreate(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setError(null);
+    if (!newEmail.trim() || !newUsername.trim() || newPassword.length < 8) return;
+    try {
+      await createUser.mutateAsync({
+        email: newEmail.trim(),
+        username: newUsername.trim(),
+        password: newPassword,
+        role: newRole,
+      });
+      setNewEmail("");
+      setNewUsername("");
+      setNewPassword("");
+      setNewRole("TAM");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not create user.");
+    }
+  }
 
   async function handleRoleChange(u: AdminUser, role: Role) {
     setError(null);
@@ -130,6 +156,77 @@ function UsersTab() {
           </button>
         </div>
       )}
+      <form
+        onSubmit={handleCreate}
+        className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
+      >
+        <label className="flex-1 min-w-[160px]">
+          <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Email
+          </span>
+          <input
+            type="email"
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="user@example.com"
+            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+          />
+        </label>
+        <label className="flex-1 min-w-[120px]">
+          <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Username
+          </span>
+          <input
+            type="text"
+            value={newUsername}
+            onChange={(e) => setNewUsername(e.target.value)}
+            maxLength={50}
+            placeholder="alice"
+            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+          />
+        </label>
+        <label className="flex-1 min-w-[140px]">
+          <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Password (min 8)
+          </span>
+          <input
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            autoComplete="new-password"
+            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+          />
+        </label>
+        <label className="min-w-[120px]">
+          <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Role
+          </span>
+          <select
+            value={newRole}
+            onChange={(e) => setNewRole(e.target.value as Role)}
+            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-none"
+          >
+            {ROLE_OPTIONS.map((r) => (
+              <option key={r} value={r}>
+                {r}
+              </option>
+            ))}
+          </select>
+        </label>
+        <button
+          type="submit"
+          disabled={
+            createUser.isPending ||
+            !newEmail.trim() ||
+            !newUsername.trim() ||
+            newPassword.length < 8
+          }
+          className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+        >
+          {createUser.isPending ? "Adding…" : "Add user"}
+        </button>
+      </form>
+
       <div className="overflow-x-auto rounded border border-outline-variant bg-surface">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">

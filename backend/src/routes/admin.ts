@@ -45,6 +45,56 @@ adminRouter.get("/users", async (_req, res) => {
   );
 });
 
+const createUserSchema = z.object({
+  email: z.string().email(),
+  username: z.string().min(1).max(50),
+  password: z.string().min(8).max(200),
+  role: z.nativeEnum(RoleName),
+});
+
+adminRouter.post(
+  "/users",
+  validate("body", createUserSchema),
+  async (req, res) => {
+    const { email, username, password, role } = req.body as z.infer<
+      typeof createUserSchema
+    >;
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) {
+      throw new HttpError(409, "email_in_use", "A user with that email already exists");
+    }
+
+    const targetRole = await prisma.role.findUniqueOrThrow({
+      where: { roleName: role },
+    });
+    const passwordHash = await bcrypt.hash(password, 10);
+
+    const created = await prisma.user.create({
+      data: { email, username, passwordHash, roleId: targetRole.id },
+      select: {
+        id: true,
+        username: true,
+        email: true,
+        active: true,
+        createdAt: true,
+        role: { select: { roleName: true } },
+      },
+    });
+
+    res.status(201).json({
+      id: created.id,
+      username: created.username,
+      email: created.email,
+      active: created.active,
+      role: created.role.roleName,
+      createdAt: created.createdAt,
+      projectsAsTAM: 0,
+      projectsAsSA: 0,
+    });
+  },
+);
+
 const updateRoleSchema = z.object({ role: z.nativeEnum(RoleName) });
 
 adminRouter.patch(

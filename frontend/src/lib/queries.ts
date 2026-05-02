@@ -663,6 +663,26 @@ export function useAdminUsers() {
   });
 }
 
+export function useAdminCreateUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: {
+      email: string;
+      username: string;
+      password: string;
+      role: Role;
+    }) =>
+      apiRequest<AdminUser>("/admin/users", {
+        method: "POST",
+        body: input,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminQueryKeys.users });
+      qc.invalidateQueries({ queryKey: queryKeys.users });
+    },
+  });
+}
+
 export function useAdminUpdateRole() {
   const qc = useQueryClient();
   return useMutation({
