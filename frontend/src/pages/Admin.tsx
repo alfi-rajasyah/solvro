@@ -9,6 +9,7 @@ import {
   useAdminCreateRole,
   useAdminCreateUser,
   useAdminDeleteRole,
+  useAdminDeleteUser,
   useAdminProjects,
   useAdminReassignProject,
   useAdminResetPassword,
@@ -68,6 +69,7 @@ function UsersTab() {
   const { data: users, isLoading, isError } = useAdminUsers();
   const { data: roles } = useAdminRoles();
   const createUser = useAdminCreateUser();
+  const deleteUser = useAdminDeleteUser();
   const updateRole = useAdminUpdateRole();
   const setActive = useAdminSetActive();
   const resetPassword = useAdminResetPassword();
@@ -123,6 +125,22 @@ function UsersTab() {
       await setActive.mutateAsync({ id: u.id, active: !u.active });
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Failed to update status.");
+    }
+  }
+
+  async function handleDelete(u: AdminUser) {
+    setError(null);
+    if (
+      !confirm(
+        `Permanently delete ${u.username} (${u.email})? This cannot be undone.`,
+      )
+    ) {
+      return;
+    }
+    try {
+      await deleteUser.mutateAsync(u.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Failed to delete user.");
     }
   }
 
@@ -312,6 +330,19 @@ function UsersTab() {
                         className="rounded px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                       >
                         Reset password
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(u)}
+                        disabled={isSelf || deleteUser.isPending}
+                        className="rounded px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
+                        title={
+                          isSelf
+                            ? "You cannot delete yourself"
+                            : "Permanently delete this user"
+                        }
+                      >
+                        Delete
                       </button>
                     </div>
                   </td>

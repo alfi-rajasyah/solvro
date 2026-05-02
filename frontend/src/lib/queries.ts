@@ -784,6 +784,19 @@ export function useAdminResetPassword() {
   });
 }
 
+export function useAdminDeleteUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiRequest<void>(`/admin/users/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: adminQueryKeys.users });
+      qc.invalidateQueries({ queryKey: queryKeys.users });
+      qc.invalidateQueries({ queryKey: adminQueryKeys.roles });
+    },
+  });
+}
+
 export function useAdminProjects() {
   return useQuery({
     queryKey: adminQueryKeys.projects,

@@ -15,6 +15,16 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-05-02 — Admin can permanently delete users
+
+- **[backend/src/routes/admin.ts](backend/src/routes/admin.ts)** — new `DELETE /admin/users/:id` endpoint. Refuses self-delete (admin cannot delete themselves). Pre-checks all FK relations: if the target user has any projects (as TAM or SA), locked baselines, assigned tasks, or comments, returns 400 with a list of blockers (e.g. `"3 project(s) as TAM, 12 assigned task(s)"`). Admin must reassign or clear those first. If clean, hard-deletes the row.
+- **[frontend/src/lib/queries.ts](frontend/src/lib/queries.ts)** — new `useAdminDeleteUser` mutation hook. Invalidates both admin and global user queries plus the role list (so role user counts update).
+- **[frontend/src/pages/Admin.tsx](frontend/src/pages/Admin.tsx)** — added a "Delete" button to each row in Admin > Users (after Reset Password). Disabled for the current user (you can't delete yourself). Shows a `confirm()` dialog before firing. Backend errors (e.g. user-in-use) surface in the existing error banner above the table.
+
+### Changed — 2026-05-02 — Customer form: AM is free text, SA stays as user dropdown
+
+- **[frontend/src/components/CustomerFormModal.tsx](frontend/src/components/CustomerFormModal.tsx)** — Account Manager reverted to a free-text input. AMs are often external sales contacts who don't have user accounts in this system, so a hard dropdown of TAM-role users was the wrong shape. Solution Architect stays as a dropdown of literal SA-role users.
+
 ### Changed — 2026-05-02 — Customer form picks AM/SA from user dropdowns; wildcard users eligible for SA/TAM
 
 - **[backend/src/routes/users.ts](backend/src/routes/users.ts)** — `GET /users` now returns each user's `permissions: string[]` alongside their role. Lets the frontend filter dropdowns by capability (e.g. "anyone with `*`") instead of only by literal role name.

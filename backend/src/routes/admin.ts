@@ -164,6 +164,57 @@ adminRouter.patch(
   },
 );
 
+adminRouter.delete(
+  "/users/:id",
+  validate("params", idParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+
+    if (req.user!.sub === id) {
+      throw new HttpError(400, "self_delete", "Admins cannot delete themselves");
+    }
+
+    const target = await prisma.user.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: {
+            projectsAsTAM: true,
+            projectsAsSA: true,
+            projectBaselinesLocked: true,
+            assignedTasks: true,
+            comments: true,
+          },
+        },
+      },
+    });
+    if (!target) throw new HttpError(404, "user_not_found", "User not found");
+
+    const blockers: string[] = [];
+    if (target._count.projectsAsTAM > 0)
+      blockers.push(`${target._count.projectsAsTAM} project(s) as TAM`);
+    if (target._count.projectsAsSA > 0)
+      blockers.push(`${target._count.projectsAsSA} project(s) as SA`);
+    if (target._count.projectBaselinesLocked > 0)
+      blockers.push(`${target._count.projectBaselinesLocked} locked baseline(s)`);
+    if (target._count.assignedTasks > 0)
+      blockers.push(`${target._count.assignedTasks} assigned task(s)`);
+    if (target._count.comments > 0)
+      blockers.push(`${target._count.comments} comment(s)`);
+
+    if (blockers.length > 0) {
+      throw new HttpError(
+        400,
+        "user_in_use",
+        `Cannot delete ${target.username}: still has ${blockers.join(", ")}. Reassign or remove these first.`,
+      );
+    }
+
+    await prisma.user.delete({ where: { id } });
+    res.status(204).end();
+  },
+);
+
 adminRouter.post(
   "/users/:id/reset-password",
   validate("params", idParamSchema),
