@@ -57,7 +57,7 @@ export function Settings() {
         <h2 className="mb-3 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
           Profile
         </h2>
-        <dl className="grid grid-cols-[140px_1fr] gap-y-2 text-sm">
+        <dl className="grid grid-cols-1 gap-y-2 text-sm md:grid-cols-[140px_1fr]">
           <dt className="text-on-surface-variant">Username</dt>
           <dd className="font-mono text-on-surface">{user.username}</dd>
 
@@ -163,7 +163,7 @@ function ThemeCard() {
       <p className="mb-3 text-[12px] text-on-surface-variant">
         Currently rendering in <strong>{resolved}</strong> mode.
       </p>
-      <div className="grid grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {options.map((opt) => (
           <button
             key={opt.key}

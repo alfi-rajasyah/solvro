@@ -54,10 +54,10 @@ export function ProjectDetail() {
     <div
       className={[
         "flex h-full min-w-0 flex-col transition-[margin] duration-200 ease-out",
-        contextOpen ? "mr-80" : "mr-0",
+        contextOpen ? "md:mr-80" : "mr-0",
       ].join(" ")}
     >
-      <div className="mb-4 flex items-start justify-between gap-4">
+      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
         <div className="min-w-0">
           <p className="font-mono text-[11px] uppercase tracking-widest text-on-surface-variant">
             SOLV-{String(project.id).padStart(3, "0")}
@@ -111,7 +111,7 @@ export function ProjectDetail() {
         </div>
       </div>
 
-      <nav className="mb-6 flex gap-6 border-b border-outline-variant">
+      <nav className="mb-6 flex gap-6 overflow-x-auto whitespace-nowrap border-b border-outline-variant">
         {TABS.map((tab) => (
           <NavLink
             key={tab.to}
@@ -122,6 +122,7 @@ export function ProjectDetail() {
                 isActive
                   ? "border-primary text-primary"
                   : "border-transparent text-on-surface-variant hover:text-on-surface",
+                tab.to === "gantt" ? "hidden md:inline-block" : "",
               ].join(" ")
             }
           >

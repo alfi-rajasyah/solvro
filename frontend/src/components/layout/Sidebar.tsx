@@ -36,8 +36,8 @@ export function Sidebar() {
 
       <aside
         className={[
-          "fixed left-0 top-0 z-50 flex h-screen flex-col overflow-hidden border-r border-slate-800 bg-slate-950 font-display transition-[width] duration-200 ease-out",
-          open ? "w-sidebar" : "w-16",
+          "fixed left-0 top-0 z-50 h-screen flex-col overflow-hidden border-r border-slate-800 bg-slate-950 font-display transition-[width] duration-200 ease-out",
+          open ? "flex w-sidebar" : "hidden w-16 md:flex",
         ].join(" ")}
       >
         <div

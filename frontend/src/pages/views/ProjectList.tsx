@@ -187,7 +187,7 @@ export function ProjectList() {
         )}
 
         {/* Column headers */}
-        <div className="grid grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-b border-outline-variant bg-surface-container-low px-3 py-2 font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+        <div className="hidden grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-b border-outline-variant bg-surface-container-low px-3 py-2 font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant md:grid">
           <span></span>
           <span>#</span>
           <span>Name</span>
@@ -482,7 +482,8 @@ function TaskRow({
 
   return (
     <>
-      <div className="grid grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-t border-outline-variant px-3 py-2 hover:bg-surface-container-low">
+      {/* Desktop grid row */}
+      <div className="hidden grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-t border-outline-variant px-3 py-2 hover:bg-surface-container-low md:grid">
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
@@ -575,6 +576,93 @@ function TaskRow({
         </span>
       </div>
 
+      {/* Mobile card */}
+      <div className="flex flex-col gap-2 border-t border-outline-variant px-3 py-3 md:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onToggleDone(node.task)}
+            className={[
+              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
+              node.task.status === "DONE"
+                ? "border-emerald-500 bg-emerald-500 text-white"
+                : "border-outline-variant text-transparent",
+            ].join(" ")}
+            aria-label="Toggle done"
+          >
+            <span className="material-symbols-outlined text-[14px]">check</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onEdit(node.task)}
+            className={[
+              "min-w-0 flex-1 truncate text-left text-sm",
+              node.task.status === "DONE"
+                ? "text-on-surface-variant line-through"
+                : "text-on-surface",
+            ].join(" ")}
+          >
+            <span className="mr-2 font-mono text-[10px] text-on-surface-variant">
+              #{index}
+            </span>
+            {node.task.title}
+          </button>
+          {node.subtasks.length > 0 && (
+            <button
+              type="button"
+              onClick={() => setExpanded((v) => !v)}
+              className="shrink-0 rounded p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+              aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+            >
+              <span className="material-symbols-outlined text-[18px]">
+                {expanded ? "expand_more" : "chevron_right"}
+              </span>
+            </button>
+          )}
+        </div>
+        <div className="flex items-center justify-between gap-2 pl-7">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <AssigneeAvatar user={node.task.assignedTo} size="xs" />
+            {node.task.assignedTo && (
+              <span className="truncate text-[11px] text-on-surface-variant">
+                {node.task.assignedTo.username}
+              </span>
+            )}
+          </span>
+          <span className="relative">
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => setEditingDates(true)}
+              className={[
+                "rounded px-1 text-right font-mono text-[11px]",
+                overdue ? "font-bold text-error" : "text-on-surface-variant",
+              ].join(" ")}
+            >
+              {fmtRange(node.task.startDate, node.task.dueDate)}
+              {overdue && " · OVERDUE"}
+            </button>
+            {editingDates && canEdit && (
+              <InlineDateRangeEditor
+                className="absolute right-0 top-full z-50 mt-1"
+                startISO={node.task.startDate}
+                endISO={node.task.dueDate}
+                onSave={(s, e) => {
+                  onUpdateDates(node.task.id, s, e);
+                  setEditingDates(false);
+                }}
+                onCancel={() => setEditingDates(false)}
+              />
+            )}
+          </span>
+        </div>
+        {node.subtasks.length > 0 && (
+          <span className="pl-7 font-mono text-[10px] text-on-surface-variant">
+            {node.subtasks.length} subtask{node.subtasks.length === 1 ? "" : "s"}
+          </span>
+        )}
+      </div>
+
       {expanded &&
         node.subtasks.map((s, idx) => (
           <SubtaskRow
@@ -588,18 +676,28 @@ function TaskRow({
           />
         ))}
       {expanded && canEdit && (
-        <button
-          type="button"
-          onClick={() => onAddSubtask(node.task.id)}
-          className="grid w-full grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-t border-outline-variant px-3 py-1.5 text-left text-[11px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
-        >
-          <span></span>
-          <span></span>
-          <span className="flex items-center gap-1 pl-6">
+        <>
+          <button
+            type="button"
+            onClick={() => onAddSubtask(node.task.id)}
+            className="hidden w-full grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-t border-outline-variant px-3 py-1.5 text-left text-[11px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary md:grid"
+          >
+            <span></span>
+            <span></span>
+            <span className="flex items-center gap-1 pl-6">
+              <span className="material-symbols-outlined text-[14px]">add</span>
+              Add subtask…
+            </span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onAddSubtask(node.task.id)}
+            className="flex w-full items-center gap-1 border-t border-outline-variant px-3 py-2 pl-10 text-left text-[11px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary md:hidden"
+          >
             <span className="material-symbols-outlined text-[14px]">add</span>
             Add subtask…
-          </span>
-        </button>
+          </button>
+        </>
       )}
     </>
   );
@@ -624,82 +722,154 @@ function SubtaskRow({
   const overdue =
     task.dueDate && task.status !== "DONE" && new Date(task.dueDate) < startOfToday();
   return (
-    <div className="grid grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-t border-outline-variant bg-surface-container-low/40 px-3 py-1.5 hover:bg-surface-container-low">
-      <span></span>
-      <span className="pl-3 font-mono text-[11px] text-on-surface-variant">{index}</span>
-      <button
-        type="button"
-        onClick={() => onEdit(task)}
-        className="flex min-w-0 items-center gap-2 pl-6 text-left"
-      >
+    <>
+      {/* Desktop grid row */}
+      <div className="hidden grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-t border-outline-variant bg-surface-container-low/40 px-3 py-1.5 hover:bg-surface-container-low md:grid">
+        <span></span>
+        <span className="pl-3 font-mono text-[11px] text-on-surface-variant">{index}</span>
         <button
           type="button"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleDone(task);
-          }}
-          className={[
-            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-            task.status === "DONE"
-              ? "border-emerald-500 bg-emerald-500 text-white"
-              : "border-outline-variant text-transparent hover:border-primary",
-          ].join(" ")}
-          aria-label="Toggle done"
+          onClick={() => onEdit(task)}
+          className="flex min-w-0 items-center gap-2 pl-6 text-left"
         >
-          <span className="material-symbols-outlined text-[12px]">check</span>
-        </button>
-        <span
-          className={[
-            "truncate text-xs",
-            task.status === "DONE"
-              ? "text-on-surface-variant line-through"
-              : "text-on-surface",
-          ].join(" ")}
-        >
-          {task.title}
-        </span>
-      </button>
-      <span>
-        <AssigneeAvatar user={task.assignedTo} size="xs" />
-        {task.assignedTo && (
-          <span className="ml-2 text-[11px] text-on-surface-variant">
-            {task.assignedTo.username}
-          </span>
-        )}
-      </span>
-      <span className="relative">
-        <button
-          type="button"
-          disabled={!canEdit}
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditingDates(true);
-          }}
-          className={[
-            "rounded px-1 text-left",
-            overdue
-              ? "font-mono text-[11px] font-bold text-error"
-              : "font-mono text-[11px] text-on-surface-variant",
-            canEdit ? "hover:bg-surface-container-low hover:text-primary" : "cursor-default",
-          ].join(" ")}
-          title={canEdit ? "Click to edit dates" : undefined}
-        >
-          {fmtRange(task.startDate, task.dueDate)}
-        </button>
-        {editingDates && canEdit && (
-          <InlineDateRangeEditor
-            className="absolute left-0 top-full z-50 mt-1"
-            startISO={task.startDate}
-            endISO={task.dueDate}
-            onSave={(s, e) => {
-              onUpdateDates(task.id, s, e);
-              setEditingDates(false);
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleDone(task);
             }}
-            onCancel={() => setEditingDates(false)}
-          />
-        )}
-      </span>
-    </div>
+            className={[
+              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+              task.status === "DONE"
+                ? "border-emerald-500 bg-emerald-500 text-white"
+                : "border-outline-variant text-transparent hover:border-primary",
+            ].join(" ")}
+            aria-label="Toggle done"
+          >
+            <span className="material-symbols-outlined text-[12px]">check</span>
+          </button>
+          <span
+            className={[
+              "truncate text-xs",
+              task.status === "DONE"
+                ? "text-on-surface-variant line-through"
+                : "text-on-surface",
+            ].join(" ")}
+          >
+            {task.title}
+          </span>
+        </button>
+        <span>
+          <AssigneeAvatar user={task.assignedTo} size="xs" />
+          {task.assignedTo && (
+            <span className="ml-2 text-[11px] text-on-surface-variant">
+              {task.assignedTo.username}
+            </span>
+          )}
+        </span>
+        <span className="relative">
+          <button
+            type="button"
+            disabled={!canEdit}
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingDates(true);
+            }}
+            className={[
+              "rounded px-1 text-left",
+              overdue
+                ? "font-mono text-[11px] font-bold text-error"
+                : "font-mono text-[11px] text-on-surface-variant",
+              canEdit ? "hover:bg-surface-container-low hover:text-primary" : "cursor-default",
+            ].join(" ")}
+            title={canEdit ? "Click to edit dates" : undefined}
+          >
+            {fmtRange(task.startDate, task.dueDate)}
+          </button>
+          {editingDates && canEdit && (
+            <InlineDateRangeEditor
+              className="absolute left-0 top-full z-50 mt-1"
+              startISO={task.startDate}
+              endISO={task.dueDate}
+              onSave={(s, e) => {
+                onUpdateDates(task.id, s, e);
+                setEditingDates(false);
+              }}
+              onCancel={() => setEditingDates(false)}
+            />
+          )}
+        </span>
+      </div>
+
+      {/* Mobile subtask card */}
+      <div className="flex flex-col gap-1.5 border-t border-outline-variant bg-surface-container-low/40 px-3 py-2 pl-8 md:hidden">
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => onToggleDone(task)}
+            className={[
+              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+              task.status === "DONE"
+                ? "border-emerald-500 bg-emerald-500 text-white"
+                : "border-outline-variant text-transparent",
+            ].join(" ")}
+            aria-label="Toggle done"
+          >
+            <span className="material-symbols-outlined text-[12px]">check</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => onEdit(task)}
+            className={[
+              "min-w-0 flex-1 truncate text-left text-xs",
+              task.status === "DONE"
+                ? "text-on-surface-variant line-through"
+                : "text-on-surface",
+            ].join(" ")}
+          >
+            <span className="mr-2 font-mono text-[10px] text-on-surface-variant">
+              {index}
+            </span>
+            {task.title}
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-2 pl-6">
+          <span className="flex min-w-0 items-center gap-1.5">
+            <AssigneeAvatar user={task.assignedTo} size="xs" />
+            {task.assignedTo && (
+              <span className="truncate text-[11px] text-on-surface-variant">
+                {task.assignedTo.username}
+              </span>
+            )}
+          </span>
+          <span className="relative">
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => setEditingDates(true)}
+              className={[
+                "rounded px-1 text-right font-mono text-[11px]",
+                overdue ? "font-bold text-error" : "text-on-surface-variant",
+              ].join(" ")}
+            >
+              {fmtRange(task.startDate, task.dueDate)}
+            </button>
+            {editingDates && canEdit && (
+              <InlineDateRangeEditor
+                className="absolute right-0 top-full z-50 mt-1"
+                startISO={task.startDate}
+                endISO={task.dueDate}
+                onSave={(s, e) => {
+                  onUpdateDates(task.id, s, e);
+                  setEditingDates(false);
+                }}
+                onCancel={() => setEditingDates(false)}
+              />
+            )}
+          </span>
+        </div>
+      </div>
+    </>
   );
 }
 

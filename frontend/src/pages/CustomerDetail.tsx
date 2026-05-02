@@ -102,7 +102,7 @@ export function CustomerDetail() {
           <span className="material-symbols-outlined text-[16px]">chevron_left</span>
           Customers
         </Link>
-        <div className="mt-2 flex items-start justify-between gap-4">
+        <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
           <div className="min-w-0">
             <h1 className="font-display text-h1 text-on-surface">{customer.name}</h1>
             <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-on-surface-variant">
