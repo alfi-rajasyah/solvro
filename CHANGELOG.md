@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-05-02 — CLAUDE.md accuracy + coverage pass
+
+- **[CLAUDE.md](CLAUDE.md)** — fixed `npm run typecheck` documentation (actual script is `tsc --noEmit`, not `tsc -b --noEmit`). Added a production-deployment paragraph in "Repository status" describing [docker-compose.prod.yml](docker-compose.prod.yml), the GHCR images published by [.github/workflows/docker-publish.yml](.github/workflows/docker-publish.yml), the nginx-served frontend in prod, and the prod env contract — future Claudes touching env/Docker need this. Added a routes-inventory bullet to "Backend conventions" naming all twelve route files (incl. the previously undocumented `services.ts`) and a `prisma migrate dev --name <slug>` warning (it hangs without `--name` in non-interactive shells). Expanded the "Frontend conventions" routing bullet to enumerate all shipped pages (Customer is a first-class entity; Admin uses a separate `AdminGuard`). Added bullets for [frontend/src/lib/theme.tsx](frontend/src/lib/theme.tsx) (runtime theme provider) and the hand-rolled Gantt implementation in [frontend/src/components/gantt/](frontend/src/components/gantt/) — explicit drift from PRD §6's `gantt-task-react` claim, called out so a future Claude doesn't `npm install` the wrong library.
+
 ### Added — 2026-05-02 — Production Docker images, GHCR publish workflow, and server-side compose
 
 - **Backend Dockerfile** ([backend/Dockerfile](backend/Dockerfile)) rewritten as a 4-stage build (`deps` / `dev` / `build` / `runtime`). The `dev` stage preserves today's `npm run dev` watch workflow (used by [docker-compose.yml](docker-compose.yml) via `target: dev`); the default last stage `runtime` produces a deployable image that runs `node dist/index.js` with prod-only `node_modules` (`npm ci --omit=dev`) plus the generated Prisma client and the compiled `dist/`. Final image ≈ 200–250 MB.
