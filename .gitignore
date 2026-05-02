@@ -9,8 +9,10 @@ frontend/dist/
 .env.local
 .env.*.local
 
-# Local Docker overrides
+# Local Docker overrides + the deployed compose (setup.sh inlines it; the
+# canonical compose definition lives inside setup.sh, not as a tracked file).
 docker-compose.override.yml
+docker-compose.yml
 
 # Prisma
 backend/prisma/migrations/dev.db*

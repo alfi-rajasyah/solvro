@@ -15,6 +15,18 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-05-02 — setup.sh accepts env vars; docker-compose.yml untracked
+
+- **[setup.sh](setup.sh)** — extended input handling: if `ADMIN_EMAIL` and/or `ADMIN_PASSWORD` are present in the environment, those are used directly and the prompt is skipped. If either is empty, the script falls back to `read ... </dev/tty` for an interactive prompt (so it still works behind `curl | bash`). If neither path is available (no env vars AND no `/dev/tty`), it errors out with the env-var invocation example. **Why:** the pure `/dev/tty` approach was inconsistent across some shells / SSH terminal setups and a user kept hitting "invalid email" because `read` returned empty without ever showing a prompt. The env-var path is a deterministic escape hatch:
+  ```
+  ADMIN_EMAIL=you@x.com ADMIN_PASSWORD=secret bash <(curl -sSL <url>)
+  ```
+  README/docs should recommend `bash <(curl -sSL ...)` over `curl ... | bash` because the former leaves stdin attached to the terminal so the interactive prompts work without the `/dev/tty` dance.
+
+### Removed — 2026-05-02 — docker-compose.yml no longer tracked in the repo
+
+- **docker-compose.yml** — `git rm --cached` and added to [.gitignore](.gitignore). The canonical compose definition now lives **inside [setup.sh](setup.sh)** as a heredoc; tracking a separate copy in the repo was duplicated information that could drift from the script. Local overrides (`docker-compose.override.yml`) were already gitignored. Anyone who wants to inspect the compose file looks at the heredoc inside setup.sh, or grabs the rendered file from a deployed server at `~/solvro/docker-compose.yml` (which setup.sh writes there).
+
 ### Fixed — 2026-05-02 — setup.sh prompts now work under `curl | bash`
 
 - **[setup.sh](setup.sh)** — all `read` calls now redirect from `/dev/tty` instead of stdin (`read ... </dev/tty`). When the script is invoked via `curl -sSL .../setup.sh | bash`, the script's stdin is the curl pipe, not the terminal — so the previous `read -p "Admin email: "` immediately returned empty and failed validation with `invalid email.`. Reading from `/dev/tty` bypasses stdin entirely and reaches the user's terminal directly. Added a guard at the top that prints a fallback instruction (`curl ... -o setup.sh && bash setup.sh`) if `/dev/tty` is also unavailable (rare — happens in some unattended/CI shells).

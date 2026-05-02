@@ -109,31 +109,49 @@ fi
 echo "Fresh install. You'll be asked for the admin email and password."
 echo
 
-# Read from /dev/tty explicitly so prompts work even when the script is
-# invoked via `curl ... | bash` (stdin is the pipe, not the terminal).
-if [[ ! -t 0 ]] && [[ ! -r /dev/tty ]]; then
-  echo "ERROR: cannot read from /dev/tty. Re-run as: curl -sSL <url> -o setup.sh && bash setup.sh"
-  exit 1
+# Inputs can come from env vars (preferred for `curl | bash` and CI/automation)
+# or from interactive prompts read from /dev/tty (so prompts work even when
+# the script is piped from curl, where stdin is the curl pipe).
+#
+#   ADMIN_EMAIL=you@x.com ADMIN_PASSWORD=secret bash <(curl -sSL <url>)
+# or
+#   bash <(curl -sSL <url>)        # then answer prompts
+# or
+#   curl -sSL <url> -o setup.sh && bash setup.sh
+
+ADMIN_EMAIL="${ADMIN_EMAIL:-}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
+
+if [[ -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" ]]; then
+  if [[ ! -r /dev/tty ]]; then
+    echo "ERROR: no /dev/tty available and ADMIN_EMAIL/ADMIN_PASSWORD not set."
+    echo "Re-run with env vars:"
+    echo "  ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=secret bash <(curl -sSL <url>)"
+    exit 1
+  fi
+
+  if [[ -z "$ADMIN_EMAIL" ]]; then
+    read -r -p "Admin email: " ADMIN_EMAIL </dev/tty
+  fi
+
+  if [[ -z "$ADMIN_PASSWORD" ]]; then
+    read -r -s -p "Admin password (min 8 chars): " ADMIN_PASSWORD </dev/tty
+    echo
+    read -r -s -p "Confirm password: " ADMIN_PASSWORD_CONFIRM </dev/tty
+    echo
+    [[ "$ADMIN_PASSWORD" == "$ADMIN_PASSWORD_CONFIRM" ]] || {
+      echo "ERROR: passwords do not match."
+      exit 1
+    }
+  fi
 fi
 
-read -r -p "Admin email: " ADMIN_EMAIL </dev/tty
 [[ -n "$ADMIN_EMAIL" && "$ADMIN_EMAIL" == *"@"* ]] || {
   echo "ERROR: invalid email."
   exit 1
 }
-
-# Read password without echoing it
-read -r -s -p "Admin password (min 8 chars): " ADMIN_PASSWORD </dev/tty
-echo
 [[ ${#ADMIN_PASSWORD} -ge 8 ]] || {
   echo "ERROR: password must be at least 8 characters."
-  exit 1
-}
-
-read -r -s -p "Confirm password: " ADMIN_PASSWORD_CONFIRM </dev/tty
-echo
-[[ "$ADMIN_PASSWORD" == "$ADMIN_PASSWORD_CONFIRM" ]] || {
-  echo "ERROR: passwords do not match."
   exit 1
 }
 
