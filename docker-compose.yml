@@ -1,14 +1,8 @@
-# Solvro — single-file deployment.
-# Usage on a fresh server with Docker installed:
-#   1. Save this file as docker-compose.yml in any directory
-#   2. Run: docker compose up -d
-# That's it. No .env file, no editing, no secrets to manage.
+# Solvro deployment.
 #
-# WARNING: the secrets below are demo defaults. They are committed to
-# the public compose file and known to anyone who reads the repo.
-# Suitable for private-LAN demos. NOT suitable for public internet.
-# Before exposing this to the internet, replace POSTGRES_PASSWORD,
-# JWT_SECRET, and tighten CORS_ORIGIN to a specific domain.
+# Do not run `docker compose up` against this file directly — it expects
+# POSTGRES_PASSWORD and JWT_SECRET to come from a sibling .env file.
+# Use setup.sh, which generates those secrets and writes the .env for you.
 
 services:
   postgres:
@@ -17,7 +11,7 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_USER: solvro
-      POSTGRES_PASSWORD: solvro_demo_password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: solvro
     volumes:
       - solvro_pgdata:/var/lib/postgresql/data
@@ -38,8 +32,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
-      DATABASE_URL: postgresql://solvro:solvro_demo_password@postgres:5432/solvro?schema=public
-      JWT_SECRET: solvro-demo-jwt-secret-not-for-production-use-32chars-minimum-here
+      DATABASE_URL: postgresql://solvro:${POSTGRES_PASSWORD}@postgres:5432/solvro?schema=public
+      JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: 8h
       CORS_ORIGIN: "*"
       LOG_LEVEL: info
