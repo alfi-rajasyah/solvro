@@ -46,11 +46,13 @@ const createTaskSchema = z.object({
   parentTaskId: z.number().int().positive().nullable().optional(),
   sectionId: z.number().int().positive().nullable().optional(),
   labelIds: z.array(z.number().int().positive()).optional(),
+  isMilestone: z.boolean().optional(),
 });
 
 const createSectionSchema = z.object({
   name: z.string().min(1).max(100),
   position: z.number().int().min(0).optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
 });
 
 const taskListQuerySchema = z.object({
@@ -243,7 +245,7 @@ projectsRouter.get(
       include: {
         assignedTo: { select: { id: true, username: true, email: true } },
         labels: true,
-        section: { select: { id: true, name: true, position: true } },
+        section: { select: { id: true, name: true, position: true, color: true } },
         _count: { select: { subtasks: true, comments: true } },
       },
     });
@@ -282,6 +284,7 @@ projectsRouter.post(
         assignedToId: body.assignedToId ?? null,
         parentTaskId: body.parentTaskId ?? null,
         sectionId: body.sectionId ?? null,
+        isMilestone: body.isMilestone ?? false,
         labels: body.labelIds && body.labelIds.length > 0
           ? { connect: body.labelIds.map((lid) => ({ id: lid })) }
           : undefined,
@@ -289,7 +292,7 @@ projectsRouter.post(
       include: {
         assignedTo: { select: { id: true, username: true, email: true } },
         labels: true,
-        section: { select: { id: true, name: true, position: true } },
+        section: { select: { id: true, name: true, position: true, color: true } },
         _count: { select: { subtasks: true, comments: true } },
       },
     });
@@ -327,6 +330,7 @@ projectsRouter.post(
         projectId: id,
         name: body.name,
         position: body.position ?? (max._max.position ?? -1) + 1,
+        ...(body.color !== undefined && { color: body.color }),
       },
     });
     res.status(201).json(section);
@@ -392,6 +396,113 @@ projectsRouter.post(
       },
     });
     res.status(201).json(risk);
+  },
+);
+
+// Project-scoped task dependencies. The dependency rows themselves are
+// item-scoped (PATCH/DELETE) in routes/dependencies.ts; collection routes
+// stay here for URL nesting.
+const createDependencySchema = z.object({
+  predecessorTaskId: z.number().int().positive(),
+  successorTaskId: z.number().int().positive(),
+  type: z.enum(["HARD", "SOFT"]).optional(),
+  // Routing hints from the diagram drag — preserve which side of each
+  // node the connection enters/exits. Validated loosely: any string from
+  // the client, since the handle ID set is owned by the React Flow code.
+  sourceHandle: z.string().max(40).nullable().optional(),
+  targetHandle: z.string().max(40).nullable().optional(),
+});
+
+projectsRouter.get(
+  "/:id/dependencies",
+  validate("params", idParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
+    const project = await prisma.project.findFirst({
+      where: { id, ...filter },
+      select: { id: true },
+    });
+    if (!project) throw new HttpError(404, "not_found", "Project not found");
+
+    const deps = await prisma.taskDependency.findMany({
+      where: { projectId: id },
+      orderBy: { id: "asc" },
+    });
+    res.json(deps);
+  },
+);
+
+projectsRouter.post(
+  "/:id/dependencies",
+  requirePermission("task:write"),
+  validate("params", idParamSchema),
+  validate("body", createDependencySchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
+    const project = await prisma.project.findFirst({
+      where: { id, ...filter },
+      select: { id: true },
+    });
+    if (!project) throw new HttpError(404, "not_found", "Project not found");
+
+    const body = req.body as z.infer<typeof createDependencySchema>;
+    if (body.predecessorTaskId === body.successorTaskId) {
+      throw new HttpError(400, "self_dependency", "A task cannot depend on itself.");
+    }
+
+    // Both endpoints must live on this project.
+    const tasks = await prisma.task.findMany({
+      where: { id: { in: [body.predecessorTaskId, body.successorTaskId] }, projectId: id },
+      select: { id: true },
+    });
+    if (tasks.length !== 2) {
+      throw new HttpError(400, "task_not_in_project", "Both tasks must belong to this project.");
+    }
+
+    // Reject cycles: walk forward from `successor` over existing edges; if we
+    // reach `predecessor` the new edge would close a loop.
+    const allEdges = await prisma.taskDependency.findMany({
+      where: { projectId: id },
+      select: { predecessorTaskId: true, successorTaskId: true },
+    });
+    const adj = new Map<number, number[]>();
+    for (const e of allEdges) {
+      const arr = adj.get(e.predecessorTaskId) ?? [];
+      arr.push(e.successorTaskId);
+      adj.set(e.predecessorTaskId, arr);
+    }
+    const seen = new Set<number>();
+    const stack = [body.successorTaskId];
+    while (stack.length > 0) {
+      const cur = stack.pop()!;
+      if (cur === body.predecessorTaskId) {
+        throw new HttpError(400, "cycle", "This dependency would create a cycle.");
+      }
+      if (seen.has(cur)) continue;
+      seen.add(cur);
+      for (const next of adj.get(cur) ?? []) stack.push(next);
+    }
+
+    try {
+      const dep = await prisma.taskDependency.create({
+        data: {
+          projectId: id,
+          predecessorTaskId: body.predecessorTaskId,
+          successorTaskId: body.successorTaskId,
+          type: body.type ?? "HARD",
+          sourceHandle: body.sourceHandle ?? null,
+          targetHandle: body.targetHandle ?? null,
+        },
+      });
+      res.status(201).json(dep);
+    } catch (err) {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        throw new HttpError(409, "duplicate", "This dependency already exists.");
+      }
+      throw err;
+    }
   },
 );
 

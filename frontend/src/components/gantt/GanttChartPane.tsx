@@ -1,7 +1,8 @@
 import { type Row, type ViewMode } from "@/lib/gantt/geometry";
 import { ROW_HEIGHT } from "@/lib/gantt/constants";
-import type { Holiday } from "@/lib/queries";
+import type { Holiday, TaskDependency } from "@/lib/queries";
 import { GanttColumnGrid } from "./GanttColumnGrid";
+import { GanttConnectors } from "./GanttConnectors";
 import { GanttDateAxis } from "./GanttDateAxis";
 import { GanttRow } from "./GanttRow";
 import { GanttTodayLine } from "./GanttTodayLine";
@@ -15,8 +16,15 @@ interface GanttChartPaneProps {
   contentWidth: number;
   holidays: Holiday[];
   canEdit: boolean;
+  dependencies: TaskDependency[];
+  /**
+   * Active connect-drag state for the rubber-band line. `null` when no
+   * drag is in progress.
+   */
+  connectDrag: { startX: number; startY: number; cursorX: number; cursorY: number } | null;
   onCommit: (taskId: number, startDate: Date, dueDate: Date) => void;
   onTaskClick: (taskId: number) => void;
+  onConnectStart?: (sourceTaskId: number, clientX: number, clientY: number) => void;
 }
 
 export function GanttChartPane({
@@ -28,8 +36,11 @@ export function GanttChartPane({
   contentWidth,
   holidays,
   canEdit,
+  dependencies,
+  connectDrag,
   onCommit,
   onTaskClick,
+  onConnectStart,
 }: GanttChartPaneProps) {
   const bodyHeight = rows.length * ROW_HEIGHT;
   return (
@@ -66,9 +77,44 @@ export function GanttChartPane({
               canEdit={canEdit}
               onCommit={onCommit}
               onTaskClick={onTaskClick}
+              onConnectStart={onConnectStart}
             />
           ))}
         </div>
+        <GanttConnectors
+          rows={rows}
+          chartStart={chartStart}
+          viewMode={viewMode}
+          columnWidth={columnWidth}
+          contentWidth={contentWidth}
+          bodyHeight={bodyHeight}
+          dependencies={dependencies}
+        />
+        {connectDrag && (
+          <svg
+            className="pointer-events-none absolute left-0 top-0"
+            width={contentWidth}
+            height={bodyHeight}
+            style={{ zIndex: 4, overflow: "visible" }}
+          >
+            <line
+              x1={connectDrag.startX}
+              y1={connectDrag.startY}
+              x2={connectDrag.cursorX}
+              y2={connectDrag.cursorY}
+              stroke="rgb(var(--primary))"
+              strokeWidth={2}
+              strokeDasharray="4 4"
+              strokeLinecap="round"
+            />
+            <circle
+              cx={connectDrag.cursorX}
+              cy={connectDrag.cursorY}
+              r={4}
+              fill="rgb(var(--primary))"
+            />
+          </svg>
+        )}
         <GanttTodayLine
           chartStart={chartStart}
           chartEnd={chartEnd}

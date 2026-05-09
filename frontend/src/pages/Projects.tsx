@@ -38,9 +38,9 @@ export function Projects() {
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-h1 text-on-surface">Projects</h1>
+          <h1 className="font-display text-2xl font-bold text-on-surface">Projects</h1>
           <p className="text-sm text-on-surface-variant">
             {activeCustomer
               ? `Filtered by customer: ${activeCustomer.name}`
@@ -51,49 +51,50 @@ export function Projects() {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-2 rounded bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary transition-colors hover:bg-primary-container"
+            className="inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary transition-colors hover:bg-primary-container"
           >
             <span className="material-symbols-outlined text-base">add</span>
-            New Project
+            New project
           </button>
         )}
       </div>
 
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded border border-outline-variant bg-surface-container-lowest p-3">
-        <label className="block">
-          <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-            Customer
-          </span>
-          <select
-            value={customerFilter ?? ""}
-            onChange={(e) =>
-              setCustomerFilter(e.target.value === "" ? "" : Number(e.target.value))
-            }
-            className="rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
-          >
-            <option value="">All customers</option>
-            {(customers ?? []).map((c) => (
-              <option key={c.id} value={c.id}>
-                {c.name}
-              </option>
-            ))}
-          </select>
-        </label>
+      {/* Filter row */}
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <select
+          value={customerFilter ?? ""}
+          onChange={(e) =>
+            setCustomerFilter(e.target.value === "" ? "" : Number(e.target.value))
+          }
+          className="rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
+        >
+          <option value="">All customers</option>
+          {(customers ?? []).map((c) => (
+            <option key={c.id} value={c.id}>
+              {c.name}
+            </option>
+          ))}
+        </select>
         {customerFilter && (
           <button
             type="button"
             onClick={() => setCustomerFilter("")}
-            className="rounded border border-outline-variant px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+            className="rounded border border-outline-variant px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
           >
             Clear
           </button>
+        )}
+        {projects && projects.length > 0 && (
+          <span className="ml-auto font-mono text-[12px] text-on-surface-variant">
+            {projects.length} {projects.length === 1 ? "project" : "projects"}
+          </span>
         )}
       </div>
 
       {isLoading && <SkeletonGrid />}
 
       {isError && (
-        <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+        <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
           Could not load projects: {(error as Error).message}
         </div>
       )}
@@ -119,45 +120,80 @@ export function Projects() {
 }
 
 function ProjectCard({ project }: { project: ProjectSummary }) {
+  const saInit = project.sa.username.slice(0, 2).toUpperCase();
+  const tamInit = project.tam.username.slice(0, 2).toUpperCase();
+  const idBadge = `P-${String(project.id).padStart(3, "0")}`;
+
   return (
     <Link
       to={`/projects/${project.id}`}
-      className="group flex flex-col gap-3 rounded border border-outline-variant bg-surface-container-lowest p-5 transition-all hover:border-primary"
+      className="group flex flex-col rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card transition-colors hover:border-primary"
     >
-      <div className="flex items-start justify-end gap-2">
+      {/* ID + status row */}
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <span className="font-mono text-[11px] text-on-surface-variant">{idBadge}</span>
         <ProjectStatusChip status={project.status} />
       </div>
 
-      <h3 className="text-sm font-semibold leading-tight text-on-surface group-hover:text-primary">
+      {/* Title */}
+      <h3 className="mb-1 truncate font-display text-sm font-bold leading-tight text-on-surface group-hover:text-primary">
         {project.name}
       </h3>
 
-      {project.customer && (
-        <p className="text-[11px] text-on-surface-variant">
-          <span className="material-symbols-outlined align-middle text-[12px]">business</span>{" "}
-          <span className="font-medium text-on-surface">{project.customer.name}</span>
-        </p>
-      )}
+      {/* Description */}
+      <p className="mb-3 line-clamp-2 min-h-[2.4rem] text-[12px] leading-snug text-on-surface-variant">
+        {project.description ?? "No description."}
+      </p>
 
-      {project.description && (
-        <p className="line-clamp-2 text-xs text-on-surface-variant">
-          {project.description}
-        </p>
-      )}
-
-      <div className="mt-auto flex items-center justify-between border-t border-outline-variant pt-3 text-[11px] text-on-surface-variant">
-        <span>
-          TAM <span className="font-medium text-on-surface">{project.tam.username}</span>
+      {/* Bottom row: customer + avatar stack + task count */}
+      <div className="mt-auto flex items-center justify-between gap-2 text-[11px] text-on-surface-variant">
+        <span className="min-w-0 flex-1 truncate">
+          {project.customer?.name ?? <em className="opacity-70">No customer</em>}
         </span>
-        <span className="font-mono">{project._count.tasks} tasks</span>
+        <div className="flex -space-x-1.5">
+          <span
+            title={`SA: ${project.sa.username}`}
+            className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface-container-lowest text-[10px] font-bold text-white"
+            style={{ background: avatarColor(project.sa.username) }}
+          >
+            {saInit}
+          </span>
+          <span
+            title={`TAM: ${project.tam.username}`}
+            className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface-container-lowest bg-primary text-[10px] font-bold text-on-primary"
+          >
+            {tamInit}
+          </span>
+        </div>
+      </div>
+
+      {/* Task-count strip */}
+      <div className="mt-3 flex items-center justify-between border-t border-outline-variant pt-2 text-[11px] text-on-surface-variant">
+        <span className="flex items-center gap-1">
+          <span className="material-symbols-outlined text-[14px]">task_alt</span>
+          {project._count.tasks} {project._count.tasks === 1 ? "task" : "tasks"}
+        </span>
+        {project.baselineLockedAt && (
+          <span className="flex items-center gap-1" title="Baseline locked">
+            <span className="material-symbols-outlined text-[14px] text-primary">bookmark</span>
+            Baseline
+          </span>
+        )}
       </div>
     </Link>
   );
 }
 
+const AVATAR_PALETTE = ["#0d9488", "#7c3aed", "#dc2626", "#0ea5e9", "#9333ea", "#a78bfa", "#f59e0b", "#10b981"];
+function avatarColor(seed: string) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+}
+
 function EmptyState({ onCreate }: { onCreate?: () => void }) {
   return (
-    <div className="rounded border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center">
+    <div className="rounded-xl border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center">
       <span className="material-symbols-outlined mb-2 text-4xl text-on-surface-variant">
         folder_open
       </span>
@@ -166,7 +202,7 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
         <button
           type="button"
           onClick={onCreate}
-          className="inline-flex items-center gap-2 rounded bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
+          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
         >
           <span className="material-symbols-outlined text-base">add</span>
           Create your first project
@@ -182,7 +218,7 @@ function SkeletonGrid() {
       {Array.from({ length: 3 }).map((_, i) => (
         <div
           key={i}
-          className="h-40 animate-pulse rounded border border-outline-variant bg-surface-container-low"
+          className="h-40 animate-pulse rounded-xl bg-surface-container-low shadow-card"
         />
       ))}
     </div>

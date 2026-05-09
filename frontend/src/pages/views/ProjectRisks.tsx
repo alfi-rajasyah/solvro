@@ -162,7 +162,7 @@ export function ProjectRisks() {
               setStatusFilter("ALL");
               setSearch("");
             }}
-            className="ml-auto rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary"
+            className="ml-auto rounded px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary"
           >
             Reset
           </button>
@@ -190,7 +190,7 @@ export function ProjectRisks() {
         <>
           <div className="hidden overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest md:block">
             <table className="w-full text-sm">
-              <thead className="bg-surface-container-low text-left font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+              <thead className="bg-surface-container-low text-left font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
                 <tr>
                   <th className="px-3 py-2">Description</th>
                   <th className="px-3 py-2">Category</th>
@@ -299,7 +299,7 @@ function RiskRow({
           {risk.description}
         </button>
         {(risk.mitigationPlan || risk.contingencyPlan) && (
-          <div className="mt-1 space-y-0.5 text-[11px] text-on-surface-variant">
+          <div className="mt-1 space-y-0.5 text-[12px] text-on-surface-variant">
             {risk.mitigationPlan && (
               <p className="line-clamp-2">
                 <span className="font-display font-bold uppercase tracking-wider">
@@ -365,7 +365,7 @@ function RiskRow({
           title={`${risk.probability} × ${risk.impact} = ${score}`}
         >
           {score}
-          <span className="font-display text-[9px] font-bold uppercase tracking-wider">
+          <span className="font-display text-[10px] font-bold uppercase tracking-wider">
             {scoreLevel(score)}
           </span>
         </div>
@@ -376,7 +376,7 @@ function RiskRow({
             value={risk.status}
             onChange={(e) => onChange({ status: e.target.value as RiskStatus })}
             className={[
-              "w-full rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider",
+              "w-full rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider",
               STATUS_TONE[risk.status],
             ].join(" ")}
           >
@@ -389,7 +389,7 @@ function RiskRow({
         ) : (
           <span
             className={[
-              "inline-block rounded px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider",
+              "inline-block rounded px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider",
               STATUS_TONE[risk.status],
             ].join(" ")}
           >
@@ -454,7 +454,7 @@ function RiskCard({
           {score}
         </div>
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px]">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
         <span className="text-on-surface-variant">
           {CATEGORY_LABEL[risk.category]}
         </span>
@@ -463,7 +463,7 @@ function RiskCard({
         </span>
         <span
           className={[
-            "rounded px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider",
+            "rounded px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider",
             STATUS_TONE[risk.status],
           ].join(" ")}
         >
@@ -506,7 +506,7 @@ function Select({
   options: { value: string; label: string }[];
 }) {
   return (
-    <label className="flex items-center gap-2 text-[11px] text-on-surface-variant">
+    <label className="flex items-center gap-2 text-[12px] text-on-surface-variant">
       <span className="font-display font-bold uppercase tracking-wider">
         {label}
       </span>
@@ -545,7 +545,7 @@ function Stat({
   return (
     <div
       className={[
-        "rounded border px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-wider",
+        "rounded border px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider",
         toneClass,
       ].join(" ")}
     >

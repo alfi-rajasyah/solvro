@@ -33,9 +33,11 @@ import { exportGanttToPdf } from "@/lib/gantt/exportPdf";
 import {
   type Task,
   type TaskStatus,
+  useCreateDependency,
   useCreateSection,
   useHolidays,
   useLockBaseline,
+  useProjectDependencies,
   useProjectSections,
   useProjectTasks,
   useUpdateSection,
@@ -74,6 +76,8 @@ export function GanttFrame({
 
   const { data: tasks, isLoading, isError, error } = useProjectTasks(projectId);
   const { data: sections } = useProjectSections(projectId);
+  const { data: dependencies } = useProjectDependencies(projectId);
+  const createDep = useCreateDependency(projectId);
   const updateTask = useUpdateTask(projectId);
   const createSection = useCreateSection(projectId);
   const updateSection = useUpdateSection(projectId);
@@ -110,6 +114,110 @@ export function GanttFrame({
   const [newSectionName, setNewSectionName] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Declared early so connect-drag closures below can reach it; the
+  // ref is attached to the scroller in the JSX further down.
+  const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  /**
+   * Connect-drag state: tracks the rubber-band line from a bar's right
+   * edge to the cursor while the user is creating a new dependency.
+   * `null` when no drag is in progress.
+   *
+   * Coordinates are local to the chart-body container (i.e. excluding
+   * the list pane on the left and the date axis at the top), so the
+   * SVG overlay rendered by `GanttChartPane` can use them directly.
+   */
+  const [connectDrag, setConnectDrag] = useState<{
+    sourceTaskId: number;
+    startX: number;
+    startY: number;
+    cursorX: number;
+    cursorY: number;
+  } | null>(null);
+
+  const handleConnectStart = useCallback(
+    (sourceTaskId: number, clientX: number, clientY: number) => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      const rect = scroller.getBoundingClientRect();
+      // clientXY → chart-body-local coords. The chart body is offset by
+      // LIST_PANE_WIDTH from the left and AXIS_HEIGHT from the top of
+      // the scroller's content origin.
+      const toLocal = (cx: number, cy: number) => ({
+        x: cx - rect.left + scroller.scrollLeft - LIST_PANE_WIDTH,
+        y: cy - rect.top + scroller.scrollTop - AXIS_HEIGHT,
+      });
+      const start = toLocal(clientX, clientY);
+      setConnectDrag({
+        sourceTaskId,
+        startX: start.x,
+        startY: start.y,
+        cursorX: start.x,
+        cursorY: start.y,
+      });
+
+      const onMove = (ev: PointerEvent) => {
+        const c = toLocal(ev.clientX, ev.clientY);
+        setConnectDrag((prev) =>
+          prev ? { ...prev, cursorX: c.x, cursorY: c.y } : null,
+        );
+      };
+      const onUp = (ev: PointerEvent) => {
+        cleanup();
+        // Walk up from elementFromPoint until we find a [data-task-id].
+        // The release target is the successor.
+        let node: Element | null = document.elementFromPoint(ev.clientX, ev.clientY);
+        let targetTaskId: number | null = null;
+        while (node) {
+          const id = (node as HTMLElement).dataset?.taskId;
+          if (id) {
+            targetTaskId = Number(id);
+            break;
+          }
+          node = node.parentElement;
+        }
+        setConnectDrag(null);
+        if (targetTaskId === null || targetTaskId === sourceTaskId) return;
+        createDep.mutate(
+          {
+            predecessorTaskId: sourceTaskId,
+            successorTaskId: targetTaskId,
+            type: "HARD",
+            // Default to right→left handles for Gantt-created deps —
+            // matches the chart's natural left-to-right time flow when
+            // the dep is later viewed in the Network Diagram.
+            sourceHandle: "right-source",
+            targetHandle: "left-target",
+          },
+          {
+            onError: (err) => {
+              setActionError(
+                err instanceof ApiError
+                  ? err.message
+                  : "Could not create dependency.",
+              );
+            },
+          },
+        );
+      };
+      const onKey = (ev: KeyboardEvent) => {
+        if (ev.key === "Escape") {
+          cleanup();
+          setConnectDrag(null);
+        }
+      };
+      function cleanup() {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        window.removeEventListener("keydown", onKey);
+      }
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+      window.addEventListener("keydown", onKey);
+    },
+    [createDep],
+  );
+
   const rows = useMemo<Row[]>(
     () => buildRows({ tasks: tasks ?? [], sections: sections ?? [], collapsed }),
     [tasks, sections, collapsed],
@@ -125,8 +233,6 @@ export function GanttFrame({
     () => (dateRange ? computeChartEnd(dateRange.max, viewMode) : null),
     [dateRange, viewMode],
   );
-
-  const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   const columnCount = useMemo(() => {
     if (!chartStart || !chartEnd) return 0;
@@ -397,13 +503,13 @@ export function GanttFrame({
   const datedTaskCount = (tasks ?? []).filter((t) => t.startDate || t.dueDate).length;
 
   return (
-    <div className="flex h-full min-h-[460px] min-w-0 flex-col overflow-hidden rounded border border-outline-variant bg-surface-container-lowest">
+    <div className="flex min-w-0 flex-col overflow-hidden rounded border border-outline-variant bg-surface-container-lowest">
       <div className="flex items-center gap-2 border-b border-outline-variant bg-surface-container-lowest px-3 py-1.5">
         <button
           type="button"
           onClick={scrollToToday}
           disabled={!chartStart}
-          className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary disabled:opacity-50"
         >
           <span className="material-symbols-outlined text-base">today</span>
           Today
@@ -414,7 +520,7 @@ export function GanttFrame({
             <button
               type="button"
               onClick={() => onCreateTaskOpen(null)}
-              className="inline-flex items-center gap-1 rounded bg-primary px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
+              className="inline-flex items-center gap-1 rounded bg-primary px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Task
@@ -422,7 +528,7 @@ export function GanttFrame({
             <button
               type="button"
               onClick={() => setAddingSection(true)}
-              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Section
@@ -438,8 +544,8 @@ export function GanttFrame({
               }
               className={
                 baselineLockedAt
-                  ? "inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
-                  : "inline-flex items-center gap-1 rounded border border-primary bg-primary px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
+                  ? "inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+                  : "inline-flex items-center gap-1 rounded border border-primary bg-primary px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
               }
             >
               <span className="material-symbols-outlined text-base">
@@ -449,12 +555,12 @@ export function GanttFrame({
             </button>
           </>
         )}
-        <span className="ml-3 font-mono text-[11px] text-on-surface-variant">
+        <span className="ml-3 font-mono text-[12px] text-on-surface-variant">
           {datedTaskCount} dated · {sectionCount} sections
           {canEdit && " · drag bars or edges to reschedule"}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <span className="font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <span className="font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
             Scale
           </span>
           <div className="inline-flex overflow-hidden rounded border border-outline-variant">
@@ -464,7 +570,7 @@ export function GanttFrame({
                 type="button"
                 onClick={() => setViewMode(v.mode)}
                 className={[
-                  "px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider",
+                  "px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider",
                   i > 0 ? "border-l border-outline-variant" : "",
                   v.mode === viewMode
                     ? "bg-primary text-on-primary"
@@ -495,7 +601,7 @@ export function GanttFrame({
           <button
             type="submit"
             disabled={createSection.isPending || !newSectionName.trim()}
-            className="rounded bg-primary px-2 py-1 font-display text-[10px] font-bold uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className="rounded bg-primary px-2 py-1 font-display text-[11px] font-bold uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
           >
             Add
           </button>
@@ -505,7 +611,7 @@ export function GanttFrame({
               setAddingSection(false);
               setNewSectionName("");
             }}
-            className="rounded px-2 py-1 text-[10px] text-on-surface-variant hover:bg-surface-container"
+            className="rounded px-2 py-1 text-[11px] text-on-surface-variant hover:bg-surface-container"
           >
             Cancel
           </button>
@@ -537,7 +643,7 @@ export function GanttFrame({
       {!isLoading && !isError && rows.length > 0 && chartStart && chartEnd && (
         <div
           ref={scrollerRef}
-          className="solvro-gantt relative min-h-0 min-w-0 flex-1 overflow-auto"
+          className="solvro-gantt relative min-w-0 overflow-x-auto"
         >
           <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
             <div
@@ -565,8 +671,11 @@ export function GanttFrame({
                   contentWidth={contentWidth}
                   holidays={holidays}
                   canEdit={canEdit}
+                  dependencies={dependencies ?? []}
+                  connectDrag={connectDrag}
                   onCommit={handleCommit}
                   onTaskClick={handleTaskClick}
+                  onConnectStart={canEdit ? handleConnectStart : undefined}
                 />
               </div>
             </div>
@@ -619,7 +728,7 @@ export function GanttFrame({
               </p>
             )}
             <label className="block">
-              <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
                 Baseline as-of date
               </span>
               <input
@@ -628,7 +737,7 @@ export function GanttFrame({
                 onChange={(e) => setBaselineAsOf(e.target.value)}
                 className="w-full rounded border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
               />
-              <span className="mt-1 block text-[10px] text-on-surface-variant">
+              <span className="mt-1 block text-[11px] text-on-surface-variant">
                 Defaults to today. Use a different date to backdate the snapshot — e.g.
                 "May 1 baseline".
               </span>
@@ -652,11 +761,11 @@ export function GanttFrame({
                       setConfirmingBaseline(false);
                     }
                   }}
-                  className="font-display text-[10px] font-bold uppercase tracking-wider text-error hover:underline disabled:opacity-50"
+                  className="font-display text-[11px] font-bold uppercase tracking-wider text-error hover:underline disabled:opacity-50"
                 >
                   Clear baseline instead
                 </button>
-                <span className="ml-1 text-[10px] text-on-surface-variant">
+                <span className="ml-1 text-[11px] text-on-surface-variant">
                   — removes the snapshot entirely.
                 </span>
               </div>
@@ -668,9 +777,9 @@ export function GanttFrame({
       {baselineToast && (
         <div
           role="status"
-          className="pointer-events-auto fixed bottom-6 left-1/2 z-[110] -translate-x-1/2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 font-display text-[11px] font-bold uppercase tracking-wider text-emerald-700 shadow-md"
+          className="pointer-events-auto fixed bottom-6 left-1/2 z-[110] -translate-x-1/2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 font-display text-[12px] font-bold uppercase tracking-wider text-emerald-700 shadow-md"
         >
-          <span className="material-symbols-outlined mr-1 align-middle text-[14px]">
+          <span className="material-symbols-outlined mr-1 align-middle text-[15px]">
             check_circle
           </span>
           {baselineToast}

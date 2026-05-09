@@ -2,6 +2,8 @@ import { useMemo, useState, type FormEvent } from "react";
 import { useProjectContext } from "../ProjectDetail";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { InlineDateRangeEditor } from "@/components/InlineDateRangeEditor";
+import { PriorityBadge } from "@/components/PriorityBadge";
+import { TaskStatusChip } from "@/components/StatusChip";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -53,7 +55,7 @@ export function ProjectList() {
 
   if (isError) {
     return (
-      <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+      <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
         Could not load tasks: {(error as Error).message}
       </div>
     );
@@ -128,6 +130,15 @@ export function ProjectList() {
     }
   }
 
+  async function handleSectionColorChange(s: Section, color: string) {
+    setActionError(null);
+    try {
+      await updateSection.mutateAsync({ id: s.id, patch: { color } });
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Could not update color.");
+    }
+  }
+
   async function handleDeleteSection(s: Section) {
     if (
       !confirm(
@@ -152,14 +163,14 @@ export function ProjectList() {
 
   return (
     <>
-      <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest">
+      <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest shadow-card">
         {/* Toolbar */}
         <div className="flex items-center gap-2 border-b border-outline-variant px-3 py-2">
           {canEdit && (
             <button
               type="button"
               onClick={() => setCreateTaskCtx({ sectionId: null, parentTaskId: null })}
-              className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
+              className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Add task
@@ -169,13 +180,13 @@ export function ProjectList() {
             <button
               type="button"
               onClick={() => setAddingSection(true)}
-              className="inline-flex items-center gap-1 rounded border border-outline-variant px-3 py-1.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+              className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Add section
             </button>
           )}
-          <span className="ml-auto font-mono text-[11px] text-on-surface-variant">
+          <span className="ml-auto font-mono text-[12px] text-on-surface-variant">
             {tasks?.length ?? 0} tasks · {sections?.length ?? 0} sections
           </span>
         </div>
@@ -187,12 +198,14 @@ export function ProjectList() {
         )}
 
         {/* Column headers */}
-        <div className="hidden grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-b border-outline-variant bg-surface-container-low px-3 py-2 font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant md:grid">
+        <div className="hidden grid-cols-[36px_minmax(240px,1fr)_190px_170px_80px_48px_28px] items-center border-b border-outline-variant bg-surface-container-low px-3 py-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant md:grid">
           <span></span>
-          <span>#</span>
-          <span>Name</span>
+          <span>Task</span>
+          <span>Status</span>
+          <span>Dates</span>
+          <span>Timer</span>
           <span>Assignee</span>
-          <span>Start – Due</span>
+          <span></span>
         </div>
 
         {/* Sections */}
@@ -224,6 +237,7 @@ export function ProjectList() {
               setRenameValue(s ? s.name : "");
             }}
             onDelete={handleDeleteSection}
+            onColorChange={handleSectionColorChange}
             renamingKey={renamingSectionKey}
             renameValue={renameValue}
             onRenameChange={setRenameValue}
@@ -249,7 +263,7 @@ export function ProjectList() {
             <button
               type="submit"
               disabled={createSection.isPending || !newSectionName.trim()}
-              className="rounded bg-primary px-2 py-1 font-display text-[10px] font-bold uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className="rounded bg-primary px-2 py-1 font-display text-[11px] font-bold uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
             >
               Add
             </button>
@@ -259,7 +273,7 @@ export function ProjectList() {
                 setAddingSection(false);
                 setNewSectionName("");
               }}
-              className="rounded px-2 py-1 text-[10px] text-on-surface-variant hover:bg-surface-container"
+              className="rounded px-2 py-1 text-[11px] text-on-surface-variant hover:bg-surface-container"
             >
               Cancel
             </button>
@@ -306,6 +320,7 @@ interface SectionBlockProps {
   // the parent then opens the rename input keyed on the literal "none".
   onRename: (s: Section | null) => void;
   onDelete: (s: Section) => void;
+  onColorChange: (s: Section, color: string) => void;
   renamingKey: number | "none" | null;
   renameValue: string;
   onRenameChange: (v: string) => void;
@@ -326,6 +341,7 @@ function SectionBlock({
   onUpdateDates,
   onRename,
   onDelete,
+  onColorChange,
   renamingKey,
   renameValue,
   onRenameChange,
@@ -336,7 +352,7 @@ function SectionBlock({
   const isRenaming = renamingKey === sectionKey;
   return (
     <div className="border-b border-outline-variant">
-      <div className="flex items-center gap-2 bg-surface-container-low px-3 py-2">
+      <div className="flex items-center gap-2 bg-surface-container-low px-3 py-1.5">
         <button
           type="button"
           onClick={onToggle}
@@ -365,14 +381,14 @@ function SectionBlock({
             />
             <button
               type="submit"
-              className="rounded bg-primary px-2 py-0.5 font-display text-[10px] font-bold uppercase text-on-primary"
+              className="rounded bg-primary px-2 py-0.5 font-display text-[11px] font-bold uppercase text-on-primary"
             >
               {section ? "Save" : "Create"}
             </button>
             <button
               type="button"
               onClick={onRenameCancel}
-              className="text-[10px] text-on-surface-variant"
+              className="text-[11px] text-on-surface-variant"
             >
               Cancel
             </button>
@@ -387,18 +403,33 @@ function SectionBlock({
             {section?.name ?? "(No section)"}
           </h3>
         )}
-        <span className="font-mono text-[11px] text-on-surface-variant">
+        <span className="font-mono text-[12px] text-on-surface-variant">
           · {tasks.length}
         </span>
         {canEdit && !isRenaming && (
           <div className="ml-auto flex items-center gap-1">
+            {section && (
+              <label
+                className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded hover:ring-2 hover:ring-outline-variant"
+                title="Phase color (used in the Network Diagram)"
+                style={{ backgroundColor: section.color }}
+              >
+                <input
+                  type="color"
+                  value={section.color}
+                  onChange={(e) => onColorChange(section, e.target.value)}
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                  aria-label="Section color"
+                />
+              </label>
+            )}
             <button
               type="button"
               onClick={() => onRename(section)}
               className="rounded p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
               title={section ? "Rename section" : "Promote into a real section"}
             >
-              <span className="material-symbols-outlined text-[16px]">edit</span>
+              <span className="material-symbols-outlined text-[17px]">edit</span>
             </button>
             {section && (
               <button
@@ -407,7 +438,7 @@ function SectionBlock({
                 className="rounded p-1 text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
                 title="Delete section"
               >
-                <span className="material-symbols-outlined text-[16px]">delete</span>
+                <span className="material-symbols-outlined text-[17px]">delete</span>
               </button>
             )}
           </div>
@@ -430,7 +461,7 @@ function SectionBlock({
           ))}
 
           {tasks.length === 0 && (
-            <div className="px-12 py-3 text-[11px] text-on-surface-variant">
+            <div className="px-12 py-2 text-[12px] text-on-surface-variant">
               No tasks in this section.
             </div>
           )}
@@ -439,9 +470,9 @@ function SectionBlock({
             <button
               type="button"
               onClick={onAddTask}
-              className="flex w-full items-center gap-2 px-12 py-2 text-left text-[11px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
+              className="flex w-full items-center gap-2 px-12 py-1 text-left text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
             >
-              <span className="material-symbols-outlined text-[14px]">add</span>
+              <span className="material-symbols-outlined text-[15px]">add</span>
               Add task...
             </button>
           )}
@@ -483,44 +514,43 @@ function TaskRow({
   return (
     <>
       {/* Desktop grid row */}
-      <div className="hidden grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-t border-outline-variant px-3 py-2 hover:bg-surface-container-low md:grid">
+      <div className="hidden grid-cols-[36px_minmax(240px,1fr)_190px_170px_80px_48px_28px] items-center border-t border-outline-variant px-3 py-1.5 hover:bg-surface-container-low md:grid">
+        {/* Done toggle */}
         <button
           type="button"
-          onClick={() => setExpanded((v) => !v)}
-          disabled={node.subtasks.length === 0}
-          className="text-on-surface-variant hover:text-on-surface disabled:invisible"
-          aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+          onClick={() => onToggleDone(node.task)}
+          className={[
+            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors",
+            node.task.status === "DONE"
+              ? "border-emerald-500 bg-emerald-500 text-white"
+              : "border-outline-variant text-transparent hover:border-primary",
+          ].join(" ")}
+          aria-label="Toggle done"
         >
-          <span className="material-symbols-outlined text-[16px]">
-            {expanded ? "expand_more" : "chevron_right"}
-          </span>
+          <span className="material-symbols-outlined text-[13px]">check</span>
         </button>
-        <span className="font-mono text-[11px] text-on-surface-variant">{index}</span>
+
+        {/* Title + subtext */}
         <button
           type="button"
           onClick={() => onEdit(node.task)}
-          className="flex min-w-0 items-center gap-2 text-left"
+          className="flex min-w-0 flex-col items-start text-left"
         >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleDone(node.task);
-            }}
-            className={[
-              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-              node.task.status === "DONE"
-                ? "border-emerald-500 bg-emerald-500 text-white"
-                : "border-outline-variant text-transparent hover:border-primary",
-            ].join(" ")}
-            aria-label="Toggle done"
-          >
-            <span className="material-symbols-outlined text-[12px]">check</span>
-          </button>
-          <span className="flex min-w-0 items-baseline gap-2">
+          <span className="flex items-center gap-1.5">
+            {node.subtasks.length > 0 && (
+              <span
+                className="material-symbols-outlined text-[15px] text-on-surface-variant"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setExpanded((v) => !v);
+                }}
+              >
+                {expanded ? "expand_more" : "chevron_right"}
+              </span>
+            )}
             <span
               className={[
-                "shrink-0 truncate text-sm",
+                "truncate text-sm font-semibold",
                 node.task.status === "DONE"
                   ? "text-on-surface-variant line-through"
                   : "text-on-surface",
@@ -528,26 +558,21 @@ function TaskRow({
             >
               {node.task.title}
             </span>
-            {node.subtasks.length > 0 && (
-              <span className="shrink-0 font-mono text-[10px] text-on-surface-variant">
-                {node.subtasks.length} subtask{node.subtasks.length === 1 ? "" : "s"}
-              </span>
-            )}
-            {node.task.description && (
-              <span className="min-w-0 truncate text-[11px] text-on-surface-variant">
-                — {node.task.description}
-              </span>
-            )}
+          </span>
+          <span className="text-[11px] text-on-surface-variant">
+            T-{String(node.task.id).padStart(3, "0")}
+            {node.task.assignedTo && ` · ${node.task.assignedTo.username}`}
+            {node.subtasks.length > 0 && ` · ${node.subtasks.length} subtask${node.subtasks.length === 1 ? "" : "s"}`}
           </span>
         </button>
-        <span>
-          <AssigneeAvatar user={node.task.assignedTo} size="xs" />
-          {node.task.assignedTo && (
-            <span className="ml-2 text-xs text-on-surface-variant">
-              {node.task.assignedTo.username}
-            </span>
-          )}
-        </span>
+
+        {/* Status + priority chips */}
+        <div className="flex flex-wrap items-center gap-1">
+          <TaskStatusChip status={node.task.status} />
+          <PriorityBadge priority={node.task.priority} compact />
+        </div>
+
+        {/* Dates (editable) */}
         <span className="relative">
           <button
             type="button"
@@ -557,14 +582,15 @@ function TaskRow({
               setEditingDates(true);
             }}
             className={[
-              "rounded px-1 text-left",
+              "flex items-center gap-1 rounded px-1 text-left",
               overdue
-                ? "font-mono text-[11px] font-bold text-error"
-                : "font-mono text-[11px] text-on-surface-variant",
+                ? "font-mono text-[12px] font-bold text-error"
+                : "font-mono text-[12px] text-on-surface-variant",
               canEdit ? "hover:bg-surface-container-low hover:text-primary" : "cursor-default",
             ].join(" ")}
             title={canEdit ? "Click to edit dates" : undefined}
           >
+            <span className="material-symbols-outlined text-[13px]">calendar_today</span>
             {fmtRange(node.task.startDate, node.task.dueDate)}
             {overdue && " · OVERDUE"}
           </button>
@@ -581,10 +607,25 @@ function TaskRow({
             />
           )}
         </span>
+
+        {/* Timer placeholder */}
+        <div className="flex items-center gap-1 font-mono text-[12px] text-on-surface-variant">
+          <span className="material-symbols-outlined text-[14px]">timer</span>
+          <span>--:--:--</span>
+        </div>
+
+        {/* Assignee avatar */}
+        <AssigneeAvatar user={node.task.assignedTo} size="xs" />
+
+        {/* Comment count */}
+        <div className="flex items-center gap-0.5 text-[12px] text-on-surface-variant">
+          <span className="material-symbols-outlined text-[14px]">chat_bubble</span>
+          {node.task._count.comments > 0 ? node.task._count.comments : ""}
+        </div>
       </div>
 
       {/* Mobile card */}
-      <div className="flex flex-col gap-2 border-t border-outline-variant px-3 py-3 md:hidden">
+      <div className="flex flex-col gap-2 border-t border-outline-variant px-3 py-2 md:hidden">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -597,7 +638,7 @@ function TaskRow({
             ].join(" ")}
             aria-label="Toggle done"
           >
-            <span className="material-symbols-outlined text-[14px]">check</span>
+            <span className="material-symbols-outlined text-[15px]">check</span>
           </button>
           <button
             type="button"
@@ -612,13 +653,13 @@ function TaskRow({
                   : "text-on-surface",
               ].join(" ")}
             >
-              <span className="mr-2 font-mono text-[10px] text-on-surface-variant">
+              <span className="mr-2 font-mono text-[11px] text-on-surface-variant">
                 #{index}
               </span>
               {node.task.title}
             </span>
             {node.task.description && (
-              <span className="min-w-0 truncate text-[11px] text-on-surface-variant">
+              <span className="min-w-0 truncate text-[12px] text-on-surface-variant">
                 — {node.task.description}
               </span>
             )}
@@ -630,7 +671,7 @@ function TaskRow({
               className="shrink-0 rounded p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
               aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
             >
-              <span className="material-symbols-outlined text-[18px]">
+              <span className="material-symbols-outlined text-[19px]">
                 {expanded ? "expand_more" : "chevron_right"}
               </span>
             </button>
@@ -640,7 +681,7 @@ function TaskRow({
           <span className="flex min-w-0 items-center gap-1.5">
             <AssigneeAvatar user={node.task.assignedTo} size="xs" />
             {node.task.assignedTo && (
-              <span className="truncate text-[11px] text-on-surface-variant">
+              <span className="truncate text-[12px] text-on-surface-variant">
                 {node.task.assignedTo.username}
               </span>
             )}
@@ -651,7 +692,7 @@ function TaskRow({
               disabled={!canEdit}
               onClick={() => setEditingDates(true)}
               className={[
-                "rounded px-1 text-right font-mono text-[11px]",
+                "rounded px-1 text-right font-mono text-[12px]",
                 overdue ? "font-bold text-error" : "text-on-surface-variant",
               ].join(" ")}
             >
@@ -673,7 +714,7 @@ function TaskRow({
           </span>
         </div>
         {node.subtasks.length > 0 && (
-          <span className="pl-7 font-mono text-[10px] text-on-surface-variant">
+          <span className="pl-7 font-mono text-[11px] text-on-surface-variant">
             {node.subtasks.length} subtask{node.subtasks.length === 1 ? "" : "s"}
           </span>
         )}
@@ -696,21 +737,20 @@ function TaskRow({
           <button
             type="button"
             onClick={() => onAddSubtask(node.task.id)}
-            className="hidden w-full grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-t border-outline-variant px-3 py-1.5 text-left text-[11px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary md:grid"
+            className="hidden w-full grid-cols-[36px_minmax(240px,1fr)_190px_170px_80px_48px_28px] items-center border-t border-outline-variant px-3 py-1 text-left text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary md:grid"
           >
             <span></span>
-            <span></span>
-            <span className="flex items-center gap-1 pl-6">
-              <span className="material-symbols-outlined text-[14px]">add</span>
+            <span className="flex items-center gap-1 pl-5">
+              <span className="material-symbols-outlined text-[15px]">add</span>
               Add subtask…
             </span>
           </button>
           <button
             type="button"
             onClick={() => onAddSubtask(node.task.id)}
-            className="flex w-full items-center gap-1 border-t border-outline-variant px-3 py-2 pl-10 text-left text-[11px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary md:hidden"
+            className="flex w-full items-center gap-1 border-t border-outline-variant px-3 py-2 pl-10 text-left text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary md:hidden"
           >
-            <span className="material-symbols-outlined text-[14px]">add</span>
+            <span className="material-symbols-outlined text-[15px]">add</span>
             Add subtask…
           </button>
         </>
@@ -739,57 +779,52 @@ function SubtaskRow({
     task.dueDate && task.status !== "DONE" && new Date(task.dueDate) < startOfToday();
   return (
     <>
-      {/* Desktop grid row */}
-      <div className="hidden grid-cols-[28px_44px_minmax(280px,1fr)_180px_220px] items-center border-t border-outline-variant bg-surface-container-low/40 px-3 py-1.5 hover:bg-surface-container-low md:grid">
-        <span></span>
-        <span className="pl-3 font-mono text-[11px] text-on-surface-variant">{index}</span>
+      {/* Desktop grid row (subtask, indented) */}
+      <div className="hidden grid-cols-[36px_minmax(240px,1fr)_190px_170px_80px_48px_28px] items-center border-t border-outline-variant bg-surface-container-low/40 px-3 py-1 hover:bg-surface-container-low md:grid">
+        {/* Done toggle */}
+        <button
+          type="button"
+          onClick={() => onToggleDone(task)}
+          className={[
+            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+            task.status === "DONE"
+              ? "border-emerald-500 bg-emerald-500 text-white"
+              : "border-outline-variant text-transparent hover:border-primary",
+          ].join(" ")}
+          aria-label="Toggle done"
+        >
+          <span className="material-symbols-outlined text-[12px]">check</span>
+        </button>
+
+        {/* Title (indented) */}
         <button
           type="button"
           onClick={() => onEdit(task)}
-          className="flex min-w-0 items-center gap-2 pl-6 text-left"
+          className="flex min-w-0 flex-col items-start pl-5 text-left"
         >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              onToggleDone(task);
-            }}
+          <span
             className={[
-              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
+              "truncate text-xs font-medium",
               task.status === "DONE"
-                ? "border-emerald-500 bg-emerald-500 text-white"
-                : "border-outline-variant text-transparent hover:border-primary",
+                ? "text-on-surface-variant line-through"
+                : "text-on-surface",
             ].join(" ")}
-            aria-label="Toggle done"
           >
-            <span className="material-symbols-outlined text-[12px]">check</span>
-          </button>
-          <span className="flex min-w-0 items-baseline gap-2">
-            <span
-              className={[
-                "shrink-0 truncate text-xs",
-                task.status === "DONE"
-                  ? "text-on-surface-variant line-through"
-                  : "text-on-surface",
-              ].join(" ")}
-            >
-              {task.title}
-            </span>
-            {task.description && (
-              <span className="min-w-0 truncate text-[11px] text-on-surface-variant">
-                — {task.description}
-              </span>
-            )}
+            {task.title}
+          </span>
+          <span className="text-[11px] text-on-surface-variant">
+            T-{String(task.id).padStart(3, "0")}
+            {task.assignedTo && ` · ${task.assignedTo.username}`}
           </span>
         </button>
-        <span>
-          <AssigneeAvatar user={task.assignedTo} size="xs" />
-          {task.assignedTo && (
-            <span className="ml-2 text-[11px] text-on-surface-variant">
-              {task.assignedTo.username}
-            </span>
-          )}
-        </span>
+
+        {/* Status + priority */}
+        <div className="flex flex-wrap items-center gap-1">
+          <TaskStatusChip status={task.status} />
+          <PriorityBadge priority={task.priority} compact />
+        </div>
+
+        {/* Dates */}
         <span className="relative">
           <button
             type="button"
@@ -799,14 +834,14 @@ function SubtaskRow({
               setEditingDates(true);
             }}
             className={[
-              "rounded px-1 text-left",
+              "flex items-center gap-1 rounded px-1 text-left",
               overdue
-                ? "font-mono text-[11px] font-bold text-error"
-                : "font-mono text-[11px] text-on-surface-variant",
+                ? "font-mono text-[12px] font-bold text-error"
+                : "font-mono text-[12px] text-on-surface-variant",
               canEdit ? "hover:bg-surface-container-low hover:text-primary" : "cursor-default",
             ].join(" ")}
-            title={canEdit ? "Click to edit dates" : undefined}
           >
+            <span className="material-symbols-outlined text-[13px]">calendar_today</span>
             {fmtRange(task.startDate, task.dueDate)}
           </button>
           {editingDates && canEdit && (
@@ -822,10 +857,25 @@ function SubtaskRow({
             />
           )}
         </span>
+
+        {/* Timer placeholder */}
+        <div className="flex items-center gap-1 font-mono text-[12px] text-on-surface-variant">
+          <span className="material-symbols-outlined text-[14px]">timer</span>
+          <span>--:--:--</span>
+        </div>
+
+        {/* Assignee */}
+        <AssigneeAvatar user={task.assignedTo} size="xs" />
+
+        {/* Comment count */}
+        <div className="flex items-center gap-0.5 text-[12px] text-on-surface-variant">
+          <span className="material-symbols-outlined text-[14px]">chat_bubble</span>
+          {task._count.comments > 0 ? task._count.comments : ""}
+        </div>
       </div>
 
       {/* Mobile subtask card */}
-      <div className="flex flex-col gap-1.5 border-t border-outline-variant bg-surface-container-low/40 px-3 py-2 pl-8 md:hidden">
+      <div className="flex flex-col gap-1.5 border-t border-outline-variant bg-surface-container-low/40 px-3 py-1.5 pl-8 md:hidden">
         <div className="flex items-center gap-2">
           <button
             type="button"
@@ -838,7 +888,7 @@ function SubtaskRow({
             ].join(" ")}
             aria-label="Toggle done"
           >
-            <span className="material-symbols-outlined text-[12px]">check</span>
+            <span className="material-symbols-outlined text-[13px]">check</span>
           </button>
           <button
             type="button"
@@ -853,13 +903,13 @@ function SubtaskRow({
                   : "text-on-surface",
               ].join(" ")}
             >
-              <span className="mr-2 font-mono text-[10px] text-on-surface-variant">
+              <span className="mr-2 font-mono text-[11px] text-on-surface-variant">
                 {index}
               </span>
               {task.title}
             </span>
             {task.description && (
-              <span className="min-w-0 truncate text-[11px] text-on-surface-variant">
+              <span className="min-w-0 truncate text-[12px] text-on-surface-variant">
                 — {task.description}
               </span>
             )}
@@ -869,7 +919,7 @@ function SubtaskRow({
           <span className="flex min-w-0 items-center gap-1.5">
             <AssigneeAvatar user={task.assignedTo} size="xs" />
             {task.assignedTo && (
-              <span className="truncate text-[11px] text-on-surface-variant">
+              <span className="truncate text-[12px] text-on-surface-variant">
                 {task.assignedTo.username}
               </span>
             )}
@@ -880,7 +930,7 @@ function SubtaskRow({
               disabled={!canEdit}
               onClick={() => setEditingDates(true)}
               className={[
-                "rounded px-1 text-right font-mono text-[11px]",
+                "rounded px-1 text-right font-mono text-[12px]",
                 overdue ? "font-bold text-error" : "text-on-surface-variant",
               ].join(" ")}
             >

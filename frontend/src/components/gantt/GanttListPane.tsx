@@ -38,25 +38,25 @@ export function GanttListPane({
       >
         <div style={{ width: CHECKBOX_COL_WIDTH }} />
         <div
-          className="flex items-center border-r border-outline-variant px-2 font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant"
+          className="flex items-center border-r border-outline-variant px-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant"
           style={{ width: NAME_COL_WIDTH }}
         >
           Name
         </div>
         <div
-          className="flex items-center justify-end border-r border-outline-variant px-2 font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant"
+          className="flex items-center justify-end border-r border-outline-variant px-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant"
           style={{ width: DATE_COL_WIDTH }}
         >
           Start
         </div>
         <div
-          className="flex items-center justify-end border-r border-outline-variant px-2 font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant"
+          className="flex items-center justify-end border-r border-outline-variant px-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant"
           style={{ width: DATE_COL_WIDTH }}
         >
           Due
         </div>
         <div
-          className="flex items-center justify-end px-2 font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant"
+          className="flex items-center justify-end px-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant"
           style={{ width: PCT_COL_WIDTH }}
         >
           %

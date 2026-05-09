@@ -92,7 +92,7 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="rounded px-3 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -100,7 +100,7 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
             type="submit"
             form="customer-form"
             disabled={submitting}
-            className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {submitting ? "Saving…" : isEdit ? "Save changes" : "Create customer"}
           </button>
@@ -184,7 +184,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
         {label}
         {required && <span className="ml-1 text-error">*</span>}
       </span>

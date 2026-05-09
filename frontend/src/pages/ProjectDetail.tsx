@@ -2,16 +2,17 @@ import { useState } from "react";
 import { Link, NavLink, Outlet, useOutletContext, useParams } from "react-router-dom";
 import { RightSidebar } from "@/components/layout/RightSidebar";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
-import { ProjectStatusChip } from "@/components/StatusChip";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { GanttExportProvider } from "@/lib/gantt/exportContext";
 import { type ProjectDetail as ProjectDetailType, useProject } from "@/lib/queries";
 
 const TABS = [
+  { to: "overview", label: "Overview" },
   { to: "list", label: "List" },
   { to: "kanban", label: "Kanban" },
   { to: "gantt", label: "Gantt" },
   { to: "timeline", label: "Timeline" },
+  { to: "diagram", label: "Diagram" },
   { to: "risks", label: "Risks" },
 ];
 
@@ -24,7 +25,7 @@ export function ProjectDetail() {
   const projectId = id ? Number(id) : null;
   const { user } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
-  const [contextOpen, setContextOpen] = useState(true);
+  const [contextOpen, setContextOpen] = useState(false);
 
   const { data: project, isLoading, isError, error } = useProject(projectId);
 
@@ -33,15 +34,15 @@ export function ProjectDetail() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-24 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
-        <div className="h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+        <div className="h-24 animate-pulse rounded-xl bg-surface-container-low shadow-card" />
+        <div className="h-64 animate-pulse rounded-xl bg-surface-container-low shadow-card" />
       </div>
     );
   }
 
   if (isError || !project) {
     return (
-      <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+      <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
         {error instanceof Error
           ? error.message
           : "Project not found or you don't have access."}{" "}
@@ -60,32 +61,29 @@ export function ProjectDetail() {
         contextOpen ? "md:mr-80" : "mr-0",
       ].join(" ")}
     >
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
+      {/* Project name + status now live in the TopBar (see TopBar.tsx).
+          This thin meta row keeps description + roles + actions next to the tabs. */}
+      <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-3">
-            <h1 className="truncate font-display text-h2 text-on-surface">
-              {project.name}
-            </h1>
-            <ProjectStatusChip status={project.status} />
-          </div>
           {project.description && (
-            <p className="mt-1 max-w-2xl text-sm text-on-surface-variant">
+            <p className="max-w-2xl text-sm text-on-surface-variant">
               {project.description}
             </p>
           )}
-          <p className="mt-2 text-[11px] text-on-surface-variant">
+          <p className="mt-1 text-[12px] text-on-surface-variant">
+            SA <span className="font-medium text-on-surface">{project.sa.username}</span>
+            {" → "}
             TAM <span className="font-medium text-on-surface">{project.tam.username}</span>{" "}
-            · SA <span className="font-medium text-on-surface">{project.sa.username}</span>{" "}
             · {project._count.tasks} tasks
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex shrink-0 items-center gap-2">
           {canEdit && (
             <button
               type="button"
               onClick={() => setEditOpen(true)}
-              className="inline-flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container"
+              className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container"
             >
               <span className="material-symbols-outlined text-base">edit</span>
               Edit project
@@ -97,7 +95,7 @@ export function ProjectDetail() {
             aria-pressed={contextOpen}
             aria-label={contextOpen ? "Hide project context" : "Show project context"}
             className={[
-              "inline-flex items-center gap-2 rounded border px-3 py-1.5 font-display text-xs font-bold transition-colors",
+              "inline-flex items-center gap-2 rounded-lg border px-3 py-1.5 font-display text-xs font-bold transition-colors",
               contextOpen
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-outline-variant bg-surface-container-lowest text-on-surface hover:bg-surface-container",
@@ -111,7 +109,7 @@ export function ProjectDetail() {
         </div>
       </div>
 
-      <nav className="mb-6 flex gap-6 overflow-x-auto whitespace-nowrap border-b border-outline-variant">
+      <nav className="mb-6 flex gap-6 overflow-x-auto overflow-y-clip whitespace-nowrap border-b border-outline-variant">
         {TABS.map((tab) => (
           <NavLink
             key={tab.to}

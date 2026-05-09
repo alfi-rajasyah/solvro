@@ -66,7 +66,7 @@ export function GanttDateAxis({
         {monthGroups.map((g, i) => (
           <div
             key={i}
-            className="absolute top-0 flex h-full items-center justify-center border-r border-outline-variant/60 font-display text-[11px] font-semibold uppercase tracking-wider text-on-surface-variant"
+            className="absolute top-0 flex h-full items-center justify-center border-r border-outline-variant/60 font-display text-[12px] font-semibold uppercase tracking-wider text-on-surface-variant"
             style={{ left: g.start * columnWidth, width: g.span * columnWidth }}
           >
             {g.label}
@@ -78,7 +78,7 @@ export function GanttDateAxis({
           <div
             key={i}
             className={[
-              "absolute top-0 flex h-full items-center justify-center border-r border-outline-variant/40 text-[10px]",
+              "absolute top-0 flex h-full items-center justify-center border-r border-outline-variant/40 text-[11px]",
               col.isWeekend ? "text-on-surface-variant/60" : "text-on-surface-variant",
             ].join(" ")}
             style={{ left: i * columnWidth, width: columnWidth }}
@@ -102,7 +102,7 @@ export function GanttDateAxis({
         ))}
         {todayPos && (
           <div
-            className="pointer-events-none absolute -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-[11px] font-bold text-white shadow"
+            className="pointer-events-none absolute -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-[12px] font-bold text-white shadow"
             style={{ left: todayCenterX - 14, zIndex: 6 }}
             aria-hidden="true"
           >

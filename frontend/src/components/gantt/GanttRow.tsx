@@ -12,6 +12,7 @@ interface GanttRowProps {
   canEdit: boolean;
   onCommit: (taskId: number, startDate: Date, dueDate: Date) => void;
   onTaskClick: (taskId: number) => void;
+  onConnectStart?: (sourceTaskId: number, clientX: number, clientY: number) => void;
 }
 
 export function GanttRow({
@@ -23,6 +24,7 @@ export function GanttRow({
   canEdit,
   onCommit,
   onTaskClick,
+  onConnectStart,
 }: GanttRowProps) {
   return (
     <div
@@ -46,6 +48,7 @@ export function GanttRow({
           canEdit={canEdit}
           onCommit={onCommit}
           onClick={onTaskClick}
+          onConnectStart={onConnectStart}
         />
       )}
     </div>

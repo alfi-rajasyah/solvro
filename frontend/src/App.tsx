@@ -12,9 +12,12 @@ import { Projects } from "@/pages/Projects";
 import { Reports } from "@/pages/Reports";
 import { Settings } from "@/pages/Settings";
 import { Tasks } from "@/pages/Tasks";
+import { WorkLogs } from "@/pages/WorkLogs";
+import { ProjectDiagram } from "@/pages/views/ProjectDiagram";
 import { ProjectGantt } from "@/pages/views/ProjectGantt";
 import { ProjectKanban } from "@/pages/views/ProjectKanban";
 import { ProjectList } from "@/pages/views/ProjectList";
+import { ProjectOverview } from "@/pages/views/ProjectOverview";
 import { ProjectRisks } from "@/pages/views/ProjectRisks";
 import { ProjectTimeline } from "@/pages/views/ProjectTimeline";
 
@@ -34,16 +37,19 @@ export function App() {
         <Route path="overview" element={<Overview />} />
         <Route path="projects" element={<Projects />} />
         <Route path="projects/:id" element={<ProjectDetail />}>
-          <Route index element={<Navigate to="list" replace />} />
+          <Route index element={<Navigate to="overview" replace />} />
+          <Route path="overview" element={<ProjectOverview />} />
           <Route path="list" element={<ProjectList />} />
           <Route path="kanban" element={<ProjectKanban />} />
           <Route path="gantt" element={<ProjectGantt />} />
           <Route path="timeline" element={<ProjectTimeline />} />
+          <Route path="diagram" element={<ProjectDiagram />} />
           <Route path="risks" element={<ProjectRisks />} />
         </Route>
         <Route path="customers" element={<Customers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
         <Route path="tasks" element={<Tasks />} />
+        <Route path="work-logs" element={<WorkLogs />} />
         <Route path="reports" element={<Reports />} />
         <Route path="settings" element={<Settings />} />
         <Route

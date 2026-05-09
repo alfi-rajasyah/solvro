@@ -137,7 +137,7 @@ function TimelineItem({
             ))}
           </div>
           <span
-            className={`font-mono text-[11px] ${overdue ? "font-bold text-error" : "text-on-surface-variant"}`}
+            className={`font-mono text-[12px] ${overdue ? "font-bold text-error" : "text-on-surface-variant"}`}
           >
             {fmt(task.startDate)} → {fmt(task.dueDate)}
             {overdue && " · OVERDUE"}
@@ -154,14 +154,14 @@ function TimelineItem({
           <AssigneeAvatar user={task.assignedTo} size="xs" />
         </div>
         {task.description && (
-          <p className="mt-1 text-[11px] text-on-surface-variant">{task.description}</p>
+          <p className="mt-1 text-[12px] text-on-surface-variant">{task.description}</p>
         )}
         {subtasks.length > 0 && (
           <ul className="mt-2 space-y-0.5 border-l border-outline-variant pl-3">
             {subtasks.map((s) => (
               <li
                 key={s.id}
-                className={`text-[11px] ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
+                className={`text-[12px] ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
               >
                 {s.status === "DONE" ? "✓" : "·"} {s.title}
               </li>
@@ -177,7 +177,7 @@ function TimelineItem({
                 onClick={() => onChangeStatus(s)}
                 disabled={task.status === s}
                 className={[
-                  "rounded px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider transition-colors",
+                  "rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider transition-colors",
                   task.status === s
                     ? "cursor-default bg-primary text-on-primary"
                     : "border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary",

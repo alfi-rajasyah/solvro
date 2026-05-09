@@ -26,6 +26,12 @@ interface GanttBarProps {
   canEdit: boolean;
   onCommit: (taskId: number, startDate: Date, dueDate: Date) => void;
   onClick: (taskId: number) => void;
+  /**
+   * Fired when the user pointer-downs on the bar's right-edge connector
+   * dot. The frame captures the gesture from there and hit-tests the
+   * release target on pointer-up.
+   */
+  onConnectStart?: (sourceTaskId: number, clientX: number, clientY: number) => void;
 }
 
 const STATUS_FILL: Record<TaskStatus, string> = {
@@ -48,6 +54,7 @@ export function GanttBar({
   canEdit,
   onCommit,
   onClick,
+  onConnectStart,
 }: GanttBarProps) {
   const [ghost, setGhost] = useState<{ start: Date; end: Date } | null>(null);
   const dragRef = useRef<{
@@ -225,6 +232,7 @@ export function GanttBar({
         />
       )}
     <div
+      data-task-id={row.taskId}
       className={[
         "absolute select-none rounded overflow-hidden",
         STATUS_FILL[status],
@@ -273,10 +281,27 @@ export function GanttBar({
         </>
       )}
     </div>
+    {canEdit && onConnectStart && (
+      <div
+        title="Drag to a task to create a dependency"
+        className="absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-70 shadow transition-opacity hover:opacity-100"
+        style={{
+          left: left + width,
+          top: top + barHeight / 2,
+          transform: "translate(-50%, -50%)",
+        }}
+        onPointerDown={(e) => {
+          // Don't let the bar's onPointerDown fire — we own this gesture.
+          e.stopPropagation();
+          e.preventDefault();
+          onConnectStart(row.taskId!, e.clientX, e.clientY);
+        }}
+      />
+    )}
     <div
-      className="pointer-events-none absolute flex items-center whitespace-nowrap text-[11px] font-medium text-on-surface"
+      className="pointer-events-none absolute flex items-center whitespace-nowrap text-[12px] font-medium text-on-surface"
       style={{
-        left: left + width + 6,
+        left: left + width + 14,
         top,
         height: barHeight,
         zIndex: 2,

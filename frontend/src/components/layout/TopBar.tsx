@@ -1,6 +1,8 @@
 import { useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { ProjectStatusChip } from "@/components/StatusChip";
 import { useAuth } from "@/lib/auth";
+import { useProject } from "@/lib/queries";
 import { useTheme } from "@/lib/theme";
 import { useSidebar } from "./SidebarContext";
 
@@ -20,7 +22,14 @@ export function TopBar() {
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const segment = location.pathname.split("/").filter(Boolean)[0] ?? "overview";
+  const segments = location.pathname.split("/").filter(Boolean);
+  const projectId =
+    segments[0] === "projects" && segments[1] && /^\d+$/.test(segments[1])
+      ? Number(segments[1])
+      : null;
+  const { data: project } = useProject(projectId);
+
+  const segment = segments[0] ?? "overview";
   const title = PAGE_TITLES[segment] ?? "Solvro";
 
   const initials = user
@@ -37,30 +46,57 @@ export function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-outline-variant bg-surface-container-lowest px-4 font-display md:ml-16 md:px-6">
-      <div className="flex min-w-0 items-center gap-3 md:gap-8">
-        <button
-          type="button"
-          onClick={toggleSidebar}
-          aria-label="Open navigation"
-          className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface md:hidden"
-        >
-          <span className="material-symbols-outlined">menu</span>
-        </button>
-        <span className="truncate text-lg font-bold text-on-surface">{title}</span>
-      </div>
+    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-outline-variant bg-surface-container-lowest px-4 font-display md:ml-16 md:gap-4 md:px-6">
+      <button
+        type="button"
+        onClick={toggleSidebar}
+        aria-label="Open navigation"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface md:hidden"
+      >
+        <span className="material-symbols-outlined">menu</span>
+      </button>
 
-      <div className="flex items-center gap-2 md:gap-4">
-        <div className="relative hidden md:block">
-          <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-lg text-on-surface-variant">
+      {projectId && project ? (
+        <div className="flex min-w-0 items-center gap-2">
+          <Link
+            to="/projects"
+            className="shrink-0 text-[13px] text-on-surface-variant hover:text-on-surface"
+          >
+            Projects
+          </Link>
+          <span className="text-on-surface-variant">/</span>
+          <span className="truncate text-[15px] font-semibold text-on-surface">
+            {project.name}
+          </span>
+          <ProjectStatusChip status={project.status} />
+        </div>
+      ) : (
+        <span className="truncate text-[15px] font-semibold text-on-surface">{title}</span>
+      )}
+
+      <div className="ml-auto flex items-center gap-3">
+        <div className="hidden min-w-[260px] items-center gap-2 rounded bg-surface-container px-3 py-1.5 md:flex">
+          <span className="material-symbols-outlined text-base text-on-surface-variant">
             search
           </span>
           <input
             type="text"
-            placeholder="Search…"
-            className="w-64 rounded border-none bg-surface-container py-1.5 pl-10 pr-4 text-xs text-on-surface focus:ring-1 focus:ring-primary"
+            placeholder="Search projects, tasks, customers…"
+            className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-none placeholder:text-on-surface-variant"
           />
+          <span className="rounded border border-outline-variant bg-surface-container-low px-1.5 py-0.5 font-mono text-[10px] text-on-surface-variant">
+            ⌘K
+          </span>
         </div>
+
+        <button
+          type="button"
+          aria-label="Notifications"
+          className="relative hidden h-8 w-8 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface md:flex"
+        >
+          <span className="material-symbols-outlined text-[20px]">notifications</span>
+          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-error" />
+        </button>
 
         <button
           type="button"
@@ -69,7 +105,7 @@ export function TopBar() {
           title={resolved === "dark" ? "Light mode" : "Dark mode"}
           className="flex h-8 w-8 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
         >
-          <span className="material-symbols-outlined text-base">
+          <span className="material-symbols-outlined text-[20px]">
             {resolved === "dark" ? "light_mode" : "dark_mode"}
           </span>
         </button>
@@ -78,15 +114,22 @@ export function TopBar() {
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-2 rounded px-2 py-1 text-xs text-on-surface-variant hover:bg-surface-container"
+            className="flex items-center gap-2 rounded border-l border-outline-variant pl-3 text-left hover:opacity-90"
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-white">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[12px] font-bold text-white">
               {initials}
             </span>
-            <span className="hidden font-medium text-on-surface sm:inline">
-              {user?.username ?? "Guest"}
+            <div className="hidden flex-col items-start sm:flex">
+              <span className="text-[12px] font-semibold leading-tight text-on-surface">
+                {user?.username ?? "Guest"}
+              </span>
+              <span className="text-[10px] font-bold uppercase leading-tight tracking-wider text-on-surface-variant">
+                {user?.role ?? ""}
+              </span>
+            </div>
+            <span className="material-symbols-outlined text-base text-on-surface-variant">
+              expand_more
             </span>
-            <span className="material-symbols-outlined text-base">expand_more</span>
           </button>
           {menuOpen && (
             <>
@@ -96,10 +139,12 @@ export function TopBar() {
                 onClick={() => setMenuOpen(false)}
                 className="fixed inset-0 z-40 cursor-default"
               />
-              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded border border-outline-variant bg-surface-container-lowest py-1 shadow-lg">
-                <div className="border-b border-outline-variant px-3 py-2 text-[11px] text-on-surface-variant">
+              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded border border-outline-variant bg-surface-container-lowest py-1 shadow-card">
+                <div className="border-b border-outline-variant px-3 py-2 text-[12px] text-on-surface-variant">
                   <div className="font-medium text-on-surface">{user?.email}</div>
-                  <div className="uppercase tracking-wider">{user?.role}</div>
+                  <div className="text-[10px] font-bold uppercase tracking-wider">
+                    {user?.role}
+                  </div>
                 </div>
                 <button
                   type="button"
@@ -109,7 +154,7 @@ export function TopBar() {
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-on-surface hover:bg-surface-container"
                 >
-                  <span className="material-symbols-outlined text-sm">settings</span>
+                  <span className="material-symbols-outlined text-base">settings</span>
                   Settings
                 </button>
                 <button
@@ -120,7 +165,7 @@ export function TopBar() {
                   }}
                   className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs text-on-surface hover:bg-surface-container"
                 >
-                  <span className="material-symbols-outlined text-sm">logout</span>
+                  <span className="material-symbols-outlined text-base">logout</span>
                   Sign out
                 </button>
               </div>

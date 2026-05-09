@@ -1,7 +1,6 @@
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
 import { LabelPicker } from "./LabelPicker";
-import { CommentThread } from "./CommentThread";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import {
@@ -23,6 +22,13 @@ const STATUS_LABEL: Record<TaskStatus, string> = {
   TODO: "To Do",
   IN_PROGRESS: "In Progress",
   DONE: "Done",
+};
+
+const PRIORITY_COLOR: Record<Priority, string> = {
+  LOW: "text-on-surface-variant",
+  MEDIUM: "text-amber-600",
+  HIGH: "text-orange-600",
+  URGENT: "text-error",
 };
 
 interface CreateProps {
@@ -68,6 +74,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
   const [parentTaskId, setParentTaskId] = useState<number | "">("");
   const [sectionId, setSectionId] = useState<number | "">("");
   const [labelIds, setLabelIds] = useState<number[]>([]);
+  const [isMilestone, setIsMilestone] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,6 +92,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
       setParentTaskId(t.parentTaskId ?? "");
       setSectionId(t.sectionId ?? "");
       setLabelIds(t.labels.map((l) => l.id));
+      setIsMilestone(t.isMilestone);
     } else {
       const cp = props as CreateProps;
       setTitle("");
@@ -97,6 +105,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
       setParentTaskId(cp.initialParentTaskId ?? "");
       setSectionId(cp.initialSectionId ?? "");
       setLabelIds([]);
+      setIsMilestone(false);
     }
   }, [open, isEdit, props]);
 
@@ -104,6 +113,9 @@ export function TaskFormModal(props: TaskFormModalProps) {
   const possibleParents = (projectTasks ?? []).filter(
     (t) => !editingTask || (t.id !== editingTask.id && t.parentTaskId === null),
   );
+  const subtasks = editingTask
+    ? (projectTasks ?? []).filter((t) => t.parentTaskId === editingTask.id)
+    : [];
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -138,6 +150,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             parentTaskId: parent,
             sectionId: sec,
             labelIds,
+            isMilestone,
           },
         });
       } else {
@@ -152,6 +165,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
           parentTaskId: parent,
           sectionId: sec,
           labelIds: labelIds.length > 0 ? labelIds : undefined,
+          isMilestone,
         });
       }
       onClose();
@@ -161,9 +175,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
   }
 
   const submitting = create.isPending || update.isPending || remove.isPending;
-  const subtasks = editingTask
-    ? (projectTasks ?? []).filter((t) => t.parentTaskId === editingTask.id)
-    : [];
 
   async function handleDelete() {
     if (!isEdit || !editingTask) return;
@@ -184,20 +195,39 @@ export function TaskFormModal(props: TaskFormModalProps) {
     }
   }
 
+  const taskIdLabel = editingTask
+    ? `T-${String(editingTask.id).padStart(3, "0")}`
+    : "New task";
+
+  const customHeader = (
+    <div className="flex items-center justify-between border-b border-outline-variant bg-surface-container-low px-5 py-3">
+      <span className="text-xs text-on-surface-variant">{taskIdLabel}</span>
+      <button
+        type="button"
+        onClick={onClose}
+        className="rounded p-1 text-on-surface-variant hover:bg-surface-container"
+        aria-label="Close"
+      >
+        <span className="material-symbols-outlined text-base">close</span>
+      </button>
+    </div>
+  );
+
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={isEdit ? "Edit task" : "New task"}
-      widthClass="max-w-3xl"
+      customHeader={customHeader}
+      widthClass="max-w-lg"
       footer={
-        <>
+        <div className="flex w-full items-center gap-2">
           {isEdit && canEdit && (
             <button
               type="button"
               onClick={handleDelete}
               disabled={submitting}
-              className="mr-auto rounded border border-error/40 px-3 py-1.5 text-xs font-medium text-error hover:bg-error/10 disabled:opacity-50"
+              className="mr-auto rounded-lg border border-error/40 px-3 py-1.5 text-xs font-medium text-error hover:bg-error/10 disabled:opacity-50"
             >
               {remove.isPending ? "Deleting…" : "Delete task"}
             </button>
@@ -206,7 +236,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="rounded px-3 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="ml-auto rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -214,102 +244,55 @@ export function TaskFormModal(props: TaskFormModalProps) {
             type="submit"
             form="task-form"
             disabled={submitting}
-            className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
-            {submitting ? "Saving…" : isEdit ? "Save changes" : "Create task"}
+            {submitting ? "Saving…" : isEdit ? "Save" : "Create task"}
           </button>
-        </>
+        </div>
       }
     >
-      <form id="task-form" onSubmit={handleSubmit} className="grid gap-5 lg:grid-cols-3">
-        <div className="space-y-4 lg:col-span-2">
-          <Field label="Title" required>
-            <input
-              type="text"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-              maxLength={200}
-              autoFocus
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </Field>
-
-          <Field label="Description">
-            <textarea
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              rows={4}
-              maxLength={2000}
-              className="w-full resize-y rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-            />
-          </Field>
-
-          {isEdit && editingTask && (
-            <div className="space-y-2">
-              <span className="block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-                Subtasks {subtasks.length > 0 && `· ${subtasks.length}`}
+      <form id="task-form" onSubmit={handleSubmit} className="space-y-3.5">
+        {/* Title + timer */}
+        <div className="flex items-start gap-3">
+          <input
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            maxLength={200}
+            autoFocus
+            placeholder="Task title"
+            className="flex-1 border-none bg-transparent text-lg font-bold text-on-surface outline-none placeholder:text-on-surface-variant/40 focus:outline-none"
+          />
+          {isEdit && (
+            <div className="flex shrink-0 items-center gap-2">
+              <span className="rounded-lg bg-surface-container px-2 py-1 font-mono text-sm font-bold text-on-surface">
+                00:00:00
               </span>
-              {subtasks.length === 0 ? (
-                <p className="text-xs text-on-surface-variant">
-                  No subtasks. Create child tasks via the Kanban board's "+ Add task" with this
-                  task selected as the parent.
-                </p>
-              ) : (
-                <ul className="divide-y divide-outline-variant rounded border border-outline-variant">
-                  {subtasks.map((s) => (
-                    <li key={s.id} className="flex items-center gap-2 px-3 py-2">
-                      <input
-                        type="checkbox"
-                        checked={s.status === "DONE"}
-                        onChange={() =>
-                          update.mutate({
-                            id: s.id,
-                            patch: { status: s.status === "DONE" ? "TODO" : "DONE" },
-                          })
-                        }
-                        className="h-3.5 w-3.5 accent-primary"
-                      />
-                      <span
-                        className={`text-xs ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
-                      >
-                        {s.title}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-
-          {isEdit && editingTask && (
-            <div className="border-t border-outline-variant pt-4">
-              <CommentThread taskId={editingTask.id} />
+              <button
+                type="button"
+                className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-on-primary"
+                title="Start timer (Work Logs — coming soon)"
+              >
+                <span
+                  className="material-symbols-outlined text-sm"
+                  style={{ fontVariationSettings: "'FILL' 1" }}
+                >
+                  play_arrow
+                </span>
+              </button>
             </div>
           )}
         </div>
 
-        <div className="space-y-3 lg:col-span-1">
-          {isEdit && (
-            <Field label="Status">
-              <select
-                value={status}
-                onChange={(e) => setStatus(e.target.value as TaskStatus)}
-                className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-              >
-                {STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {STATUS_LABEL[s]}
-                  </option>
-                ))}
-              </select>
-            </Field>
-          )}
-
-          <Field label="Priority">
+        {/* Icon field rows */}
+        <div className="space-y-2 rounded-xl border border-outline-variant bg-surface-container-low p-3">
+          {/* Priority */}
+          <FieldRow icon="flag" label="Priority">
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as Priority)}
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              disabled={!canEdit}
+              className={`cursor-pointer border-none bg-transparent text-xs font-semibold focus:outline-none disabled:cursor-default ${PRIORITY_COLOR[priority]}`}
             >
               {PRIORITIES.map((p) => (
                 <option key={p} value={p}>
@@ -317,34 +300,33 @@ export function TaskFormModal(props: TaskFormModalProps) {
                 </option>
               ))}
             </select>
-          </Field>
+          </FieldRow>
 
-          <div className="grid grid-cols-2 gap-2">
-            <Field label="Start">
-              <input
-                type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="w-full rounded border border-outline-variant bg-surface-container-lowest px-2 py-2 text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </Field>
-            <Field label="Due">
-              <input
-                type="date"
-                value={dueDate}
-                onChange={(e) => setDueDate(e.target.value)}
-                className="w-full rounded border border-outline-variant bg-surface-container-lowest px-2 py-2 text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
-              />
-            </Field>
-          </div>
+          {/* Status */}
+          <FieldRow icon="radio_button_checked" label="Status">
+            <select
+              value={status}
+              onChange={(e) => setStatus(e.target.value as TaskStatus)}
+              disabled={!canEdit}
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+            >
+              {STATUSES.map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          </FieldRow>
 
-          <Field label="Assignee">
+          {/* Assignee */}
+          <FieldRow icon="group" label="Assignee">
             <select
               value={assignedToId === "" ? "" : String(assignedToId)}
               onChange={(e) =>
                 setAssignedToId(e.target.value === "" ? "" : Number(e.target.value))
               }
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              disabled={!canEdit}
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
             >
               <option value="">Unassigned</option>
               {(users ?? []).map((u) => (
@@ -353,15 +335,39 @@ export function TaskFormModal(props: TaskFormModalProps) {
                 </option>
               ))}
             </select>
-          </Field>
+          </FieldRow>
 
-          <Field label="Parent task">
+          {/* Due Date */}
+          <FieldRow icon="calendar_today" label="Due Date">
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              disabled={!canEdit}
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+            />
+          </FieldRow>
+
+          {/* Start Date */}
+          <FieldRow icon="calendar_month" label="Start Date">
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              disabled={!canEdit}
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+            />
+          </FieldRow>
+
+          {/* Parent task */}
+          <FieldRow icon="account_tree" label="Parent">
             <select
               value={parentTaskId === "" ? "" : String(parentTaskId)}
               onChange={(e) =>
                 setParentTaskId(e.target.value === "" ? "" : Number(e.target.value))
               }
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              disabled={!canEdit}
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
             >
               <option value="">— Top level —</option>
               {possibleParents.map((t) => (
@@ -370,15 +376,17 @@ export function TaskFormModal(props: TaskFormModalProps) {
                 </option>
               ))}
             </select>
-          </Field>
+          </FieldRow>
 
-          <Field label="Section">
+          {/* Section */}
+          <FieldRow icon="folder" label="Section">
             <select
               value={sectionId === "" ? "" : String(sectionId)}
               onChange={(e) =>
                 setSectionId(e.target.value === "" ? "" : Number(e.target.value))
               }
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              disabled={!canEdit}
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
             >
               <option value="">— No section —</option>
               {(sections ?? []).map((s) => (
@@ -387,21 +395,104 @@ export function TaskFormModal(props: TaskFormModalProps) {
                 </option>
               ))}
             </select>
-          </Field>
+          </FieldRow>
 
-          <Field label="Labels">
+          {/* Labels */}
+          <FieldRow icon="label" label="Labels">
             <LabelPicker
               projectId={projectId}
               selectedIds={labelIds}
-              onChange={setLabelIds}
+              onChange={canEdit ? setLabelIds : () => {}}
             />
-          </Field>
+          </FieldRow>
+
+          {/* Milestone toggle — drives the hex shape in the Network Diagram */}
+          <FieldRow icon="hexagon" label="Milestone">
+            <label className="inline-flex cursor-pointer items-center gap-2 text-xs">
+              <input
+                type="checkbox"
+                checked={isMilestone}
+                onChange={(e) => setIsMilestone(e.target.checked)}
+                disabled={!canEdit}
+                className="h-3.5 w-3.5 accent-primary"
+              />
+              <span className="text-on-surface">
+                {isMilestone ? "Yes — render as hex" : "No — regular task card"}
+              </span>
+            </label>
+          </FieldRow>
         </div>
 
+        {/* Attachments placeholder */}
+        <div>
+          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Attachments
+          </p>
+          <button
+            type="button"
+            className="flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700"
+          >
+            <span className="material-symbols-outlined text-sm">add</span>
+            Add Attachment
+          </button>
+        </div>
+
+        {/* Description */}
+        <div>
+          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Description
+          </p>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            maxLength={2000}
+            placeholder="Add a description…"
+            disabled={!canEdit}
+            className="w-full resize-y rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-default"
+          />
+        </div>
+
+        {/* Subtasks */}
+        {isEdit && editingTask && (
+          <div>
+            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Subtasks {subtasks.length > 0 && `· ${subtasks.length}`}
+            </p>
+            {subtasks.length === 0 ? (
+              <p className="text-xs text-on-surface-variant">No subtasks yet.</p>
+            ) : (
+              <ul className="divide-y divide-outline-variant rounded-xl border border-outline-variant">
+                {subtasks.map((s) => (
+                  <li key={s.id} className="flex items-center gap-2 px-3 py-2">
+                    <input
+                      type="checkbox"
+                      checked={s.status === "DONE"}
+                      onChange={() =>
+                        update.mutate({
+                          id: s.id,
+                          patch: { status: s.status === "DONE" ? "TODO" : "DONE" },
+                        })
+                      }
+                      className="h-3.5 w-3.5 accent-primary"
+                    />
+                    <span
+                      className={`text-xs ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
+                    >
+                      {s.title}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* Error */}
         {error && (
           <div
             role="alert"
-            className="rounded border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container lg:col-span-3"
+            className="rounded-lg border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
           >
             {error}
           </div>
@@ -411,22 +502,22 @@ export function TaskFormModal(props: TaskFormModalProps) {
   );
 }
 
-function Field({
+function FieldRow({
+  icon,
   label,
-  required,
   children,
 }: {
+  icon: string;
   label: string;
-  required?: boolean;
-  children: ReactNode;
+  children: React.ReactNode;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-        {label}
-        {required && <span className="ml-1 text-error">*</span>}
+    <div className="flex items-center gap-3">
+      <span className="material-symbols-outlined w-5 shrink-0 text-sm text-on-surface-variant">
+        {icon}
       </span>
-      {children}
-    </label>
+      <span className="w-20 shrink-0 text-xs text-on-surface-variant">{label}</span>
+      <div className="flex-1">{children}</div>
+    </div>
   );
 }

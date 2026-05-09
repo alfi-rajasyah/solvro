@@ -10,6 +10,13 @@ frontend/dist/
 # stale config. Keep them out of the working tree.
 frontend/vite.config.js
 frontend/vite.config.d.ts
+frontend/tailwind.config.js
+frontend/tailwind.config.d.ts
+
+# New UI/ — local-only design reference (HTML mockups + Figma source/PDF).
+# Kept out of the repo: the PDF is 163 MB (exceeds GitHub's 100 MB limit)
+# and the HTMLs are dev-only previews, not a build target.
+New UI/
 
 .env
 .env.local

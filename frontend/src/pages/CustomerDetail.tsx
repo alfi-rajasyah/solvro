@@ -92,69 +92,99 @@ export function CustomerDetail() {
     }
   }
 
+  const avatarBg = avatarColor(customer.name);
   return (
     <div className="space-y-6">
       <div>
         <Link
           to="/customers"
-          className="inline-flex items-center gap-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary"
+          className="inline-flex items-center gap-1 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary"
         >
-          <span className="material-symbols-outlined text-[16px]">chevron_left</span>
+          <span className="material-symbols-outlined text-[17px]">chevron_left</span>
           Customers
         </Link>
-        <div className="mt-2 flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-4">
-          <div className="min-w-0">
-            <h1 className="font-display text-h1 text-on-surface">{customer.name}</h1>
-            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-on-surface-variant">
+        <div className="mt-2 grid gap-4 md:grid-cols-3">
+          {/* Identity card */}
+          <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card md:col-span-1">
+            <div className="mb-3 flex items-center gap-3">
+              <div
+                className="grid h-12 w-12 shrink-0 place-items-center rounded font-display text-lg font-bold text-white"
+                style={{ background: avatarBg }}
+              >
+                {customer.name.slice(0, 2).toUpperCase()}
+              </div>
+              <div className="min-w-0">
+                <h1 className="truncate font-display text-base font-bold text-on-surface">
+                  {customer.name}
+                </h1>
+                <p className="text-[11px] uppercase tracking-wider text-on-surface-variant">
+                  {customer._count.projects} project{customer._count.projects === 1 ? "" : "s"}
+                </p>
+              </div>
+            </div>
+            <div className="space-y-1 text-[12px] text-on-surface-variant">
               {customer.accountManager && (
-                <span>
-                  <span className="font-display font-bold uppercase tracking-wider">
-                    AM:
-                  </span>{" "}
-                  {customer.accountManager}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base">person</span>
+                  <span>AM: {customer.accountManager}</span>
+                </div>
               )}
               {customer.solutionArchitect && (
-                <span>
-                  <span className="font-display font-bold uppercase tracking-wider">
-                    SA:
-                  </span>{" "}
-                  {customer.solutionArchitect}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base">engineering</span>
+                  <span>SA: {customer.solutionArchitect}</span>
+                </div>
               )}
-              <span className="font-mono">
-                {customer._count.projects} project
-                {customer._count.projects === 1 ? "" : "s"}
-              </span>
             </div>
-            {customer.description && (
-              <p className="mt-2 max-w-3xl whitespace-pre-line text-sm text-on-surface-variant">
-                {customer.description}
-              </p>
+            {canMutate && (
+              <div className="mt-3 flex items-center gap-1 border-t border-outline-variant pt-2">
+                <button
+                  type="button"
+                  onClick={() => setEditOpen(true)}
+                  className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary"
+                >
+                  <span className="material-symbols-outlined text-base">edit</span>
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={handleDelete}
+                  disabled={deleteCustomer.isPending}
+                  className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-error hover:text-error disabled:opacity-50"
+                >
+                  <span className="material-symbols-outlined text-base">delete</span>
+                  Delete
+                </button>
+              </div>
             )}
           </div>
-          {canMutate && (
-            <div className="flex shrink-0 items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setEditOpen(true)}
-                className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary"
-              >
-                <span className="material-symbols-outlined text-base">edit</span>
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={handleDelete}
-                disabled={deleteCustomer.isPending}
-                className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-error hover:text-error disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-base">delete</span>
-                Delete
-              </button>
-            </div>
-          )}
+
+          {/* KPI tiles */}
+          <CustomerKpi
+            label="Active projects"
+            value={customer._count.projects}
+            hint="Linked to this customer"
+            icon="folder_open"
+            tone="primary"
+          />
+          <CustomerKpi
+            label="Services subscribed"
+            value={customer.services.length}
+            hint={
+              customer.services.length === 0
+                ? "None mapped yet"
+                : `Across ${customer.services.reduce((acc, a) => acc + a.tools.length, 0)} tools`
+            }
+            icon="category"
+            tone="emerald"
+          />
         </div>
+
+        {customer.description && (
+          <p className="mt-3 max-w-3xl whitespace-pre-line text-sm text-on-surface-variant">
+            {customer.description}
+          </p>
+        )}
       </div>
 
       {actionError && (
@@ -227,7 +257,7 @@ function OverviewTab({
 
       <ResourceSection icon="category" title="Services">
         {customer.services.length === 0 ? (
-          <p className="text-[12px] text-on-surface-variant">
+          <p className="text-[13px] text-on-surface-variant">
             No services mapped yet. Assign them from the Services tab.
           </p>
         ) : (
@@ -240,21 +270,21 @@ function OverviewTab({
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-on-surface">{a.service.name}</p>
                   {a.service.description && (
-                    <p className="text-[11px] text-on-surface-variant">
+                    <p className="text-[12px] text-on-surface-variant">
                       {a.service.description}
                     </p>
                   )}
                 </div>
                 <div className="flex max-w-[60%] shrink-0 flex-wrap justify-end gap-1">
                   {a.tools.length === 0 ? (
-                    <span className="text-[11px] italic text-on-surface-variant">
+                    <span className="text-[12px] italic text-on-surface-variant">
                       No tools listed
                     </span>
                   ) : (
                     a.tools.map((t, i) => (
                       <span
                         key={`${t}-${i}`}
-                        className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] text-primary"
+                        className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[12px] text-primary"
                       >
                         {t}
                       </span>
@@ -268,21 +298,21 @@ function OverviewTab({
       </ResourceSection>
 
       <ResourceSection icon="hub" title="Topology" soon>
-        <p className="text-[12px] text-on-surface-variant">
+        <p className="text-[13px] text-on-surface-variant">
           No network topology configured. The Topology tab will host the diagram once
           this feature is built.
         </p>
       </ResourceSection>
 
       <ResourceSection icon="account_tree" title="Organization Structure" soon>
-        <p className="text-[12px] text-on-surface-variant">
+        <p className="text-[13px] text-on-surface-variant">
           Customer org chart not yet captured. The Organization Structure tab will show
           roles and reporting lines once the model is in place.
         </p>
       </ResourceSection>
 
       <div>
-        <h2 className="mb-2 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+        <h2 className="mb-2 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface-variant">
           Projects
         </h2>
         {customer.projects.length === 0 ? (
@@ -294,7 +324,7 @@ function OverviewTab({
         ) : (
           <div className="overflow-x-auto rounded border border-outline-variant bg-surface">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
                 <tr>
                   <th className="px-3 py-2">Project</th>
                   <th className="px-3 py-2">Status</th>
@@ -318,13 +348,13 @@ function OverviewTab({
                       </Link>
                     </td>
                     <td className="px-3 py-2">
-                      <span className="rounded bg-surface-container-low px-1.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                      <span className="rounded bg-surface-container-low px-1.5 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
                         {p.status}
                       </span>
                     </td>
                     <td className="px-3 py-2 text-on-surface-variant">{p.tam.username}</td>
                     <td className="px-3 py-2 text-on-surface-variant">{p.sa.username}</td>
-                    <td className="px-3 py-2 text-right font-mono text-[12px] text-on-surface-variant">
+                    <td className="px-3 py-2 text-right font-mono text-[13px] text-on-surface-variant">
                       {p._count.tasks}
                     </td>
                   </tr>
@@ -336,6 +366,48 @@ function OverviewTab({
       </div>
     </div>
   );
+}
+
+function CustomerKpi({
+  label,
+  value,
+  hint,
+  icon,
+  tone,
+}: {
+  label: string;
+  value: number;
+  hint?: string;
+  icon: string;
+  tone: "primary" | "emerald" | "amber" | "neutral";
+}) {
+  const iconColor =
+    tone === "primary"
+      ? "text-primary"
+      : tone === "emerald"
+        ? "text-emerald-600"
+        : tone === "amber"
+          ? "text-amber-600"
+          : "text-on-surface-variant";
+  return (
+    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">{label}</span>
+        <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
+      </div>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className="font-mono text-3xl font-bold tabular-nums text-on-surface">{value}</span>
+        {hint && <span className="text-[11px] text-on-surface-variant">{hint}</span>}
+      </div>
+    </div>
+  );
+}
+
+const AVATAR_PALETTE = ["#0d9488", "#7c3aed", "#dc2626", "#0ea5e9", "#9333ea", "#a78bfa", "#f59e0b", "#10b981", "#0058be"];
+function avatarColor(seed: string) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
 }
 
 function ResourceSection({
@@ -353,15 +425,15 @@ function ResourceSection({
     <section className="rounded border border-outline-variant bg-surface-container-lowest p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-[20px] text-primary">
+          <span className="material-symbols-outlined text-[21px] text-primary">
             {icon}
           </span>
-          <h3 className="font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
+          <h3 className="font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
             {title}
           </h3>
         </div>
         {soon && (
-          <span className="rounded bg-surface-container px-1.5 py-0.5 font-display text-[9px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="rounded bg-surface-container px-1.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Soon
           </span>
         )}
@@ -426,7 +498,7 @@ function ProfileCompletionCard({
   if (doneCount === total) {
     return (
       <div className="rounded border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
-        <span className="material-symbols-outlined mr-1 align-middle text-[18px]">
+        <span className="material-symbols-outlined mr-1 align-middle text-[19px]">
           check_circle
         </span>
         Profile complete — all sections filled in.
@@ -438,10 +510,10 @@ function ProfileCompletionCard({
     <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
-          <h2 className="font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
+          <h2 className="font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
             Customer profile completion
           </h2>
-          <p className="text-[11px] text-on-surface-variant">
+          <p className="text-[12px] text-on-surface-variant">
             Fill these sections to give TAMs and stakeholders a complete picture.
           </p>
         </div>
@@ -464,7 +536,7 @@ function ProfileCompletionCard({
             <div className="flex min-w-0 items-start gap-2">
               <span
                 className={[
-                  "material-symbols-outlined mt-0.5 text-[18px]",
+                  "material-symbols-outlined mt-0.5 text-[19px]",
                   item.done ? "text-emerald-600" : "text-on-surface-variant",
                 ].join(" ")}
               >
@@ -480,7 +552,7 @@ function ProfileCompletionCard({
                   {item.label}
                 </p>
                 {!item.done && (
-                  <p className="text-[11px] text-on-surface-variant">{item.hint}</p>
+                  <p className="text-[12px] text-on-surface-variant">{item.hint}</p>
                 )}
               </div>
             </div>
@@ -488,7 +560,7 @@ function ProfileCompletionCard({
               <button
                 type="button"
                 onClick={item.onAction}
-                className="shrink-0 rounded border border-outline-variant px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+                className="shrink-0 rounded border border-outline-variant px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
               >
                 {item.actionLabel}
               </button>
@@ -563,10 +635,10 @@ function ServicesTab({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
+        <h2 className="font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
           Service Catalogue Mapping
         </h2>
-        <p className="text-[11px] text-on-surface-variant">
+        <p className="text-[12px] text-on-surface-variant">
           Select the services this customer subscribes to and list the tools used for
           each — e.g. "Backup &amp; Restore" → Acronis, Veeam.
         </p>
@@ -613,7 +685,7 @@ function ServicesTab({
                   <div className="flex min-w-0 items-center gap-2">
                     <span
                       className={[
-                        "material-symbols-outlined text-[18px]",
+                        "material-symbols-outlined text-[19px]",
                         assigned ? "text-primary" : "text-on-surface-variant",
                       ].join(" ")}
                     >
@@ -623,13 +695,13 @@ function ServicesTab({
                       <p className="font-medium text-on-surface">
                         {s.name}
                         {!s.active && (
-                          <span className="ml-2 font-display text-[9px] font-bold uppercase tracking-wider text-on-surface-variant">
+                          <span className="ml-2 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
                             inactive
                           </span>
                         )}
                       </p>
                       {s.description && (
-                        <p className="truncate text-[11px] text-on-surface-variant">
+                        <p className="truncate text-[12px] text-on-surface-variant">
                           {s.description}
                         </p>
                       )}
@@ -695,14 +767,14 @@ function ToolsEditor({
 
   return (
     <div>
-      <p className="mb-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <p className="mb-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
         Tools used
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
         {tools.map((t, i) => (
           <span
             key={`${t}-${i}`}
-            className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[11px] text-primary"
+            className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[12px] text-primary"
           >
             {t}
             {canMutate && (
@@ -713,7 +785,7 @@ function ToolsEditor({
                 aria-label={`Remove ${t}`}
                 className="rounded-full text-primary/70 hover:text-primary disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-[12px]">close</span>
+                <span className="material-symbols-outlined text-[13px]">close</span>
               </button>
             )}
           </span>
@@ -727,11 +799,11 @@ function ToolsEditor({
             onBlur={() => commit(draft)}
             disabled={saving}
             placeholder={tools.length === 0 ? "e.g. Acronis, Crowdstrike" : "Add tool…"}
-            className="min-w-[140px] flex-1 rounded border border-outline-variant bg-surface px-2 py-0.5 text-[11px] focus:border-primary focus:outline-none disabled:opacity-50"
+            className="min-w-[140px] flex-1 rounded border border-outline-variant bg-surface px-2 py-0.5 text-[12px] focus:border-primary focus:outline-none disabled:opacity-50"
           />
         )}
         {!canMutate && tools.length === 0 && (
-          <span className="text-[11px] italic text-on-surface-variant">
+          <span className="text-[12px] italic text-on-surface-variant">
             No tools listed.
           </span>
         )}

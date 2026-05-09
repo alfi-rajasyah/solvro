@@ -68,38 +68,38 @@ export function InlineDateRangeEditor({
       ].join(" ")}
     >
       <label className="flex items-center gap-2 py-0.5">
-        <span className="w-10 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+        <span className="w-10 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
           Start
         </span>
         <input
           type="date"
           value={start}
           onChange={(e) => setStart(e.target.value)}
-          className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[11px] text-on-surface focus:border-primary focus:outline-none"
+          className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface focus:border-primary focus:outline-none"
         />
       </label>
       <label className="flex items-center gap-2 py-0.5">
-        <span className="w-10 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+        <span className="w-10 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
           Due
         </span>
         <input
           type="date"
           value={end}
           onChange={(e) => setEnd(e.target.value)}
-          className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[11px] text-on-surface focus:border-primary focus:outline-none"
+          className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface focus:border-primary focus:outline-none"
         />
       </label>
       <div className="mt-1 flex items-center justify-end gap-1">
         <button
           type="button"
           onClick={onCancel}
-          className="rounded px-1.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+          className="rounded px-1.5 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="rounded bg-primary px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
+          className="rounded bg-primary px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
         >
           Save
         </button>

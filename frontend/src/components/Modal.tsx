@@ -5,6 +5,7 @@ interface ModalProps {
   open: boolean;
   onClose: () => void;
   title: string;
+  customHeader?: ReactNode;
   children: ReactNode;
   footer?: ReactNode;
   widthClass?: string;
@@ -14,6 +15,7 @@ export function Modal({
   open,
   onClose,
   title,
+  customHeader,
   children,
   footer,
   widthClass = "max-w-lg",
@@ -42,23 +44,29 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex w-full ${widthClass} flex-col rounded-none border-outline-variant bg-surface-container-lowest shadow-xl md:h-auto md:rounded-lg md:border`}
+        className={`flex max-h-screen w-full ${widthClass} flex-col rounded-none border-outline-variant bg-surface-container-lowest shadow-card md:h-auto md:max-h-[calc(100vh-2rem)] md:rounded md:border`}
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <header className="flex items-center justify-between border-b border-outline-variant px-5 py-4">
-          <h2 className="font-display text-base font-semibold text-on-surface">{title}</h2>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded p-1 text-on-surface-variant hover:bg-surface-container"
-            aria-label="Close"
-          >
-            <span className="material-symbols-outlined text-base">close</span>
-          </button>
-        </header>
+        {customHeader !== undefined ? (
+          customHeader
+        ) : (
+          <header className="flex items-center justify-between border-b border-outline-variant px-5 py-3.5">
+            <span className="font-display text-[14px] font-semibold text-on-surface">
+              {title}
+            </span>
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex h-7 w-7 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+              aria-label="Close"
+            >
+              <span className="material-symbols-outlined text-base">close</span>
+            </button>
+          </header>
+        )}
         <div className="flex-1 overflow-y-auto px-5 py-4">{children}</div>
         {footer && (
-          <footer className="flex justify-end gap-2 border-t border-outline-variant bg-surface-container-low px-5 py-3">
+          <footer className="flex justify-end gap-2 border-t border-outline-variant px-5 py-3">
             {footer}
           </footer>
         )}
