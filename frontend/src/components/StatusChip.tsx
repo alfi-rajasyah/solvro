@@ -1,41 +1,69 @@
 import type { ProjectStatus, TaskStatus } from "@/lib/queries";
 
-const PROJECT_TONE: Record<ProjectStatus, string> = {
-  PLANNING: "bg-surface-container text-on-surface-variant",
-  ACTIVE: "bg-emerald-100 text-emerald-700",
-  ON_HOLD: "bg-amber-100 text-amber-700",
-  COMPLETED: "bg-primary/10 text-primary",
-  CANCELLED: "bg-error-container text-on-error-container",
+type Tone = "emerald" | "amber" | "rose" | "violet" | "blue" | "gray";
+
+const TONE_CLASS: Record<Tone, string> = {
+  emerald: "bg-chip-emerald-bg text-chip-emerald-text",
+  amber: "bg-chip-amber-bg text-chip-amber-text",
+  rose: "bg-chip-rose-bg text-chip-rose-text",
+  violet: "bg-chip-violet-bg text-chip-violet-text",
+  blue: "bg-primary/10 text-primary dark:bg-primary/20",
+  gray: "bg-surface-container-high text-on-surface-variant",
 };
 
-const TASK_TONE: Record<TaskStatus, string> = {
-  TODO: "bg-surface-container text-on-surface-variant",
-  IN_PROGRESS: "bg-primary/10 text-primary",
-  DONE: "bg-emerald-100 text-emerald-700",
+const PROJECT_TONE: Record<ProjectStatus, Tone> = {
+  PLANNING: "blue",
+  ACTIVE: "emerald",
+  ON_HOLD: "amber",
+  COMPLETED: "blue",
+  CANCELLED: "rose",
+};
+
+const PROJECT_LABEL: Record<ProjectStatus, string> = {
+  PLANNING: "Planning",
+  ACTIVE: "Active",
+  ON_HOLD: "On hold",
+  COMPLETED: "Completed",
+  CANCELLED: "Cancelled",
+};
+
+const TASK_TONE: Record<TaskStatus, Tone> = {
+  TODO: "gray",
+  IN_PROGRESS: "blue",
+  DONE: "emerald",
 };
 
 const TASK_LABEL: Record<TaskStatus, string> = {
-  TODO: "To Do",
-  IN_PROGRESS: "In Progress",
+  TODO: "To do",
+  IN_PROGRESS: "In progress",
   DONE: "Done",
 };
 
+const CHIP_BASE =
+  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-display text-[11px] font-semibold leading-[18px]";
+
 export function ProjectStatusChip({ status }: { status: ProjectStatus }) {
   return (
-    <span
-      className={`rounded px-1.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider ${PROJECT_TONE[status]}`}
-    >
-      {status.replace("_", " ")}
+    <span className={`${CHIP_BASE} ${TONE_CLASS[PROJECT_TONE[status]]}`}>
+      {PROJECT_LABEL[status]}
     </span>
   );
 }
 
 export function TaskStatusChip({ status }: { status: TaskStatus }) {
   return (
-    <span
-      className={`rounded px-1.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider ${TASK_TONE[status]}`}
-    >
+    <span className={`${CHIP_BASE} ${TONE_CLASS[TASK_TONE[status]]}`}>
       {TASK_LABEL[status]}
     </span>
   );
+}
+
+export function Chip({
+  tone,
+  children,
+}: {
+  tone: Tone;
+  children: React.ReactNode;
+}) {
+  return <span className={`${CHIP_BASE} ${TONE_CLASS[tone]}`}>{children}</span>;
 }

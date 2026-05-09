@@ -4,7 +4,7 @@ export function LabelChip({ label, compact = false }: { label: Label; compact?: 
   const fg = pickContrast(label.color);
   return (
     <span
-      className={`inline-flex items-center rounded font-display text-[10px] font-bold uppercase tracking-wider ${compact ? "px-1 py-0.5" : "px-1.5 py-0.5"}`}
+      className={`inline-flex items-center rounded-full font-display text-[11px] font-semibold leading-[18px] ${compact ? "px-1.5 py-0.5" : "px-2 py-0.5"}`}
       style={{ backgroundColor: label.color, color: fg }}
     >
       {label.name}
@@ -18,7 +18,6 @@ function pickContrast(hex: string): string {
   const r = parseInt(m[1].slice(0, 2), 16);
   const g = parseInt(m[1].slice(2, 4), 16);
   const b = parseInt(m[1].slice(4, 6), 16);
-  // Perceived brightness — pick black/white for max contrast.
   const brightness = (r * 299 + g * 587 + b * 114) / 1000;
   return brightness > 150 ? "#191b23" : "#ffffff";
 }

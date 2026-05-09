@@ -11,12 +11,15 @@ interface NavItem {
 
 const NAV_ITEMS: NavItem[] = [
   { to: "/overview", label: "Overview", icon: "dashboard" },
-  { to: "/projects", label: "Projects", icon: "assignment" },
-  { to: "/customers", label: "Customers", icon: "business" },
+  { to: "/projects", label: "Projects", icon: "folder_managed" },
+  { to: "/customers", label: "Customers", icon: "groups" },
   { to: "/tasks", label: "Tasks", icon: "checklist" },
-  { to: "/reports", label: "Reports", icon: "bar_chart" },
+  { to: "/work-logs", label: "Work Logs", icon: "work_history" },
+  { to: "/reports", label: "Reports", icon: "analytics" },
   { to: "/admin", label: "Admin", icon: "admin_panel_settings", adminOnly: true },
 ];
+
+const SIDEBAR_BG = "bg-[#0F1623] dark:bg-[#060912]";
 
 export function Sidebar() {
   const { open, toggle, close } = useSidebar();
@@ -30,13 +33,14 @@ export function Sidebar() {
           type="button"
           onClick={close}
           aria-label="Close sidebar"
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px]"
+          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] md:hidden"
         />
       )}
 
       <aside
         className={[
-          "fixed left-0 top-0 z-50 h-screen flex-col overflow-hidden border-r border-slate-800 bg-slate-950 font-display transition-[width] duration-200 ease-out",
+          "fixed left-0 top-0 z-50 h-screen flex-col overflow-hidden border-r border-black/30 font-display text-slate-300 shadow-sidebar transition-[width] duration-200 ease-out",
+          SIDEBAR_BG,
           open ? "flex w-sidebar" : "hidden w-16 md:flex",
         ].join(" ")}
       >
@@ -56,18 +60,16 @@ export function Sidebar() {
                   terminal
                 </span>
               </div>
-              <div className="min-w-0">
-                <h1 className="truncate text-xl font-bold tracking-tighter text-white">
-                  Solvro
-                </h1>
-              </div>
+              <h1 className="truncate text-lg font-extrabold tracking-tight text-white">
+                Solvro
+              </h1>
             </div>
           )}
           <button
             type="button"
             onClick={toggle}
             aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
-            className="flex h-8 w-8 items-center justify-center rounded text-slate-300 hover:bg-slate-800 hover:text-white"
+            className="flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-white/5 hover:text-slate-100"
           >
             <span className="material-symbols-outlined text-lg">
               {open ? "menu_open" : "menu"}
@@ -86,32 +88,43 @@ export function Sidebar() {
               title={open ? undefined : item.label}
               className={({ isActive }) =>
                 [
-                  "flex items-center rounded transition-colors duration-150",
-                  open ? "gap-3 px-3 py-2.5" : "h-10 w-10 justify-center",
+                  "group flex items-center rounded transition-colors duration-150",
+                  open ? "gap-2.5 px-3 py-2 text-[13px]" : "h-10 w-10 justify-center",
                   isActive
-                    ? "bg-primary/15 text-inverse-primary"
-                    : "text-slate-400 hover:bg-slate-800/60 hover:text-slate-100",
+                    ? "bg-primary/20 text-white"
+                    : "text-slate-400 hover:bg-white/5 hover:text-slate-100",
                 ].join(" ")
               }
             >
-              <span className="material-symbols-outlined">{item.icon}</span>
-              {open && <span className="text-sm">{item.label}</span>}
+              {({ isActive }) => (
+                <>
+                  <span
+                    className={[
+                      "material-symbols-outlined text-[20px]",
+                      isActive ? "text-primary" : "",
+                    ].join(" ")}
+                  >
+                    {item.icon}
+                  </span>
+                  {open && <span>{item.label}</span>}
+                </>
+              )}
             </NavLink>
           ))}
         </nav>
 
-        <div className="mt-auto border-t border-slate-800 p-3">
+        <div className="mt-auto border-t border-white/5 p-3">
           <div
             className={[
-              "flex items-center gap-3 rounded text-xs text-emerald-400",
+              "flex items-center gap-2.5 rounded text-[12px] text-emerald-400",
               open ? "px-3 py-2" : "h-10 w-10 justify-center",
             ].join(" ")}
             title={open ? undefined : "Backend: UP"}
           >
-            <span className="material-symbols-outlined text-sm">cloud_done</span>
+            <span className="material-symbols-outlined text-[16px]">cloud_done</span>
             {open && (
               <span>
-                Backend: <span className="font-bold">UP</span>
+                Backend: <span className="font-semibold">UP</span>
               </span>
             )}
           </div>

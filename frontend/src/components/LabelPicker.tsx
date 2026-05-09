@@ -74,7 +74,7 @@ export function LabelPicker({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="rounded border border-dashed border-outline-variant px-1.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+            className="rounded border border-dashed border-outline-variant px-1.5 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
           >
             + Label
           </button>
@@ -99,7 +99,7 @@ export function LabelPicker({
             <button
               type="submit"
               disabled={createLabel.isPending || !newName.trim()}
-              className="rounded bg-primary px-2 py-1 font-display text-[10px] font-bold uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className="rounded bg-primary px-2 py-1 font-display text-[11px] font-bold uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
             >
               {createLabel.isPending ? "…" : "Add"}
             </button>
@@ -109,13 +109,13 @@ export function LabelPicker({
                 setCreating(false);
                 setNewName("");
               }}
-              className="rounded px-2 py-1 text-[10px] text-on-surface-variant hover:bg-surface-container"
+              className="rounded px-2 py-1 text-[11px] text-on-surface-variant hover:bg-surface-container"
             >
               Cancel
             </button>
           </div>
           <div className="mt-2 flex items-center gap-1">
-            <span className="text-[10px] uppercase tracking-wider text-on-surface-variant">
+            <span className="text-[11px] uppercase tracking-wider text-on-surface-variant">
               Color
             </span>
             {PALETTE.map((c) => (
@@ -133,7 +133,7 @@ export function LabelPicker({
             ))}
           </div>
           {createLabel.error && (
-            <p className="mt-1 text-[10px] text-error">
+            <p className="mt-1 text-[11px] text-error">
               {(createLabel.error as Error).message}
             </p>
           )}

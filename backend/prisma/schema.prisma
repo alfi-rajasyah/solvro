@@ -45,6 +45,14 @@ enum RiskStatus {
   CLOSED
 }
 
+// Network Diagram dependency edges. HARD = solid (true blocking),
+// SOFT = dashed (estimated/optional). Per CLAUDE.md the diagram only
+// uses these two — no FS/SS/FF/SF lag semantics.
+enum DependencyType {
+  HARD
+  SOFT
+}
+
 model Role {
   id          Int      @id @default(autoincrement())
   roleName    String   @unique @map("role_name")
@@ -94,6 +102,7 @@ model Project {
   labels             Label[]
   sections           Section[]
   risks              Risk[]
+  taskDependencies   TaskDependency[]
 
   @@index([saId])
   @@index([tamId])
@@ -162,6 +171,14 @@ model Task {
   subtasks          Task[]     @relation("TaskSubtasks")
   labels            Label[]
   comments          Comment[]
+  // Network Diagram fields (added with TaskDependency).
+  // diagramX/Y are nullable so dagre auto-layout runs only for tasks
+  // the user hasn't manually positioned yet.
+  isMilestone       Boolean    @default(false) @map("is_milestone")
+  diagramX          Float?     @map("diagram_x")
+  diagramY          Float?     @map("diagram_y")
+  predecessors      TaskDependency[] @relation("DependencySuccessor")
+  successors        TaskDependency[] @relation("DependencyPredecessor")
 
   @@index([projectId])
   @@index([sectionId])
@@ -173,11 +190,38 @@ model Task {
   @@map("tasks")
 }
 
+model TaskDependency {
+  id                Int            @id @default(autoincrement())
+  // projectId is denormalised so the row cascades on project delete
+  // and so visibility filters can scope by project without a join.
+  projectId         Int            @map("project_id")
+  project           Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  predecessorTaskId Int            @map("predecessor_task_id")
+  predecessor       Task           @relation("DependencyPredecessor", fields: [predecessorTaskId], references: [id], onDelete: Cascade)
+  successorTaskId   Int            @map("successor_task_id")
+  successor         Task           @relation("DependencySuccessor", fields: [successorTaskId], references: [id], onDelete: Cascade)
+  type              DependencyType @default(HARD)
+  // Network-Diagram routing hints. Capture which side of each node the
+  // user dragged from/to, so the edge re-renders the same way after
+  // reload. Optional: when null we default to right-source → left-target.
+  sourceHandle      String?        @map("source_handle")
+  targetHandle      String?        @map("target_handle")
+  createdAt         DateTime       @default(now()) @map("created_at")
+
+  @@unique([predecessorTaskId, successorTaskId])
+  @@index([projectId])
+  @@index([successorTaskId])
+  @@map("task_dependencies")
+}
+
 model Section {
   id        Int      @id @default(autoincrement())
   projectId Int      @map("project_id")
   project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
   name      String
+  // Hex color used as the phase track tint in the Network Diagram view.
+  // Default neutral slate-400 keeps existing seeds visually stable.
+  color     String   @default("#94a3b8")
   position  Int      @default(0)
   createdAt DateTime @default(now()) @map("created_at")
   tasks     Task[]

@@ -26,8 +26,8 @@ export function ConfirmModal({
 }: ConfirmModalProps) {
   const confirmClass =
     confirmTone === "warning"
-      ? "rounded bg-amber-500 px-4 py-1.5 font-display text-xs font-bold text-white hover:bg-amber-600 disabled:opacity-60"
-      : "rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60";
+      ? "rounded-lg bg-amber-500 px-4 py-1.5 text-xs font-bold text-white hover:bg-amber-600 disabled:opacity-60"
+      : "rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60";
   return (
     <Modal
       open={open}
@@ -39,7 +39,7 @@ export function ConfirmModal({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded px-3 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>

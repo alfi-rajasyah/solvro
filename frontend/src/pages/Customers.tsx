@@ -32,9 +32,9 @@ export function Customers() {
 
   return (
     <div>
-      <div className="mb-6 flex items-start justify-between gap-4">
+      <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-h1 text-on-surface">Customers</h1>
+          <h1 className="font-display text-2xl font-bold text-on-surface">Customers</h1>
           <p className="text-sm text-on-surface-variant">
             Customer database. Every project is mapped to a customer for cross-account
             visibility and reporting.
@@ -44,10 +44,10 @@ export function Customers() {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-2 rounded bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary transition-colors hover:bg-primary-container"
+            className="inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary transition-colors hover:bg-primary-container"
           >
             <span className="material-symbols-outlined text-base">add</span>
-            New Customer
+            New customer
           </button>
         )}
       </div>
@@ -120,88 +120,97 @@ function CustomerCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
+  const init = customer.name.slice(0, 2).toUpperCase();
   return (
     <Link
       to={`/customers/${customer.id}`}
-      className="flex flex-col gap-3 rounded border border-outline-variant bg-surface-container-lowest p-5 transition-all hover:border-primary/40 hover:shadow-md"
+      className="group flex flex-col rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card transition-colors hover:border-primary"
     >
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex h-10 w-10 items-center justify-center rounded bg-primary/10 font-display text-sm font-bold text-primary">
-          {customer.name.slice(0, 2).toUpperCase()}
+      <div className="mb-3 flex items-center gap-3">
+        <div
+          className="grid h-10 w-10 shrink-0 place-items-center rounded font-display text-base font-bold text-white"
+          style={{ background: avatarColor(customer.name) }}
+        >
+          {init}
         </div>
-        <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
-          chevron_right
-        </span>
-      </div>
-
-      <div>
-        <h3 className="text-sm font-semibold leading-tight text-on-surface">{customer.name}</h3>
-        <div className="mt-1 space-y-0.5">
+        <div className="min-w-0 flex-1">
+          <h3 className="truncate font-display text-sm font-bold leading-tight text-on-surface group-hover:text-primary">
+            {customer.name}
+          </h3>
           {customer.accountManager && (
-            <p className="text-[11px] text-on-surface-variant">
-              <span className="font-display font-bold uppercase tracking-wider">AM:</span>{" "}
-              {customer.accountManager}
-            </p>
-          )}
-          {customer.solutionArchitect && (
-            <p className="text-[11px] text-on-surface-variant">
-              <span className="font-display font-bold uppercase tracking-wider">SA:</span>{" "}
-              {customer.solutionArchitect}
+            <p className="truncate text-[11px] text-on-surface-variant">
+              AM: {customer.accountManager}
             </p>
           )}
         </div>
       </div>
 
       {customer.description && (
-        <p className="line-clamp-2 text-[11px] text-on-surface-variant">
+        <p className="mb-3 line-clamp-2 text-[12px] leading-snug text-on-surface-variant">
           {customer.description}
         </p>
       )}
 
-      <div className="mt-auto flex items-center justify-between border-t border-outline-variant pt-3">
-        <span
-          onClick={(e) => e.stopPropagation()}
-          className="font-mono text-[11px] text-on-surface-variant"
-        >
-          <Link
-            to={`/projects?customerId=${customer.id}`}
-            className="hover:text-primary"
-          >
-            {customer._count.projects} project
-            {customer._count.projects === 1 ? "" : "s"}
-          </Link>
-        </span>
+      {/* Metric grid */}
+      <div className="mt-auto grid grid-cols-2 gap-y-1 text-[12px]">
+        <span className="text-on-surface-variant">Projects</span>
+        <span className="text-right font-mono tabular-nums">{customer._count.projects}</span>
+        {customer.solutionArchitect && (
+          <>
+            <span className="text-on-surface-variant">SA lead</span>
+            <span className="truncate text-right font-mono text-[11px]" title={customer.solutionArchitect}>
+              {customer.solutionArchitect}
+            </span>
+          </>
+        )}
       </div>
 
-      {canMutate && (
-        <div
-          className="flex items-center gap-1 border-t border-outline-variant pt-2"
+      {/* Actions */}
+      <div className="mt-3 flex items-center justify-between border-t border-outline-variant pt-2">
+        <Link
+          to={`/projects?customerId=${customer.id}`}
           onClick={(e) => e.stopPropagation()}
+          className="text-[11px] text-on-surface-variant hover:text-primary"
         >
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              onEdit();
-            }}
-            className="rounded px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-primary"
+          View projects →
+        </Link>
+        {canMutate && (
+          <div
+            className="flex items-center gap-1"
+            onClick={(e) => e.stopPropagation()}
           >
-            Edit
-          </button>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              onDelete();
-            }}
-            className="rounded px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
-          >
-            Delete
-          </button>
-        </div>
-      )}
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                onEdit();
+              }}
+              className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-primary"
+            >
+              Edit
+            </button>
+            <button
+              type="button"
+              onClick={(e) => {
+                e.preventDefault();
+                onDelete();
+              }}
+              className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
+            >
+              Delete
+            </button>
+          </div>
+        )}
+      </div>
     </Link>
   );
+}
+
+const AVATAR_PALETTE = ["#0d9488", "#7c3aed", "#dc2626", "#0ea5e9", "#9333ea", "#a78bfa", "#f59e0b", "#10b981", "#0058be"];
+function avatarColor(seed: string) {
+  let h = 0;
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
+  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
 }
 
 function SkeletonGrid() {

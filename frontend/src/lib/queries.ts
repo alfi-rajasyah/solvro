@@ -33,6 +33,8 @@ export interface Section {
   projectId: number;
   name: string;
   position: number;
+  // Hex color used as the phase track tint in the Network Diagram view.
+  color: string;
   createdAt: string;
 }
 
@@ -109,8 +111,12 @@ export interface Task {
   assignedTo: { id: number; username: string; email: string } | null;
   parentTaskId: number | null;
   sectionId: number | null;
-  section: { id: number; name: string; position: number } | null;
+  section: { id: number; name: string; position: number; color: string } | null;
   labels: Label[];
+  // Network Diagram fields
+  isMilestone: boolean;
+  diagramX: number | null;
+  diagramY: number | null;
   _count: { subtasks: number; comments: number };
 }
 
@@ -204,6 +210,7 @@ export const queryKeys = {
   projectLabels: (id: number) => ["projects", id, "labels"] as const,
   projectSections: (id: number) => ["projects", id, "sections"] as const,
   projectRisks: (id: number) => ["projects", id, "risks"] as const,
+  projectDependencies: (id: number) => ["projects", id, "dependencies"] as const,
   customers: ["customers"] as const,
   customer: (id: number) => ["customers", id] as const,
   tasks: (filter?: TasksFilter) => ["tasks", filter ?? {}] as const,
@@ -463,6 +470,10 @@ export interface UpdateTaskInput {
   parentTaskId?: number | null;
   sectionId?: number | null;
   labelIds?: number[];
+  // Network Diagram fields
+  isMilestone?: boolean;
+  diagramX?: number | null;
+  diagramY?: number | null;
 }
 
 export interface LockBaselineInput {
@@ -538,6 +549,7 @@ export interface CreateTaskInput {
   parentTaskId?: number | null;
   sectionId?: number | null;
   labelIds?: number[];
+  isMilestone?: boolean;
 }
 
 export function useCreateTask(projectId: number) {
@@ -609,6 +621,7 @@ export function useProjectSections(id: number | null) {
 export interface CreateSectionInput {
   name: string;
   position?: number;
+  color?: string;
 }
 
 export function useCreateSection(projectId: number) {
@@ -632,6 +645,8 @@ export function useUpdateSection(projectId: number) {
       apiRequest<Section>(`/sections/${id}`, { method: "PATCH", body: patch }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
+      // Tasks carry `section: { color }`; invalidate so the diagram repaints.
+      qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
     },
   });
 }
@@ -950,5 +965,82 @@ export function useHolidays(years: number[]) {
       isLoading: results.some((r) => r.isLoading),
       isError: results.some((r) => r.isError),
     }),
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Network Diagram (Dependency View) — TaskDependency rows
+// ─────────────────────────────────────────────────────────────────────────
+
+export type DependencyType = "HARD" | "SOFT";
+
+export interface TaskDependency {
+  id: number;
+  projectId: number;
+  predecessorTaskId: number;
+  successorTaskId: number;
+  type: DependencyType;
+  // Diagram routing hints (which handle the user dragged from/to);
+  // null means "use defaults" — right-source → left-target.
+  sourceHandle: string | null;
+  targetHandle: string | null;
+  createdAt: string;
+}
+
+export interface CreateDependencyInput {
+  predecessorTaskId: number;
+  successorTaskId: number;
+  type?: DependencyType;
+  sourceHandle?: string | null;
+  targetHandle?: string | null;
+}
+
+export function useProjectDependencies(projectId: number | null) {
+  return useQuery({
+    queryKey: projectId
+      ? queryKeys.projectDependencies(projectId)
+      : ["projects", "noop", "dependencies"],
+    queryFn: ({ signal }) =>
+      apiRequest<TaskDependency[]>(`/projects/${projectId}/dependencies`, { signal }),
+    enabled: projectId !== null,
+  });
+}
+
+export function useCreateDependency(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateDependencyInput) =>
+      apiRequest<TaskDependency>(`/projects/${projectId}/dependencies`, {
+        method: "POST",
+        body: input,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectDependencies(projectId) });
+    },
+  });
+}
+
+export function useUpdateDependency(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, type }: { id: number; type: DependencyType }) =>
+      apiRequest<TaskDependency>(`/dependencies/${id}`, {
+        method: "PATCH",
+        body: { type },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectDependencies(projectId) });
+    },
+  });
+}
+
+export function useDeleteDependency(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) =>
+      apiRequest<void>(`/dependencies/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectDependencies(projectId) });
+    },
   });
 }

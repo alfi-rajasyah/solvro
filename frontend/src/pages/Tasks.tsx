@@ -54,8 +54,8 @@ export function Tasks() {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="font-display text-h1 text-on-surface">Tasks</h1>
+      <div className="mb-4">
+        <h1 className="font-display text-2xl font-bold text-on-surface">Tasks</h1>
         <p className="text-sm text-on-surface-variant">
           Cross-project task list. Apply filters, sort, click any row to open the editor.
         </p>
@@ -123,26 +123,26 @@ export function Tasks() {
         <button
           type="button"
           onClick={() => setFilter({ topLevel: true })}
-          className="ml-auto rounded border border-outline-variant px-2 py-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+          className="ml-auto rounded-lg border border-outline-variant px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
         >
           Reset
         </button>
       </div>
 
       {isLoading && (
-        <div className="h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+        <div className="h-64 animate-pulse rounded-xl bg-surface-container-low shadow-card" />
       )}
 
       {isError && (
-        <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+        <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
           Could not load tasks: {(error as Error).message}
         </div>
       )}
 
       {sorted.length > 0 && (
-        <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest">
+        <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest shadow-card">
           <table className="w-full text-xs">
-            <thead className="bg-surface-container-low text-on-surface-variant">
+            <thead className="border-b border-outline-variant bg-surface-container-low text-on-surface-variant">
               <tr className="text-left">
                 <Th>ID</Th>
                 <Th>Title</Th>
@@ -199,7 +199,7 @@ function Row({ task, onEdit }: { task: TaskWithProject; onEdit: () => void }) {
       className="cursor-pointer border-t border-outline-variant transition-colors hover:bg-surface-container-low"
     >
       <td className="px-3 py-2">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
+        <span className="font-mono text-[11px] uppercase tracking-widest text-on-surface-variant">
           T-{String(task.id).padStart(3, "0")}
         </span>
       </td>
@@ -219,7 +219,7 @@ function Row({ task, onEdit }: { task: TaskWithProject; onEdit: () => void }) {
             <LabelChip key={l.id} label={l} compact />
           ))}
           {task.labels.length > 2 && (
-            <span className="text-[10px] text-on-surface-variant">+{task.labels.length - 2}</span>
+            <span className="text-[11px] text-on-surface-variant">+{task.labels.length - 2}</span>
           )}
         </div>
       </td>
@@ -233,8 +233,8 @@ function Row({ task, onEdit }: { task: TaskWithProject; onEdit: () => void }) {
         <span
           className={
             overdue
-              ? "font-mono text-[11px] font-bold text-error"
-              : "font-mono text-[11px] text-on-surface-variant"
+              ? "font-mono text-[12px] font-bold text-error"
+              : "font-mono text-[12px] text-on-surface-variant"
           }
         >
           {fmt(task.dueDate)}
@@ -264,7 +264,7 @@ function Th({
     <th
       onClick={sortable ? () => onSort!(sortKey) : undefined}
       className={[
-        "px-3 py-2 font-display text-[10px] font-bold uppercase tracking-widest",
+        "px-3 py-2 font-display text-[11px] font-bold uppercase tracking-widest",
         sortable ? "cursor-pointer hover:text-primary" : "",
         sortKey && current === sortKey ? "text-primary" : "",
       ].join(" ")}
@@ -288,13 +288,13 @@ function FilterSelect({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
         {label}
       </span>
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
+        className="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
       >
         <option value="">Any</option>
         {options.map(([v, lbl]) => (

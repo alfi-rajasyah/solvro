@@ -125,7 +125,7 @@ export function GanttListRow({
             title={status === "DONE" ? "Mark incomplete" : "Mark complete"}
           >
             {status === "DONE" && (
-              <span className="material-symbols-outlined text-[12px] leading-none">
+              <span className="material-symbols-outlined text-[13px] leading-none">
                 check
               </span>
             )}
@@ -145,7 +145,7 @@ export function GanttListRow({
             title="Drag to move"
             aria-label="Drag handle"
           >
-            <span className="material-symbols-outlined text-[14px] leading-none">
+            <span className="material-symbols-outlined text-[15px] leading-none">
               drag_indicator
             </span>
           </span>
@@ -159,7 +159,7 @@ export function GanttListRow({
             className="flex h-4 w-4 shrink-0 items-center justify-center text-on-surface-variant hover:text-on-surface"
             aria-label={row.collapsed ? "Expand section" : "Collapse section"}
           >
-            <span className="material-symbols-outlined text-[16px] leading-none">
+            <span className="material-symbols-outlined text-[17px] leading-none">
               {row.collapsed ? "chevron_right" : "expand_more"}
             </span>
           </button>
@@ -172,17 +172,17 @@ export function GanttListRow({
           className={[
             "min-w-0 flex-1 truncate text-left",
             isSection
-              ? "font-display text-[12px] font-bold uppercase tracking-wider text-on-surface"
+              ? "font-display text-[13px] font-bold uppercase tracking-wider text-on-surface"
               : isSubtask
-                ? "text-[11px] text-on-surface hover:text-primary"
-                : "text-[12px] text-on-surface hover:text-primary",
+                ? "text-[12px] text-on-surface hover:text-primary"
+                : "text-[13px] text-on-surface hover:text-primary",
             status === "DONE" && !isSection ? "text-on-surface-variant line-through" : "",
           ].join(" ")}
           title={row.name}
         >
           {row.name}
           {noSectionTarget && (
-            <span className="ml-2 font-mono text-[10px] font-normal normal-case tracking-normal text-on-surface-variant">
+            <span className="ml-2 font-mono text-[11px] font-normal normal-case tracking-normal text-on-surface-variant">
               · drop a task here to clear its section
             </span>
           )}
@@ -193,7 +193,7 @@ export function GanttListRow({
         disabled={isSection || !canEdit || row.taskId === undefined}
         onClick={() => setEditingDates(true)}
         className={[
-          "flex items-center justify-end border-r border-outline-variant px-2 font-mono text-[11px] text-on-surface-variant",
+          "flex items-center justify-end border-r border-outline-variant px-2 font-mono text-[12px] text-on-surface-variant",
           !isSection && canEdit && row.taskId !== undefined
             ? "hover:bg-surface-container hover:text-primary"
             : "cursor-default",
@@ -212,7 +212,7 @@ export function GanttListRow({
           disabled={isSection || !canEdit || row.taskId === undefined}
           onClick={() => setEditingDates(true)}
           className={[
-            "flex h-full w-full items-center justify-end px-2 font-mono text-[11px] text-on-surface-variant",
+            "flex h-full w-full items-center justify-end px-2 font-mono text-[12px] text-on-surface-variant",
             !isSection && canEdit && row.taskId !== undefined
               ? "hover:bg-surface-container hover:text-primary"
               : "cursor-default",
@@ -235,7 +235,7 @@ export function GanttListRow({
         )}
       </div>
       <div
-        className="flex items-center justify-end px-2 font-mono text-[11px] text-on-surface-variant"
+        className="flex items-center justify-end px-2 font-mono text-[12px] text-on-surface-variant"
         style={{ width: PCT_COL_WIDTH }}
       >
         {isSection ? "" : `${progress}%`}

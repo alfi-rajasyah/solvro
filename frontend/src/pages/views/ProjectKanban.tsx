@@ -11,7 +11,6 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import { useProjectContext } from "../ProjectDetail";
-import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { TaskFormModal } from "@/components/TaskFormModal";
@@ -80,6 +79,14 @@ export function ProjectKanban() {
     updateTask.mutate({ id: taskId, patch: { status: newStatus } });
   }
 
+  // Toggling a subtask's DONE state from inside the parent card. Subtasks
+  // ride along with their parent on the board (no drag of their own), but
+  // the inline checklist lets you tick them off without opening the modal.
+  const toggleSubtaskStatus = (sub: Task) => {
+    const next: TaskStatus = sub.status === "DONE" ? "TODO" : "DONE";
+    updateTask.mutate({ id: sub.id, patch: { status: next } });
+  };
+
   if (isLoading) {
     return (
       <div className="grid h-full grid-cols-3 gap-4">
@@ -95,7 +102,7 @@ export function ProjectKanban() {
 
   if (isError) {
     return (
-      <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+      <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
         Could not load tasks: {(error as Error).message}
       </div>
     );
@@ -115,8 +122,10 @@ export function ProjectKanban() {
               subtaskMap={subtaskMap}
               canAdd={canMove}
               canDrag={canMove}
+              canToggleSubtasks={canMove}
               onAdd={() => setCreateStatus(col.id)}
               onCardClick={(t) => setEditTask(t)}
+              onToggleSubtask={toggleSubtaskStatus}
             />
           ))}
         </div>
@@ -158,53 +167,58 @@ interface ColumnProps {
   subtaskMap: Map<number, Task[]>;
   canAdd: boolean;
   canDrag: boolean;
+  canToggleSubtasks: boolean;
   onAdd: () => void;
   onCardClick: (t: Task) => void;
+  onToggleSubtask: (s: Task) => void;
 }
 
-function Column({ id, label, tone, tasks, subtaskMap, canAdd, canDrag, onAdd, onCardClick }: ColumnProps) {
+function Column({ id, label, tasks, subtaskMap, canAdd, canDrag, canToggleSubtasks, onAdd, onCardClick, onToggleSubtask }: ColumnProps) {
   const { isOver, setNodeRef } = useDroppable({ id });
   return (
     <div
       ref={setNodeRef}
       className={[
-        "flex flex-col gap-3 rounded border bg-surface-container-low p-3 transition-colors",
-        isOver ? "border-primary" : "border-outline-variant",
+        "flex flex-col gap-2.5 rounded-xl p-2 transition-all",
+        isOver ? "bg-primary/5 ring-2 ring-inset ring-primary/30" : "",
       ].join(" ")}
     >
-      <div className="flex items-center justify-between px-1">
-        <h3 className="flex items-center gap-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
-          {label}
-          <span className={`rounded px-1.5 py-0.5 text-[10px] ${tone}`}>{tasks.length}</span>
-        </h3>
+      {/* Column header */}
+      <div className="flex items-center justify-between px-1 pb-1">
+        <h3 className="text-sm font-bold text-on-surface">{label}</h3>
+        <span className="material-symbols-outlined cursor-pointer text-base text-on-surface-variant hover:text-on-surface">
+          more_horiz
+        </span>
       </div>
 
-      <div className="flex flex-col gap-2">
-        {tasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            subtaskMap={subtaskMap}
-            canDrag={canDrag}
-            onClick={() => onCardClick(task)}
-          />
-        ))}
-        {tasks.length === 0 && (
-          <div className="rounded border border-dashed border-outline-variant px-3 py-6 text-center text-[11px] text-on-surface-variant">
-            Drop tasks here
-          </div>
-        )}
-        {canAdd && (
-          <button
-            type="button"
-            onClick={onAdd}
-            className="flex w-full items-center gap-2 rounded border border-dashed border-outline-variant px-3 py-2 text-xs text-on-surface-variant transition-colors hover:border-primary hover:text-primary"
-          >
-            <span className="material-symbols-outlined text-base">add</span>
-            Add task
-          </button>
-        )}
-      </div>
+      {/* Teal dashed add box */}
+      {canAdd && (
+        <button
+          type="button"
+          onClick={onAdd}
+          className="flex h-9 w-full items-center justify-center rounded-lg border-[1.5px] border-dashed border-teal-500 text-xl font-light text-teal-500 transition-colors hover:bg-teal-50 dark:hover:bg-teal-900/20"
+        >
+          +
+        </button>
+      )}
+
+      {tasks.map((task) => (
+        <TaskCard
+          key={task.id}
+          task={task}
+          subtaskMap={subtaskMap}
+          canDrag={canDrag}
+          canToggleSubtasks={canToggleSubtasks}
+          onClick={() => onCardClick(task)}
+          onToggleSubtask={onToggleSubtask}
+        />
+      ))}
+
+      {tasks.length === 0 && (
+        <div className="rounded-lg border border-dashed border-outline-variant px-3 py-8 text-center text-[12px] text-on-surface-variant">
+          Drop tasks here
+        </div>
+      )}
     </div>
   );
 }
@@ -213,14 +227,18 @@ function TaskCard({
   task,
   subtaskMap,
   canDrag,
+  canToggleSubtasks = false,
   dragging = false,
   onClick,
+  onToggleSubtask,
 }: {
   task: Task;
   subtaskMap: Map<number, Task[]>;
   canDrag: boolean;
+  canToggleSubtasks?: boolean;
   dragging?: boolean;
   onClick?: () => void;
+  onToggleSubtask?: (s: Task) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
     id: task.id,
@@ -233,10 +251,8 @@ function TaskCard({
 
   const subtasks = subtaskMap.get(task.id) ?? [];
   const subtasksDone = subtasks.filter((s) => s.status === "DONE").length;
-  const overdue =
-    task.dueDate && task.status !== "DONE" && new Date(task.dueDate) < startOfToday();
+  const duration = getDuration(task.startDate, task.dueDate);
 
-  // Drag movement should not also fire click
   function handleClick(e: React.MouseEvent) {
     if (isDragging) return;
     e.stopPropagation();
@@ -251,79 +267,130 @@ function TaskCard({
       style={style}
       onClick={handleClick}
       className={[
-        "rounded border bg-surface-container-lowest p-3 shadow-sm transition-shadow",
+        "rounded border border-outline-variant bg-surface-container-lowest p-3 shadow-card transition-shadow",
         canDrag ? "cursor-grab active:cursor-grabbing" : "",
         isDragging ? "opacity-40" : "",
-        dragging ? "border-primary shadow-md" : "border-outline-variant hover:border-primary/40",
+        dragging ? "ring-2 ring-primary" : "hover:shadow-[0_4px_16px_rgba(0,0,0,0.10)]",
       ].join(" ")}
     >
-      {task.labels.length > 0 && (
-        <div className="mb-2 flex flex-wrap gap-1">
-          {task.labels.slice(0, 3).map((l) => (
-            <LabelChip key={l.id} label={l} compact />
-          ))}
-          {task.labels.length > 3 && (
-            <span className="text-[10px] text-on-surface-variant">+{task.labels.length - 3}</span>
-          )}
-        </div>
-      )}
-
-      <div className="mb-2 flex items-center justify-between gap-2">
-        <span className="font-mono text-[10px] uppercase tracking-widest text-on-surface-variant">
-          T-{String(task.id).padStart(3, "0")}
-        </span>
-        <div className="flex items-center gap-1.5">
-          <PriorityBadge priority={task.priority} compact />
-          <AssigneeAvatar user={task.assignedTo} size="xs" />
+      {/* Title + duration */}
+      <div className="mb-1.5 flex items-start justify-between gap-2">
+        <p className="text-[15px] font-bold leading-tight text-on-surface">{task.title}</p>
+        <div className="flex shrink-0 items-center gap-1 text-[13px] text-on-surface-variant">
+          <span className="material-symbols-outlined text-[15px]">schedule</span>
+          <span className="whitespace-nowrap">{duration}</span>
         </div>
       </div>
 
-      <p className="text-sm font-medium leading-tight text-on-surface">{task.title}</p>
-      {task.description && (
-        <p className="mt-1 line-clamp-2 text-[11px] text-on-surface-variant">{task.description}</p>
+      {/* Labels (compact, up to 2) */}
+      {task.labels.length > 0 && (
+        <div className="mb-1.5 flex flex-wrap gap-1">
+          {task.labels.slice(0, 2).map((l) => (
+            <LabelChip key={l.id} label={l} compact />
+          ))}
+          {task.labels.length > 2 && (
+            <span className="text-[11px] text-on-surface-variant">+{task.labels.length - 2}</span>
+          )}
+        </div>
       )}
 
-      <div className="mt-2 flex items-center justify-between gap-2 text-[10px]">
-        <span
-          className={
-            overdue
-              ? "font-bold text-error"
-              : "text-on-surface-variant"
-          }
-        >
-          {task.dueDate ? (
-            <>
-              <span className="material-symbols-outlined align-middle text-[12px]">schedule</span>{" "}
-              {fmt(task.dueDate)}
-              {overdue && " · OVERDUE"}
-            </>
-          ) : (
-            "No due date"
-          )}
-        </span>
-        <span className="flex items-center gap-2 text-on-surface-variant">
-          {subtasks.length > 0 && (
-            <span title={`Subtasks: ${subtasksDone}/${subtasks.length} done`}>
-              ✓ {subtasksDone}/{subtasks.length}
+      {/* Description */}
+      {task.description && (
+        <p className="mb-2 line-clamp-2 text-[13px] leading-snug text-on-surface-variant">
+          {task.description}
+        </p>
+      )}
+
+      {/* Inline subtask checklist */}
+      {subtasks.length > 0 && (
+        <div className="mb-2">
+          <div className="mb-1 flex items-center gap-1 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            <span className="material-symbols-outlined text-[12px]">check_circle</span>
+            Subtasks {subtasksDone}/{subtasks.length}
+          </div>
+          <ul className="space-y-0.5 border-l border-outline-variant/60 pl-2">
+            {subtasks.map((s) => {
+              const done = s.status === "DONE";
+              return (
+                <li key={s.id} className="flex items-center gap-1.5 text-[12px]">
+                  <button
+                    type="button"
+                    disabled={!canToggleSubtasks}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onToggleSubtask?.(s);
+                    }}
+                    aria-label={done ? "Mark not done" : "Mark done"}
+                    className={[
+                      "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors",
+                      done
+                        ? "border-emerald-500 bg-emerald-500 text-white"
+                        : "border-outline-variant hover:border-primary",
+                      canToggleSubtasks ? "cursor-pointer" : "cursor-default",
+                    ].join(" ")}
+                  >
+                    {done && (
+                      <span className="material-symbols-outlined text-[11px] leading-none">check</span>
+                    )}
+                  </button>
+                  <span
+                    className={[
+                      "flex-1 truncate",
+                      done ? "text-on-surface-variant line-through" : "text-on-surface",
+                    ].join(" ")}
+                  >
+                    {s.title}
+                  </span>
+                  {s.assignedTo && (
+                    <span
+                      title={s.assignedTo.username}
+                      className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary text-[8px] font-bold text-on-primary"
+                    >
+                      {s.assignedTo.username[0]?.toUpperCase() ?? "?"}
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      )}
+
+      {/* Bottom: attach + comments + avatar */}
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3 text-[13px] text-on-surface-variant">
+          <span className="flex items-center gap-0.5">
+            <span className="material-symbols-outlined text-[14px]">attach_file</span>
+            0
+          </span>
+          <span className="flex items-center gap-0.5">
+            <span className="material-symbols-outlined text-[14px]">chat_bubble</span>
+            {task._count.comments}
+          </span>
+        </div>
+        <div className="flex items-center gap-1">
+          <PriorityBadge priority={task.priority} compact />
+          {task.assignedTo && (
+            <span
+              title={task.assignedTo.username}
+              className="flex h-6 w-6 items-center justify-center rounded-full bg-primary text-[10px] font-bold text-on-primary"
+            >
+              {task.assignedTo.username[0]?.toUpperCase() ?? "?"}
             </span>
           )}
-          {task._count.comments > 0 && (
-            <span title={`${task._count.comments} comments`}>
-              💬 {task._count.comments}
-            </span>
-          )}
-        </span>
+        </div>
       </div>
     </div>
   );
 }
 
-function fmt(iso: string) {
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+function getDuration(start: string | null, end: string | null): string {
+  if (!end) return "—";
+  if (!start) return new Date(end).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  const diff = Math.ceil(
+    (new Date(end).getTime() - new Date(start).getTime()) / (1000 * 60 * 60 * 24),
+  );
+  return diff > 0 ? `${diff} Days` : "1 Day";
 }
 
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
-}

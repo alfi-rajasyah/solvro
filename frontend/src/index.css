@@ -3,22 +3,22 @@
 @tailwind utilities;
 
 @layer base {
-  /* Light theme — ported from DESIGN.md frontmatter. */
+  /* Light theme — blue-gray base (#F0F4F9) derived from AProjectO design language. */
   :root {
-    --surface: 249 249 255;
-    --surface-dim: 216 217 227;
-    --surface-bright: 249 249 255;
+    --surface: 240 244 249;
+    --surface-dim: 210 218 228;
+    --surface-bright: 248 250 253;
     --surface-container-lowest: 255 255 255;
-    --surface-container-low: 242 243 253;
-    --surface-container: 236 237 247;
-    --surface-container-high: 230 231 242;
-    --surface-container-highest: 225 226 236;
+    --surface-container-low: 240 244 249;
+    --surface-container: 232 238 245;
+    --surface-container-high: 224 231 239;
+    --surface-container-highest: 213 221 232;
     --on-surface: 25 27 35;
     --on-surface-variant: 66 71 84;
     --inverse-surface: 46 48 56;
     --inverse-on-surface: 239 240 250;
     --outline: 114 119 133;
-    --outline-variant: 194 198 214;
+    --outline-variant: 209 214 226;
     --primary: 0 88 190;
     --on-primary: 255 255 255;
     --primary-container: 33 112 228;
@@ -34,43 +34,60 @@
     --on-error: 255 255 255;
     --error-container: 255 218 214;
     --on-error-container: 147 0 10;
-    --background: 249 249 255;
+    --background: 240 244 249;
     --on-background: 25 27 35;
+    /* Chip / status palette — light tone bg + saturated text. */
+    --emerald-bg: 220 252 231;
+    --emerald-text: 22 163 74;
+    --amber-bg: 254 243 199;
+    --amber-text: 217 119 6;
+    --rose-bg: 254 226 226;
+    --rose-text: 220 38 38;
+    --violet-bg: 237 233 254;
+    --violet-text: 109 40 217;
   }
 
-  /* Dark theme — derived from MD3 dark scheme for the same #0058be primary. */
+  /* Dark theme — blue-gray dark palette derived from the same hue family. */
   .dark {
-    --surface: 16 18 24;
-    --surface-dim: 16 18 24;
-    --surface-bright: 55 56 65;
-    --surface-container-lowest: 11 13 18;
-    --surface-container-low: 25 27 35;
-    --surface-container: 29 31 39;
-    --surface-container-high: 39 41 49;
-    --surface-container-highest: 50 52 60;
-    --on-surface: 225 226 236;
-    --on-surface-variant: 194 198 214;
-    --inverse-surface: 225 226 236;
-    --inverse-on-surface: 46 48 56;
-    --outline: 140 145 160;
-    --outline-variant: 66 71 84;
+    --surface: 15 20 30;
+    --surface-dim: 11 15 22;
+    --surface-bright: 30 38 55;
+    --surface-container-lowest: 9 12 18;
+    --surface-container-low: 15 20 30;
+    --surface-container: 22 28 40;
+    --surface-container-high: 28 35 50;
+    --surface-container-highest: 36 44 62;
+    --on-surface: 220 226 238;
+    --on-surface-variant: 170 178 198;
+    --inverse-surface: 220 226 238;
+    --inverse-on-surface: 46 54 72;
+    --outline: 120 130 155;
+    --outline-variant: 50 60 80;
     --primary: 173 198 255;
     --on-primary: 0 48 99;
     --primary-container: 0 70 141;
     --on-primary-container: 216 226 255;
     --inverse-primary: 0 88 190;
-    --secondary: 190 198 220;
-    --on-secondary: 40 48 65;
-    --secondary-container: 62 71 89;
+    --secondary: 185 194 218;
+    --on-secondary: 36 44 62;
+    --secondary-container: 55 64 84;
     --on-secondary-container: 218 226 253;
-    --tertiary: 192 199 203;
-    --on-tertiary: 42 49 52;
+    --tertiary: 188 196 202;
+    --on-tertiary: 38 46 50;
     --error: 255 180 171;
     --on-error: 105 0 5;
     --error-container: 147 0 10;
     --on-error-container: 255 218 214;
-    --background: 16 18 24;
-    --on-background: 225 226 236;
+    --background: 15 20 30;
+    --on-background: 220 226 238;
+    --emerald-bg: 6 78 59;
+    --emerald-text: 167 243 208;
+    --amber-bg: 120 53 15;
+    --amber-text: 253 230 138;
+    --rose-bg: 127 29 29;
+    --rose-text: 254 202 202;
+    --violet-bg: 76 29 149;
+    --violet-text: 221 214 254;
   }
 
   html,
@@ -106,4 +123,183 @@
   .material-symbols-outlined {
     font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
   }
+}
+
+/* ─── Network Diagram (Dependency View) ─────────────────────────── */
+
+/* Theme variables flip with .dark — canvas, nodes, halo all follow. */
+.diagram-canvas {
+  --diagram-canvas-bg: #f8fafc;
+  --diagram-node-bg: #ffffff;
+  --diagram-node-text: #0f172a;
+  --diagram-node-meta: #64748b;
+  --diagram-grid: rgba(15, 23, 42, 0.10);
+  --diagram-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --diagram-glow: 0, 88, 190;
+  --cp-stroke: #0058be;
+
+  background: var(--diagram-canvas-bg);
+}
+.dark .diagram-canvas {
+  --diagram-canvas-bg: #0d0d1a;
+  --diagram-node-bg: #1a1a2e;
+  --diagram-node-text: #f1f5f9;
+  --diagram-node-meta: #cbd5e1;
+  --diagram-grid: rgba(255, 255, 255, 0.07);
+  --diagram-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  --diagram-glow: 255, 255, 255;
+  --cp-stroke: #ffffff;
+}
+
+/* React Flow has its own background and we want to match the theme variable */
+.diagram-canvas .react-flow__background-pattern {
+  /* Background component already pulls from `color` prop = var(--diagram-grid) */
+}
+.diagram-canvas .react-flow__minimap,
+.diagram-canvas .react-flow__controls {
+  background: var(--diagram-node-bg);
+  border: 1px solid rgba(127, 127, 127, 0.20);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.diagram-canvas .react-flow__controls-button {
+  background: var(--diagram-node-bg);
+  border-bottom: 1px solid rgba(127, 127, 127, 0.15);
+  color: var(--diagram-node-text);
+}
+.diagram-canvas .react-flow__controls-button:hover {
+  background: rgba(127, 127, 127, 0.10);
+}
+.diagram-canvas .react-flow__minimap-mask {
+  fill: rgba(127, 127, 127, 0.20);
+}
+
+.diagram-task-node {
+  position: relative;
+  width: 200px;
+  height: 96px;
+  background: var(--diagram-node-bg);
+  color: var(--diagram-node-text);
+  border-radius: 10px;
+  padding: 10px 12px 10px 18px;
+  box-shadow: var(--diagram-shadow);
+  font-size: 12px;
+  cursor: grab;
+}
+.diagram-task-node::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 5px;
+  background: var(--phase, #94a3b8);
+  border-top-left-radius: 10px;
+  border-bottom-left-radius: 10px;
+}
+.diagram-task-node[data-cp="1"] {
+  box-shadow:
+    0 0 0 1.5px rgba(var(--diagram-glow), 0.85),
+    0 0 18px rgba(var(--diagram-glow), 0.30),
+    var(--diagram-shadow);
+}
+.diagram-task-node[data-selected="1"] {
+  box-shadow:
+    0 0 0 2px var(--phase, #94a3b8),
+    0 0 0 6px rgba(var(--diagram-glow), 0.10),
+    var(--diagram-shadow);
+}
+.diagram-task-node[data-faded="1"] {
+  opacity: 0.45;
+}
+
+.diagram-task-id {
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  color: var(--diagram-node-meta);
+  opacity: 0.85;
+  margin-bottom: 1px;
+}
+.diagram-task-title {
+  font-weight: 700;
+  font-size: 13px;
+  line-height: 1.2;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diagram-task-meta {
+  display: flex;
+  gap: 8px;
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 11px;
+  line-height: 1.3;
+  color: var(--diagram-node-meta);
+}
+.diagram-task-meta-label {
+  width: 38px;
+  font-weight: 500;
+  opacity: 0.75;
+}
+
+/* Milestone — clip-path hexagon */
+.diagram-milestone-node {
+  position: relative;
+  width: 180px;
+  height: 72px;
+  background: var(--diagram-node-bg);
+  color: var(--diagram-node-text);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 0 28px;
+  font-size: 12px;
+  cursor: grab;
+  clip-path: polygon(14px 0, calc(100% - 14px) 0, 100% 50%, calc(100% - 14px) 100%, 14px 100%, 0 50%);
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.18));
+}
+.dark .diagram-milestone-node {
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.55));
+}
+.diagram-milestone-node::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--phase, #94a3b8) 0, var(--phase, #94a3b8) 5px, transparent 5px);
+  pointer-events: none;
+}
+.diagram-milestone-node[data-cp="1"] {
+  filter:
+    drop-shadow(0 0 6px rgba(var(--diagram-glow), 0.55))
+    drop-shadow(0 0 1px rgba(var(--diagram-glow), 0.9))
+    drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
+}
+.diagram-milestone-node[data-selected="1"] {
+  outline: 2px solid var(--phase, #94a3b8);
+  outline-offset: 2px;
+}
+.diagram-milestone-node[data-faded="1"] {
+  opacity: 0.45;
+}
+.diagram-milestone-title {
+  font-weight: 700;
+  font-size: 13px;
+}
+.diagram-milestone-date {
+  font-family: ui-monospace, "JetBrains Mono", monospace;
+  font-size: 11px;
+  color: var(--diagram-node-meta);
+}
+
+/* Handles — invisible. The Network Diagram is read-only for
+   dependency creation; handles only stay around as anchor points so
+   React Flow can attach existing edges to them. */
+.diagram-canvas .react-flow__handle.diagram-handle {
+  width: 1px;
+  height: 1px;
+  background: transparent;
+  border: none;
+  opacity: 0;
+  pointer-events: none;
 }

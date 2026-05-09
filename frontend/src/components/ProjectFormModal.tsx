@@ -128,7 +128,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="rounded px-3 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -136,7 +136,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             type="submit"
             form="project-form"
             disabled={submitting}
-            className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {submitting ? "Saving…" : isEdit ? "Save changes" : "Create project"}
           </button>
@@ -151,7 +151,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             onChange={(e) => setName(e.target.value)}
             maxLength={200}
             autoFocus
-            className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </Field>
 
@@ -161,7 +161,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             maxLength={2000}
-            className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
           />
         </Field>
 
@@ -171,7 +171,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             onChange={(e) =>
               setCustomerId(e.target.value === "" ? "" : Number(e.target.value))
             }
-            className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
           >
             <option value="">
               {customers && customers.length === 0
@@ -191,7 +191,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             <select
               value={saId === "" ? "" : String(saId)}
               onChange={(e) => setSaId(e.target.value === "" ? "" : Number(e.target.value))}
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               <option value="">Select SA…</option>
               {sas.map((u) => (
@@ -206,7 +206,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               {PROJECT_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -222,7 +222,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             <select
               value={tamId === "" ? "" : String(tamId)}
               onChange={(e) => setTamId(e.target.value === "" ? "" : Number(e.target.value))}
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
               <option value="">Defaults to current user</option>
               {tams.map((u) => (
@@ -237,7 +237,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
         {error && (
           <div
             role="alert"
-            className="rounded border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
+            className="rounded-lg border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
           >
             {error}
           </div>
@@ -258,7 +258,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
         {label}
         {required && <span className="ml-1 text-error">*</span>}
       </span>

@@ -93,7 +93,7 @@ export function Reports() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="font-display text-h1 text-on-surface">Reports</h1>
+          <h1 className="font-display text-2xl font-bold text-on-surface">Reports</h1>
           <p className="text-sm text-on-surface-variant">
             Task status + priority distribution and completion percentage.
           </p>
@@ -108,7 +108,7 @@ export function Reports() {
             onChange={(e) =>
               setSelectedProjectId(e.target.value === "" ? "" : Number(e.target.value))
             }
-            className="rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="rounded border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
             <option value="">All projects</option>
             {(projects ?? []).map((p) => (
@@ -124,8 +124,19 @@ export function Reports() {
         <div className="h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
       )}
 
+      {/* KPI strip */}
       {stats && (
-        <div className="grid gap-4 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <Kpi label="Total tasks" value={stats.total} hint={scopeLabel} icon="checklist" tone="neutral" />
+          <Kpi label="In progress" value={stats.statusCounts.IN_PROGRESS} hint="Active work" icon="autorenew" tone="primary" />
+          <Kpi label="Completed" value={stats.statusCounts.DONE} hint={`${stats.pct}% of total`} icon="trending_up" tone="emerald" />
+          <Kpi label="Backlog" value={stats.statusCounts.TODO} hint="Awaiting start" icon="schedule" tone="amber" />
+        </div>
+      )}
+
+      {/* Charts */}
+      {stats && (
+        <div className="grid gap-4 lg:grid-cols-2">
           <ChartCard title={`Task Status · ${scopeLabel}`}>
             {stats.total === 0 ? (
               <Empty />
@@ -148,27 +159,39 @@ export function Reports() {
               <PieChartShell data={priorityPieData} colorMap={PRIORITY_COLORS} />
             ) : null}
           </ChartCard>
-
-          <section className="space-y-3">
-            <SummaryCard
-              label="Completion"
-              value={`${stats.pct}%`}
-              hint={`${stats.statusCounts.DONE} of ${stats.total} tasks done`}
-              tone="primary"
-            />
-            <SummaryCard
-              label="In Progress"
-              value={stats.statusCounts.IN_PROGRESS}
-              hint="Active work"
-            />
-            <SummaryCard
-              label="Backlog"
-              value={stats.statusCounts.TODO}
-              hint="Awaiting start"
-            />
-          </section>
         </div>
       )}
+    </div>
+  );
+}
+
+interface KpiProps {
+  label: string;
+  value: number;
+  hint?: string;
+  icon: string;
+  tone: "primary" | "emerald" | "amber" | "neutral";
+}
+
+function Kpi({ label, value, hint, icon, tone }: KpiProps) {
+  const iconColor =
+    tone === "primary"
+      ? "text-primary"
+      : tone === "emerald"
+        ? "text-emerald-600"
+        : tone === "amber"
+          ? "text-amber-600"
+          : "text-on-surface-variant";
+  return (
+    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">{label}</span>
+        <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
+      </div>
+      <div className="mt-2 flex items-baseline gap-2">
+        <span className="font-mono text-3xl font-bold tabular-nums text-on-surface">{value}</span>
+        {hint && <span className="text-[11px] text-on-surface-variant">{hint}</span>}
+      </div>
     </div>
   );
 }
@@ -183,12 +206,12 @@ function ChartCard({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
+    <section className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
       <header className="mb-4">
-        <h2 className="font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+        <h2 className="font-display text-[12px] font-bold uppercase tracking-widest text-on-surface-variant">
           {title}
         </h2>
-        {hint && <p className="mt-0.5 text-[11px] text-on-surface-variant">{hint}</p>}
+        {hint && <p className="mt-0.5 text-[12px] text-on-surface-variant">{hint}</p>}
       </header>
       {children}
     </section>
@@ -221,13 +244,22 @@ function PieChartShell<K extends string>({
               <Cell
                 key={entry.key}
                 fill={colorMap[entry.key]}
-                stroke="#ffffff"
+                stroke="rgb(var(--surface-container-lowest))"
                 strokeWidth={2}
               />
             ))}
           </Pie>
-          <Tooltip formatter={(v: number, name: string) => [`${v} tasks`, name]} />
-          <Legend />
+          <Tooltip
+            formatter={(v: number, name: string) => [`${v} tasks`, name]}
+            contentStyle={{
+              fontSize: 11,
+              borderRadius: 4,
+              border: "1px solid rgb(var(--outline-variant))",
+              background: "rgb(var(--surface-container-lowest))",
+              color: "rgb(var(--on-surface))",
+            }}
+          />
+          <Legend wrapperStyle={{ fontSize: 11, color: "rgb(var(--on-surface-variant))" }} />
         </PieChart>
       </ResponsiveContainer>
     </div>
@@ -239,28 +271,5 @@ function Empty() {
     <p className="rounded border border-dashed border-outline-variant px-4 py-8 text-center text-xs text-on-surface-variant">
       No tasks in this scope yet.
     </p>
-  );
-}
-
-function SummaryCard({
-  label,
-  value,
-  hint,
-  tone = "default",
-}: {
-  label: string;
-  value: number | string;
-  hint?: string;
-  tone?: "default" | "primary";
-}) {
-  const valueClass = tone === "primary" ? "text-primary" : "text-on-surface";
-  return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
-      <span className="mb-1 block font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
-        {label}
-      </span>
-      <div className={`font-display text-h2 leading-none ${valueClass}`}>{value}</div>
-      {hint && <p className="mt-1 text-[11px] text-on-surface-variant">{hint}</p>}
-    </div>
   );
 }

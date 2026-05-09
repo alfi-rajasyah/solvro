@@ -21,7 +21,7 @@ export function CommentThread({ taskId }: { taskId: number }) {
 
   return (
     <div className="space-y-3">
-      <h3 className="font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+      <h3 className="font-display text-[12px] font-bold uppercase tracking-widest text-on-surface-variant">
         Comments {comments && comments.length > 0 && `· ${comments.length}`}
       </h3>
 
@@ -45,7 +45,7 @@ export function CommentThread({ taskId }: { taskId: number }) {
             <li key={c.id} className="flex gap-3">
               <AssigneeAvatar user={c.author} size="sm" />
               <div className="min-w-0 flex-1 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2">
-                <div className="mb-0.5 flex items-center justify-between gap-2 text-[11px]">
+                <div className="mb-0.5 flex items-center justify-between gap-2 text-[12px]">
                   <span className="font-medium text-on-surface">{c.author.username}</span>
                   <span className="text-on-surface-variant">{relativeTime(c.createdAt)}</span>
                 </div>
@@ -72,13 +72,13 @@ export function CommentThread({ taskId }: { taskId: number }) {
           <button
             type="submit"
             disabled={addComment.isPending || !body.trim()}
-            className="rounded bg-primary px-3 py-1 font-display text-[11px] font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className="rounded bg-primary px-3 py-1 font-display text-[12px] font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
           >
             {addComment.isPending ? "Posting…" : "Post"}
           </button>
         </div>
         {addComment.error && (
-          <p className="mt-1 text-[11px] text-error">
+          <p className="mt-1 text-[12px] text-error">
             {(addComment.error as Error).message}
           </p>
         )}

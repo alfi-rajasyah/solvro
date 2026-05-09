@@ -108,7 +108,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded px-3 py-1.5 text-xs text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -116,7 +116,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             type="button"
             onClick={onSubmit}
             disabled={busy}
-            className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {busy ? "Saving…" : isEdit ? "Save changes" : "Create risk"}
           </button>
@@ -131,7 +131,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
         )}
 
         <div>
-          <label className="mb-1 block font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <label className="mb-1 block font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
             Risk description
           </label>
           <textarea
@@ -145,7 +145,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <label className="mb-1 block font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
               Category
             </label>
             <select
@@ -161,7 +161,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             </select>
           </div>
           <div>
-            <label className="mb-1 block font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <label className="mb-1 block font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
               Status
             </label>
             <select
@@ -180,7 +180,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <label className="mb-1 block font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
               Probability (1–5)
             </label>
             <select
@@ -196,7 +196,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             </select>
           </div>
           <div>
-            <label className="mb-1 block font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <label className="mb-1 block font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
               Impact (1–5)
             </label>
             <select
@@ -212,7 +212,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             </select>
           </div>
           <div>
-            <label className="mb-1 block font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <label className="mb-1 block font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
               Score
             </label>
             <div
@@ -222,7 +222,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
               ].join(" ")}
             >
               {score}{" "}
-              <span className="ml-2 font-display text-[10px] font-bold uppercase tracking-wider">
+              <span className="ml-2 font-display text-[11px] font-bold uppercase tracking-wider">
                 {scoreLevel(score)}
               </span>
             </div>
@@ -230,7 +230,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
         </div>
 
         <div>
-          <label className="mb-1 block font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <label className="mb-1 block font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
             Mitigation plan
           </label>
           <textarea
@@ -243,7 +243,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
         </div>
 
         <div>
-          <label className="mb-1 block font-display text-[10px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <label className="mb-1 block font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
             Contingency plan
           </label>
           <textarea

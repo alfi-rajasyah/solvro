@@ -45,7 +45,7 @@ export function Settings() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <header>
-        <h1 className="font-display text-h1 text-on-surface">Settings</h1>
+        <h1 className="font-display text-2xl font-bold text-on-surface">Settings</h1>
         <p className="text-sm text-on-surface-variant">
           Manage your account profile and password.
         </p>
@@ -53,8 +53,8 @@ export function Settings() {
 
       <ThemeCard />
 
-      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
-        <h2 className="mb-3 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
+      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
+        <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
           Profile
         </h2>
         <dl className="grid grid-cols-1 gap-y-2 text-sm md:grid-cols-[140px_1fr]">
@@ -66,28 +66,28 @@ export function Settings() {
 
           <dt className="text-on-surface-variant">Role</dt>
           <dd>
-            <span className="rounded bg-surface-container-low px-1.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+            <span className="rounded-full bg-surface-container-low px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
               {user.role}
             </span>
           </dd>
         </dl>
-        <p className="mt-3 text-[11px] text-on-surface-variant">
+        <p className="mt-3 text-[12px] text-on-surface-variant">
           Username, email, and role can only be changed by an Admin.
         </p>
       </section>
 
-      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
-        <h2 className="mb-3 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
+      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
+        <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
           Change password
         </h2>
 
         {success && (
-          <div className="mb-3 rounded border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
+          <div className="mb-3 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
             Password updated.
           </div>
         )}
         {error && (
-          <div className="mb-3 rounded border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">
+          <div className="mb-3 rounded-lg border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">
             {error}
           </div>
         )}
@@ -100,7 +100,7 @@ export function Settings() {
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
               required
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </Field>
           <Field label="New password" required>
@@ -111,9 +111,9 @@ export function Settings() {
               autoComplete="new-password"
               minLength={8}
               required
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
-            <p className="mt-1 text-[11px] text-on-surface-variant">
+            <p className="mt-1 text-[12px] text-on-surface-variant">
               At least 8 characters. Must differ from the current password.
             </p>
           </Field>
@@ -125,14 +125,14 @@ export function Settings() {
               autoComplete="new-password"
               minLength={8}
               required
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </Field>
           <div className="flex justify-end">
             <button
               type="submit"
               disabled={change.isPending}
-              className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+              className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-60"
             >
               {change.isPending ? "Saving…" : "Update password"}
             </button>
@@ -146,52 +146,70 @@ export function Settings() {
 function ThemeCard() {
   const { choice, resolved, setChoice } = useTheme();
   const options: { key: ThemeChoice; label: string; icon: string; hint: string }[] = [
-    { key: "light", label: "Light", icon: "light_mode", hint: "Always light." },
-    { key: "dark", label: "Dark", icon: "dark_mode", hint: "Always dark." },
+    { key: "light", label: "Light", icon: "light_mode", hint: "Always light" },
+    { key: "dark", label: "Dark", icon: "dark_mode", hint: "Always dark" },
     {
       key: "system",
       label: "System",
       icon: "computer",
-      hint: "Follow OS preference.",
+      hint: "Follow OS preference",
     },
   ];
   return (
-    <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
-      <h2 className="mb-3 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
+    <section className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
+      <h2 className="mb-1 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
         Appearance
       </h2>
       <p className="mb-3 text-[12px] text-on-surface-variant">
-        Currently rendering in <strong>{resolved}</strong> mode.
+        Currently rendering in <strong className="text-on-surface">{resolved}</strong> mode.
       </p>
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-        {options.map((opt) => (
-          <button
-            key={opt.key}
-            type="button"
-            onClick={() => setChoice(opt.key)}
-            className={[
-              "flex flex-col items-start gap-1 rounded border p-3 text-left transition-colors",
-              choice === opt.key
-                ? "border-primary bg-primary/5"
-                : "border-outline-variant bg-surface-container-lowest hover:border-primary/40",
-            ].join(" ")}
-          >
-            <div className="flex items-center gap-2">
-              <span
-                className={[
-                  "material-symbols-outlined text-[18px]",
-                  choice === opt.key ? "text-primary" : "text-on-surface-variant",
-                ].join(" ")}
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        {options.map((opt) => {
+          const active = choice === opt.key;
+          return (
+            <button
+              key={opt.key}
+              type="button"
+              onClick={() => setChoice(opt.key)}
+              className={[
+                "flex flex-col gap-2 rounded border p-3 text-left transition-colors",
+                active
+                  ? "border-primary bg-primary/5"
+                  : "border-outline-variant bg-surface-container-lowest hover:border-primary/40",
+              ].join(" ")}
+            >
+              <div className="flex items-center justify-between">
+                <span className="font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
+                  {opt.label}
+                </span>
+                {active ? (
+                  <span className="material-symbols-outlined text-base text-primary">check_circle</span>
+                ) : (
+                  <span className={`material-symbols-outlined text-base text-on-surface-variant`}>{opt.icon}</span>
+                )}
+              </div>
+              {/* Theme preview tile */}
+              <div
+                className="h-12 rounded border border-outline-variant overflow-hidden"
+                aria-hidden
               >
-                {opt.icon}
-              </span>
-              <span className="font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
-                {opt.label}
-              </span>
-            </div>
-            <p className="text-[11px] text-on-surface-variant">{opt.hint}</p>
-          </button>
-        ))}
+                {opt.key === "light" && (
+                  <div className="h-full bg-white" style={{ borderColor: "#D1D6E2" }} />
+                )}
+                {opt.key === "dark" && (
+                  <div className="h-full" style={{ background: "#0F1623" }} />
+                )}
+                {opt.key === "system" && (
+                  <div className="grid h-full grid-cols-2">
+                    <div className="bg-white" />
+                    <div style={{ background: "#0F1623" }} />
+                  </div>
+                )}
+              </div>
+              <p className="text-[11px] text-on-surface-variant">{opt.hint}</p>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
@@ -208,7 +226,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
         {label}
         {required && <span className="ml-1 text-error">*</span>}
       </span>

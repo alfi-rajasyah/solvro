@@ -15,6 +15,395 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-05-10 — Align shared chrome (chips, sidebar, topbar, modal) with the static preview
+
+Follow-up pass to the page-level alignment: the *shared* components used everywhere now match the preview's visual language, so the polish lands once and propagates.
+
+- **`frontend/src/index.css`** — Added theme-aware chip color tokens (`--emerald-bg/text`, `--amber-bg/text`, `--rose-bg/text`, `--violet-bg/text`) under `:root` (light) and `.dark` (dark) using the same RGB triplets the preview HTML defines. Chips now flip with the theme automatically.
+- **`frontend/tailwind.config.ts`** — Exposed those tokens as Tailwind colors (`bg-chip-emerald-bg`, `text-chip-emerald-text`, etc.) so any chip can be styled with utilities instead of inline hex.
+- **`frontend/src/components/StatusChip.tsx`** — Rewrote chip styling to match the preview spec: `gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold leading-[18px]`. Labels are now Title-cased ("Active", "On hold", "In progress", "To do") instead of UPPERCASED. Exports a generic `<Chip tone="emerald|amber|rose|violet|blue|gray">` for ad-hoc reuse without rebuilding the base styling per call site.
+- **`frontend/src/components/PriorityBadge.tsx`** — Same chip shape; tones collapsed to gray (Low/Med), amber (High), rose (Urgent) per preview. Dropped the leading colored dot — the bg/text contrast carries enough signal at this size.
+- **`frontend/src/components/LabelChip.tsx`** — Switched from `rounded` to `rounded-full` and weight 600 so user-defined labels read as the same chip family.
+- **`frontend/src/components/layout/Sidebar.tsx`** — Restored DESIGN.md's "dark slate, recedes" intent: rail bg is now `#0F1623` (light) / `#060912` (dark), nav links are `text-slate-400` on `hover:bg-white/5`, active item is `bg-primary/20 text-white` with the icon tinted `text-primary`. Brand wordmark is `text-white text-lg font-extrabold tracking-tight`. Backdrop on mobile only (`md:hidden`) so it doesn't grey out the canvas on desktop. Nav icons updated to match the preview set (`folder_managed`, `groups`, `analytics`).
+- **`frontend/src/components/layout/TopBar.tsx`** — Height dropped from `h-16` to `h-14` (preview spec). Search input moved into a filled pill (`bg-surface-container`) with a `⌘K` mono kbd hint. Added a notifications bell with a small error dot. User chip on the right pulls a left border separator like the preview. Theme toggle and avatar menu kept; sign-out / settings dropdown unchanged.
+- **`frontend/src/components/layout/RightSidebar.tsx`** — Now uses `<ProjectStatusChip>` directly (was a bespoke `STATUS_TONE` map with rings — outdated after the chip refactor). Top offset changed from `top-16` to `top-14` to track the new TopBar height. Export buttons: dropped `uppercase tracking-wider` for a softer `font-semibold` to match the rest of the app's secondary buttons.
+- **`frontend/src/components/layout/Shell.tsx`** — Main canvas height adjusted from `calc(100vh-64px)` to `calc(100vh-56px)` to match the new TopBar height.
+- **`frontend/src/components/Modal.tsx`** — Switched from `rounded-xl … shadow-xl` to `rounded … shadow-card`, gave the header a real title (`text-[14px] font-semibold text-on-surface` instead of a tiny variant-text label) and removed the `bg-surface-container-low` band on header/footer — the bordered separators alone are enough at the new radius. Edge-to-edge mobile layout preserved (`rounded-none md:rounded`).
+
+Typecheck clean.
+
+### Changed — 2026-05-10 — Bring the real app's visual language up to the static preview
+
+The static `solvro-app-preview.html` mockup set a higher visual bar than the actual app — KPI tiles, the avatar-tile + metric-grid customer card, the S-curve overview, the polished login split-panel, etc. This pass aligns the implementation to that target across every authed page (interactivity unchanged).
+
+- **`frontend/src/pages/Login.tsx`** — Restyled the right form panel: outlined inputs with leading mail/lock icons + show-password toggle, "Remember me" / "Forgot password?" row, primary uppercase "Sign in" button, and a Demo accounts footer that autofills the form on click (password `password123`). Left brand panel keeps the gradient but uses a tighter chip + headline + version-stamp layout matching the preview.
+- **`frontend/src/pages/Overview.tsx`** — Replaced the prior 2×2 quadrant tiles with a 4-KPI strip (Active Projects · Open Tasks · Completed · Total) + a Recharts area chart S-curve (Actual vs. Baseline) + an activity feed of recent tasks with seeded avatar colors + a "Recently updated projects" strip. Drops the donut + work-log placeholder.
+- **`frontend/src/pages/Projects.tsx`** — Card now leads with a `P-NNN` mono-num ID badge + status chip, then title, description, customer + avatar stack (SA + TAM, both seeded from username), and a footer strip with task count and a baseline-locked badge when set. Filter row simplified to a customer dropdown + result count, no more shadow-card panel.
+- **`frontend/src/pages/Customers.tsx`** — Card redesigned around a 40px seed-colored avatar tile + truncated AM line, optional description, then a 2-column metric grid (Projects count, SA lead). Shared seeded `avatarColor` palette mirrors the preview.
+- **`frontend/src/pages/CustomerDetail.tsx`** — Header rebuilt as a 3-card strip: identity card with avatar tile + AM/SA + Edit/Delete actions, plus two KPI tiles (Active projects · Services subscribed). Existing tabs (Overview · Services · Topology · Org · Documents) and Services-tab tools editor unchanged.
+- **`frontend/src/pages/Tasks.tsx`** — H1 sized `text-2xl font-bold`, filter panel switched from `rounded-xl shadow-card` to `rounded border border-outline-variant`, table container ditto. Sorting/filtering logic untouched.
+- **`frontend/src/pages/Reports.tsx`** — Added a 4-KPI strip across the top (Total tasks · In progress · Completed · Backlog), reorganized chart cards into a 2-up layout, and reskinned the Recharts tooltip + legend to use CSS-variable surface colors so they read in dark mode. Pie charts kept.
+- **`frontend/src/pages/Settings.tsx`** — Appearance card now shows visual theme-preview tiles (white / dark slate / split) for Light · Dark · System, with a check-circle marker when active. Other surfaces switched from `rounded-xl shadow-card` to `rounded border + shadow-card`.
+- **`frontend/src/pages/Admin.tsx`** — Added a 3-KPI strip at the top of the Users tab (Users · Custom roles · Inactive accounts) derived from `users` + `roles` data; introduced a small shared `AdminKpi` component. Users CRUD form + table unchanged.
+- **`frontend/src/pages/views/ProjectOverview.tsx`** — Reskinned the 4 KPI tiles (icon top-right, mono-num value, hint inline) and the S-curve section/empty-state/skeletons to use `rounded border border-outline-variant` instead of `rounded-xl shadow-card`. Recharts S-curve rendering logic unchanged.
+- **`frontend/src/pages/views/ProjectList.tsx`** + **`ProjectKanban.tsx`** — Swapped the loading skeletons and outer table/card containers from `rounded-xl … shadow-card` to `rounded border border-outline-variant`. Kanban subtask checklist (added earlier today) carries through unchanged.
+
+Typecheck clean across all changes.
+
+### Added — 2026-05-10 — Full-app static UI preview (single shareable HTML)
+
+A standalone HTML file that mirrors every major screen of the app, intended for design review and external sharing. No build, no backend, no auth — just open in a browser.
+
+- **`New UI/solvro-app-preview.html`** — 16 screens covered: Login, Overview (dashboard), Projects, Project · Overview / List / Kanban (with subtask checklist) / Gantt / Timeline / Diagram / Risks tabs, Customers, Customer detail, Tasks (cross-project), Reports, Settings, Admin. Wired with:
+  - Manual light/dark toggle (button in the sticky header) using a `darkMode: 'class'` Tailwind config + CSS variables for the M3 surface tokens. Initial state respects OS `prefers-color-scheme`. Chrome bar carries an in-page TOC linking to each screen anchor.
+  - Faithful chrome: 64px sidebar rail (dark slate), 56px topbar with project breadcrumb on detail pages, and the same 7-tab order the app uses (Overview · List · Kanban · Gantt · Timeline · Diagram · Risks).
+  - Visual fidelity for the load-bearing concepts: AI Breakdown amber glow on machine-generated cards, phase-color left rails on diagram nodes, S-curve baseline-vs-actual + forecast, Gantt grid with dependency arrows + parent-subtask dotted teal edges, Kanban subtask checklist nested inside parent cards, risk register with live-computed score cells, project-level Risks summary tiles.
+  - Source Sans 3 + JetBrains Mono via Google Fonts CDN; Material Symbols via Google Fonts CDN; Tailwind via JIT CDN. Self-contained — no asset folder.
+
+
+
+Each parent card on the Kanban now renders its subtasks as a compact, indented checklist inside the card (between the description and the meta row). The earlier `subtasksDone/total` badge in the bottom row is removed because the list itself is now the authoritative summary.
+
+- **`frontend/src/pages/views/ProjectKanban.tsx`**:
+  - Added `toggleSubtaskStatus` handler in the parent component (flips a subtask's status between `TODO` and `DONE` via the existing `useUpdateTask` mutation, which already does optimistic update + invalidate).
+  - Threaded a new `onToggleSubtask: (Task) => void` prop and a `canToggleSubtasks: boolean` flag through `Column` → `TaskCard` (gated on the same `TAM/ADMIN` role check as the drag-to-move).
+  - In `TaskCard`, when `subtasks.length > 0`, renders a list with a small status circle (clickable to toggle when permitted), the subtask title (line-through when done), and an optional assignee initial. Inline `onPointerDown` `stopPropagation` keeps the dnd-kit draggable on the parent card from intercepting the toggle click. Removed the redundant subtask-count badge from the meta row.
+
+Subtasks intentionally don't drag independently — moving a parent moves the subtask group with it. To reorganize across statuses individually, use the per-row toggle or open the parent's edit modal (which still lists subtasks).
+
+### Fixed — 2026-05-10 — Project tabs nav no longer shows a stray vertical scrollbar
+
+The project sub-tab nav (`<nav className="… overflow-x-auto …">` in [ProjectDetail.tsx](frontend/src/pages/ProjectDetail.tsx)) was rendering a thin vertical scrollbar along its right edge because of a CSS quirk: when `overflow-x` is set to a non-visible value, `overflow-y: visible` is computed to `auto`. Combined with the active tab's `-mb-px border-b-2` which overhangs the content box by 1px to overlap the nav's own bottom border, the nav had 1px of vertical overflow → vertical scrollbar appeared.
+
+- **`frontend/src/pages/ProjectDetail.tsx`** — Added `overflow-y-clip` to the tabs nav so the y-axis is clipped (not scrolled). `overflow-x-auto` is retained for horizontal tab scroll on narrow viewports. `clip` doesn't make the element a scroll container, so no scrollbar is reserved on either axis when not needed; the 1px overhang is silently clipped (still indistinguishable visually since the active border sits flush against the nav's `border-b`).
+
+### Fixed — 2026-05-10 — Gantt card sizes to its rows, no extra page scrollbar
+
+The Gantt card was forcing a `h-full min-h-[460px]` fixed-fit and an internal `flex-1 overflow-auto` scroller, which (a) padded the card with empty rows below the last task whenever the data was sparse, and (b) on shorter viewports the 460px floor pushed total page height just past `<main>`, surfacing a stray page-level vertical scrollbar on top of the Gantt's own horizontal scroller.
+
+The card should grow with the number of tasks — many rows = tall card and the page scrolls vertically; few rows = short card and nothing extra to scroll.
+
+- **`frontend/src/components/gantt/GanttFrame.tsx`**:
+  - Root: dropped `h-full min-h-[460px]` from the outer container so the card height = its natural content height (toolbar + axis + rows × ROW_HEIGHT).
+  - Inner scroller: changed `min-h-0 min-w-0 flex-1 overflow-auto` to `min-w-0 overflow-x-auto`. Vertical scroll is now the page's job (`<main>` already has `overflow-y-auto`); the scroller still owns horizontal scrolling for wide date ranges. The inner content div's `minHeight: AXIS_HEIGHT + rows.length * ROW_HEIGHT` style still drives the card's height, so this is purely a wrapper change.
+
+### Changed — 2026-05-10 — Network Diagram is read-only for dependencies
+
+The diagram is now purely a visualization. All dependency creation/deletion goes through the Gantt chart's connector-handle drag.
+
+- **`frontend/src/pages/views/ProjectDiagram.tsx`**:
+  - Removed `onConnect` and `onEdgeDoubleClick` handlers, `useCreateDependency` / `useDeleteDependency` hook calls, the `error` state + dismissable error toast (only `onConnect` ever populated it), the `ApiError` import, and the unused `Connection` type import.
+  - Added `nodesConnectable={false}` on `<ReactFlow>` so users can't initiate a connection drag.
+  - Kept node dragging + position persistence so users can still arrange the canvas layout.
+- **`frontend/src/index.css`** — `.diagram-handle` is now `width: 1px; height: 1px; opacity: 0; pointer-events: none;`. Existing edges still attach to the handles as anchor points, but the dots no longer render.
+
+Auto-derived parent → subtask edges, the read-only critical-path toggle, hover/click selection highlight, double-click-to-open-task-modal, and Auto-layout all keep working — only manual edge create/delete is gone.
+
+### Added — 2026-05-09 — Create dependencies directly in the Gantt chart
+
+The Gantt becomes the primary place for managing dependencies. Each editable bar grows a small connector dot at its right edge — drag from there to another bar to create a `TaskDependency`. Both the Gantt's connector overlay and the Network Diagram update immediately because they share the TanStack Query cache.
+
+- **`frontend/src/components/gantt/GanttBar.tsx`** — Added `data-task-id` attribute to every bar (used for hit-testing on pointer-up) plus a small primary-blue circular handle (12px, white-bordered, 70%/100% opacity on hover) anchored to the bar's right edge. `onPointerDown` on the handle calls a new `onConnectStart(sourceTaskId, clientX, clientY)` prop after stopping propagation so the bar's own drag-to-move pointer logic doesn't fire.
+- **`frontend/src/components/gantt/GanttRow.tsx`** — Plumbed the `onConnectStart` prop through to `GanttBar`.
+- **`frontend/src/components/gantt/GanttChartPane.tsx`** — Accepts a `connectDrag` prop (start/cursor coords in chart-body-local space). When non-null, renders a dashed primary-blue SVG `<line>` with a circle endpoint as a rubber-band that follows the cursor (`overflow: visible` so the line extends outside the SVG's viewBox if the cursor leaves the chart body). Mounted at `z-index: 4` so it sits above bars and the static connectors.
+- **`frontend/src/components/gantt/GanttFrame.tsx`** — Added `useCreateDependency`, `connectDrag` state, and `handleConnectStart`. `handleConnectStart` converts client coords → chart-body-local using `scrollerRef.getBoundingClientRect() + scrollLeft/Top - LIST_PANE_WIDTH/AXIS_HEIGHT`, then attaches **window-level** `pointermove` / `pointerup` / `keydown` listeners imperatively (not via useEffect, so state updates during drag don't re-add listeners). On `pointerup`: walks up `document.elementFromPoint(...)` looking for the nearest `[data-task-id]` ancestor; if it differs from the source task, fires the create mutation with `sourceHandle: "right-source"` + `targetHandle: "left-target"` defaults so the new dep also looks natural in the Network Diagram. ESC cancels mid-drag. Errors surface via `setActionError`.
+
+The earlier change that rendered existing TaskDependencies on the Gantt (via `GanttConnectors`) stays as-is — combined, you can both create AND view dependencies in the Gantt without leaving the tab.
+
+### Added — 2026-05-09 — Render TaskDependency arrows on the Gantt chart
+
+The same dependency edges drawn in the Network Diagram now render as stepped arrows on the Gantt chart, so users can see precedence relationships in either view without re-creating them.
+
+- **`frontend/src/components/gantt/GanttConnectors.tsx`** (new) — SVG overlay sized to the chart body. For each `TaskDependency` row, finds the predecessor and successor `Row` (matched by `taskId`), computes their bar endpoints via `positionFor`, and draws a stepped path (`M…H…V…H…`). Forward layouts route forward → vertical → forward; backward dependencies (successor to the left of predecessor) route around with an extra leg above/below the source row. Arrowheads via SVG `<marker>` colored with `currentColor` so they match the path stroke. HARD = solid, SOFT = dashed (`stroke-dasharray="5 4"`).
+- **`frontend/src/components/gantt/GanttChartPane.tsx`** — Accepts a new `dependencies: TaskDependency[]` prop and mounts `<GanttConnectors />` between the rows layer and the today-line (z-index: 2 so it sits above bars and grid but under the today line).
+- **`frontend/src/components/gantt/GanttFrame.tsx`** — Added `useProjectDependencies(projectId)` and passes the result down. Subscribes to the same TanStack Query cache used by the Network Diagram, so creating/deleting a dep in either view propagates immediately to the other.
+
+Connectors automatically skip dependencies whose endpoints aren't currently visible (e.g. either task is in a collapsed section). No layout adjustments needed when sections expand/collapse — connectors recompute via `useMemo` keyed on `rows`.
+
+### Changed — 2026-05-09 — Two-phase auto-layout: subtasks stack below parents
+
+Previous attempt fed parent → child edges into dagre's main LR graph, which simply pushed subtasks one rank to the **right** of the parent — not below. Now `autoLayout` runs in two phases.
+
+- **`frontend/src/lib/diagram/autoLayout.ts`**:
+  - Phase 1: dagre lays out only **top-level tasks** (those without a `parentTaskId`) using the dependency graph. Subtasks are excluded from dagre entirely.
+  - Phase 2: subtasks are placed **directly below** their parent — horizontally centered on the parent, vertically stacked in id order with a 24px gap between siblings (`SUBTASK_VGAP`).
+  - Stable id-sort means the layout is deterministic across runs.
+
+To apply: click the **Auto-layout** toolbar button — existing diagram positions are persisted in `Task.diagramX/Y`, so they don't move automatically when this code changes.
+
+### Added — 2026-05-09 — Auto-rendered parent → subtask edges in Network Diagram
+
+The diagram now visualizes the existing `Task.parentTaskId` hierarchy. Every task that has a parent gets an auto-derived edge from the parent's bottom handle to its own top handle — distinct in style from real `TaskDependency` edges so the two relations are never confused.
+
+- **`frontend/src/lib/diagram/autoLayout.ts`** — dagre now also receives parent → child edges (in addition to `TaskDependency` rows). Subtasks land one rank deeper than their parent, so the auto-layout reflects the task hierarchy when first opened.
+- **`frontend/src/pages/views/ProjectDiagram.tsx`**:
+  - `PhaseEdgeData` gained an optional `isParent: true` flag.
+  - The edges memo iterates `tasks.filter(t => t.parentTaskId !== null)` after building dependency edges and appends a synthetic edge with id `parent-<childId>`, `sourceHandle: "bottom-source"`, `targetHandle: "top-target"`. The synthetic id namespace can't collide with numeric `TaskDependency` ids.
+  - `PhaseEdge` checks `data.isParent` and short-circuits to a muted dotted line (`stroke-dasharray="2 4"`, ~50% opacity, no `markerEnd`) so it reads as a containment line, not an arrow.
+  - `onEdgeDoubleClick` skips edges whose id starts with `parent-` — parent links can't be deleted from the diagram (clear `parentTaskId` from the task modal instead).
+  - Parent edges aren't included in the critical-path computation (only `TaskDependency` rows are).
+
+User-drawn `TaskDependency` edges and auto parent edges coexist; if a parent also has a real dependency to its subtask, both render and are visually distinct.
+
+### Removed — 2026-05-09 — Comments section from TaskFormModal
+
+- **`frontend/src/components/TaskFormModal.tsx`** — Removed the entire `Comments` section (cosmetic B/I/U toolbar + `CommentThread` embed) that only rendered in edit mode. Dropped the now-unused `CommentThread` import. The comment-thread component itself stays in `src/components/CommentThread.tsx` and the backend `/tasks/:id/comments` endpoints stay live — only the modal's mount of it is removed.
+
+Why: the section made the edit modal substantially taller for marginal value (CommentThread isn't wired to a real toolbar; the BIU/etc buttons are cosmetic). User can re-introduce it later if comments become a primary workflow.
+
+### Changed — 2026-05-09 — Cap modal height + tighten TaskFormModal spacing
+
+The Task form modal was growing past viewport height because the panel container had `md:h-auto` with no `max-h`. Result: very tall content (esp. with comments) pushed the footer off-screen and made the whole page scroll.
+
+- **`frontend/src/components/Modal.tsx`** — Panel now has `max-h-screen` (mobile) and `md:max-h-[calc(100vh-2rem)]` (desktop, accounting for the outer `md:p-4`). Combined with the existing `flex-1 overflow-y-auto` body, the modal is now capped at viewport height and the body scrolls internally; header + footer stay pinned. Affects every modal that uses this component.
+- **`frontend/src/components/TaskFormModal.tsx`** — Tightened internal spacing: form `space-y-5` → `space-y-3.5`, field-rows-card `space-y-3 p-4` → `space-y-2 p-3`, all section header margins `mb-2` → `mb-1.5`. Net: ~40px less vertical content, fewer cases where scrolling kicks in at all.
+
+### Changed — 2026-05-09 — Persist diagram handle IDs + render task IDs on nodes
+
+Two fixes for the Network Diagram view.
+
+**1. Edge handle persistence.** The bidirectional handles (added earlier today) let users drag connections from any side of any node, but the chosen sides were thrown away on reload — every edge re-rendered through the default right→left routing, turning a clean vertical drag into an L-shape after refresh. Now the source/target handle IDs travel with the dependency.
+
+- **`backend/prisma/schema.prisma`** — `TaskDependency` gained `sourceHandle String?` and `targetHandle String?` columns (snake_case in SQL, nullable; null = "use defaults").
+- **Migration**: `20260509110118_add_dependency_handle_ids` (or similar timestamp). Applied via `DATABASE_URL=… npm run prisma:migrate -- --name add_dependency_handle_ids`. After migration, `docker compose exec backend npx prisma generate && docker compose restart backend` to refresh the container's Prisma client.
+- **`backend/src/routes/projects.ts`** `createDependencySchema` accepts optional `sourceHandle` / `targetHandle` strings; the POST handler stores them on insert.
+- **`frontend/src/lib/queries.ts`** — `TaskDependency` and `CreateDependencyInput` interfaces gained the two fields.
+- **`frontend/src/pages/views/ProjectDiagram.tsx`** — `onConnect` now passes through `params.sourceHandle` / `params.targetHandle`; the edge-mapping memo reads `d.sourceHandle ?? "right-source"` (and the target counterpart) so legacy rows fall back to the LR default while new rows preserve their original handles across reloads.
+
+**2. Task IDs visible on nodes.** Each task and milestone card now shows its `T-NNN` ID in a small mono-font line above the title — matches the format already used in [`ProjectList.tsx`](frontend/src/pages/views/ProjectList.tsx).
+
+- **`frontend/src/pages/views/ProjectDiagram.tsx`** — Inserted `<div className="diagram-task-id">T-{padded id}</div>` above the title in `TaskCardNode`; for `MilestoneNode` (single-line layout) the ID is prefixed inline before the milestone title.
+- **`frontend/src/index.css`** — New `.diagram-task-id` rule: 10px JetBrains-Mono, weight 600, `--diagram-node-meta` color at 0.85 opacity. Plays cleanly in both light and dark canvas themes via the existing CSS variables.
+
+### Changed — 2026-05-09 — Bidirectional handles in Network Diagram (4 sides)
+
+Each diagram node now stacks a `source` AND a `target` handle at all four sides (left, right, top, bottom) — **8 handles total per node**. Users can initiate or receive a connection from any side. Top/bottom is especially useful for subtasks laid out vertically below their parent: a clean down-arrow instead of a long L-shape going around.
+
+- **`frontend/src/pages/views/ProjectDiagram.tsx`** — Replaced the single-target/single-source handle pair on `TaskCardNode` and `MilestoneNode` with a shared `<BidirectionalHandles />` helper that renders 8 handles with unique IDs (`left-target`, `left-source`, `right-target`, `right-source`, `top-target`, `top-source`, `bottom-target`, `bottom-source`). Existing edges are explicitly pinned to `sourceHandle: "right-source"` + `targetHandle: "left-target"` so the LR-flow visual default is preserved on reload regardless of which sides the user originally dragged from.
+
+The connection itself is still a `TaskDependency` row — top/bottom is purely a routing/ergonomics choice, not a new relation type.
+
+Caveat: handle IDs aren't persisted on `TaskDependency`, so vertically-drawn edges re-render through the default right→left route after a refresh. Semantic dependency direction (predecessor → successor) is preserved.
+
+### Changed — 2026-05-09 — Apply Projects-card treatment to all entity cards
+
+Extended the compact-but-larger-text card treatment from the Projects grid to the rest of the app's card-style components.
+
+- **`frontend/src/pages/Customers.tsx`** `CustomerCard`:
+  - Padding `p-5` → `p-4`, gap `gap-3` → `gap-2.5`.
+  - Avatar block `h-10 w-10 text-sm` → `h-9 w-9 text-[13px]`.
+  - Title `text-sm font-semibold` → `text-base font-bold`, added `group-hover:text-primary`.
+  - AM / SA / description / projects-count rows: `text-[12px]` → `text-[13px]`; description gained `leading-snug`.
+  - Footer: collapsed the two stacked divider rows ("N projects" + "Edit/Delete") into a single row sharing one `border-t` — saves ~24px of vertical space and makes Edit/Delete inline-right of the project count.
+  - Chevron now flips to primary color on hover.
+- **`frontend/src/pages/Overview.tsx`** dashboard cards:
+  - All four panels: `p-5` → `p-4`.
+  - Card headings: `font-display text-sm font-semibold` → `font-display text-base font-semibold`.
+- **`frontend/src/pages/views/ProjectKanban.tsx`** `TaskCard`:
+  - Padding `p-4` → `p-3` (cards already feel dense; tightening to compensate for bigger text).
+  - Title `text-sm` → `text-[15px]`.
+  - Duration / count strip: `text-[12px]` → `text-[13px]` and icons `text-[14px]` → `text-[15px]`.
+  - Description `text-[12px]` → `text-[13px]` + `leading-snug`.
+  - `mb-2`/`mb-3` between sections trimmed to `mb-1.5`/`mb-2`.
+
+### Changed — 2026-05-09 — Tighter, more readable Project cards on /projects
+
+- **`frontend/src/pages/Projects.tsx`** `ProjectCard`:
+  - Padding `p-5` → `p-4` (tighter card).
+  - Title: `text-sm` → `text-base` (17px) + `leading-tight`. Edit icon `text-[14px]` → `text-[16px]` to keep parity.
+  - Customer name: `text-[12px]` → `text-[13px]`.
+  - Description: `text-xs` → `text-[13px]` + `leading-snug`; clamp `line-clamp-3` → `line-clamp-2`; `min-h-[3rem] mb-5` → `min-h-[2.4rem] mb-3`.
+  - SA/TAM avatars: `h-7 w-7` → `h-6 w-6` (proportional with the smaller card).
+  - "N issues" footer: `text-xs` → `text-[13px]`, icon `text-[15px]` → `text-[16px]`.
+
+Net result: smaller card, larger body text — denser grid plus better readability.
+
+### Changed — 2026-05-09 — Project context right sidebar defaults to closed
+
+- **`frontend/src/pages/ProjectDetail.tsx`** — `contextOpen` state initialized to `false` instead of `true`. The 320px right sidebar (RightSidebar) now stays hidden until the user clicks the Context toggle in the header. Gives the canvas more horizontal room on first load — especially useful for the new Diagram view.
+
+### Added — 2026-05-09 — Network Diagram (Dependency View) tab — full implementation
+
+OmniPlan-style freeform DAG canvas of project tasks, mounted as the 7th project sub-tab at `projects/:id/diagram` (positioned **before** Risks). Tasks are draggable nodes (rectangle for regular, hex for milestone), connected by stepped SVG edges showing predecessor → successor dependencies, grouped into colored phases via `Section.color`, with a togglable critical-path highlight. Both light and dark theme variants honored.
+
+**Backend** (`backend/`):
+- **Schema** (`prisma/schema.prisma`):
+  - New `DependencyType` enum: `HARD` | `SOFT` (drives solid vs dashed edges).
+  - New `TaskDependency` model with `predecessorTaskId`, `successorTaskId`, `type`, `projectId` (denormalised for cascade + visibility), unique on `(predecessorTaskId, successorTaskId)`.
+  - `Task` extended: `isMilestone Boolean @default(false)`, `diagramX Float?`, `diagramY Float?` (nullable so dagre auto-layout only runs for tasks the user hasn't manually placed).
+  - `Section` extended: `color String @default("#94a3b8")`.
+  - `Project` got `taskDependencies TaskDependency[]` back-relation for cascade.
+- **Migration**: `20260509102543_add_task_dependencies_and_diagram_fields`. Run with `DATABASE_URL=… npm run prisma:migrate -- --name add_task_dependencies_and_diagram_fields` per CLAUDE.md.
+- **Routes**:
+  - New `src/routes/dependencies.ts` exporting `dependenciesRouter`. Mounts at `/dependencies` for item-scoped `PATCH /:id` (update type) + `DELETE /:id`. Visibility gated through the project the dep belongs to.
+  - `src/routes/projects.ts`: added project-scoped `GET /:id/dependencies` and `POST /:id/dependencies` (with **cycle detection** via DFS reachability from the new successor back to predecessor before insert; rejects with HTTP 400 `cycle`). Also rejects self-deps and tasks not in the project. Extended `createSectionSchema` and `createTaskSchema` to accept `color` and `isMilestone` respectively. Added `color` to all `section: { select }` includes so the frontend gets it.
+  - `src/routes/tasks.ts`: extended `updateTaskSchema` to accept `isMilestone`, `diagramX`, `diagramY`. PATCH now writes them.
+  - `src/routes/sections.ts`: extended `updateSectionSchema` to accept `color` (validated `/^#[0-9a-fA-F]{6}$/`).
+  - `src/app.ts`: mounted `dependenciesRouter` at `/dependencies`.
+
+**Frontend** (`frontend/`):
+- **Dependencies**: added `@xyflow/react` (^12.10.2), `dagre` (^0.8.5), `@types/dagre` (^0.7.54) in `package.json`.
+- **Types & queries** (`src/lib/queries.ts`):
+  - `Task` interface gained `isMilestone`, `diagramX`, `diagramY`. `Task.section` gained `color`.
+  - `Section` interface gained `color`.
+  - New `DependencyType`, `TaskDependency`, `CreateDependencyInput` types.
+  - New hooks: `useProjectDependencies`, `useCreateDependency`, `useUpdateDependency`, `useDeleteDependency`. Added `queryKeys.projectDependencies`.
+  - `useUpdateSection` invalidates `projectTasks` too (so section-color changes flow into the cached task data the diagram reads).
+  - `UpdateTaskInput`/`CreateTaskInput` extended with `isMilestone` + diagram coordinates.
+- **Diagram helpers** (`src/lib/diagram/`, new directory):
+  - `autoLayout.ts` — runs `dagre` left-to-right, returns `taskId → {x,y}` top-left positions.
+  - `criticalPath.ts` — Kahn topological sort + longest-path relaxation over `effortDays(task)`. Returns `{ taskIds: Set, edgeIds: Set }`. Pure function. Bails out with empty result on cycles (which the backend rejects anyway).
+  - `colorUtils.ts` — `phaseColor(section)` falls back to a hash-derived palette when `Section.color` is missing/invalid.
+- **New view** (`src/pages/views/ProjectDiagram.tsx`):
+  - Wraps everything in `ReactFlowProvider`. Custom node types `task` (rectangle) + `milestone` (hex via clip-path). Custom edge type `phase` using `getSmoothStepPath`, with `strokeDasharray="6 4"` on SOFT and stroke colour from source's section.
+  - Node positions seed from `Task.diagramX`/`diagramY`; tasks with null coords get auto-layout via dagre. `onNodeDragStop` PATCHes coords to the server.
+  - `onConnect` (drag from right handle to left handle) creates a HARD dependency. Backend cycle rejection surfaced as a dismissible toast.
+  - `onEdgeDoubleClick` confirms then deletes the edge.
+  - `onNodeClick` selects + highlights upstream/downstream chain (edges fade to 20% for non-related, others stay full opacity). `onNodeDoubleClick` opens the existing `TaskFormModal` for full editing.
+  - Floating toolbar (top-left): "Critical Path" toggle (on by default) + "Auto-layout" button (re-runs dagre and persists). Phase legend (top-right) lists every Section the project's tasks belong to with its color swatch + name. MiniMap (bottom-right) auto-colors nodes by phase.
+- **Theme-aware canvas** (`src/index.css`): added `.diagram-canvas` block with CSS variables (`--diagram-canvas-bg`, `--diagram-node-bg`, `--diagram-grid`, `--diagram-glow`, `--cp-stroke`) that flip under `.dark` (the existing app-wide dark-mode toggle). Light mode = `#f8fafc` canvas with primary-blue critical-path halo. Dark mode = `#0d0d1a` canvas with white halo. `.diagram-task-node` (rectangle) and `.diagram-milestone-node` (hex via clip-path) styles plus `[data-cp]`/`[data-selected]`/`[data-faded]` highlight states. Also styled `.react-flow__minimap` and `.react-flow__controls` to match.
+- **Wiring**:
+  - `src/App.tsx`: imported `ProjectDiagram`, added `<Route path="diagram" />` under `projects/:id` (between `timeline` and `risks`).
+  - `src/pages/ProjectDetail.tsx`: added `{ to: "diagram", label: "Diagram" }` to the `TABS` array between Timeline and Risks (text-only, no icon — matches the other tabs).
+- **Form controls**:
+  - `src/components/TaskFormModal.tsx`: added an "Is milestone" `FieldRow` (hex icon + checkbox) between Labels and the existing rows. Wired to the new `isMilestone` field; sends through both create and edit flows.
+  - `src/pages/views/ProjectList.tsx`: added a small color-swatch + native `<input type="color">` to each section header (real sections only, not the synthetic No-section group). Plumbed via a new `onColorChange` prop on `SectionBlock`. Updates flow through the existing `useUpdateSection` hook.
+
+Why: per the approved plan at `~/.claude/plans/refactored-sauteeing-bird.md`. The view gives PMs a visual schedule-logic surface that complements the Gantt — Gantt shows time, Diagram shows precedence. Phase colors via `Section.color` (rather than a new `Phase` model) keeps the data model lean. Critical path is computed client-side because typical project sizes (a few dozen tasks) stay well within JS performance.
+
+### Added — 2026-05-09 — Network Diagram preview mockup (review artifact)
+
+- **`New UI/network-diagram-preview.html`** — static, single-file HTML mockup of the planned Network Diagram (Dependency View) tab. Tailwind CDN + Source Sans 3 + Material Symbols + JetBrains Mono. Renders sample 9-task / 3-milestone DAG with phase-colored task nodes, hex-clipped milestone nodes, stepped SVG dependency edges (solid = HARD, dashed = SOFT), arrowheads, "Critical Path" toggle ON state with halo glow on the longest chain, "Implement revisions" shown in selected state, floating toolbar (top-left), phase legend (top-right), and minimap (bottom-right). No JS framework — pure SVG + CSS.
+- **Theming**: follows OS appearance via `@media (prefers-color-scheme: dark)`. Canvas/nodes/toolbar/minimap/critical-path glow all flip — light mode uses a `#F8FAFC` canvas with white nodes and a primary-blue critical-path halo; dark mode uses `#0d0d1a` canvas with `#1a1a2e` nodes and a white halo. Tailwind config uses `darkMode: 'media'`. Critical-path arrowhead marker uses `currentColor` so the parent `<g style="color: var(--cp-stroke)">` flips marker fill in tandem with edge stroke.
+- **Tab order**: Diagram is positioned **before** Risks (between Timeline and Risks) per user preference.
+
+Why: per the approved plan at `~/.claude/plans/refactored-sauteeing-bird.md`, Deliverable 0 — visual sign-off before any backend schema or frontend code lands. Open the file directly in a browser; no build step.
+
+### Changed — 2026-05-09 — Move project title into TopBar on project routes
+
+The project breadcrumb + name + status chip were eating ~80px of vertical space at the top of every project view. Moved them into the TopBar so the canvas can use that real estate for actual work.
+
+- **`frontend/src/components/layout/TopBar.tsx`** — On routes matching `/projects/:id/*`, the static `My Projects` title is replaced with `Projects / [project.name]` (link + name) plus the live `ProjectStatusChip`. Uses `useProject(id)` which hits the same TanStack Query cache populated by `ProjectDetail` — no extra network request.
+- **`frontend/src/pages/ProjectDetail.tsx`** — Removed the in-page breadcrumb, `<h1>`, and status chip from the project header (now in TopBar). Removed the `Link` and `ProjectStatusChip` imports that became unused. Kept the description line, SA→TAM/tasks meta row, and the Edit/Context action buttons; reduced the header's bottom margin from `mb-4` → `mb-3` since it's much thinner.
+
+### Added — 2026-05-09 — Project Overview tab with S-curve (baseline vs current)
+
+New project sub-route `projects/:id/overview` becomes the default landing tab when entering a project (replaces the old default `list`).
+
+- **`frontend/src/pages/views/ProjectOverview.tsx`** (new) — Overview view containing:
+  - **KPI strip** (4 cards): total tasks (with top-level/subtask split), completion %, overdue count, baseline lock state.
+  - **Progress S-Curve segment** (`recharts` LineChart) plotting cumulative tasks scheduled to complete over time. Two series: dashed gray "Baseline (planned)" using `task.baselineDueDate`, solid blue "Current (re-planned)" using `task.dueDate`. Includes a `ReferenceLine` at "today", a slip-days indicator (delta between baseline final date and current final date), and a custom legend strip.
+  - **Empty / lock states**: when no baseline is locked, only the current curve is shown plus a "Lock baseline in Gantt" CTA. When no tasks have dates, an empty-state card replaces the chart.
+- **`frontend/src/App.tsx`** — Registered `<Route path="overview" element={<ProjectOverview />} />` under `projects/:id`. Switched the index redirect from `list` → `overview`.
+- **`frontend/src/pages/ProjectDetail.tsx`** — Added `Overview` as the first entry in the `TABS` array.
+
+Why: gives TAMs a single-glance status surface — completion, overdue, and schedule-slip — without opening Gantt. The S-curve is the canonical PM view of planned-vs-actual progress; here "actual" is interpreted as the currently-scheduled timeline (since tasks don't carry a `completedAt` timestamp), which still reveals re-plans relative to the locked baseline.
+
+### Changed — 2026-05-09 — Harmonize all modals with TaskFormModal styling
+
+Make every modal in the app share the same chrome/footer language as the redesigned TaskFormModal.
+
+- **`frontend/src/components/Modal.tsx`** — Default header (rendered when no `customHeader` is supplied) now uses the subtle breadcrumb style: `bg-surface-container-low`, `text-xs text-on-surface-variant`, `py-3` (was `text-base font-semibold text-on-surface`, `py-4`, no bg). All modals inheriting the default header now match the task modal's quieter top-bar style.
+- **`frontend/src/components/ProjectFormModal.tsx`**, **`CustomerFormModal.tsx`**, **`RiskFormModal.tsx`**, **`ConfirmModal.tsx`** — Footer buttons unified to the TaskFormModal pattern:
+  - Cancel: `rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container` (was a flat link-style `rounded` button with no border).
+  - Primary action: `rounded-lg bg-primary … hover:bg-primary/90` (was `rounded bg-primary … hover:bg-primary-container` with `font-display`). Removed `font-display` since TaskFormModal doesn't use it on action buttons.
+  - ConfirmModal warning tone updated to match: `rounded-lg`, no `font-display`.
+
+### Changed — 2026-05-09 — Compact spacing in ProjectList (Task List view)
+
+The font bump pushed task rows visually further apart; tightened vertical paddings to restore density.
+
+- **`frontend/src/pages/views/ProjectList.tsx`**:
+  - Section header row: `py-2` → `py-1.5`.
+  - Task row (desktop grid): `py-3` → `py-1.5`.
+  - Task row (mobile card): `py-3` → `py-2`.
+  - Subtask row (desktop grid): `py-2` → `py-1`.
+  - Subtask row (mobile card): `py-2` → `py-1.5`.
+  - "Add task..." button (under section): `py-2` → `py-1`.
+  - "Add subtask..." button (desktop, inline): `py-1.5` → `py-1`.
+  - Empty-section message: `py-3` → `py-2`.
+  - Title + ID-subtext column: removed `gap-0.5` (let line-height handle spacing).
+
+### Changed — 2026-05-09 — Global font-size bump (+1px across the scale)
+
+Default fonts felt too small at desktop viewport. Applied a uniform +1px bump.
+
+- **`frontend/tailwind.config.ts`** — Overrode Tailwind's default `fontSize` scale via `theme.extend.fontSize`: `xs` 12→13, `sm` 14→15, `base` 16→17, `lg` 18→19, `xl` 20→21, `2xl` 24→25, `3xl` 30→31, `4xl` 36→37 (each with proportional `lineHeight`). Bumped app-specific tokens too: `h1` 32→34, `h2` 24→26, `body-lg` 16→17, `body-sm` 14→15, `data-mono` 13→14, `label-caps` 11→12.
+- **Mass replacement of arbitrary `text-[Npx]` utilities across `frontend/src/`** (281 occurrences) — applied +1px to every bracket-syntax pixel size, largest-to-smallest order to avoid double-bumping: `[20px]→[21px]`, `[18px]→[19px]`, `[16px]→[17px]`, `[14px]→[15px]`, `[13px]→[14px]`, `[12px]→[13px]`, `[11px]→[12px]`, `[10px]→[11px]`, `[9px]→[10px]`. Scope: all `*.ts` / `*.tsx` files under `frontend/src/`.
+
+Why: keeps the visual hierarchy and density intact while improving readability at default zoom. `npm run typecheck` passes.
+
+### Changed — 2026-05-09 — Screen-by-screen refinement pass (Projects, List, Kanban, Task modal)
+
+Iterated on the AProjectO design revamp per user review of rendered screens:
+
+- **`frontend/src/components/Modal.tsx`** — Added `customHeader?: ReactNode` prop; when provided it replaces the default title/close header so callers can supply custom breadcrumb-style headers without changing shared modal behavior.
+- **`frontend/src/pages/Projects.tsx`** — Rebuilt `ProjectCard`: title + hover-reveal edit icon, status chip top-right, 3-line description clamp, bottom row with SA/TAM avatar cluster (amber/blue, -6px overlap) + issues count. Removed the old TAM-text/border-t footer. Filter bar selects/buttons updated to `rounded-lg`.
+- **`frontend/src/pages/views/ProjectKanban.tsx`** — Columns no longer have a card background; they float on the bg with a ring-2 ring-primary highlight on drag-over. Column header is bold name + `more_horiz` menu icon. Teal dashed `+` box replaces the bottom "Add task" button. `TaskCard` redesigned: title + duration (`X Days` from start→due diff), 2-label strip, description `line-clamp-2`, bottom row with 📎0/💬N counts + priority badge + assignee avatar. `AssigneeAvatar` and `startOfToday` helpers removed (unused). Added `getDuration` helper.
+- **`frontend/src/pages/views/ProjectList.tsx`** — Desktop grid updated from 5 columns to 7: `[36px • 1fr • 190px • 170px • 80px • 48px • 28px]`. New columns: done-toggle | task title+ID subtext | status+priority chips | dates (calendar icon) | timer `--:--:--` placeholder | assignee avatar | comment count. Imported `TaskStatusChip` and `PriorityBadge`. `SubtaskRow` desktop grid and "Add subtask" button row updated to match. Mobile card layout unchanged.
+- **`frontend/src/components/TaskFormModal.tsx`** — Full Screen 7 redesign. Modal now uses `customHeader` (breadcrumb `T-XXX` + close button on `bg-surface-container-low`). Form is single-column: large borderless title input + cosmetic timer row (edit mode only); icon field rows (Priority, Status, Assignee, Due Date, Start Date, Parent, Section, Labels) inside a rounded card; Attachments placeholder; Description textarea; Subtasks checklist; Comments section with cosmetic B/I/U toolbar strip above `CommentThread`. All create/edit/delete mutations and validation logic kept intact. Width reduced from `max-w-3xl` to `max-w-lg`.
+
+### Added — 2026-05-09 — Frontend design revamp: AProjectO design language applied across all pages
+
+Full visual overhaul of the Solvro frontend adopting the AProjectO design language (blue-gray base `#F0F4F9`, shadow-based white cards, larger radii, pill-shaped chips, light sidebar). All backend wiring kept intact. Dark mode preserved with a blue-gray dark palette.
+
+**Design tokens** (`frontend/src/index.css`, `frontend/tailwind.config.ts`):
+- `--background` and surface-container tokens shifted from lavender (`249 249 255`) to blue-gray (`240 244 249` = `#F0F4F9`) in both light and dark themes. Dark theme rebuilt with blue-gray hue family (`bg: 15 20 30`, surface: `22 28 40` etc.).
+- `--outline-variant` lightened to `209 214 226`.
+- Border radius scale bumped: `DEFAULT: 0.5rem` (was 0.25), `lg: 1rem` (was 0.5), `xl: 1.5rem` (was 0.75); added `2xl: 2rem`. `sm` kept as 0.25rem.
+
+**Layout chrome** (`Shell.tsx`, `Sidebar.tsx`, `TopBar.tsx`):
+- `Shell`: main area bg changed from `bg-surface-container-low` → `bg-background` (the new blue-gray).
+- `Sidebar`: background changed from `bg-slate-950` (dark) → `bg-surface-container-lowest dark:bg-surface-container-low` (white/dark-blue-gray). All `slate-*` hardcoded classes removed; active nav item changed from `bg-primary/15 text-inverse-primary` → solid `bg-primary text-on-primary`. Bottom status border updated to `border-outline-variant`.
+- `TopBar`: search input changed to `rounded-full` + `border border-outline-variant`; user block now shows a two-line name/role block instead of single username.
+
+**Shared atoms** (`StatusChip.tsx`, `PriorityBadge.tsx`, `Modal.tsx`):
+- `StatusChip`: `rounded` → `rounded-full` on both `ProjectStatusChip` and `TaskStatusChip`.
+- `PriorityBadge`: `rounded` → `rounded-full`.
+- `Modal`: desktop radius bumped `md:rounded-lg` → `md:rounded-xl`.
+
+**Login** (`Login.tsx`): Two-column layout — left `bg-primary` panel with decorative rings + feature icon grid; right white form panel with bottom-border-only inputs and a black "Log in" button. Mobile shows only the form panel.
+
+**Overview** (`Overview.tsx`): Replaced 4 stat cards + 2 list sections with 2×2 dashboard grid: Projects mini-card (count + link), Tasks donut (`recharts PieChart`), Work Log coming-soon placeholder, Performance line chart (`recharts LineChart`). All cards `rounded-xl shadow-sm`.
+
+**Project pages** (`Projects.tsx`, `ProjectDetail.tsx`, `ProjectList.tsx`, `ProjectKanban.tsx`):
+- Project cards: outlined → `rounded-xl shadow-sm` (no border). Hover: shadow intensifies instead of border color change.
+- ProjectDetail: breadcrumb added above title (`Projects / {name}`); buttons rounded-lg; SA → TAM flow shown in subtitle.
+- ProjectList: outer wrapper → `rounded-xl shadow-sm overflow-hidden`; toolbar buttons → `rounded-lg`.
+- Kanban: columns `rounded-xl shadow-sm`, `ring-2 ring-primary` on drag-over; task cards `rounded-xl shadow-sm hover:shadow-md`; column count badge → `rounded-full`.
+
+**Form modals** (`TaskFormModal.tsx`, `ProjectFormModal.tsx`): All inputs/selects/textareas → `rounded-lg`; footer buttons → `rounded-lg`; error alerts → `rounded-lg`; subtask list → `rounded-xl`.
+
+**Remaining pages** (`Reports.tsx`, `Settings.tsx`, `Admin.tsx`, `Customers.tsx`): All card sections → `rounded-xl shadow-sm` (border removed); inputs → `rounded-lg`; error/success alerts → `rounded-lg`; theme choice buttons in Settings → `rounded-xl`; role badge → `rounded-full`.
+
+**Work Logs preview** (`WorkLogs.tsx`): New page with "Coming Soon" empty state (icon + heading + description + "Preview only" badge). Route `/work-logs` added to `App.tsx` under `<AuthGuard><Shell/>`. "Work Logs" nav item (`work_history` icon) added to `Sidebar.tsx` between Tasks and Reports.
+
+### Changed — 2026-05-08 — `CLAUDE.md` synced with subtasks, comments, baseline, admin query keys, and CONFIGURATION.md
+
+Four gaps between current code and the orientation doc closed — no code or schema touched:
+
+- **Data model paragraph** now calls out the self-referential `parentTaskId` subtask relation and the `topLevel` query param, the `Comment` entity and its `GET/POST /tasks/:id/comments` thread, and the baseline-locking mechanics (`POST /projects/:id/baseline` snapshot-copies task dates into `baselineStartDate`/`baselineDueDate` and stamps the project).
+- **Routes inventory** documents `POST /projects/:id/baseline` — what it does, how `{ clear: true }` resets, and that it operates atomically.
+- **Server state hooks** list extended to include sections, comments, and `useLockBaseline`; notes the separate `adminQueryKeys` namespace (distinct from `queryKeys`) and documents the optimistic-update pattern used by `useUpdateTask`/`useUpdateRisk` as the canonical model for instant-feeling inline mutations.
+- **Repository status** now references `CONFIGURATION.md` as the env/port/deployment reference.
+
+### Added — 2026-05-04 — `CONFIGURATION.md` reference document
+
+New top-level [CONFIGURATION.md](CONFIGURATION.md) at the repo root — a two-layer (high-level + detailed) configuration reference covering the three deployment shapes (native dev / dockerised dev / prod), every backend/frontend/postgres/GHCR env var with defaults and validation rules, services + ports + volumes, the `/api` reverse-proxy pattern, migrations, seeded credentials, RBAC config, theme tokens, and the `setup.sh` prod bootstrap. User noted they will move it later (it's at the root for now). Documentation-only — no code, schema, or compose changes.
+
+### Changed — 2026-05-04 — `CLAUDE.md` synced with Risk Management + Gantt export additions
+
+[CLAUDE.md](CLAUDE.md) was drifting against recent commits (f44133e Risk Management view, 8c1b78c Gantt Excel/PDF export). Synced the orientation doc so future Claude sessions don't re-discover this from scratch:
+
+- **Routes inventory** updated to include `risks` and explain the split (`PATCH/DELETE /risks/:id` lives in [backend/src/routes/risks.ts](backend/src/routes/risks.ts); creation is nested under `POST /projects/:id/risks` in [backend/src/routes/projects.ts](backend/src/routes/projects.ts)) — both gate via `requirePermission("project:write")` + `projectVisibilityFilter`.
+- **Admin sub-tree** now called out explicitly: `/admin` carries user CRUD **and role CRUD** (custom roles with arbitrary permission arrays), which is what makes the project-wide `hasPermission`-not-role-name pattern load-bearing.
+- **Project sub-views** updated from four to five (`{list,kanban,gantt,timeline,risks}`) with the wiring rule "register in both [App.tsx](frontend/src/App.tsx) and [ProjectDetail.tsx](frontend/src/pages/ProjectDetail.tsx)".
+- **Prisma data-model paragraph** now lists `Risk` (and the `Service` / `CustomerService` join) alongside the other domain models, with a one-line note that `riskScore` is derived (`probability × impact`) — not stored — so future agents don't try to add a column or trigger.
+- **Server-state hooks** paragraph mentions `useProjectRisks` / `useCreateRisk` / `useUpdateRisk` / `useDeleteRisk` and the centralised `queryKeys` map.
+- **Gantt export layer** added as its own bullet under Frontend conventions: [exportExcel.ts](frontend/src/lib/gantt/exportExcel.ts) (`exceljs`) + [exportPdf.ts](frontend/src/lib/gantt/exportPdf.ts) (`jspdf` + `jspdf-autotable`) + shared [exportContext.tsx](frontend/src/lib/gantt/exportContext.tsx). Documented the rule that the heavy export deps must stay behind dynamic `import()` so they don't enter the main bundle.
+
+No code or schema touched — documentation-only sync.
+
 ### Added — 2026-05-03 — Risk Management view (Risk Register Table) on Project Detail
 
 New project sub-view at `/projects/:id/risks`, sitting next to **Timeline** in the project tab nav. Implements a full risk register:
