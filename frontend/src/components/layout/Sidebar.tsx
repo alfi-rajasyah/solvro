@@ -13,7 +13,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/overview", label: "Overview", icon: "dashboard" },
   { to: "/projects", label: "Projects", icon: "folder_managed" },
   { to: "/customers", label: "Customers", icon: "groups" },
-  { to: "/tasks", label: "Tasks", icon: "checklist" },
+  { to: "/daily-review", label: "Daily Review", icon: "edit_note" },
   { to: "/work-logs", label: "Work Logs", icon: "work_history" },
   { to: "/reports", label: "Reports", icon: "analytics" },
   { to: "/admin", label: "Admin", icon: "admin_panel_settings", adminOnly: true },

@@ -53,6 +53,13 @@ enum DependencyType {
   SOFT
 }
 
+// Daily Review note visibility. INTERNAL notes never appear in any
+// customer-facing export; CUSTOMER_FACING is an explicit opt-in.
+enum NoteVisibility {
+  INTERNAL
+  CUSTOMER_FACING
+}
+
 model Role {
   id          Int      @id @default(autoincrement())
   roleName    String   @unique @map("role_name")
@@ -66,7 +73,12 @@ model User {
   id                     Int       @id @default(autoincrement())
   username               String    @unique
   email                  String    @unique
-  passwordHash           String    @map("password_hash")
+  // Nullable since Google-provisioned users have no password.
+  // POST /auth/login rejects users with a null hash (HTTP 401 "google_only").
+  passwordHash           String?   @map("password_hash")
+  // Google `sub` claim. Unique per Google identity; null for password-only users.
+  googleSub              String?   @unique @map("google_sub")
+  avatarUrl              String?   @map("avatar_url")
   roleId                 Int       @map("role_id")
   role                   Role      @relation(fields: [roleId], references: [id])
   active                 Boolean   @default(true)
@@ -76,9 +88,28 @@ model User {
   projectBaselinesLocked Project[] @relation("ProjectBaselineLockedBy")
   assignedTasks          Task[]
   comments               Comment[]
+  projectNotes           ProjectNote[]
+  authConfigUpdates      AuthConfig[] @relation("AuthConfigUpdatedBy")
 
   @@index([roleId])
   @@map("users")
+}
+
+// Singleton row (id="default") holding policy that the in-app admin can edit
+// without a redeploy. The Google Client ID stays in env (infra-level); the
+// allowed-domains list lives here (operational policy).
+model AuthConfig {
+  id                   String   @id @default("default")
+  // Google OAuth 2.0 Client ID. Public — Google verifies ID tokens server-side
+  // against this audience. Stored in DB so the admin can configure it from the
+  // app (Admin > Sign-in) without a redeploy / rebuild.
+  googleClientId       String?  @map("google_client_id")
+  googleAllowedDomains String[] @default([]) @map("google_allowed_domains")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+  updatedById          Int?     @map("updated_by_id")
+  updatedBy            User?    @relation("AuthConfigUpdatedBy", fields: [updatedById], references: [id])
+
+  @@map("auth_config")
 }
 
 model Project {
@@ -103,6 +134,7 @@ model Project {
   sections           Section[]
   risks              Risk[]
   taskDependencies   TaskDependency[]
+  notes              ProjectNote[]
 
   @@index([saId])
   @@index([tamId])
@@ -287,4 +319,22 @@ model Blueprint {
 
   @@unique([projectId, version])
   @@map("blueprints")
+}
+
+// Daily Review notes — TAM logs cross-project notes per session, each
+// scoped to a single project. INTERNAL notes never leave the app;
+// CUSTOMER_FACING notes feed the Reports export packet (last 14 days).
+model ProjectNote {
+  id         Int            @id @default(autoincrement())
+  projectId  Int            @map("project_id")
+  project    Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  authorId   Int            @map("author_id")
+  author     User           @relation(fields: [authorId], references: [id])
+  body       String         @db.Text
+  visibility NoteVisibility @default(INTERNAL)
+  createdAt  DateTime       @default(now()) @map("created_at")
+
+  @@index([projectId, createdAt])
+  @@index([authorId])
+  @@map("project_notes")
 }

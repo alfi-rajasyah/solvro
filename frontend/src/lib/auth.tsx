@@ -13,7 +13,7 @@ import { apiRequest, getToken, setToken } from "./api";
 // requireAdmin gate). Custom roles created via Admin > Roles tab use other
 // strings; the type is `string` to allow them.
 export type Role = string;
-export const BUILTIN_ROLES = ["SA", "TAM", "ADMIN", "STAKEHOLDER"] as const;
+export const BUILTIN_ROLES = ["SA", "TAM", "ADMIN", "STAKEHOLDER", "PENDING"] as const;
 export type BuiltinRole = (typeof BUILTIN_ROLES)[number];
 
 export interface AuthUser {
@@ -53,6 +53,7 @@ interface AuthContextValue {
   token: string | null;
   status: "loading" | "authenticated" | "unauthenticated";
   login: (email: string, password: string) => Promise<void>;
+  loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -123,6 +124,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const loginWithGoogle = useCallback(async (idToken: string) => {
+    setStatus("loading");
+    try {
+      const res = await apiRequest<LoginResponse>("/auth/google", {
+        method: "POST",
+        body: { idToken },
+        auth: false,
+      });
+      setToken(res.token);
+      setTokenState(res.token);
+      setUser(res.user);
+      setStatus("authenticated");
+    } catch (err) {
+      setStatus("unauthenticated");
+      throw err;
+    }
+  }, []);
+
   const logout = useCallback(() => {
     setToken(null);
     setTokenState(null);
@@ -131,8 +150,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, token, status, login, logout }),
-    [user, token, status, login, logout],
+    () => ({ user, token, status, login, loginWithGoogle, logout }),
+    [user, token, status, login, loginWithGoogle, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

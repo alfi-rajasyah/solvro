@@ -1,11 +1,13 @@
 import { Router } from "express";
 import { randomBytes } from "node:crypto";
 import bcrypt from "bcrypt";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { requireAuth, requireAdmin } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
+import { bustAuthConfigCache } from "../authConfig.js";
 
 export const adminRouter = Router();
 
@@ -20,7 +22,7 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 // references these names structurally. Custom roles created via
 // POST /admin/roles can have arbitrary names but won't trigger those
 // hardcoded code paths.
-const BUILTIN_ROLES = new Set(["ADMIN", "SA", "TAM", "STAKEHOLDER"]);
+const BUILTIN_ROLES = new Set(["ADMIN", "SA", "TAM", "STAKEHOLDER", "PENDING"]);
 
 // ---- Users ----------------------------------------------------------------
 
@@ -33,6 +35,8 @@ adminRouter.get("/users", async (_req, res) => {
       email: true,
       active: true,
       createdAt: true,
+      googleSub: true,
+      avatarUrl: true,
       role: { select: { roleName: true } },
       _count: { select: { projectsAsTAM: true, projectsAsSA: true } },
     },
@@ -45,6 +49,8 @@ adminRouter.get("/users", async (_req, res) => {
       active: u.active,
       role: u.role.roleName,
       createdAt: u.createdAt,
+      provider: u.googleSub ? "google" : "password",
+      avatarUrl: u.avatarUrl,
       projectsAsTAM: u._count.projectsAsTAM,
       projectsAsSA: u._count.projectsAsSA,
     })),
@@ -98,6 +104,8 @@ adminRouter.post(
       active: created.active,
       role: created.role.roleName,
       createdAt: created.createdAt,
+      provider: "password",
+      avatarUrl: null,
       projectsAsTAM: 0,
       projectsAsSA: 0,
     });
@@ -116,6 +124,13 @@ adminRouter.patch(
 
     if (req.user!.sub === id) {
       throw new HttpError(400, "self_demote", "Admins cannot change their own role");
+    }
+    if (role === "PENDING") {
+      throw new HttpError(
+        400,
+        "pending_assign_blocked",
+        "PENDING is provisioning-only. Use deactivate to revoke access while keeping the row.",
+      );
     }
     const target = await prisma.role.findUnique({ where: { roleName: role } });
     if (!target) {
@@ -361,6 +376,96 @@ adminRouter.delete(
     }
     await prisma.role.delete({ where: { id } });
     res.status(204).end();
+  },
+);
+
+// ---- Auth settings (OAuth policy singleton) -------------------------------
+
+// Hostname regex: lowercase labels separated by dots, TLD ≥ 2 letters.
+// Tight on purpose — we're an allowlist for *email domains*, not URLs.
+const DOMAIN_PATTERN = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
+
+// Google OAuth Client ID format: <digits>-<alnum>.apps.googleusercontent.com.
+// Loose enough to accept any valid Google-issued ID without false rejects.
+const GOOGLE_CLIENT_ID_PATTERN = /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/;
+
+adminRouter.get("/settings/auth", async (_req, res) => {
+  const row = await prisma.authConfig.findUniqueOrThrow({
+    where: { id: "default" },
+    include: { updatedBy: { select: { id: true, username: true } } },
+  });
+  res.json({
+    googleClientId: row.googleClientId,
+    googleAllowedDomains: row.googleAllowedDomains,
+    updatedAt: row.updatedAt,
+    updatedBy: row.updatedBy,
+  });
+});
+
+// All fields are optional in the body — admin can update Client ID alone,
+// the domain list alone, or both together. Send `null` (or empty string,
+// which transforms to null) to clear the Client ID.
+const updateAuthSettingsSchema = z.object({
+  googleClientId: z
+    .union([z.string(), z.null()])
+    .optional()
+    .transform((v) => {
+      if (v === undefined) return undefined; // not provided in body
+      if (v === null) return null;
+      const trimmed = v.trim();
+      return trimmed === "" ? null : trimmed;
+    })
+    .refine(
+      (v) => v === undefined || v === null || GOOGLE_CLIENT_ID_PATTERN.test(v),
+      {
+        message:
+          "Client ID must look like 123456789-abc.apps.googleusercontent.com",
+      },
+    ),
+  googleAllowedDomains: z
+    .array(
+      z
+        .string()
+        .min(1)
+        .max(253)
+        .transform((s) => s.trim().toLowerCase())
+        .refine((s) => DOMAIN_PATTERN.test(s), {
+          message: "Each entry must be a valid hostname (e.g. example.com)",
+        }),
+    )
+    .max(32, "At most 32 domains")
+    .transform((arr) => Array.from(new Set(arr)))
+    .optional(),
+});
+
+adminRouter.patch(
+  "/settings/auth",
+  validate("body", updateAuthSettingsSchema),
+  async (req, res) => {
+    const body = req.body as z.infer<typeof updateAuthSettingsSchema>;
+    // Only touch columns the client actually sent — `undefined` means "leave
+    // the existing value alone"; an explicit null on googleClientId clears it.
+    const data: Prisma.AuthConfigUncheckedUpdateInput = {
+      updatedById: req.user!.sub,
+    };
+    if (body.googleClientId !== undefined) data.googleClientId = body.googleClientId;
+    if (body.googleAllowedDomains !== undefined)
+      data.googleAllowedDomains = body.googleAllowedDomains;
+
+    const row = await prisma.authConfig.update({
+      where: { id: "default" },
+      data,
+      include: { updatedBy: { select: { id: true, username: true } } },
+    });
+    // Make the new value (and the cached OAuth2Client) take effect immediately
+    // instead of waiting for the in-process 30s cache TTL.
+    bustAuthConfigCache();
+    res.json({
+      googleClientId: row.googleClientId,
+      googleAllowedDomains: row.googleAllowedDomains,
+      updatedAt: row.updatedAt,
+      updatedBy: row.updatedBy,
+    });
   },
 );
 

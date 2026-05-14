@@ -216,6 +216,13 @@ echo "   docker compose ps              # check container status"
 echo "   docker compose logs -f backend # tail backend logs"
 echo "   bash setup.sh                  # re-run to update images"
 echo
+echo " To enable Google sign-in:"
+echo "   1. Create an OAuth 2.0 Client ID in Google Cloud Console"
+echo "      (Web application, add http://$SERVER_IP as Authorized JS origin)."
+echo "   2. Sign in as admin → Admin → Sign-in tab → paste the Client ID,"
+echo "      add at least one allowed email domain, click Save."
+echo "      No restart, no rebuild needed."
+echo
 echo " Backup the database before destructive operations:"
 echo "   docker run --rm -v $VOLUME_NAME:/data -v \$PWD:/backup alpine \\"
 echo "     tar czf /backup/pg-\$(date +%F).tgz -C / data"
