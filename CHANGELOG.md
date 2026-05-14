@@ -15,6 +15,128 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-05-15 — Admin > Sign-in: button + modal pattern, Client ID masked by default
+
+The always-visible Client ID input and inline form felt like a configuration screen even when nothing was happening. Switched to a **connected-service summary**: status pill (Connected / Half configured / Not connected), domain count, a `Connect` / `Manage` button that opens a modal, and a read-only Client ID row with `123…xyz.apps.googleusercontent.com` masking + Reveal/Copy actions. The modal holds the actual edit form (Client ID with show/hide toggle, domain chip list with inline add) plus a `Disconnect` button in the footer that clears both fields in one PATCH. Form state resets on each open so reopening after Save reflects the latest server state.
+
+The Client ID is still **not actually secret** — it ships in any Google sign-in button's HTML and is verifiable by anyone who inspects the network tab. Masking is purely a chrome decision: it stops the admin page from looking like a paste-bin and matches the user's expectation of how "connected identity provider" UIs typically present.
+
+- **`frontend/src/pages/Admin.tsx`** — Replaced the inline `SignInTab` form with a status card (icon, status chip, domain count, `Connect` / `Manage` action). Added a `ClientIdField` component for the read-only display with masking + Reveal + Copy. Added a `SignInModal` component holding the actual edit form with show/hide on the Client ID input, domain chips, Cancel / Save / Disconnect actions. Added a `maskClientId()` helper that keeps the first 3 + last 3 chars of the project prefix and the full `.apps.googleusercontent.com` suffix. The modal resets its draft state on each open via a `useEffect` keyed off `open` so reopening doesn't surface stale edits.
+- **`frontend/src/pages/Admin.tsx`** — Imported the existing `Modal` component (no new dep, no new abstraction).
+
+No backend changes — the same `PATCH /admin/settings/auth` endpoint handles both fields, including `googleClientId: null` to clear it on Disconnect. Frontend `npm run typecheck` clean.
+
+### Changed — 2026-05-14 — Google OAuth Client ID moved from env into DB-backed Admin > Sign-in
+
+The hybrid model (Client ID in env, allowed-domains in DB) still required hardcoding the Client ID into compose/`.env`/CI build-args before any admin could turn on Google sign-in — and the frontend's build-time `VITE_GOOGLE_OAUTH_CLIENT_ID` forced a full rebuild every time the admin wanted to switch projects. Replaced with a fully **in-app** configuration model: both Client ID and allowed-domains live in the `AuthConfig` singleton, edited from `Admin > Sign-in`. Frontend fetches the Client ID at runtime from a new public endpoint and wraps `<GoogleOAuthProvider>` locally on the Login page when configured.
+
+**Schema**
+
+- **`backend/prisma/schema.prisma`** — `AuthConfig` gains `googleClientId String?`. Nullable so the singleton is valid before the admin configures it.
+- **`backend/prisma/migrations/20260514130000_authconfig_google_client_id/migration.sql`** — single non-rewriting `ADD COLUMN`.
+
+**Backend**
+
+- **`backend/src/authConfig.ts`** — extended the in-process cache to include `googleClientId` and a **memoised `OAuth2Client` instance** keyed off it. Building a new `OAuth2Client` per request would re-derive the JWKS verifier cache; caching it means warm verification on every sign-in. Cache bust on PATCH propagates both the new ID and the new verifier together.
+- **`backend/src/routes/auth.ts`** — removed the module-level `OAuth2Client` (was created from `env.GOOGLE_OAUTH_CLIENT_ID` at boot — dead now). `POST /auth/google` reads `googleClient` + `googleClientId` + `googleAllowedDomains` from the cached `AuthConfig` instead. Added `GET /auth/google/config` (public, no auth) returning `{ clientId, enabled }` so the Login page can decide whether to render the Google button.
+- **`backend/src/routes/admin.ts`** — `GET/PATCH /admin/settings/auth` now read and write `googleClientId`. PATCH body schema accepts the field as `string | null | undefined`: `undefined` leaves it untouched, empty-string or `null` clears it, a non-empty string is validated against the Google Client ID format (`<digits>-<alnum>.apps.googleusercontent.com`). `googleAllowedDomains` is similarly optional in the body — admin can update either field independently. Each PATCH busts the in-process cache so changes take effect within the same request.
+- **`backend/src/env.ts`** — removed `GOOGLE_OAUTH_CLIENT_ID` entirely. No env var, no Zod preprocess workaround, nothing to misconfigure.
+
+**Frontend**
+
+- **`frontend/src/lib/queries.ts`** — `AuthSettings.googleClientId: string | null`. New `useGoogleAuthConfig()` hook (public, `auth: false`) backed by `GET /auth/google/config`. `useUpdateAuthSettings` accepts partial updates (`UpdateAuthSettingsInput { googleClientId?, googleAllowedDomains? }`) and invalidates the public-config query so the Login page picks up changes immediately if it's currently mounted.
+- **`frontend/src/main.tsx`** — removed `<GoogleOAuthProvider>` from the app root. It now lives inside the Login page, wrapped tightly around `<GoogleLogin>` and conditioned on `googleConfig.enabled`. No more empty-string client ID pollution at app boot.
+- **`frontend/src/pages/Login.tsx`** — uses `useGoogleAuthConfig()` to decide rendering: skeleton while loading, `<GoogleOAuthProvider clientId={…}><GoogleLogin /></GoogleOAuthProvider>` when enabled, "Ask an admin to set it up in Admin → Sign-in" hint when not. Removed the `import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID` read.
+- **`frontend/src/pages/Admin.tsx`** — Sign-in tab grew a Client ID input above the domain list, with `Clear` action, inline format validation matching the backend regex, and a unified Save/Cancel that ships both fields in one PATCH. "How to set up" disclosure rewritten — no env vars, no rebuild step. The empty-state banner now adapts based on whether Client ID, domains, or both are missing.
+- **`frontend/src/vite-env.d.ts`** — dropped the `VITE_GOOGLE_OAUTH_CLIENT_ID` declaration.
+
+**Stripped (no longer needed)**
+
+- **`docker-compose.yml`** (dev) — removed `GOOGLE_OAUTH_CLIENT_ID` and `VITE_GOOGLE_OAUTH_CLIENT_ID` from both service env blocks.
+- **`frontend/Dockerfile`** — removed the `ARG`/`ENV VITE_GOOGLE_OAUTH_CLIENT_ID` from the `build` stage.
+- **`.github/workflows/docker-publish.yml`** — removed the `build-args:` block. No more dependency on a GitHub repo variable.
+- **`setup.sh`** — removed the env line from the generated prod compose. Updated the post-install help text to point admins straight at `Admin → Sign-in`.
+- **`.env.example`**, **`backend/.env.example`**, **`frontend/.env.example`** — removed the OAuth lines.
+
+**Operational notes**
+
+- Existing dev DB rows for `AuthConfig` get `google_client_id = NULL` (column default). Admin must visit Sign-in tab once to populate.
+- The 30 s cache TTL still applies, but admin edits explicitly bust the cache, so the same admin session sees the new value instantly. Cross-replica propagation (if you ever run >1 backend) still bounded by TTL.
+- Self-serve onboarding: a fresh deploy now needs only `setup.sh` + admin password — no Google Cloud step required ahead of time. Admin configures OAuth from the UI when they're ready.
+
+### Fixed — 2026-05-14 — Backend wouldn't boot when GOOGLE_OAUTH_CLIENT_ID was unset
+
+When the compose-wired `GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}` expands without a host value, Docker passes the empty string `""` to the container, not unset. The previous Zod schema `z.string().min(1).optional()` rejects empty strings (`.min(1)` fires before `.optional()` short-circuits), so the backend exited at env validation and every API call from the frontend returned 500 (proxied to a dead backend) — including the admin password login.
+
+- **`backend/src/env.ts`** — Wrapped `GOOGLE_OAUTH_CLIENT_ID` in a `z.preprocess(v => v === "" ? undefined : v, …)` so empty-string compose input collapses to `undefined`, and `.optional()` accepts it cleanly. Same pattern should be applied to any future env var whose compose default is `${VAR:-}` and whose absence is meaningful at runtime.
+
+### Changed — 2026-05-14 — Docs + compose plumbing aligned with actual dev workflow + Google OAuth env wiring
+
+CLAUDE.md previously described the "Postgres-only-in-Docker, apps native" workflow and called the working-tree `docker-compose.yml` "prod-shaped, pulls GHCR images". Neither matches reality: the working-tree compose is a **dev** compose (gitignored) that builds local `dev` Dockerfile targets with hot-reload + bind mounts + named-volume `node_modules`; production gets its compose generated by [setup.sh](setup.sh) on the server with prebuilt GHCR images. Future Claude sessions kept tripping over this. Fixing the docs and wiring the Google OAuth env vars through both compose paths in the same pass so the feature actually works end-to-end.
+
+- **`CLAUDE.md`** — Rewrote the "Repository status" compose paragraph: replaced the "single compose file, prod-shaped" claim with the two-compose-file reality (dev = working-tree gitignored, prod = generated by setup.sh). Added a "Container-aware tooling" note explaining that host-side `npm install` doesn't propagate into the running container's named-volume `node_modules` — must also run `docker compose exec <svc> npm install`. Rewrote "Common commands" so the Docker-dev path is canonical (with `docker compose exec` recipes for prisma, typecheck, db:seed) and native-host dev is positioned as a fallback. Added a "Migration generation gotcha" section covering the `prisma migrate dev` non-TTY-shell failure and the two workarounds (`exec -it` for a TTY, or host-side `migrate diff` + `migrate deploy`). Removed misleading mention of demo seeded accounts beyond `admin@solvro.local` (the others are referenced in old CHANGELOG entries but no longer auto-seeded). Removed the dangling "see CONFIGURATION.md" reference (file doesn't exist; flagged in this entry).
+- **`docker-compose.yml`** (dev, gitignored) — Added `GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}` to the backend service and `VITE_GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}` to the frontend service. Both expand from the host shell environment or a sibling `.env` file. When unset, the backend boots fine (env is optional) and the frontend bundle ships without the Google button — both paths surface a "not configured" hint instead of crashing. Single source of truth (one var, two services) so dev configuration stays consistent.
+- **`frontend/Dockerfile`** — Added `ARG VITE_GOOGLE_OAUTH_CLIENT_ID=""` + `ENV` line in the `build` stage. Vite resolves `import.meta.env.VITE_*` at build time, so for the **published GHCR image** the Client ID must be present during `npm run build`, not at container run. Backend Dockerfile is unaffected (no Vite, no `VITE_*` access).
+- **`.github/workflows/docker-publish.yml`** — Added `build-args: VITE_GOOGLE_OAUTH_CLIENT_ID=${{ vars.VITE_GOOGLE_OAUTH_CLIENT_ID }}` to the build-push step. Reads from a **repository variable** (Settings → Secrets and variables → Actions → Variables), so admins can enable Google sign-in in prod by setting one variable and pushing a release — no code change. When unset, the variable expands to an empty string and the published frontend ships with the Google button disabled. Backend image silently ignores the build-arg (Vite-only concern).
+- **`setup.sh`** — Added `GOOGLE_OAUTH_CLIENT_ID: ${GOOGLE_OAUTH_CLIENT_ID:-}` to the generated prod compose's backend env block (reads from `~/solvro/.env`). Updated the final help-text block to walk the admin through enabling Google sign-in: create OAuth client in Google Cloud Console → append `GOOGLE_OAUTH_CLIENT_ID=...` to `~/solvro/.env` → also set the `VITE_GOOGLE_OAUTH_CLIENT_ID` repo variable and re-run setup to pull a rebuilt frontend image → sign in as admin and add allowed domains under `Admin > Sign-in`.
+- **Frontend container node_modules sync** — Because the dev compose stores `node_modules` in a named volume (`solvro_frontend_node_modules`), my earlier host-side `npm i @react-oauth/google` updated `frontend/package.json` but the container kept the stale lockfile-derived deps and Vite failed with `[plugin:vite:import-analysis] Failed to resolve import "@react-oauth/google"`. Fixed by running `docker compose exec frontend npm install`, then `docker compose restart frontend`. Same pattern applied to the backend container for `google-auth-library`. Documented in CLAUDE.md so future installs don't hit the same wall.
+
+No app code changed in this entry — only docs, compose, Dockerfile build-args, and the CI workflow. Backend `tsc --noEmit` and frontend `npm run typecheck` were already clean from the prior commit.
+
+### Added — 2026-05-14 — Google OAuth sign-in (primary auth) + admin-driven RBAC
+
+New end-to-end sign-in flow. Anyone with an email on an admin-allowlisted Google domain can sign in via Google; on first sign-in they're auto-provisioned into a new built-in **PENDING** role with no permissions, and the admin promotes them from `Admin > Users`. Password auth stays as an admin-only break-glass path (`admin@solvro.local` keeps its password; every other user is created with `passwordHash = NULL` and rejected from `/auth/login`).
+
+**Backend**
+
+- **`backend/prisma/schema.prisma`** — `User.passwordHash` is now nullable (Google users have no password); added `User.googleSub @unique` (dedup key from the Google ID token's `sub` claim) and `User.avatarUrl` (from the `picture` claim). New singleton model `AuthConfig { id String @id @default("default"), googleAllowedDomains String[], updatedAt, updatedBy User? }` — the admin-editable allowlist of email domains that may sign in via Google.
+- **`backend/prisma/migrations/20260514120000_add_google_oauth_and_pending_role/`** — generated via `prisma migrate diff` (interactive `migrate dev` blocks on the benign "new unique constraint on nullable column" warning in non-TTY shells). All `ALTER TABLE` operations are non-rewriting Postgres DDL; safe to apply via `prisma migrate deploy` against the running prod DB.
+- **`backend/prisma/seed.ts`** — added `PENDING: []` to the built-in role map (5 roles total). Also upserts the `AuthConfig` singleton with an empty `googleAllowedDomains` array on every seed, so a fresh deploy forces the admin to make an explicit policy decision before Google sign-in becomes usable. The seed never overwrites admin-edited values on re-runs (`update: {}`).
+- **`backend/src/env.ts`** — added optional `GOOGLE_OAUTH_CLIENT_ID`. Kept optional so existing dev environments continue to boot; when missing, `POST /auth/google` returns `503 oauth_not_configured` (same code as an empty domain allowlist). Allowed-domains list is *not* in env — it lives in `AuthConfig` so the in-app admin owns it without redeploys.
+- **`backend/src/authConfig.ts`** (new) — in-process cache for the `AuthConfig` singleton with a 30 s TTL. Reads happen on every Google sign-in; the row rarely changes. Cache is busted explicitly from `PATCH /admin/settings/auth` so admin edits propagate immediately.
+- **`backend/src/routes/auth.ts`** — added `POST /auth/google`: validates body `{ idToken }`, verifies via `google-auth-library` `OAuth2Client.verifyIdToken({ idToken, audience: GOOGLE_OAUTH_CLIENT_ID })`, gates on `email_verified === true`, then on the `hd` claim or email-suffix against `AuthConfig.googleAllowedDomains`. Finds user by `googleSub`, then by `email` (account-linking case: existing email-matched row with null `googleSub` gets updated). New users are created with `roleId = (PENDING role).id`, `passwordHash: null`, `googleSub`, `avatarUrl`, and a username derived from the email local-part — `createWithUniqueUsername` retries `-2`, `-3`, … on `P2002` so two domains sharing a local-part don't collide. Mints the same `{ sub, role, permissions }` JWT as `/auth/login` (downstream `requireAuth` / `requirePermission` / `projectVisibilityFilter` can't distinguish the two auth paths — that's the design goal). `/auth/login` got a short-circuit before `bcrypt.compare` that returns `401 google_only` if `user.passwordHash === null`. `/auth/change-password` gained the same null-safety guard.
+- **`backend/src/routes/admin.ts`** — `GET /admin/users` now selects `googleSub` + `avatarUrl` and maps to a derived `provider: "google" | "password"` field. `PATCH /admin/users/:id/role` rejects target `"PENDING"` with `400 pending_assign_blocked` — PENDING is provisioning-only; use `active: false` to revoke. Added `GET /admin/settings/auth` and `PATCH /admin/settings/auth` (both behind the existing `requireAdmin` router-level gate); the PATCH validates each domain against a hostname regex, deduplicates, caps at 32, sets `updatedById`, and busts the in-process `AuthConfig` cache so the new allowlist takes effect immediately. Added `"PENDING"` to the `BUILTIN_ROLES` set so it can't be deleted/renamed.
+- **`backend/package.json`** — added `google-auth-library ^10.x` (server-side ID token verification).
+
+**Frontend**
+
+- **`frontend/src/main.tsx`** — wrapped the app tree in `<GoogleOAuthProvider clientId={import.meta.env.VITE_GOOGLE_OAUTH_CLIENT_ID ?? ""}>` between `ThemeProvider` and `AuthProvider`. Provider sits above the router so any route can call `<GoogleLogin>` if needed later.
+- **`frontend/src/vite-env.d.ts`** — declared `ImportMetaEnv.VITE_GOOGLE_OAUTH_CLIENT_ID?: string`.
+- **`frontend/src/lib/auth.tsx`** — extended `AuthContext` with `loginWithGoogle(idToken)`; implementation mirrors `login()`, posts to `/auth/google`, stores the returned JWT in `localStorage["solvro.token"]` (no separate Google-vs-password storage — token shape is identical). Appended `PENDING` to the `BUILTIN_ROLES` tuple.
+- **`frontend/src/lib/queries.ts`** — extended `AdminUser` with `provider: "google" | "password"` and `avatarUrl: string | null`. Added `AuthSettings` interface, `adminQueryKeys.authSettings`, `useAuthSettings`, and `useUpdateAuthSettings` (mutation `setQueryData`s the fresh row directly — no need to invalidate, since the row is singleton).
+- **`frontend/src/pages/Login.tsx`** — restructured: Google button is the primary CTA (`<GoogleLogin theme="filled_blue" text="signin_with" />`). Password form moved behind a collapsible `<details>` labeled "Admin sign-in (password)". Removed the demo-accounts footer (misleading once Google is the canonical path). Tailored error messages by backend `code` (`domain_not_allowed`, `email_not_verified`, `oauth_not_configured`, `account_disabled`, `google_only`, `invalid_credentials`, `invalid_token`). When `VITE_GOOGLE_OAUTH_CLIENT_ID` is unset at build time, the page renders an amber "Google sign-in isn't set up" hint instead of the button, so the password form remains the only path in mis-configured dev environments.
+- **`frontend/src/pages/Admin.tsx`** — added a new **Sign-in** tab between Roles and Project Override. Editable chip list of allowed domains with inline add input (regex-validated client-side; backend revalidates), Save/Cancel pair, "Last updated by … on …" footer, and a collapsed "How to set up Google sign-in" disclosure that documents the Google Cloud Console step (since that part can't be done from inside the app). Users tab gained a **Provider** column (Google chip with mail icon vs Password chip with key icon), a **"Needs role"** amber pill next to the role dropdown for `PENDING` users, and a 4-tile KPI strip (`Users` / `Pending` / `Custom roles` / `Inactive`). PENDING is filtered out of every user-facing role dropdown (it's provisioning-only — never selectable as a target). Roles tab description updated to list PENDING as the fifth built-in.
+- **`frontend/package.json`** — added `@react-oauth/google ^0.13.x` (provider + `<GoogleLogin>` button — handles GSI script loading and returns the Google ID token via `credentialResponse.credential`).
+
+**Env / config**
+
+- **`.env.example`** (root), **`backend/.env.example`** — documented optional `GOOGLE_OAUTH_CLIENT_ID` and root-only `VITE_GOOGLE_OAUTH_CLIENT_ID` (same value as the backend var; shipped in the frontend bundle, not secret because Google verification is server-side).
+- **`frontend/.env.example`** (new) — created with `VITE_GOOGLE_OAUTH_CLIENT_ID` + the existing `VITE_API_PROXY_TARGET` override documented for reference.
+
+**Operational notes**
+
+- The seeded admin (`admin@solvro.local`) is intentionally **exempt** from the Google domain allowlist because they sign in via password, not Google. Don't "fix" this by adding `solvro.local` to the allowlist — Google won't issue a verified ID token for that domain anyway.
+- AuthConfig is cached in-process for 30 s. Admin edits via the Sign-in tab bust the cache immediately for the editing process, but with multiple backend replicas behind a load balancer, other replicas observe the change within 30 s. The UI surfaces this lag ("Changes take effect within ~30 seconds").
+- Username collision on Google auto-provision: handled via P2002-retry with `-2`/`-3`/… suffixes up to 20 attempts.
+- JWT remains provider-agnostic — no `provider` claim, no auth-event audit table. If per-session auditing becomes important, add a DB-side `AuthEvent` table rather than polluting the JWT.
+
+Backend `tsc --noEmit` clean. Frontend `npm run typecheck` clean.
+
+### Added — 2026-05-10 — Daily Review screen (TAM cross-project notes)
+
+New top-level page where TAMs log a note per active project in a single morning session. This is the **input** side of the core SA-to-customer loop documented in CLAUDE.md → Reports will later consume `CUSTOMER_FACING` notes for the export packet.
+
+- **`backend/prisma/schema.prisma`** — Added `NoteVisibility` enum (`INTERNAL` | `CUSTOMER_FACING`) and `ProjectNote` model. Note IDs are `Int @default(autoincrement())` to match every other model in this schema (the spec in CLAUDE.md showed `String @default(cuid())`, but the FK to `Project.id`/`User.id` requires `Int` — flagging as intentional deviation). Cascade-delete on project, plain FK on author. Indexes on `(project_id, created_at)` (chronological-per-project read) and `author_id`. Default visibility is `INTERNAL` so customer-facing is an explicit opt-in.
+- **`backend/prisma/migrations/20260510022142_add_project_notes/`** — Generated via `prisma migrate dev --name add_project_notes`. Creates the `NoteVisibility` enum and `project_notes` table.
+- **`backend/.env`** — Created from `.env.example` (`DATABASE_URL=postgresql://solvro:solvro_dev@localhost:5432/solvro?schema=public`) so `prisma migrate dev` can resolve the env var on host runs. Required first-time setup that wasn't committed.
+- **`backend/src/routes/projects.ts`** — Added `GET /projects/:id/notes` (visibility + limit query params) and `POST /projects/:id/notes`. Both gate visibility through the existing `projectVisibilityFilter` so notes inherit the project's role-scoped access. Write requires `project:write`; read uses the same auth as other project-nested reads.
+- **`frontend/src/lib/queries.ts`** — Added `NoteVisibility` type, `ProjectNote` interface, `queryKeys.projectNotes(id, visibility?)`, `useProjectNotes`, `useAddProjectNote`. The query key bucketizes by visibility filter; the `onSuccess` invalidator wipes every visibility bucket for the project (`["projects", id, "notes"]`) so all variants refetch.
+- **`frontend/src/pages/DailyReview.tsx`** — New page. Lists TAM's `ACTIVE` + `PLANNING` projects (visibility-filtered backend-side) as a vertical stack of cards, each with project metadata, a textarea (⌘↵ to save), an `Internal | Customer-facing` segmented toggle defaulting to Internal, and a "Recent notes" panel showing the last 5 notes per project with a tone-coded visibility dot. Optimistic-feel: empties the textarea on success and keeps the visibility default.
+- **`frontend/src/App.tsx`** — Registered `/daily-review` route. The `/tasks` route is left intact (CLAUDE.md says don't delete the page, only remove the sidebar link).
+- **`frontend/src/components/layout/Sidebar.tsx`** — Removed `Tasks` (TAMs think in projects, not tasks; the per-project task views cover this). Added `Daily Review` (icon `edit_note`) between `Customers` and `Work Logs`. New order: Overview → Projects → Customers → Daily Review → Work Logs → Reports → Admin. Settings remains in the user menu (TopBar), as before.
+
+Backend `tsc --noEmit` clean. Frontend `npm run typecheck` clean.
+
 ### Changed — 2026-05-10 — Align shared chrome (chips, sidebar, topbar, modal) with the static preview
 
 Follow-up pass to the page-level alignment: the *shared* components used everywhere now match the preview's visual language, so the polish lands once and propagates.

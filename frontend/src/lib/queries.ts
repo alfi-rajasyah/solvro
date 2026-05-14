@@ -164,6 +164,18 @@ export interface OverviewResponse {
   recentTasks: OverviewTask[];
 }
 
+export type NoteVisibility = "INTERNAL" | "CUSTOMER_FACING";
+
+export interface ProjectNote {
+  id: number;
+  projectId: number;
+  authorId: number;
+  body: string;
+  visibility: NoteVisibility;
+  createdAt: string;
+  author: { id: number; username: string };
+}
+
 export type RiskCategory =
   | "EXTERNAL"
   | "INTERNAL"
@@ -210,6 +222,8 @@ export const queryKeys = {
   projectLabels: (id: number) => ["projects", id, "labels"] as const,
   projectSections: (id: number) => ["projects", id, "sections"] as const,
   projectRisks: (id: number) => ["projects", id, "risks"] as const,
+  projectNotes: (id: number, visibility?: NoteVisibility) =>
+    ["projects", id, "notes", visibility ?? "all"] as const,
   projectDependencies: (id: number) => ["projects", id, "dependencies"] as const,
   customers: ["customers"] as const,
   customer: (id: number) => ["customers", id] as const,
@@ -735,6 +749,49 @@ export function useDeleteRisk(projectId: number) {
   });
 }
 
+export function useProjectNotes(
+  id: number | null,
+  opts: { visibility?: NoteVisibility; limit?: number } = {},
+) {
+  const { visibility, limit } = opts;
+  return useQuery({
+    queryKey: id
+      ? queryKeys.projectNotes(id, visibility)
+      : ["projects", "noop", "notes"],
+    queryFn: ({ signal }) => {
+      const params = new URLSearchParams();
+      if (visibility) params.set("visibility", visibility);
+      if (limit) params.set("limit", String(limit));
+      const qs = params.toString();
+      return apiRequest<ProjectNote[]>(
+        `/projects/${id}/notes${qs ? `?${qs}` : ""}`,
+        { signal },
+      );
+    },
+    enabled: id !== null,
+  });
+}
+
+export interface CreateNoteInput {
+  body: string;
+  visibility?: NoteVisibility;
+}
+
+export function useAddProjectNote(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateNoteInput) =>
+      apiRequest<ProjectNote>(`/projects/${projectId}/notes`, {
+        method: "POST",
+        body: input,
+      }),
+    onSuccess: () => {
+      // Invalidate every visibility-bucketed key for this project.
+      qc.invalidateQueries({ queryKey: ["projects", projectId, "notes"] });
+    },
+  });
+}
+
 export function useAddComment(taskId: number) {
   const qc = useQueryClient();
   return useMutation({
@@ -756,8 +813,24 @@ export interface AdminUser {
   active: boolean;
   role: Role;
   createdAt: string;
+  provider: "google" | "password";
+  avatarUrl: string | null;
   projectsAsTAM: number;
   projectsAsSA: number;
+}
+
+export interface AuthSettings {
+  googleClientId: string | null;
+  googleAllowedDomains: string[];
+  updatedAt: string;
+  updatedBy: { id: number; username: string } | null;
+}
+
+// Public — no auth required. Used by Login.tsx to decide whether to render
+// the Google button and what audience to initialise GoogleOAuthProvider with.
+export interface GoogleAuthRuntimeConfig {
+  clientId: string | null;
+  enabled: boolean;
 }
 
 export interface AdminProject {
@@ -780,6 +853,7 @@ export const adminQueryKeys = {
   users: ["admin", "users"] as const,
   projects: ["admin", "projects"] as const,
   roles: ["admin", "roles"] as const,
+  authSettings: ["admin", "settings", "auth"] as const,
 };
 
 export interface AdminRole {
@@ -942,6 +1016,49 @@ export function useAdminReassignProject() {
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: queryKeys.overview });
     },
+  });
+}
+
+export function useAuthSettings() {
+  return useQuery({
+    queryKey: adminQueryKeys.authSettings,
+    queryFn: ({ signal }) =>
+      apiRequest<AuthSettings>("/admin/settings/auth", { signal }),
+  });
+}
+
+export interface UpdateAuthSettingsInput {
+  googleClientId?: string | null;
+  googleAllowedDomains?: string[];
+}
+
+export function useUpdateAuthSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateAuthSettingsInput) =>
+      apiRequest<AuthSettings>("/admin/settings/auth", {
+        method: "PATCH",
+        body: input,
+      }),
+    onSuccess: (fresh) => {
+      qc.setQueryData(adminQueryKeys.authSettings, fresh);
+      // The public runtime config could have flipped enabled/disabled —
+      // refetch so the Login page picks up the new state on next mount.
+      qc.invalidateQueries({ queryKey: ["auth", "google", "config"] });
+    },
+  });
+}
+
+// Public runtime config for the Login page (no auth required).
+export function useGoogleAuthConfig() {
+  return useQuery({
+    queryKey: ["auth", "google", "config"] as const,
+    queryFn: ({ signal }) =>
+      apiRequest<GoogleAuthRuntimeConfig>("/auth/google/config", {
+        signal,
+        auth: false,
+      }),
+    staleTime: 60_000,
   });
 }
 

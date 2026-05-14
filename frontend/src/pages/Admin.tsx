@@ -1,4 +1,5 @@
-import { useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { Modal } from "@/components/Modal";
 import { Tabs } from "@/components/Tabs";
 import { ApiError } from "@/lib/api";
 import {
@@ -18,22 +19,28 @@ import {
   useAdminUpdateRole,
   useAdminUpdateRolePermissions,
   useAdminUsers,
+  useAuthSettings,
   useCreateService,
   useDeleteService,
   useServices,
+  useUpdateAuthSettings,
   useUpdateService,
 } from "@/lib/queries";
 import type { Role } from "@/lib/auth";
 import { useAuth } from "@/lib/auth";
 
-type Tab = "users" | "roles" | "projects" | "services";
+type Tab = "users" | "roles" | "signin" | "projects" | "services";
 
 const TAB_ITEMS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: "users", label: "Users" },
   { key: "roles", label: "Roles" },
+  { key: "signin", label: "Sign-in" },
   { key: "projects", label: "Project Override" },
   { key: "services", label: "Service Catalogue" },
 ];
+
+// Domain regex matches the backend validator (PATCH /admin/settings/auth).
+const DOMAIN_PATTERN = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
 
 export function Admin() {
   const [tab, setTab] = useState<Tab>("users");
@@ -55,6 +62,7 @@ export function Admin() {
       <div className="flex-1 overflow-auto p-4 md:p-6">
         {tab === "users" && <UsersTab />}
         {tab === "roles" && <RolesTab />}
+        {tab === "signin" && <SignInTab />}
         {tab === "projects" && <ProjectsTab />}
         {tab === "services" && <ServicesTab />}
       </div>
@@ -82,10 +90,20 @@ function UsersTab() {
   const [newPassword, setNewPassword] = useState("");
   const [newRole, setNewRole] = useState<Role>("TAM");
 
-  const roleOptions = useMemo<Role[]>(
-    () => (roles ?? []).map((r) => r.roleName),
+  // PENDING is provisioning-only — never offer it as a target in any
+  // user-facing dropdown (assignment goes one-way: PENDING → real role).
+  const assignableRoles = useMemo<Role[]>(
+    () => (roles ?? []).map((r) => r.roleName).filter((r) => r !== "PENDING"),
     [roles],
   );
+  // For an existing user, the dropdown must still include their current
+  // role (even if it's PENDING) so the select renders without a phantom
+  // value mismatch — but it remains the only PENDING option available.
+  function roleOptionsFor(currentRole: Role): Role[] {
+    return currentRole === "PENDING"
+      ? ["PENDING", ...assignableRoles]
+      : assignableRoles;
+  }
 
   if (isLoading) return <p className="text-on-surface-variant">Loading users…</p>;
   if (isError || !users) return <p className="text-error">Failed to load users.</p>;
@@ -157,17 +175,19 @@ function UsersTab() {
 
   const activeCount = users.filter((u) => u.active).length;
   const adminCount = users.filter((u) => u.role === "ADMIN").length;
+  const pendingCount = users.filter((u) => u.role === "PENDING").length;
   const customRoleCount = (roles ?? []).filter(
-    (r) => !["ADMIN", "TAM", "SA", "STAKEHOLDER"].includes(r.roleName),
+    (r) => !["ADMIN", "TAM", "SA", "STAKEHOLDER", "PENDING"].includes(r.roleName),
   ).length;
 
   return (
     <div className="space-y-4">
       {/* KPI strip */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <AdminKpi label="Users" value={users.length} hint={`${activeCount} active · ${adminCount} admins`} icon="group" tone="primary" />
+        <AdminKpi label="Pending" value={pendingCount} hint="Needs role assignment" icon="hourglass_top" tone="amber" />
         <AdminKpi label="Custom roles" value={customRoleCount} hint={`${(roles ?? []).length} total roles`} icon="shield_person" tone="emerald" />
-        <AdminKpi label="Inactive accounts" value={users.length - activeCount} hint="Cannot sign in" icon="block" tone="amber" />
+        <AdminKpi label="Inactive" value={users.length - activeCount} hint="Cannot sign in" icon="block" tone="neutral" />
       </div>
       {error && (
         <div className="rounded border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
@@ -247,7 +267,7 @@ function UsersTab() {
             onChange={(e) => setNewRole(e.target.value as Role)}
             className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-none"
           >
-            {roleOptions.map((r) => (
+            {assignableRoles.map((r) => (
               <option key={r} value={r}>
                 {r}
               </option>
@@ -274,6 +294,7 @@ function UsersTab() {
             <tr>
               <th className="px-3 py-2">User</th>
               <th className="px-3 py-2">Email</th>
+              <th className="px-3 py-2">Provider</th>
               <th className="px-3 py-2">Role</th>
               <th className="px-3 py-2 text-right">Projects (TAM/SA)</th>
               <th className="px-3 py-2">Status</th>
@@ -296,19 +317,32 @@ function UsersTab() {
                     {u.email}
                   </td>
                   <td className="px-3 py-2">
-                    <select
-                      value={u.role}
-                      disabled={isSelf}
-                      onChange={(e) => handleRoleChange(u, e.target.value as Role)}
-                      className="rounded border border-outline-variant bg-surface px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
-                      title={isSelf ? "You cannot change your own role" : undefined}
-                    >
-                      {roleOptions.map((r) => (
-                        <option key={r} value={r}>
-                          {r}
-                        </option>
-                      ))}
-                    </select>
+                    <ProviderChip provider={u.provider} />
+                  </td>
+                  <td className="px-3 py-2">
+                    <div className="flex items-center gap-2">
+                      <select
+                        value={u.role}
+                        disabled={isSelf}
+                        onChange={(e) => handleRoleChange(u, e.target.value as Role)}
+                        className="rounded border border-outline-variant bg-surface px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                        title={isSelf ? "You cannot change your own role" : undefined}
+                      >
+                        {roleOptionsFor(u.role).map((r) => (
+                          <option key={r} value={r} disabled={r === "PENDING"}>
+                            {r}
+                          </option>
+                        ))}
+                      </select>
+                      {u.role === "PENDING" && (
+                        <span
+                          title="Auto-provisioned via Google. Pick a role above to grant access."
+                          className="rounded-full bg-chip-amber-bg px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-chip-amber-text"
+                        >
+                          Needs role
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-3 py-2 text-right font-mono text-[13px] text-on-surface-variant">
                     {u.projectsAsTAM} / {u.projectsAsSA}
@@ -365,6 +399,23 @@ function UsersTab() {
         </table>
       </div>
     </div>
+  );
+}
+
+function ProviderChip({ provider }: { provider: "google" | "password" }) {
+  if (provider === "google") {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-display text-[11px] font-semibold text-primary dark:bg-primary/20">
+        <span className="material-symbols-outlined text-[12px]">mail</span>
+        Google
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full bg-surface-container-high px-2 py-0.5 font-display text-[11px] font-semibold text-on-surface-variant">
+      <span className="material-symbols-outlined text-[12px]">key</span>
+      Password
+    </span>
   );
 }
 
@@ -480,11 +531,13 @@ function RolesTab() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-on-surface-variant">
-        Built-in roles (ADMIN, SA, TAM, STAKEHOLDER) are referenced by name in
-        backend code and cannot be deleted or renamed. Custom roles you create
-        here can be assigned to users but won't trigger built-in code paths
-        (e.g. project visibility filters) — grant access by assigning users
-        directly as TAM/SA on specific projects.
+        Built-in roles (ADMIN, SA, TAM, STAKEHOLDER, PENDING) are referenced by
+        name in backend code and cannot be deleted or renamed. PENDING is the
+        auto-provisioning role for first-time Google sign-ins — assign a real
+        role from the Users tab to grant access. Custom roles you create here
+        can be assigned to users but won't trigger built-in code paths (e.g.
+        project visibility filters) — grant access by assigning users directly
+        as TAM/SA on specific projects.
       </p>
 
       {error && (
@@ -640,6 +693,435 @@ function RolesTab() {
         </table>
       </div>
     </div>
+  );
+}
+
+// ---- Sign-in (OAuth policy) tab -------------------------------------------
+
+const GOOGLE_CLIENT_ID_PATTERN =
+  /^[0-9]+-[a-z0-9]+\.apps\.googleusercontent\.com$/;
+
+function maskClientId(id: string): string {
+  // Show "123…xyz.apps.googleusercontent.com" — enough to recognise, not enough
+  // to dictate. The Client ID is technically public (it ships in the bundle),
+  // but treating it as private in admin chrome keeps the UI feeling intentional.
+  const at = id.indexOf(".apps.googleusercontent.com");
+  if (at <= 0) return id;
+  const prefix = id.slice(0, at);
+  if (prefix.length <= 7) return id;
+  return `${prefix.slice(0, 3)}…${prefix.slice(-3)}${id.slice(at)}`;
+}
+
+function SignInTab() {
+  const { data, isLoading, isError } = useAuthSettings();
+  const [modalOpen, setModalOpen] = useState(false);
+
+  if (isLoading) return <p className="text-on-surface-variant">Loading sign-in policy…</p>;
+  if (isError || !data) return <p className="text-error">Failed to load sign-in policy.</p>;
+
+  const connected =
+    data.googleClientId !== null && data.googleAllowedDomains.length > 0;
+  const halfConfigured =
+    (data.googleClientId !== null) !== (data.googleAllowedDomains.length > 0);
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-on-surface-variant">
+        Connect Solvro to your company's Google Workspace so employees can sign
+        in with their work Google account. The first sign-in auto-creates a{" "}
+        <span className="font-mono">PENDING</span> account that you assign a
+        role to from the Users tab.
+      </p>
+
+      {/* Connection card */}
+      <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div
+              className={[
+                "grid h-10 w-10 shrink-0 place-items-center rounded-full",
+                connected
+                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  : "bg-surface-container-high text-on-surface-variant",
+              ].join(" ")}
+            >
+              <span className="material-symbols-outlined text-[20px]">
+                {connected ? "verified_user" : "lock_open"}
+              </span>
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-display text-sm font-semibold text-on-surface">
+                  Google identity provider
+                </span>
+                <span
+                  className={[
+                    "rounded-full px-2 py-0.5 font-display text-[11px] font-semibold uppercase tracking-wider",
+                    connected
+                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      : halfConfigured
+                        ? "bg-chip-amber-bg text-chip-amber-text"
+                        : "bg-surface-container-high text-on-surface-variant",
+                  ].join(" ")}
+                >
+                  {connected
+                    ? "Connected"
+                    : halfConfigured
+                      ? "Half configured"
+                      : "Not connected"}
+                </span>
+              </div>
+              <p className="mt-0.5 text-xs text-on-surface-variant">
+                {connected
+                  ? `${data.googleAllowedDomains.length} domain${data.googleAllowedDomains.length === 1 ? "" : "s"} allowed`
+                  : "Set a Client ID and at least one allowed email domain to enable Google sign-in."}
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => setModalOpen(true)}
+            className="rounded bg-primary px-4 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
+          >
+            {connected ? "Manage" : "Connect"}
+          </button>
+        </div>
+
+        {connected && (
+          <div className="mt-4 grid gap-3 border-t border-outline-variant pt-4 sm:grid-cols-2">
+            <ClientIdField id={data.googleClientId!} />
+            <div>
+              <div className="mb-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                Allowed domains
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {data.googleAllowedDomains.map((d) => (
+                  <span
+                    key={d}
+                    className="rounded-full bg-primary/10 px-2.5 py-0.5 font-mono text-[12px] text-primary dark:bg-primary/20"
+                  >
+                    {d}
+                  </span>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        <div className="mt-4 border-t border-outline-variant pt-3 text-[11px] text-on-surface-variant">
+          {data.updatedBy ? (
+            <>
+              Last updated by{" "}
+              <span className="font-semibold">{data.updatedBy.username}</span>{" "}
+              on{" "}
+              <span className="font-mono">
+                {new Date(data.updatedAt).toLocaleString()}
+              </span>
+            </>
+          ) : (
+            <>Not yet edited since the database was seeded.</>
+          )}
+        </div>
+      </div>
+
+      <SignInModal
+        open={modalOpen}
+        onClose={() => setModalOpen(false)}
+        initialClientId={data.googleClientId ?? ""}
+        initialDomains={data.googleAllowedDomains}
+      />
+    </div>
+  );
+}
+
+// Read-only display for the saved Client ID — masked by default, click-to-reveal.
+// Reveal is just a UX nicety; the ID isn't actually secret.
+function ClientIdField({ id }: { id: string }) {
+  const [revealed, setRevealed] = useState(false);
+  return (
+    <div>
+      <div className="mb-1 flex items-center gap-2">
+        <span className="font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          Client ID
+        </span>
+        <button
+          type="button"
+          onClick={() => setRevealed((v) => !v)}
+          className="font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-on-surface"
+        >
+          {revealed ? "Hide" : "Reveal"}
+        </button>
+        <button
+          type="button"
+          onClick={() => void navigator.clipboard.writeText(id)}
+          title="Copy to clipboard"
+          className="text-on-surface-variant hover:text-on-surface"
+        >
+          <span className="material-symbols-outlined text-[14px]">
+            content_copy
+          </span>
+        </button>
+      </div>
+      <div className="break-all rounded bg-surface px-2 py-1.5 font-mono text-[12px] text-on-surface">
+        {revealed ? id : maskClientId(id)}
+      </div>
+    </div>
+  );
+}
+
+function SignInModal({
+  open,
+  onClose,
+  initialClientId,
+  initialDomains,
+}: {
+  open: boolean;
+  onClose: () => void;
+  initialClientId: string;
+  initialDomains: string[];
+}) {
+  const update = useUpdateAuthSettings();
+  const [clientId, setClientId] = useState(initialClientId);
+  const [domains, setDomains] = useState<string[]>(initialDomains);
+  const [newDomain, setNewDomain] = useState("");
+  const [showClientId, setShowClientId] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Reset draft whenever the modal opens, so reopening after Save shows the
+  // current server state, not stale local edits.
+  useEffect(() => {
+    if (open) {
+      setClientId(initialClientId);
+      setDomains(initialDomains);
+      setNewDomain("");
+      setShowClientId(false);
+      setError(null);
+    }
+  }, [open, initialClientId, initialDomains]);
+
+  const dirty =
+    clientId !== initialClientId ||
+    domains.length !== initialDomains.length ||
+    domains.some((d, i) => d !== initialDomains[i]);
+
+  function addDomain() {
+    setError(null);
+    const d = newDomain.trim().toLowerCase();
+    if (!d) return;
+    if (!DOMAIN_PATTERN.test(d)) {
+      setError("Enter a valid hostname (e.g. example.com).");
+      return;
+    }
+    if (domains.includes(d)) {
+      setError(`"${d}" is already in the list.`);
+      return;
+    }
+    setDomains([...domains, d]);
+    setNewDomain("");
+  }
+
+  function removeDomain(d: string) {
+    setError(null);
+    setDomains(domains.filter((x) => x !== d));
+  }
+
+  async function save() {
+    setError(null);
+    const trimmed = clientId.trim();
+    if (trimmed !== "" && !GOOGLE_CLIENT_ID_PATTERN.test(trimmed)) {
+      setError(
+        "Client ID must look like 123456789-abc.apps.googleusercontent.com.",
+      );
+      return;
+    }
+    try {
+      await update.mutateAsync({
+        googleClientId: trimmed === "" ? null : trimmed,
+        googleAllowedDomains: domains,
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not save policy.");
+    }
+  }
+
+  async function disconnect() {
+    setError(null);
+    if (
+      !confirm(
+        "Disconnect Google sign-in? Users with Google-only accounts won't be able to sign in until you reconnect.",
+      )
+    ) {
+      return;
+    }
+    try {
+      await update.mutateAsync({
+        googleClientId: null,
+        googleAllowedDomains: [],
+      });
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not disconnect.");
+    }
+  }
+
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Configure Google sign-in"
+      widthClass="max-w-xl"
+      footer={
+        <>
+          {(initialClientId || initialDomains.length > 0) && (
+            <button
+              type="button"
+              onClick={disconnect}
+              disabled={update.isPending}
+              className="mr-auto rounded px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-error hover:bg-error-container disabled:opacity-50"
+            >
+              Disconnect
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={onClose}
+            disabled={update.isPending}
+            className="rounded px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+          >
+            Cancel
+          </button>
+          <button
+            type="button"
+            onClick={save}
+            disabled={!dirty || update.isPending}
+            className="rounded bg-primary px-4 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
+          >
+            {update.isPending ? "Saving…" : "Save"}
+          </button>
+        </>
+      }
+    >
+      <div className="space-y-5">
+        <details className="rounded border border-outline-variant bg-surface-container text-sm">
+          <summary className="cursor-pointer px-3 py-2 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+            How to get a Client ID
+          </summary>
+          <ol className="list-decimal space-y-1 border-t border-outline-variant px-6 py-3 text-on-surface-variant">
+            <li>
+              Google Cloud Console → APIs & Services → Credentials → Create
+              credentials → <strong>OAuth 2.0 Client ID</strong> (Web application).
+            </li>
+            <li>
+              Add your app origins under{" "}
+              <strong>Authorized JavaScript origins</strong> (e.g.{" "}
+              <span className="font-mono">http://localhost:5173</span> for dev,
+              plus your production URL — no trailing slash, no path).
+            </li>
+            <li>
+              Copy the Client ID (ends in{" "}
+              <span className="font-mono">.apps.googleusercontent.com</span>)
+              and paste it below.
+            </li>
+          </ol>
+        </details>
+
+        {error && (
+          <div className="rounded border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
+            {error}
+          </div>
+        )}
+
+        <div>
+          <label className="block">
+            <span className="mb-1 flex items-center justify-between gap-2">
+              <span className="font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                Google OAuth Client ID
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowClientId((v) => !v)}
+                className="font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-on-surface"
+              >
+                {showClientId ? "Hide" : "Show"}
+              </button>
+            </span>
+            <input
+              type={showClientId ? "text" : "password"}
+              value={clientId}
+              onChange={(e) => {
+                setError(null);
+                setClientId(e.target.value);
+              }}
+              placeholder="123456789-abc.apps.googleusercontent.com"
+              spellCheck={false}
+              autoComplete="off"
+              className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-none"
+            />
+          </label>
+          <p className="mt-1 text-[11px] text-on-surface-variant">
+            The Client ID is a public identifier (it ships in any Google
+            sign-in button). The Client <em>Secret</em> stays in Google Cloud
+            and is never used by Solvro — we verify ID tokens server-side
+            against this audience.
+          </p>
+        </div>
+
+        <div>
+          <div className="mb-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+            Allowed email domains
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {domains.length === 0 && (
+              <span className="text-xs text-on-surface-variant">
+                No domains yet.
+              </span>
+            )}
+            {domains.map((d) => (
+              <span
+                key={d}
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 font-mono text-[12px] text-primary dark:bg-primary/20"
+              >
+                {d}
+                <button
+                  type="button"
+                  onClick={() => removeDomain(d)}
+                  aria-label={`Remove ${d}`}
+                  className="rounded-full p-0.5 text-primary/70 hover:bg-primary/20 hover:text-primary"
+                >
+                  <span className="material-symbols-outlined text-[14px]">
+                    close
+                  </span>
+                </button>
+              </span>
+            ))}
+          </div>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              addDomain();
+            }}
+            className="mt-3 flex items-end gap-2"
+          >
+            <input
+              type="text"
+              value={newDomain}
+              onChange={(e) => setNewDomain(e.target.value)}
+              placeholder="example.com"
+              maxLength={253}
+              className="flex-1 rounded border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-none"
+            />
+            <button
+              type="submit"
+              disabled={!newDomain.trim()}
+              className="rounded bg-surface-container-high px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface hover:bg-surface-container-highest disabled:opacity-50"
+            >
+              Add
+            </button>
+          </form>
+        </div>
+      </div>
+    </Modal>
   );
 }
 

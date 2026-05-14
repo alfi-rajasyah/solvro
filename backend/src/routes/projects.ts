@@ -1,6 +1,14 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Prisma, Priority, ProjectStatus, RiskCategory, RiskStatus, TaskStatus } from "@prisma/client";
+import {
+  NoteVisibility,
+  Prisma,
+  Priority,
+  ProjectStatus,
+  RiskCategory,
+  RiskStatus,
+  TaskStatus,
+} from "@prisma/client";
 import { prisma } from "../prisma.js";
 import {
   hasPermission,
@@ -396,6 +404,73 @@ projectsRouter.post(
       },
     });
     res.status(201).json(risk);
+  },
+);
+
+// Project-scoped Daily Review notes.
+// INTERNAL is the default visibility; CUSTOMER_FACING is opt-in per note
+// and is the only visibility the Reports export packet ever surfaces.
+const noteListQuerySchema = z.object({
+  visibility: z.nativeEnum(NoteVisibility).optional(),
+  limit: z.coerce.number().int().min(1).max(100).optional(),
+});
+
+const createNoteSchema = z.object({
+  body: z.string().min(1).max(4000),
+  visibility: z.nativeEnum(NoteVisibility).optional(),
+});
+
+projectsRouter.get(
+  "/:id/notes",
+  validate("params", idParamSchema),
+  validate("query", noteListQuerySchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const { visibility, limit } = req.query as unknown as z.infer<
+      typeof noteListQuerySchema
+    >;
+    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
+    const project = await prisma.project.findFirst({
+      where: { id, ...filter },
+      select: { id: true },
+    });
+    if (!project) throw new HttpError(404, "not_found", "Project not found");
+
+    const notes = await prisma.projectNote.findMany({
+      where: { projectId: id, ...(visibility && { visibility }) },
+      orderBy: { createdAt: "desc" },
+      take: limit ?? 50,
+      include: { author: { select: { id: true, username: true } } },
+    });
+    res.json(notes);
+  },
+);
+
+projectsRouter.post(
+  "/:id/notes",
+  requirePermission("project:write"),
+  validate("params", idParamSchema),
+  validate("body", createNoteSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
+    const project = await prisma.project.findFirst({
+      where: { id, ...filter },
+      select: { id: true },
+    });
+    if (!project) throw new HttpError(404, "not_found", "Project not found");
+
+    const body = req.body as z.infer<typeof createNoteSchema>;
+    const note = await prisma.projectNote.create({
+      data: {
+        projectId: id,
+        authorId: req.user!.sub,
+        body: body.body,
+        visibility: body.visibility ?? "INTERNAL",
+      },
+      include: { author: { select: { id: true, username: true } } },
+    });
+    res.status(201).json(note);
   },
 );
 

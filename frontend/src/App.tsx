@@ -5,6 +5,7 @@ import { Shell } from "@/components/layout/Shell";
 import { Admin } from "@/pages/Admin";
 import { CustomerDetail } from "@/pages/CustomerDetail";
 import { Customers } from "@/pages/Customers";
+import { DailyReview } from "@/pages/DailyReview";
 import { Login } from "@/pages/Login";
 import { Overview } from "@/pages/Overview";
 import { ProjectDetail } from "@/pages/ProjectDetail";
@@ -48,6 +49,7 @@ export function App() {
         </Route>
         <Route path="customers" element={<Customers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
+        <Route path="daily-review" element={<DailyReview />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="work-logs" element={<WorkLogs />} />
         <Route path="reports" element={<Reports />} />
