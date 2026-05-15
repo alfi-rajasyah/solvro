@@ -203,12 +203,7 @@ model Task {
   subtasks          Task[]     @relation("TaskSubtasks")
   labels            Label[]
   comments          Comment[]
-  // Network Diagram fields (added with TaskDependency).
-  // diagramX/Y are nullable so dagre auto-layout runs only for tasks
-  // the user hasn't manually positioned yet.
-  isMilestone       Boolean    @default(false) @map("is_milestone")
-  diagramX          Float?     @map("diagram_x")
-  diagramY          Float?     @map("diagram_y")
+  // Dependency edges (Gantt connector arrows).
   predecessors      TaskDependency[] @relation("DependencySuccessor")
   successors        TaskDependency[] @relation("DependencyPredecessor")
 

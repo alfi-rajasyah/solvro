@@ -22,10 +22,6 @@ const updateTaskSchema = z.object({
   parentTaskId: z.number().int().positive().nullable().optional(),
   sectionId: z.number().int().positive().nullable().optional(),
   labelIds: z.array(z.number().int().positive()).optional(),
-  // Network Diagram fields
-  isMilestone: z.boolean().optional(),
-  diagramX: z.number().nullable().optional(),
-  diagramY: z.number().nullable().optional(),
 });
 
 const tasksListQuerySchema = z.object({
@@ -137,9 +133,6 @@ tasksRouter.patch(
     if (body.labelIds !== undefined) {
       data.labels = { set: body.labelIds.map((lid) => ({ id: lid })) };
     }
-    if (body.isMilestone !== undefined) data.isMilestone = body.isMilestone;
-    if (body.diagramX !== undefined) data.diagramX = body.diagramX;
-    if (body.diagramY !== undefined) data.diagramY = body.diagramY;
 
     const updated = await prisma.task.update({
       where: { id },

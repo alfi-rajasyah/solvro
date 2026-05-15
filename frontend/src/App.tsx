@@ -14,7 +14,6 @@ import { Reports } from "@/pages/Reports";
 import { Settings } from "@/pages/Settings";
 import { Tasks } from "@/pages/Tasks";
 import { WorkLogs } from "@/pages/WorkLogs";
-import { ProjectDiagram } from "@/pages/views/ProjectDiagram";
 import { ProjectGantt } from "@/pages/views/ProjectGantt";
 import { ProjectKanban } from "@/pages/views/ProjectKanban";
 import { ProjectList } from "@/pages/views/ProjectList";
@@ -44,7 +43,6 @@ export function App() {
           <Route path="kanban" element={<ProjectKanban />} />
           <Route path="gantt" element={<ProjectGantt />} />
           <Route path="timeline" element={<ProjectTimeline />} />
-          <Route path="diagram" element={<ProjectDiagram />} />
           <Route path="risks" element={<ProjectRisks />} />
         </Route>
         <Route path="customers" element={<Customers />} />

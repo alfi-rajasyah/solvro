@@ -27,11 +27,18 @@ interface GanttBarProps {
   onCommit: (taskId: number, startDate: Date, dueDate: Date) => void;
   onClick: (taskId: number) => void;
   /**
-   * Fired when the user pointer-downs on the bar's right-edge connector
-   * dot. The frame captures the gesture from there and hit-tests the
-   * release target on pointer-up.
+   * Fired when the user pointer-downs on one of the bar's connector dots.
+   * `side` is which edge the drag started from: "right" = this task is the
+   * predecessor (drop target becomes the successor); "left" = this task is
+   * the successor (drop target becomes the predecessor). The frame captures
+   * the gesture from there and hit-tests the release target on pointer-up.
    */
-  onConnectStart?: (sourceTaskId: number, clientX: number, clientY: number) => void;
+  onConnectStart?: (
+    sourceTaskId: number,
+    side: "right" | "left",
+    clientX: number,
+    clientY: number,
+  ) => void;
 }
 
 const STATUS_FILL: Record<TaskStatus, string> = {
@@ -282,21 +289,38 @@ export function GanttBar({
       )}
     </div>
     {canEdit && onConnectStart && (
-      <div
-        title="Drag to a task to create a dependency"
-        className="absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-70 shadow transition-opacity hover:opacity-100"
-        style={{
-          left: left + width,
-          top: top + barHeight / 2,
-          transform: "translate(-50%, -50%)",
-        }}
-        onPointerDown={(e) => {
-          // Don't let the bar's onPointerDown fire — we own this gesture.
-          e.stopPropagation();
-          e.preventDefault();
-          onConnectStart(row.taskId!, e.clientX, e.clientY);
-        }}
-      />
+      <>
+        <div
+          title="Drag from another task to make this task depend on it"
+          className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+          style={{
+            left,
+            top: top + barHeight / 2,
+            transform: "translate(-50%, -50%)",
+          }}
+          onPointerDown={(e) => {
+            // Don't let the bar's onPointerDown fire — we own this gesture.
+            e.stopPropagation();
+            e.preventDefault();
+            onConnectStart(row.taskId!, "left", e.clientX, e.clientY);
+          }}
+        />
+        <div
+          title="Drag to a task to create a dependency"
+          className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+          style={{
+            left: left + width,
+            top: top + barHeight / 2,
+            transform: "translate(-50%, -50%)",
+          }}
+          onPointerDown={(e) => {
+            // Don't let the bar's onPointerDown fire — we own this gesture.
+            e.stopPropagation();
+            e.preventDefault();
+            onConnectStart(row.taskId!, "right", e.clientX, e.clientY);
+          }}
+        />
+      </>
     )}
     <div
       className="pointer-events-none absolute flex items-center whitespace-nowrap text-[12px] font-medium text-on-surface"

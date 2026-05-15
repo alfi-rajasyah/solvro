@@ -1,5 +1,5 @@
-import { useEffect, useState, type FormEvent } from "react";
-import { Modal } from "./Modal";
+import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { Drawer } from "./Drawer";
 import { LabelPicker } from "./LabelPicker";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -74,8 +74,12 @@ export function TaskFormModal(props: TaskFormModalProps) {
   const [parentTaskId, setParentTaskId] = useState<number | "">("");
   const [sectionId, setSectionId] = useState<number | "">("");
   const [labelIds, setLabelIds] = useState<number[]>([]);
-  const [isMilestone, setIsMilestone] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Drive the drawer's slide-out: every close path sets `closing`, and
+  // the parent's real `onClose` (which unmounts us) only runs once the
+  // exit transition has finished.
+  const [closing, setClosing] = useState(false);
+  const requestClose = useCallback(() => setClosing(true), []);
 
   useEffect(() => {
     if (!open) return;
@@ -92,7 +96,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
       setParentTaskId(t.parentTaskId ?? "");
       setSectionId(t.sectionId ?? "");
       setLabelIds(t.labels.map((l) => l.id));
-      setIsMilestone(t.isMilestone);
     } else {
       const cp = props as CreateProps;
       setTitle("");
@@ -105,7 +108,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
       setParentTaskId(cp.initialParentTaskId ?? "");
       setSectionId(cp.initialSectionId ?? "");
       setLabelIds([]);
-      setIsMilestone(false);
     }
   }, [open, isEdit, props]);
 
@@ -150,7 +152,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
             parentTaskId: parent,
             sectionId: sec,
             labelIds,
-            isMilestone,
           },
         });
       } else {
@@ -165,10 +166,9 @@ export function TaskFormModal(props: TaskFormModalProps) {
           parentTaskId: parent,
           sectionId: sec,
           labelIds: labelIds.length > 0 ? labelIds : undefined,
-          isMilestone,
         });
       }
-      onClose();
+      requestClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Save failed.");
     }
@@ -189,7 +189,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
     setError(null);
     try {
       await remove.mutateAsync(editingTask.id);
-      onClose();
+      requestClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Delete failed.");
     }
@@ -204,7 +204,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
       <span className="text-xs text-on-surface-variant">{taskIdLabel}</span>
       <button
         type="button"
-        onClick={onClose}
+        onClick={requestClose}
         className="rounded p-1 text-on-surface-variant hover:bg-surface-container"
         aria-label="Close"
       >
@@ -214,9 +214,11 @@ export function TaskFormModal(props: TaskFormModalProps) {
   );
 
   return (
-    <Modal
+    <Drawer
       open={open}
-      onClose={onClose}
+      closing={closing}
+      onClose={requestClose}
+      onClosed={onClose}
       title={isEdit ? "Edit task" : "New task"}
       customHeader={customHeader}
       widthClass="max-w-lg"
@@ -234,7 +236,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
           )}
           <button
             type="button"
-            onClick={onClose}
+            onClick={requestClose}
             disabled={submitting}
             className="ml-auto rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
@@ -406,21 +408,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
             />
           </FieldRow>
 
-          {/* Milestone toggle — drives the hex shape in the Network Diagram */}
-          <FieldRow icon="hexagon" label="Milestone">
-            <label className="inline-flex cursor-pointer items-center gap-2 text-xs">
-              <input
-                type="checkbox"
-                checked={isMilestone}
-                onChange={(e) => setIsMilestone(e.target.checked)}
-                disabled={!canEdit}
-                className="h-3.5 w-3.5 accent-primary"
-              />
-              <span className="text-on-surface">
-                {isMilestone ? "Yes — render as hex" : "No — regular task card"}
-              </span>
-            </label>
-          </FieldRow>
         </div>
 
         {/* Attachments placeholder */}
@@ -498,7 +485,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
           </div>
         )}
       </form>
-    </Modal>
+    </Drawer>
   );
 }
 

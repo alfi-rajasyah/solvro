@@ -54,7 +54,6 @@ const createTaskSchema = z.object({
   parentTaskId: z.number().int().positive().nullable().optional(),
   sectionId: z.number().int().positive().nullable().optional(),
   labelIds: z.array(z.number().int().positive()).optional(),
-  isMilestone: z.boolean().optional(),
 });
 
 const createSectionSchema = z.object({
@@ -292,7 +291,6 @@ projectsRouter.post(
         assignedToId: body.assignedToId ?? null,
         parentTaskId: body.parentTaskId ?? null,
         sectionId: body.sectionId ?? null,
-        isMilestone: body.isMilestone ?? false,
         labels: body.labelIds && body.labelIds.length > 0
           ? { connect: body.labelIds.map((lid) => ({ id: lid })) }
           : undefined,

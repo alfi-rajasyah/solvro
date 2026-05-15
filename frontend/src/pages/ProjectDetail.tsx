@@ -12,7 +12,6 @@ const TABS = [
   { to: "kanban", label: "Kanban" },
   { to: "gantt", label: "Gantt" },
   { to: "timeline", label: "Timeline" },
-  { to: "diagram", label: "Diagram" },
   { to: "risks", label: "Risks" },
 ];
 

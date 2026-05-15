@@ -113,10 +113,6 @@ export interface Task {
   sectionId: number | null;
   section: { id: number; name: string; position: number; color: string } | null;
   labels: Label[];
-  // Network Diagram fields
-  isMilestone: boolean;
-  diagramX: number | null;
-  diagramY: number | null;
   _count: { subtasks: number; comments: number };
 }
 
@@ -484,10 +480,6 @@ export interface UpdateTaskInput {
   parentTaskId?: number | null;
   sectionId?: number | null;
   labelIds?: number[];
-  // Network Diagram fields
-  isMilestone?: boolean;
-  diagramX?: number | null;
-  diagramY?: number | null;
 }
 
 export interface LockBaselineInput {
@@ -563,7 +555,6 @@ export interface CreateTaskInput {
   parentTaskId?: number | null;
   sectionId?: number | null;
   labelIds?: number[];
-  isMilestone?: boolean;
 }
 
 export function useCreateTask(projectId: number) {
