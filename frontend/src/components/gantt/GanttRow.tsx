@@ -12,7 +12,12 @@ interface GanttRowProps {
   canEdit: boolean;
   onCommit: (taskId: number, startDate: Date, dueDate: Date) => void;
   onTaskClick: (taskId: number) => void;
-  onConnectStart?: (sourceTaskId: number, clientX: number, clientY: number) => void;
+  onConnectStart?: (
+    sourceTaskId: number,
+    side: "right" | "left",
+    clientX: number,
+    clientY: number,
+  ) => void;
 }
 
 export function GanttRow({
@@ -28,7 +33,7 @@ export function GanttRow({
 }: GanttRowProps) {
   return (
     <div
-      className="relative border-b border-outline-variant"
+      className="group relative border-b border-outline-variant"
       style={{ height: ROW_HEIGHT, width: contentWidth }}
     >
       {row.kind === "section" && (

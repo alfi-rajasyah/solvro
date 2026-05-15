@@ -24,7 +24,13 @@ interface GanttChartPaneProps {
   connectDrag: { startX: number; startY: number; cursorX: number; cursorY: number } | null;
   onCommit: (taskId: number, startDate: Date, dueDate: Date) => void;
   onTaskClick: (taskId: number) => void;
-  onConnectStart?: (sourceTaskId: number, clientX: number, clientY: number) => void;
+  onConnectStart?: (
+    sourceTaskId: number,
+    side: "right" | "left",
+    clientX: number,
+    clientY: number,
+  ) => void;
+  onDeleteDependency?: (id: number) => void;
 }
 
 export function GanttChartPane({
@@ -41,6 +47,7 @@ export function GanttChartPane({
   onCommit,
   onTaskClick,
   onConnectStart,
+  onDeleteDependency,
 }: GanttChartPaneProps) {
   const bodyHeight = rows.length * ROW_HEIGHT;
   return (
@@ -89,6 +96,7 @@ export function GanttChartPane({
           contentWidth={contentWidth}
           bodyHeight={bodyHeight}
           dependencies={dependencies}
+          onDeleteDependency={onDeleteDependency}
         />
         {connectDrag && (
           <svg

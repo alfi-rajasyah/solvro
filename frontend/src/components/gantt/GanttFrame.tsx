@@ -35,6 +35,7 @@ import {
   type TaskStatus,
   useCreateDependency,
   useCreateSection,
+  useDeleteDependency,
   useHolidays,
   useLockBaseline,
   useProjectDependencies,
@@ -78,6 +79,7 @@ export function GanttFrame({
   const { data: sections } = useProjectSections(projectId);
   const { data: dependencies } = useProjectDependencies(projectId);
   const createDep = useCreateDependency(projectId);
+  const deleteDep = useDeleteDependency(projectId);
   const updateTask = useUpdateTask(projectId);
   const createSection = useCreateSection(projectId);
   const updateSection = useUpdateSection(projectId);
@@ -136,7 +138,12 @@ export function GanttFrame({
   } | null>(null);
 
   const handleConnectStart = useCallback(
-    (sourceTaskId: number, clientX: number, clientY: number) => {
+    (
+      sourceTaskId: number,
+      side: "right" | "left",
+      clientX: number,
+      clientY: number,
+    ) => {
       const scroller = scrollerRef.current;
       if (!scroller) return;
       const rect = scroller.getBoundingClientRect();
@@ -178,14 +185,19 @@ export function GanttFrame({
         }
         setConnectDrag(null);
         if (targetTaskId === null || targetTaskId === sourceTaskId) return;
+        // Right handle: this task is the predecessor, the drop target the
+        // successor. Left handle: reversed — this task depends on the drop
+        // target, so the drop target is the predecessor.
+        const predecessorTaskId = side === "left" ? targetTaskId : sourceTaskId;
+        const successorTaskId = side === "left" ? sourceTaskId : targetTaskId;
         createDep.mutate(
           {
-            predecessorTaskId: sourceTaskId,
-            successorTaskId: targetTaskId,
+            predecessorTaskId,
+            successorTaskId,
             type: "HARD",
-            // Default to right→left handles for Gantt-created deps —
-            // matches the chart's natural left-to-right time flow when
-            // the dep is later viewed in the Network Diagram.
+            // Gantt-created deps always render right→left regardless of
+            // which handle started the drag; persist that orientation so
+            // the Network Diagram view routes them the same way.
             sourceHandle: "right-source",
             targetHandle: "left-target",
           },
@@ -216,6 +228,22 @@ export function GanttFrame({
       window.addEventListener("keydown", onKey);
     },
     [createDep],
+  );
+
+  const handleDeleteDependency = useCallback(
+    (id: number) => {
+      setActionError(null);
+      deleteDep.mutate(id, {
+        onError: (err) => {
+          setActionError(
+            err instanceof ApiError
+              ? err.message
+              : "Could not delete dependency.",
+          );
+        },
+      });
+    },
+    [deleteDep],
   );
 
   const rows = useMemo<Row[]>(
@@ -676,6 +704,7 @@ export function GanttFrame({
                   onCommit={handleCommit}
                   onTaskClick={handleTaskClick}
                   onConnectStart={canEdit ? handleConnectStart : undefined}
+                  onDeleteDependency={canEdit ? handleDeleteDependency : undefined}
                 />
               </div>
             </div>

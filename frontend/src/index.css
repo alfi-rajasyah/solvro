@@ -19,9 +19,9 @@
     --inverse-on-surface: 239 240 250;
     --outline: 114 119 133;
     --outline-variant: 209 214 226;
-    --primary: 0 88 190;
+    --primary: 141 198 63;
     --on-primary: 255 255 255;
-    --primary-container: 33 112 228;
+    --primary-container: 122 181 47;
     --on-primary-container: 254 252 255;
     --inverse-primary: 173 198 255;
     --secondary: 86 94 116;
@@ -63,9 +63,9 @@
     --inverse-on-surface: 46 54 72;
     --outline: 120 130 155;
     --outline-variant: 50 60 80;
-    --primary: 173 198 255;
+    --primary: 141 198 63;
     --on-primary: 0 48 99;
-    --primary-container: 0 70 141;
+    --primary-container: 122 181 47;
     --on-primary-container: 216 226 255;
     --inverse-primary: 0 88 190;
     --secondary: 185 194 218;

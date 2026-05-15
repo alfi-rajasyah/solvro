@@ -14,8 +14,11 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/projects", label: "Projects", icon: "folder_managed" },
   { to: "/customers", label: "Customers", icon: "groups" },
   { to: "/daily-review", label: "Daily Review", icon: "edit_note" },
+  // WorkLogs: iTop API integration for internal utilization
+  // data — not yet implemented, placeholder only.
   { to: "/work-logs", label: "Work Logs", icon: "work_history" },
   { to: "/reports", label: "Reports", icon: "analytics" },
+  { to: "/settings", label: "Settings", icon: "settings" },
   { to: "/admin", label: "Admin", icon: "admin_panel_settings", adminOnly: true },
 ];
 
