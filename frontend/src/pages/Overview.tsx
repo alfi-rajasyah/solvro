@@ -26,7 +26,7 @@ export function Overview() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-bold text-on-surface">
-          Welcome back, {user?.username ?? "operator"}
+          Welcome back, {firstNameOf(user)}.
         </h1>
         <p className="text-sm text-on-surface-variant">
           A high-density snapshot of your active workload.
@@ -159,7 +159,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
       {/* Recent projects strip */}
       <div className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
         <header className="mb-3 flex items-center justify-between">
-          <h3 className="font-display text-sm font-bold text-on-surface">Recently updated projects</h3>
+          <h3 className="font-display text-sm font-bold text-on-surface">Projects needing attention</h3>
           <Link to="/projects" className="text-[11px] font-semibold text-primary hover:underline">
             View all →
           </Link>
@@ -168,19 +168,41 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
           <EmptyHint label="No projects yet." />
         ) : (
           <ul className="grid gap-2 md:grid-cols-2">
-            {data.recentProjects.slice(0, 6).map((p) => (
-              <li key={p.id}>
-                <Link
-                  to={`/projects/${p.id}`}
-                  className="flex items-center gap-3 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 transition-colors hover:border-primary"
-                >
-                  <span className="font-mono text-[11px] text-on-surface-variant">P-{String(p.id).padStart(3, "0")}</span>
-                  <span className="min-w-0 flex-1 truncate text-sm font-semibold text-on-surface">{p.name}</span>
-                  <span className="text-[11px] text-on-surface-variant">{p._count.tasks} tasks</span>
-                  <ProjectStatusPill status={p.status} />
-                </Link>
-              </li>
-            ))}
+            {[...data.recentProjects]
+              // Health-signal priority: at-risk (amber) → on-track (green)
+              // → neutral (gray); within a bucket, most-recently-updated
+              // first. The amber bucket is currently unreachable because it
+              // needs a per-project overdue count the overview query does
+              // not return.
+              // TODO(health-signal): once overdue counts are available,
+              // re-rank ACTIVE+overdue>0 ahead of on-track here.
+              .sort((a, b) => {
+                const r = healthRank(a.status) - healthRank(b.status);
+                if (r !== 0) return r;
+                return (
+                  new Date(b.updatedAt).getTime() -
+                  new Date(a.updatedAt).getTime()
+                );
+              })
+              .slice(0, 6)
+              .map((p) => (
+                <li key={p.id}>
+                  <Link
+                    to={`/projects/${p.id}`}
+                    style={{
+                      borderLeftWidth: 3,
+                      borderLeftStyle: "solid",
+                      borderLeftColor: healthColor(p.status),
+                    }}
+                    className="flex items-center gap-3 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 transition-colors hover:border-primary"
+                  >
+                    <span className="font-mono text-[11px] text-on-surface-variant">P-{String(p.id).padStart(3, "0")}</span>
+                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-on-surface">{p.name}</span>
+                    <span className="text-[11px] text-on-surface-variant">{p._count.tasks} tasks</span>
+                    <ProjectStatusPill status={p.status} />
+                  </Link>
+                </li>
+              ))}
           </ul>
         )}
       </div>
@@ -315,4 +337,32 @@ function avatarColor(seed: string) {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
+}
+
+// First name for the welcome heading. AuthUser carries no name field, so
+// derive it from the username (or email): take the segment before the
+// first "." or "@" and capitalize it. "alfi.rajasyah" → "Alfi",
+// "tam@elitery.com" → "Tam", "admin" → "Admin".
+function firstNameOf(
+  user: { username?: string; email?: string } | null | undefined,
+): string {
+  const source = user?.username || user?.email || "operator";
+  const head = source.split(/[.@]/)[0] || "operator";
+  return head.charAt(0).toUpperCase() + head.slice(1);
+}
+
+// Health-signal left-border color, derived from project status only.
+// TODO(health-signal): the overview query returns no per-project overdue
+// count, so ACTIVE always reads as on-track. When that count is exposed,
+// ACTIVE with overdue tasks should return "#F59E0B" (amber, at risk).
+function healthColor(status: OverviewProject["status"]): string {
+  if (status === "ACTIVE") return "#8DC63F"; // on track
+  return "#6B7280"; // PLANNING / ON_HOLD / COMPLETED / other — neutral
+}
+
+// Sort priority for the same signal: 0 = at-risk (amber), 1 = on-track
+// (green), 2 = neutral (gray). Bucket 0 is unreachable until overdue
+// data exists (see healthColor's TODO).
+function healthRank(status: OverviewProject["status"]): number {
+  return status === "ACTIVE" ? 1 : 2;
 }
