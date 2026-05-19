@@ -3,6 +3,8 @@
 #
 # First run on a fresh server:
 #   - Prompts for an admin email + password
+#   - Prompts for the host ports (website / API / optional Postgres), each
+#     with a default you can accept by pressing Enter
 #   - Generates random POSTGRES_PASSWORD and JWT_SECRET
 #   - Writes ~/solvro/{docker-compose.yml,.env}
 #   - Wipes any prior solvro_pgdata volume (clears stale postgres state)
@@ -10,7 +12,16 @@
 #
 # Re-runs on a server that already has ~/solvro/.env:
 #   - Detects existing install, skips prompts
-#   - Just pulls new images and restarts (your update flow)
+#   - Reuses the ports from ~/solvro/.env, pulls new images, restarts
+#
+# Ports (all bound to 127.0.0.1 — local-only access; reach it from the
+# server itself or via an SSH tunnel, not the LAN/internet):
+#   FRONTEND_PORT   website     (default 80)
+#   BACKEND_PORT    API         (default 3000)
+#   POSTGRES_PORT   database    (default: NOT published — stays private)
+# Set them as env vars, or answer the prompts. To change frontend/backend
+# ports later, edit ~/solvro/.env and `docker compose up -d`. Changing
+# whether/where Postgres is published requires re-running this script.
 #
 # Requirements: Docker Engine + Docker Compose plugin already installed.
 
@@ -38,8 +49,34 @@ command -v openssl >/dev/null 2>&1 || {
 mkdir -p "$DEPLOY_DIR"
 cd "$DEPLOY_DIR"
 
-# ------------------------------------------------------------------ writes the compose file (always, so updates pick up changes)
-cat > "$COMPOSE_FILE" <<'COMPOSE_EOF'
+# ------------------------------------------------------------------ helpers
+
+# Valid TCP port: integer 1-65535. 10# forces base-10 so leading zeros
+# (e.g. "08") don't get misread as octal.
+is_port() {
+  [[ "$1" =~ ^[0-9]+$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 ))
+}
+
+# App URL for the success/update message. Local-only, so always localhost;
+# the :port suffix is dropped when the website is on 80.
+app_url() {
+  if [[ "${FRONTEND_PORT:-80}" == "80" ]]; then
+    echo "http://localhost"
+  else
+    echo "http://localhost:${FRONTEND_PORT}"
+  fi
+}
+
+# Writes ~/solvro/docker-compose.yml from the current FRONTEND_PORT /
+# BACKEND_PORT / POSTGRES_PORT. Frontend/backend ports stay as literal
+# ${VAR:-default} so docker compose resolves them from ~/solvro/.env at
+# `up` time (same mechanism as ${POSTGRES_PASSWORD}/${JWT_SECRET}). The
+# postgres `ports:` block can't be expressed by interpolation (a key must
+# be present or absent), so it's emitted here only when POSTGRES_PORT is
+# set. Everything binds to 127.0.0.1 (local-only).
+write_compose_file() {
+  {
+    cat <<'COMPOSE_HEAD'
 services:
   postgres:
     image: postgres:15-alpine
@@ -56,6 +93,13 @@ services:
       interval: 5s
       timeout: 5s
       retries: 10
+COMPOSE_HEAD
+
+    if [[ -n "${POSTGRES_PORT:-}" ]]; then
+      printf '    ports:\n      - "127.0.0.1:%s:5432"\n' "$POSTGRES_PORT"
+    fi
+
+    cat <<'COMPOSE_REST'
 
   backend:
     image: ghcr.io/alfi-rajasyah/solvro-backend:latest
@@ -74,7 +118,7 @@ services:
       CORS_ORIGIN: "*"
       LOG_LEVEL: info
     ports:
-      - "3000:3000"
+      - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
     command: >
       sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/index.js"
 
@@ -86,34 +130,43 @@ services:
     depends_on:
       - backend
     ports:
-      - "80:80"
+      - "127.0.0.1:${FRONTEND_PORT:-80}:80"
 
 volumes:
   solvro_pgdata:
     name: solvro_pgdata
-COMPOSE_EOF
+COMPOSE_REST
+  } > "$COMPOSE_FILE"
+}
 
 # ------------------------------------------------------------------ branch: update vs fresh install
 if [[ -f "$ENV_FILE" ]]; then
   echo "Existing install detected (~/solvro/.env present). Pulling new images and restarting..."
+  # Reuse the ports persisted at first install. Older installs predate the
+  # port vars — the compose ${VAR:-default} fallbacks keep them on 80/3000
+  # and Postgres unpublished, exactly as before (now bound to 127.0.0.1).
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+  write_compose_file
   docker compose pull
   docker compose up -d
-  SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-  [[ -z "${SERVER_IP:-}" ]] && SERVER_IP="<server-ip>"
   echo
-  echo "Solvro updated. Open http://$SERVER_IP"
+  echo "Solvro updated. Open $(app_url)"
   exit 0
 fi
 
 # ------------------------------------------------------------------ fresh install
-echo "Fresh install. You'll be asked for the admin email and password."
+echo "Fresh install. You'll be asked for the admin account and host ports."
 echo
 
 # Inputs can come from env vars (preferred for `curl | bash` and CI/automation)
 # or from interactive prompts read from /dev/tty (so prompts work even when
 # the script is piped from curl, where stdin is the curl pipe).
 #
-#   ADMIN_EMAIL=you@x.com ADMIN_PASSWORD=secret bash <(curl -sSL <url>)
+#   ADMIN_EMAIL=you@x.com ADMIN_PASSWORD=secret \
+#   FRONTEND_PORT=8090 BACKEND_PORT=3000 bash <(curl -sSL <url>)
 # or
 #   bash <(curl -sSL <url>)        # then answer prompts
 # or
@@ -155,14 +208,62 @@ fi
   exit 1
 }
 
+# Ports: env var, else interactive prompt with the default pre-filled
+# (Enter accepts it). No /dev/tty → silently take the defaults so
+# non-interactive automation keeps working.
+FRONTEND_PORT="${FRONTEND_PORT:-}"
+BACKEND_PORT="${BACKEND_PORT:-}"
+POSTGRES_PORT="${POSTGRES_PORT:-}"
+
+if [[ -r /dev/tty ]]; then
+  [[ -z "$FRONTEND_PORT" ]] && \
+    read -r -p "Website port [80]: " FRONTEND_PORT </dev/tty
+  [[ -z "$BACKEND_PORT" ]] && \
+    read -r -p "API port [3000]: " BACKEND_PORT </dev/tty
+  [[ -z "$POSTGRES_PORT" ]] && \
+    read -r -p "Postgres host port (blank = keep private) []: " POSTGRES_PORT </dev/tty
+fi
+
+FRONTEND_PORT="${FRONTEND_PORT:-80}"
+BACKEND_PORT="${BACKEND_PORT:-3000}"
+# POSTGRES_PORT intentionally left empty when not provided → DB stays private.
+
+is_port "$FRONTEND_PORT" || {
+  echo "ERROR: FRONTEND_PORT must be an integer 1-65535 (got '$FRONTEND_PORT')."
+  exit 1
+}
+is_port "$BACKEND_PORT" || {
+  echo "ERROR: BACKEND_PORT must be an integer 1-65535 (got '$BACKEND_PORT')."
+  exit 1
+}
+if [[ "$FRONTEND_PORT" == "$BACKEND_PORT" ]]; then
+  echo "ERROR: FRONTEND_PORT and BACKEND_PORT must differ (both '$FRONTEND_PORT')."
+  exit 1
+fi
+if [[ -n "$POSTGRES_PORT" ]]; then
+  is_port "$POSTGRES_PORT" || {
+    echo "ERROR: POSTGRES_PORT must be an integer 1-65535 or blank (got '$POSTGRES_PORT')."
+    exit 1
+  }
+  if [[ "$POSTGRES_PORT" == "$FRONTEND_PORT" || "$POSTGRES_PORT" == "$BACKEND_PORT" ]]; then
+    echo "ERROR: POSTGRES_PORT must differ from the website/API ports."
+    exit 1
+  fi
+fi
+
 POSTGRES_PASSWORD=$(openssl rand -base64 24 | tr -d '\n')
 JWT_SECRET=$(openssl rand -hex 48)
 
 cat > "$ENV_FILE" <<EOF
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 JWT_SECRET=$JWT_SECRET
+FRONTEND_PORT=$FRONTEND_PORT
+BACKEND_PORT=$BACKEND_PORT
 EOF
+[[ -n "$POSTGRES_PORT" ]] && echo "POSTGRES_PORT=$POSTGRES_PORT" >> "$ENV_FILE"
 chmod 600 "$ENV_FILE"
+
+write_compose_file
 
 # Wipe any prior bad postgres state so the new password takes effect
 echo
@@ -179,7 +280,7 @@ docker compose up -d
 # Wait for backend to be ready (max ~120s — first boot includes migrate + seed)
 echo -n "Waiting for backend to come up"
 for _ in $(seq 1 60); do
-  if curl -sf http://localhost:3000/health >/dev/null 2>&1; then
+  if curl -sf "http://localhost:${BACKEND_PORT}/health" >/dev/null 2>&1; then
     echo " ready."
     break
   fi
@@ -187,7 +288,7 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 
-if ! curl -sf http://localhost:3000/health >/dev/null 2>&1; then
+if ! curl -sf "http://localhost:${BACKEND_PORT}/health" >/dev/null 2>&1; then
   echo
   echo "ERROR: backend did not come up within ~2 minutes. Recent logs:"
   docker compose logs backend --tail 40
@@ -201,24 +302,32 @@ docker compose exec -T \
   -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
   backend npx tsx scripts/create-admin.ts
 
-SERVER_IP=$(hostname -I 2>/dev/null | awk '{print $1}')
-[[ -z "${SERVER_IP:-}" ]] && SERVER_IP="<server-ip>"
+APP_URL="$(app_url)"
 
 echo
 echo "============================================================"
-echo " Solvro is running."
+echo " Solvro is running (local-only — bound to 127.0.0.1)."
 echo
-echo "   URL:       http://$SERVER_IP"
+echo "   URL:       $APP_URL"
 echo "   Login as:  $ADMIN_EMAIL"
+echo
+echo "   Ports:     website $FRONTEND_PORT · API $BACKEND_PORT · Postgres ${POSTGRES_PORT:-not published}"
+echo
+echo " Reachable only from this server. From your machine, tunnel:"
+echo "   ssh -L ${FRONTEND_PORT}:localhost:${FRONTEND_PORT} <user>@<server>"
+echo "   then open $APP_URL"
 echo
 echo " Useful commands (run from $DEPLOY_DIR):"
 echo "   docker compose ps              # check container status"
 echo "   docker compose logs -f backend # tail backend logs"
 echo "   bash setup.sh                  # re-run to update images"
+echo "   # change website/API ports later: edit ~/solvro/.env then"
+echo "   docker compose up -d"
 echo
-echo " To enable Google sign-in:"
+echo " To enable Google sign-in (local-only):"
 echo "   1. Create an OAuth 2.0 Client ID in Google Cloud Console"
-echo "      (Web application, add http://$SERVER_IP as Authorized JS origin)."
+echo "      (Web application, add $APP_URL as an Authorized JS origin —"
+echo "      use the same host:port you reach Solvro on, e.g. via the tunnel)."
 echo "   2. Sign in as admin → Admin → Sign-in tab → paste the Client ID,"
 echo "      add at least one allowed email domain, click Save."
 echo "      No restart, no rebuild needed."
