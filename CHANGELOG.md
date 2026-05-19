@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-05-16 — Random Postgres password could break DATABASE_URL (P1013)
+
+Surfaced while testing the configurable-ports change on the server (not caused by it — the lines below predate that commit). `POSTGRES_PASSWORD` was generated with `openssl rand -base64 24`, whose alphabet includes `/`. When the random draw contained a `/`, the backend's `DATABASE_URL` (`postgresql://solvro:<pw>@postgres:5432/...`) had its authority truncated at that `/`, so the parser read a bogus port and crash-looped with `P1013: invalid port number in database URL`. ~40% of fresh installs were affected (probabilistic — earlier installs drew safe passwords); Postgres itself was Healthy, only the URL string was mis-parsed.
+
+- **[setup.sh](setup.sh)** — `POSTGRES_PASSWORD` is now `openssl rand -hex 24` (48 chars, 192 bits, alphabet `[0-9a-f]` only — URL-safe everywhere it is used), mirroring the adjacent `JWT_SECRET` hex generation. Single line changed; the fresh-install path already wipes `solvro_pgdata` and re-initialises Postgres with the new password, so there is no stale-credential mismatch. No change to `${POSTGRES_PASSWORD}` interpolation, the `.env` write, or the compose template.
+
 ### Changed — 2026-05-16 — Prod deploy: configurable, local-only host ports in setup.sh
 
 Deploying onto a server with other containers (host port 80 already taken by another app; another Postgres on 127.0.0.1:5432). The prod stack had hardcoded `80:80` / `3000:3000` host publishes and no knob to change them. Ports are now configurable at install, and—per the operator's decision that this instance is accessed locally only—every port binds to `127.0.0.1` instead of `0.0.0.0`.

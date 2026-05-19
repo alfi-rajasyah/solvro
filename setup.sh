@@ -251,7 +251,9 @@ if [[ -n "$POSTGRES_PORT" ]]; then
   fi
 fi
 
-POSTGRES_PASSWORD=$(openssl rand -base64 24 | tr -d '\n')
+# hex (not base64): base64's `/` `+` `=` are unsafe in the DATABASE_URL
+# userinfo and truncate it (P1013 "invalid port number"). 24 bytes = 192 bits.
+POSTGRES_PASSWORD=$(openssl rand -hex 24)
 JWT_SECRET=$(openssl rand -hex 48)
 
 cat > "$ENV_FILE" <<EOF
