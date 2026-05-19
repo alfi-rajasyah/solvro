@@ -14,14 +14,18 @@
 #   - Detects existing install, skips prompts
 #   - Reuses the ports from ~/solvro/.env, pulls new images, restarts
 #
-# Ports (all bound to 127.0.0.1 — local-only access; reach it from the
-# server itself or via an SSH tunnel, not the LAN/internet):
+# Host binding + ports (set as env vars or answer the prompts):
+#   BIND_ADDR       interface   (default 127.0.0.1 = local-only: reach it
+#                                from the server or an SSH tunnel only.
+#                                0.0.0.0 = all interfaces / on the network;
+#                                or a specific LAN IP. Applies to website +
+#                                API; Postgres always stays on 127.0.0.1.)
 #   FRONTEND_PORT   website     (default 80)
 #   BACKEND_PORT    API         (default 3000)
 #   POSTGRES_PORT   database    (default: NOT published — stays private)
-# Set them as env vars, or answer the prompts. To change frontend/backend
-# ports later, edit ~/solvro/.env and `docker compose up -d`. Changing
-# whether/where Postgres is published requires re-running this script.
+# To change BIND_ADDR / frontend / backend later, edit ~/solvro/.env and
+# `docker compose up -d`. Changing whether/where Postgres is published
+# requires re-running this script.
 #
 # Requirements: Docker Engine + Docker Compose plugin already installed.
 
@@ -57,23 +61,46 @@ is_port() {
   [[ "$1" =~ ^[0-9]+$ ]] && (( 10#$1 >= 1 && 10#$1 <= 65535 ))
 }
 
-# App URL for the success/update message. Local-only, so always localhost;
-# the :port suffix is dropped when the website is on 80.
+# Valid IPv4 dotted-quad, each octet 0-255. Rejects hostnames / IPv6.
+is_ipv4() {
+  [[ "$1" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]] || return 1
+  local IFS=. octet
+  for octet in $1; do
+    (( 10#$octet >= 0 && 10#$octet <= 255 )) || return 1
+  done
+  return 0
+}
+
+# URL for the success/update message, from BIND_ADDR + FRONTEND_PORT.
+# 127.0.0.1 -> localhost (loopback only); 0.0.0.0 -> the server's primary
+# IP (reachable on the network); a specific IP -> that IP. The :port
+# suffix is dropped when the website is on 80.
 app_url() {
+  local host
+  case "${BIND_ADDR:-127.0.0.1}" in
+    127.0.0.1) host="localhost" ;;
+    0.0.0.0)
+      host="$(hostname -I 2>/dev/null | awk '{print $1}')"
+      [[ -z "$host" ]] && host="<server-ip>"
+      ;;
+    *) host="${BIND_ADDR}" ;;
+  esac
   if [[ "${FRONTEND_PORT:-80}" == "80" ]]; then
-    echo "http://localhost"
+    echo "http://${host}"
   else
-    echo "http://localhost:${FRONTEND_PORT}"
+    echo "http://${host}:${FRONTEND_PORT}"
   fi
 }
 
-# Writes ~/solvro/docker-compose.yml from the current FRONTEND_PORT /
-# BACKEND_PORT / POSTGRES_PORT. Frontend/backend ports stay as literal
-# ${VAR:-default} so docker compose resolves them from ~/solvro/.env at
-# `up` time (same mechanism as ${POSTGRES_PASSWORD}/${JWT_SECRET}). The
-# postgres `ports:` block can't be expressed by interpolation (a key must
-# be present or absent), so it's emitted here only when POSTGRES_PORT is
-# set. Everything binds to 127.0.0.1 (local-only).
+# Writes ~/solvro/docker-compose.yml from the current BIND_ADDR /
+# FRONTEND_PORT / BACKEND_PORT / POSTGRES_PORT. Bind address + frontend/
+# backend ports stay as literal ${VAR:-default} so docker compose resolves
+# them from ~/solvro/.env at `up` time (same mechanism as
+# ${POSTGRES_PASSWORD}/${JWT_SECRET}). The postgres `ports:` block can't be
+# expressed by interpolation (a key must be present or absent), so it's
+# emitted here only when POSTGRES_PORT is set — and it stays bound to
+# 127.0.0.1 regardless of BIND_ADDR (never expose the DB on the network
+# just because the web app is exposed).
 write_compose_file() {
   {
     cat <<'COMPOSE_HEAD'
@@ -118,7 +145,7 @@ COMPOSE_HEAD
       CORS_ORIGIN: "*"
       LOG_LEVEL: info
     ports:
-      - "127.0.0.1:${BACKEND_PORT:-3000}:3000"
+      - "${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-3000}:3000"
     command: >
       sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/index.js"
 
@@ -130,7 +157,7 @@ COMPOSE_HEAD
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-80}:80"
+      - "${BIND_ADDR:-127.0.0.1}:${FRONTEND_PORT:-80}:80"
 
 volumes:
   solvro_pgdata:
@@ -165,7 +192,7 @@ echo
 # or from interactive prompts read from /dev/tty (so prompts work even when
 # the script is piped from curl, where stdin is the curl pipe).
 #
-#   ADMIN_EMAIL=you@x.com ADMIN_PASSWORD=secret \
+#   ADMIN_EMAIL=you@x.com ADMIN_PASSWORD=secret BIND_ADDR=0.0.0.0 \
 #   FRONTEND_PORT=8090 BACKEND_PORT=3000 bash <(curl -sSL <url>)
 # or
 #   bash <(curl -sSL <url>)        # then answer prompts
@@ -214,6 +241,7 @@ fi
 FRONTEND_PORT="${FRONTEND_PORT:-}"
 BACKEND_PORT="${BACKEND_PORT:-}"
 POSTGRES_PORT="${POSTGRES_PORT:-}"
+BIND_ADDR="${BIND_ADDR:-}"
 
 if [[ -r /dev/tty ]]; then
   [[ -z "$FRONTEND_PORT" ]] && \
@@ -222,10 +250,13 @@ if [[ -r /dev/tty ]]; then
     read -r -p "API port [3000]: " BACKEND_PORT </dev/tty
   [[ -z "$POSTGRES_PORT" ]] && \
     read -r -p "Postgres host port (blank = keep private) []: " POSTGRES_PORT </dev/tty
+  [[ -z "$BIND_ADDR" ]] && \
+    read -r -p "Bind address [127.0.0.1] (0.0.0.0 = all interfaces): " BIND_ADDR </dev/tty
 fi
 
 FRONTEND_PORT="${FRONTEND_PORT:-80}"
 BACKEND_PORT="${BACKEND_PORT:-3000}"
+BIND_ADDR="${BIND_ADDR:-127.0.0.1}"
 # POSTGRES_PORT intentionally left empty when not provided → DB stays private.
 
 is_port "$FRONTEND_PORT" || {
@@ -250,6 +281,10 @@ if [[ -n "$POSTGRES_PORT" ]]; then
     exit 1
   fi
 fi
+is_ipv4 "$BIND_ADDR" || {
+  echo "ERROR: BIND_ADDR must be an IPv4 address (e.g. 127.0.0.1, 0.0.0.0, 192.168.1.10) — got '$BIND_ADDR'."
+  exit 1
+}
 
 # hex (not base64): base64's `/` `+` `=` are unsafe in the DATABASE_URL
 # userinfo and truncate it (P1013 "invalid port number"). 24 bytes = 192 bits.
@@ -259,6 +294,7 @@ JWT_SECRET=$(openssl rand -hex 48)
 cat > "$ENV_FILE" <<EOF
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 JWT_SECRET=$JWT_SECRET
+BIND_ADDR=$BIND_ADDR
 FRONTEND_PORT=$FRONTEND_PORT
 BACKEND_PORT=$BACKEND_PORT
 EOF
@@ -279,10 +315,16 @@ docker compose pull
 echo "Starting stack..."
 docker compose up -d
 
+# Probe host for the readiness check. 0.0.0.0 binds include loopback and
+# 127.0.0.1 obviously does, so use 127.0.0.1 for both; a specific bind IP
+# does NOT bind loopback, so hit that IP directly.
+HEALTH_HOST="$BIND_ADDR"
+[[ "$BIND_ADDR" == "0.0.0.0" ]] && HEALTH_HOST="127.0.0.1"
+
 # Wait for backend to be ready (max ~120s — first boot includes migrate + seed)
 echo -n "Waiting for backend to come up"
 for _ in $(seq 1 60); do
-  if curl -sf "http://localhost:${BACKEND_PORT}/health" >/dev/null 2>&1; then
+  if curl -sf "http://${HEALTH_HOST}:${BACKEND_PORT}/health" >/dev/null 2>&1; then
     echo " ready."
     break
   fi
@@ -290,7 +332,7 @@ for _ in $(seq 1 60); do
   sleep 2
 done
 
-if ! curl -sf "http://localhost:${BACKEND_PORT}/health" >/dev/null 2>&1; then
+if ! curl -sf "http://${HEALTH_HOST}:${BACKEND_PORT}/health" >/dev/null 2>&1; then
   echo
   echo "ERROR: backend did not come up within ~2 minutes. Recent logs:"
   docker compose logs backend --tail 40
@@ -308,28 +350,39 @@ APP_URL="$(app_url)"
 
 echo
 echo "============================================================"
-echo " Solvro is running (local-only — bound to 127.0.0.1)."
+if [[ "$BIND_ADDR" == "127.0.0.1" ]]; then
+  echo " Solvro is running (local-only — bound to 127.0.0.1)."
+else
+  echo " Solvro is running (bound to $BIND_ADDR — reachable on the network)."
+fi
 echo
 echo "   URL:       $APP_URL"
 echo "   Login as:  $ADMIN_EMAIL"
 echo
 echo "   Ports:     website $FRONTEND_PORT · API $BACKEND_PORT · Postgres ${POSTGRES_PORT:-not published}"
+echo "   Bind:      $BIND_ADDR"
 echo
-echo " Reachable only from this server. From your machine, tunnel:"
-echo "   ssh -L ${FRONTEND_PORT}:localhost:${FRONTEND_PORT} <user>@<server>"
-echo "   then open $APP_URL"
+if [[ "$BIND_ADDR" == "127.0.0.1" ]]; then
+  echo " Reachable only from this server. From your machine, tunnel:"
+  echo "   ssh -L ${FRONTEND_PORT}:localhost:${FRONTEND_PORT} <user>@<server>"
+  echo "   then open $APP_URL"
+else
+  echo " Reachable on the network at $APP_URL"
+  echo " NOTE: only the in-app login protects it — keep it behind a trusted"
+  echo "       network / VPN / firewall. (Postgres stays private on 127.0.0.1.)"
+fi
 echo
 echo " Useful commands (run from $DEPLOY_DIR):"
 echo "   docker compose ps              # check container status"
 echo "   docker compose logs -f backend # tail backend logs"
 echo "   bash setup.sh                  # re-run to update images"
-echo "   # change website/API ports later: edit ~/solvro/.env then"
+echo "   # change bind address / ports later: edit ~/solvro/.env then"
 echo "   docker compose up -d"
 echo
-echo " To enable Google sign-in (local-only):"
+echo " To enable Google sign-in:"
 echo "   1. Create an OAuth 2.0 Client ID in Google Cloud Console"
 echo "      (Web application, add $APP_URL as an Authorized JS origin —"
-echo "      use the same host:port you reach Solvro on, e.g. via the tunnel)."
+echo "      use the exact host:port you reach Solvro on)."
 echo "   2. Sign in as admin → Admin → Sign-in tab → paste the Client ID,"
 echo "      add at least one allowed email domain, click Save."
 echo "      No restart, no rebuild needed."

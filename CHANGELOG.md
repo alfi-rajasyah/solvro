@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-05-16 — Prod deploy: configurable bind address (BIND_ADDR)
+
+Follow-up to the "configurable, local-only host ports" entry below. That change bound every published port to `127.0.0.1`, which the operator discovered makes the app unreachable from their machine (loopback only) — "local only" was meant as "our private network", not "loopback". `setup.sh` now exposes the bind interface as a knob; the secure `127.0.0.1` default is unchanged so nobody who doesn't set it is affected.
+
+- **[setup.sh](setup.sh)** — adds `BIND_ADDR` (env var or interactive prompt, same intake pattern as the ports; default `127.0.0.1`). `0.0.0.0` publishes the website + API on all interfaces (reachable on the network); a specific IPv4 publishes on just that interface. Validated via a new `is_ipv4` helper (dotted-quad, octets 0–255; rejects hostnames/IPv6). Threaded into `write_compose_file` as `${BIND_ADDR:-127.0.0.1}:` on the frontend and backend mappings (literal in the single-quoted heredoc → resolved by compose from `~/solvro/.env`), persisted to `.env`, and reused on the update branch (it already sources `.env`). The readiness probe now targets a computed `HEALTH_HOST` (`127.0.0.1` for `127.0.0.1`/`0.0.0.0`, else the bind IP) so a specific-IP bind doesn't break the wait loop. Success/update banner, tunnel-vs-network guidance, and the Google-OAuth origin hint are now `BIND_ADDR`-aware.
+- **Postgres stays loopback by design:** the conditional `postgres` `ports:` block remains hardcoded to `127.0.0.1` regardless of `BIND_ADDR` — exposing the database on the network just because the web app is exposed would be a footgun. Documented in-script. Security note: with `BIND_ADDR=0.0.0.0`/a LAN IP, only the in-app login protects the app at the network layer (CORS is `*`); keep it behind a trusted network/VPN/firewall.
+- No application/image/schema changes; container ports (80/3000/5432) and the internal nginx→`backend:3000` proxy are untouched.
+
 ### Fixed — 2026-05-16 — Random Postgres password could break DATABASE_URL (P1013)
 
 Surfaced while testing the configurable-ports change on the server (not caused by it — the lines below predate that commit). `POSTGRES_PASSWORD` was generated with `openssl rand -base64 24`, whose alphabet includes `/`. When the random draw contained a `/`, the backend's `DATABASE_URL` (`postgresql://solvro:<pw>@postgres:5432/...`) had its authority truncated at that `/`, so the parser read a bogus port and crash-looped with `P1013: invalid port number in database URL`. ~40% of fresh installs were affected (probabilistic — earlier installs drew safe passwords); Postgres itself was Healthy, only the URL string was mis-parsed.
