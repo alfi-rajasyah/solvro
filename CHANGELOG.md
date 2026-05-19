@@ -15,6 +15,22 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-05-16 — Overview: personalized welcome, project health signal, "needs attention" list
+
+Three targeted UI fixes to the global Overview page (no other files touched; no new imports).
+
+- **[frontend/src/pages/Overview.tsx](frontend/src/pages/Overview.tsx)** — (1) Heading is now `Welcome back, {firstName}.` via a new `firstNameOf` helper: `AuthUser` carries no name field, so the first name is derived from `username` (falling back to `email`) by splitting on `.`/`@` and capitalizing. (2) Each card in the recent-projects list gets a 3px health-signal left border (inline `borderLeft*` style — layout/padding unchanged): ACTIVE → `#8DC63F`, PLANNING/ON_HOLD/COMPLETED → `#6B7280`. (3) Section heading renamed "Recently updated projects" → "Projects needing attention"; the list is sorted by health rank (at-risk → on-track → neutral) then `updatedAt` desc within a bucket, before `slice(0, 6)`.
+
+Limitation flagged in-code: the overview query (`OverviewProject`) returns no per-project overdue count, so the amber `#F59E0B` "at risk" state is unreachable and ACTIVE always reads as on-track. `TODO(health-signal)` comments on `healthColor`/`healthRank` mark where to re-rank ACTIVE+overdue once that data is exposed.
+
+### Changed — 2026-05-16 — Login screen restyled to the Elitery split-panel design
+
+Visual-only revamp of the sign-in screen. **No auth logic, handlers, API calls, or conditional rendering were touched** — `messageForApiError`, all state, `handleGoogleCredential`, `handlePasswordSubmit`, the authenticated redirect, the Google config ternary, and the `<details>` admin form are byte-for-byte unchanged.
+
+- **[frontend/src/pages/Login.tsx](frontend/src/pages/Login.tsx)** — split panel: dark `#191919` brand panel (left 44%, `md:grid-cols-[44%_1fr]`, `h-screen overflow-hidden`) with three decorative rings, "SV" wordmark, eyebrow/headline/body/pills hero block, and the version string; white right panel with a 280px-max centered column, restyled "Sign in" header, the existing Google block, the OR divider, the admin password `<details>`, and an "Internal use only · Elitery © 2026" footer. Greens are expressed via the `primary` token with alpha (`text-primary`, `border-primary/30`, `border-primary/[0.12]`) since `--primary` is already `#8DC63F` — keeps the screen themed per CLAUDE.md rather than hardcoding the brand hex. The bespoke dark surface (`#191919`/`#2e2e2e`) and white-overlay opacities have no token and are inline per the explicit spec. Admin inputs now use the spec focus ring (`focus-within:border-[#8DC63F]` + `0 0 0 3px rgba(141,198,63,0.15)` shadow); the admin submit button is `#191919` → `#2e2e2e` on hover.
+
+Flagged deviation: the spec's custom green "Sign in with Google" button was **not** applied — the Google sign-in is the `@react-oauth/google` `<GoogleLogin>` iframe widget, which cannot be recolored without switching to `useGoogleLogin` (an auth-handler change explicitly forbidden by the task). The official widget + its surrounding block are kept verbatim. "No scrolling" is honored at the page level (`overflow-hidden`); the collapsed-by-default admin form fits typical viewports but is not independently scrollable if expanded on a very short screen.
+
 ### Fixed — 2026-05-15 — ADMIN (wildcard) users see all active projects on Daily Review & Reports
 
 The Daily Review / Reports rework scoped the project list to `tamId === user.id`, which left built-in ADMIN (and any custom role with `*`) seeing an empty list — flagged at the time. Now wildcard-permission users see every `ACTIVE` project; a TAM stays scoped to the ones they own.
