@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-05-16 — Prod deploy: configurable, local-only host ports in setup.sh
+
+Deploying onto a server with other containers (host port 80 already taken by another app; another Postgres on 127.0.0.1:5432). The prod stack had hardcoded `80:80` / `3000:3000` host publishes and no knob to change them. Ports are now configurable at install, and—per the operator's decision that this instance is accessed locally only—every port binds to `127.0.0.1` instead of `0.0.0.0`.
+
+- **[setup.sh](setup.sh)** — adds `FRONTEND_PORT` (default 80), `BACKEND_PORT` (default 3000), and optional `POSTGRES_PORT` (default: **not published** — DB stays private as before). Each is taken from an env var or an interactive `/dev/tty` prompt with the default pre-filled (mirrors the existing `ADMIN_EMAIL`/`ADMIN_PASSWORD` intake; non-interactive runs fall back to defaults). Validated as integers 1–65535, must be distinct. Persisted to `~/solvro/.env`; frontend/backend resolve via compose `${VAR:-default}` interpolation so they can be changed later by editing `.env` + `docker compose up -d`. Compose generation moved into a `write_compose_file` function called **after** ports are known (both the fresh-install and update branches; the update branch sources `~/solvro/.env` first), because the Postgres `ports:` block is conditional (emitted only when `POSTGRES_PORT` is set) — interpolation can't express an optional key. Healthcheck wait, success/update messages, and the Google-OAuth origin hint now use the chosen ports and an SSH-tunnel note. Container ports (80/3000/5432) and the app images are unchanged; nginx still proxies `/api` to the internal `backend:3000`.
+- **Behavior change to note:** all published ports now bind to `127.0.0.1` (local-only) instead of `0.0.0.0`. A *re-run/update of any existing install* therefore also flips it to localhost-only (reach it via SSH tunnel). Intended per the approved plan; no application code, schema, or image changes.
+
 ### Changed — 2026-05-16 — Overview: personalized welcome, project health signal, "needs attention" list
 
 Three targeted UI fixes to the global Overview page (no other files touched; no new imports).
