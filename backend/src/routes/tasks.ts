@@ -5,7 +5,7 @@ import { prisma } from "../prisma.js";
 import { requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
-import { projectVisibilityFilter } from "./projects.js";
+import { ensureTaskVisible, projectVisibilityFilter } from "./projects.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -107,6 +107,7 @@ tasksRouter.patch(
     if (body.parentTaskId === id) {
       throw new HttpError(400, "invalid_parent", "Task cannot be its own parent");
     }
+    await ensureTaskVisible(req.user!, id);
 
     const data: Prisma.TaskUpdateInput = {};
     if (body.title !== undefined) data.title = body.title;
@@ -154,6 +155,7 @@ tasksRouter.delete(
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    await ensureTaskVisible(req.user!, id);
     await prisma.task.delete({ where: { id } });
     res.status(204).end();
   },
@@ -165,6 +167,7 @@ tasksRouter.get(
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    await ensureTaskVisible(req.user!, id);
     const comments = await prisma.comment.findMany({
       where: { taskId: id },
       orderBy: { createdAt: "asc" },
@@ -181,6 +184,7 @@ tasksRouter.post(
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const { body } = req.body as z.infer<typeof createCommentSchema>;
+    await ensureTaskVisible(req.user!, id);
     const comment = await prisma.comment.create({
       data: {
         taskId: id,
