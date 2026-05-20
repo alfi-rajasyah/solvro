@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-05-20 — IDOR cluster on task/section/label/project-PATCH endpoints
+
+A read-only audit found that `projectVisibilityFilter` was correctly applied on the routes added later (risks, notes, dependencies) but skipped on the older task/section/label routes and on the project PATCH route. As a result, any authed user with `task:write` or `project:write` (the default TAM role grants both globally) could read or mutate resources in any project by guessing the ID — the permission gate was the only thing scoping them, and permission ≠ visibility. Closed in one sweep across 11 routes.
+
+- **[backend/src/routes/projects.ts](backend/src/routes/projects.ts)** — added `ensureProjectVisible(user, projectId)` and `ensureTaskVisible(user, taskId)` helpers right under `projectVisibilityFilter`. Both follow the existing find-or-404 pattern used at risks/notes/dependencies (return 404, not 403, so the caller can't probe project existence). Wired into: `PATCH /:id`, `GET /:id/tasks`, `POST /:id/tasks`, `GET /:id/sections`, `POST /:id/sections`, `GET /:id/labels`, `POST /:id/labels`. The collection POSTs (`/tasks`, `/sections`, `/labels`) and the project PATCH were the data-mutation holes; the GETs were enumeration holes.
+- **[backend/src/routes/tasks.ts](backend/src/routes/tasks.ts)** — extended the `./projects.js` import to pull in `ensureTaskVisible`. Wired into: `PATCH /:id`, `DELETE /:id`, `GET /:id/comments`, `POST /:id/comments`. The task lookup is gated on the parent project's visibility filter, so a TAM with global `task:write` can no longer reach into tasks on projects they aren't assigned to.
+- **Behaviour unchanged** for users with `project:view-all` or `*` (admin / STAKEHOLDER): `projectVisibilityFilter` short-circuits to `{}`, so the visibility lookup finds the row and the request proceeds. No schema/migration changes; the helpers are pure async functions added to existing files.
+
 ### Removed — 2026-05-20 — `blueprint:create` / `blueprint:read` permissions (dead — not enforced anywhere)
 
 The two `blueprint:*` permission strings were placeholders for the Secure Ingestion Port (the planned SA blueprint → tasks webhook), which is not yet built. A repo-wide grep confirmed zero enforcement: no backend `requirePermission("blueprint:…")` or `hasPermission(user, "blueprint:…")` call sites, no `/webhook/blueprint` route, no frontend gate. Their only presence was the SA role seed and the PERMISSION_CATALOG tick-box, where they read as functional permissions but did nothing. Removed to stop confusing the editor; when the ingestion port is implemented they'll be re-introduced alongside the actual gate.

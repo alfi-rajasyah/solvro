@@ -79,6 +79,36 @@ export function projectVisibilityFilter(user: JwtPayload): Prisma.ProjectWhereIn
   return { OR: [{ tamId: user.sub }, { saId: user.sub }] };
 }
 
+// 404-if-not-visible preamble for project-nested routes. Mirrors the
+// inline pattern at the risks/notes/dependencies endpoints; extracted so
+// new project-scoped routes can't accidentally skip the visibility check
+// while still passing the permission gate. Returns 404 (not 403) on
+// purpose — don't tell the caller a project exists if they shouldn't see
+// it.
+export async function ensureProjectVisible(
+  user: JwtPayload,
+  projectId: number,
+): Promise<void> {
+  const project = await prisma.project.findFirst({
+    where: { id: projectId, ...projectVisibilityFilter(user) },
+    select: { id: true },
+  });
+  if (!project) throw new HttpError(404, "not_found", "Project not found");
+}
+
+// Same idea for routes that key off a task id and need to verify the
+// caller can see the parent project (tasks.ts PATCH/DELETE/comments).
+export async function ensureTaskVisible(
+  user: JwtPayload,
+  taskId: number,
+): Promise<void> {
+  const task = await prisma.task.findFirst({
+    where: { id: taskId, project: projectVisibilityFilter(user) },
+    select: { id: true },
+  });
+  if (!task) throw new HttpError(404, "not_found", "Task not found");
+}
+
 export const projectsRouter = Router();
 
 projectsRouter.use(requireAuth);
@@ -216,6 +246,7 @@ projectsRouter.patch(
   validate("body", updateProjectSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    await ensureProjectVisible(req.user!, id);
     const updated = await prisma.project.update({
       where: { id },
       data: req.body as z.infer<typeof updateProjectSchema>,
@@ -231,6 +262,7 @@ projectsRouter.get(
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const { status, parentTaskId } = req.query as unknown as z.infer<typeof taskListQuerySchema>;
+    await ensureProjectVisible(req.user!, id);
 
     const where: Prisma.TaskWhereInput = { projectId: id };
     if (status) where.status = status;
@@ -259,6 +291,7 @@ projectsRouter.post(
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const body = req.body as z.infer<typeof createTaskSchema>;
+    await ensureProjectVisible(req.user!, id);
 
     if (body.parentTaskId) {
       const parent = await prisma.task.findUnique({
@@ -302,6 +335,7 @@ projectsRouter.get(
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    await ensureProjectVisible(req.user!, id);
     const sections = await prisma.section.findMany({
       where: { projectId: id },
       orderBy: [{ position: "asc" }, { id: "asc" }],
@@ -318,6 +352,7 @@ projectsRouter.post(
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const body = req.body as z.infer<typeof createSectionSchema>;
+    await ensureProjectVisible(req.user!, id);
     const max = await prisma.section.aggregate({
       where: { projectId: id },
       _max: { position: true },
@@ -581,6 +616,7 @@ projectsRouter.get(
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    await ensureProjectVisible(req.user!, id);
     const labels = await prisma.label.findMany({
       where: { projectId: id },
       orderBy: { name: "asc" },
@@ -597,6 +633,7 @@ projectsRouter.post(
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const body = req.body as z.infer<typeof createLabelSchema>;
+    await ensureProjectVisible(req.user!, id);
     const label = await prisma.label.create({
       data: {
         projectId: id,
