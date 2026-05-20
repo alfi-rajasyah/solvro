@@ -876,13 +876,23 @@ export function useAdminCreateRole() {
 export function useAdminUpdateRolePermissions() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, permissions }: { id: number; permissions: string[] }) =>
+    mutationFn: ({
+      id,
+      permissions,
+      roleName,
+    }: {
+      id: number;
+      permissions: string[];
+      /** Optional rename. Backend rejects for reserved roles (PENDING). */
+      roleName?: string;
+    }) =>
       apiRequest<AdminRole>(`/admin/roles/${id}`, {
         method: "PATCH",
-        body: { permissions },
+        body: roleName ? { permissions, roleName } : { permissions },
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminQueryKeys.roles });
+      qc.invalidateQueries({ queryKey: adminQueryKeys.users });
     },
   });
 }

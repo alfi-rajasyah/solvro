@@ -1,24 +1,17 @@
 import { Router } from "express";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { hasPermission, requireAuth, type JwtPayload } from "../http/auth.js";
+import { requireAuth, type JwtPayload } from "../http/auth.js";
+import { projectVisibilityFilter } from "./projects.js";
 
 export const overviewRouter = Router();
 
 overviewRouter.use(requireAuth);
 
+// Single source of truth for project scoping — permission-based, shared
+// with the projects router (no role-name logic).
 function projectScope(user: JwtPayload): Prisma.ProjectWhereInput {
-  if (hasPermission(user, "*")) return {};
-  switch (user.role) {
-    case "STAKEHOLDER":
-      return {};
-    case "TAM":
-      return { tamId: user.sub };
-    case "SA":
-      return { saId: user.sub };
-    default:
-      return { OR: [{ tamId: user.sub }, { saId: user.sub }] };
-  }
+  return projectVisibilityFilter(user);
 }
 
 overviewRouter.get("/", async (req, res) => {

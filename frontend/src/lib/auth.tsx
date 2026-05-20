@@ -24,6 +24,26 @@ export interface AuthUser {
   permissions: string[];
 }
 
+// The permission vocabulary the app actually understands, for the Admin >
+// Roles tick-box editor. The backend stores permissions as a free-form
+// string array, so this is a curated catalogue (not enforced server-side) —
+// keep it in sync with the `requirePermission(...)` / `hasPermission(...)`
+// strings used across backend + frontend. "*" is full access (admin).
+export interface PermissionDef {
+  value: string;
+  label: string;
+  hint: string;
+}
+export const PERMISSION_CATALOG: PermissionDef[] = [
+  { value: "*", label: "Full access (admin)", hint: "Every permission, including the Admin area. Grant sparingly." },
+  { value: "project:view-all", label: "See all projects", hint: "Visibility: see every project, not just the ones you're assigned to as SA/TAM." },
+  { value: "project:read", label: "View projects", hint: "See projects, risks, sections, notes." },
+  { value: "project:write", label: "Manage projects", hint: "Create/edit projects, risks, sections, baselines." },
+  { value: "task:read", label: "View tasks", hint: "See tasks and subtasks." },
+  { value: "task:write", label: "Manage tasks", hint: "Create, edit, move, and delete tasks." },
+  { value: "report:read", label: "View reports", hint: "Access the Reports export packet." },
+];
+
 /**
  * Permission check used by UI gates. Wildcard "*" grants everything; a
  * specific permission grants just that one. Custom roles created in
