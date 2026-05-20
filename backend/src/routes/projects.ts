@@ -70,22 +70,13 @@ const taskListQuerySchema = z.object({
 });
 
 export function projectVisibilityFilter(user: JwtPayload): Prisma.ProjectWhereInput {
-  // Wildcard permission grants global visibility (built-in ADMIN, plus any
-  // custom role configured with "*" by the deployer in Admin > Roles).
-  if (hasPermission(user, "*")) return {};
-  switch (user.role) {
-    case "STAKEHOLDER":
-      return {};
-    case "TAM":
-      return { tamId: user.sub };
-    case "SA":
-      return { saId: user.sub };
-    default:
-      // Custom roles without "*": only see projects they're directly
-      // assigned to (as TAM or SA on the project row). Admin can grant
-      // broader access by adding "*" to that role's permissions.
-      return { OR: [{ tamId: user.sub }, { saId: user.sub }] };
-  }
+  // Permission-based, NOT role-name based. `project:view-all` (which "*"
+  // also satisfies via hasPermission) grants global visibility; everyone
+  // else sees only the projects they're attached to as the assigned TAM or
+  // SA on the project row. Admin grants broader access by adding
+  // "project:view-all" (or "*") to a role's permissions in Admin > Roles.
+  if (hasPermission(user, "project:view-all")) return {};
+  return { OR: [{ tamId: user.sub }, { saId: user.sub }] };
 }
 
 export const projectsRouter = Router();

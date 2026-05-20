@@ -1,5 +1,5 @@
 import { NavLink } from "react-router-dom";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import { useSidebar } from "./SidebarContext";
 
 interface NavItem {
@@ -27,7 +27,9 @@ const SIDEBAR_BG = "bg-[#0F1623] dark:bg-[#060912]";
 export function Sidebar() {
   const { open, toggle, close } = useSidebar();
   const { user } = useAuth();
-  const items = NAV_ITEMS.filter((i) => !i.adminOnly || user?.role === "ADMIN");
+  const items = NAV_ITEMS.filter(
+    (i) => !i.adminOnly || hasPermission(user, "*"),
+  );
 
   return (
     <>

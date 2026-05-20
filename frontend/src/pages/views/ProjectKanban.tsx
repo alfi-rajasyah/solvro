@@ -14,7 +14,7 @@ import { useProjectContext } from "../ProjectDetail";
 import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { TaskFormModal } from "@/components/TaskFormModal";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import { type Task, type TaskStatus, useProjectTasks, useUpdateTask } from "@/lib/queries";
 
 const COLUMNS: { id: TaskStatus; label: string; tone: string }[] = [
@@ -29,7 +29,9 @@ export function ProjectKanban() {
   const { data: tasks, isLoading, isError, error } = useProjectTasks(project.id);
   const updateTask = useUpdateTask(project.id);
 
-  const canMove = user?.role === "TAM" || user?.role === "ADMIN";
+  // Permission-based, not role-name based: anyone with task:write (which
+  // "*" also satisfies via hasPermission) can move cards.
+  const canMove = hasPermission(user, "task:write");
 
   const [activeId, setActiveId] = useState<number | null>(null);
   const [createStatus, setCreateStatus] = useState<TaskStatus | null>(null);

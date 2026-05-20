@@ -17,12 +17,29 @@ adminRouter.use(requireAuth, requireAdmin);
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
-// Built-in roles cannot be deleted or renamed: backend code (visibility
-// filters in routes/projects.ts, requireAdmin gate, requireRole guards)
-// references these names structurally. Custom roles created via
-// POST /admin/roles can have arbitrary names but won't trigger those
-// hardcoded code paths.
-const BUILTIN_ROLES = new Set(["ADMIN", "SA", "TAM", "STAKEHOLDER", "PENDING"]);
+// Phase 1 of the role-name teardown: visibility and the admin gate are now
+// permission-based, so ADMIN/SA/TAM/STAKEHOLDER are ordinary admin-managed
+// roles (renamable/deletable, subject to the anti-lockout guard). Only
+// PENDING is still protected: first-time Google sign-in still resolves it
+// by name (Phase 2 replaces that with a configurable default role).
+const PROTECTED_ROLES = new Set(["PENDING"]);
+
+// Admin access is permission-based ("*" wildcard), not role-name based.
+// This guard refuses any mutation that would leave zero active users whose
+// role grants "*" — otherwise nobody could reach /admin to undo it. Call it
+// inside the same $transaction as the mutation so a violation rolls back.
+async function ensureAdminsRemain(tx: Prisma.TransactionClient): Promise<void> {
+  const admins = await tx.user.count({
+    where: { active: true, role: { permissions: { array_contains: "*" } } },
+  });
+  if (admins === 0) {
+    throw new HttpError(
+      409,
+      "would_lock_out",
+      "That change would remove the last full-access (*) admin. Grant another role full access first.",
+    );
+  }
+}
 
 // ---- Users ----------------------------------------------------------------
 
@@ -136,16 +153,20 @@ adminRouter.patch(
     if (!target) {
       throw new HttpError(400, "role_not_found", `Role "${role}" does not exist`);
     }
-    const updated = await prisma.user.update({
-      where: { id },
-      data: { roleId: target.id },
-      select: {
-        id: true,
-        username: true,
-        email: true,
-        active: true,
-        role: { select: { roleName: true } },
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.update({
+        where: { id },
+        data: { roleId: target.id },
+        select: {
+          id: true,
+          username: true,
+          email: true,
+          active: true,
+          role: { select: { roleName: true } },
+        },
+      });
+      await ensureAdminsRemain(tx);
+      return u;
     });
     res.json({
       id: updated.id,
@@ -262,7 +283,7 @@ adminRouter.get("/roles", async (_req, res) => {
       roleName: r.roleName,
       permissions: r.permissions,
       userCount: r._count.users,
-      builtIn: BUILTIN_ROLES.has(r.roleName),
+      builtIn: PROTECTED_ROLES.has(r.roleName),
     })),
   );
 });
@@ -282,11 +303,11 @@ adminRouter.post(
   async (req, res) => {
     const { roleName, permissions } = req.body as z.infer<typeof createRoleSchema>;
 
-    if (BUILTIN_ROLES.has(roleName)) {
+    if (PROTECTED_ROLES.has(roleName)) {
       throw new HttpError(
         409,
-        "role_builtin",
-        `"${roleName}" is a built-in role and already exists`,
+        "role_reserved",
+        `"${roleName}" is a reserved role name`,
       );
     }
     const existing = await prisma.role.findUnique({ where: { roleName } });
@@ -310,6 +331,14 @@ adminRouter.post(
 
 const updateRolePermissionsSchema = z.object({
   permissions: z.array(z.string().min(1).max(100)).max(50),
+  // Optional rename. Same constraints as create; protected roles (PENDING)
+  // can't be renamed and a reserved name can't be taken.
+  roleName: z
+    .string()
+    .min(1)
+    .max(50)
+    .regex(/^[A-Z0-9_]+$/, "Role name must be uppercase letters, digits, or underscores")
+    .optional(),
 });
 
 adminRouter.patch(
@@ -318,34 +347,51 @@ adminRouter.patch(
   validate("body", updateRolePermissionsSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
-    const { permissions } = req.body as z.infer<typeof updateRolePermissionsSchema>;
+    const { permissions, roleName } = req.body as z.infer<
+      typeof updateRolePermissionsSchema
+    >;
 
     const existing = await prisma.role.findUnique({ where: { id } });
     if (!existing) throw new HttpError(404, "role_not_found", "Role not found");
-    if (existing.roleName === "ADMIN") {
-      throw new HttpError(
-        400,
-        "role_admin_immutable",
-        "ADMIN role permissions cannot be changed (always full access)",
-      );
+
+    const renaming = roleName !== undefined && roleName !== existing.roleName;
+    if (renaming) {
+      if (PROTECTED_ROLES.has(existing.roleName)) {
+        throw new HttpError(
+          400,
+          "role_protected",
+          `"${existing.roleName}" is reserved and cannot be renamed`,
+        );
+      }
+      if (PROTECTED_ROLES.has(roleName!)) {
+        throw new HttpError(400, "role_protected", `"${roleName}" is a reserved name`);
+      }
+      const clash = await prisma.role.findUnique({ where: { roleName: roleName! } });
+      if (clash) {
+        throw new HttpError(409, "role_exists", `Role "${roleName}" already exists`);
+      }
     }
 
-    const updated = await prisma.role.update({
-      where: { id },
-      data: { permissions },
-      select: {
-        id: true,
-        roleName: true,
-        permissions: true,
-        _count: { select: { users: true } },
-      },
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.role.update({
+        where: { id },
+        data: { permissions, ...(renaming ? { roleName: roleName! } : {}) },
+        select: {
+          id: true,
+          roleName: true,
+          permissions: true,
+          _count: { select: { users: true } },
+        },
+      });
+      await ensureAdminsRemain(tx);
+      return u;
     });
     res.json({
       id: updated.id,
       roleName: updated.roleName,
       permissions: updated.permissions,
       userCount: updated._count.users,
-      builtIn: BUILTIN_ROLES.has(updated.roleName),
+      builtIn: PROTECTED_ROLES.has(updated.roleName),
     });
   },
 );
@@ -360,11 +406,11 @@ adminRouter.delete(
       include: { _count: { select: { users: true } } },
     });
     if (!role) throw new HttpError(404, "role_not_found", "Role not found");
-    if (BUILTIN_ROLES.has(role.roleName)) {
+    if (PROTECTED_ROLES.has(role.roleName)) {
       throw new HttpError(
         400,
-        "role_builtin",
-        "Built-in roles cannot be deleted",
+        "role_protected",
+        `"${role.roleName}" is reserved and cannot be deleted`,
       );
     }
     if (role._count.users > 0) {
@@ -503,13 +549,8 @@ adminRouter.put(
     if (!tam.active) {
       throw new HttpError(400, "tam_inactive", "Target user is deactivated");
     }
-    if (tam.role.roleName !== "TAM" && tam.role.roleName !== "ADMIN") {
-      throw new HttpError(
-        400,
-        "tam_invalid_role",
-        "Target user must have TAM or ADMIN role",
-      );
-    }
+    // No role-name requirement: any active user can be a project's TAM
+    // (admin's choice). Role names no longer gate this.
 
     const updated = await prisma.project.update({
       where: { id: projectId },

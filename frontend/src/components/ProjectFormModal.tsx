@@ -58,17 +58,17 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
       setName("");
       setDescription("");
       setSaId("");
-      setTamId(user?.role === "TAM" ? user.id : "");
+      setTamId("");
       setCustomerId("");
       setStatus("PLANNING");
     }
   }, [open, project, user]);
 
-  // SA / TAM dropdowns are limited to literal SA/TAM-role users — those
-  // are the structural roles for project ownership. Wildcard-permission
-  // users (admin etc.) shouldn't clutter these pickers.
-  const sas = (users ?? []).filter((u) => u.role === "SA");
-  const tams = (users ?? []).filter((u) => u.role === "TAM");
+  // SA / TAM dropdowns list all users — role names no longer gate who's
+  // eligible to be assigned (admin's choice). Anti-self-clutter not done
+  // here because useUsers() doesn't expose `active`.
+  const sas = users ?? [];
+  const tams = users ?? [];
   const canPickTam = user?.permissions?.includes("*") ?? false;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {

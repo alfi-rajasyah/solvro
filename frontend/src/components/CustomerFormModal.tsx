@@ -26,11 +26,12 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  // Solution Architect is a dropdown of literal SA-role users.
-  // Account Manager is a free-text field — AMs may not have user
-  // accounts in this system at all (external sales contacts, etc.).
+  // Solution Architect dropdown lists all users — role names no longer
+  // gate eligibility. Account Manager is a free-text field — AMs may
+  // not have user accounts in this system at all (external sales
+  // contacts, etc.).
   const solutionArchitectOptions = useMemo(
-    () => (users ?? []).filter((u) => u.role === "SA"),
+    () => users ?? [],
     [users],
   );
 

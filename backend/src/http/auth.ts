@@ -88,13 +88,15 @@ export function requirePermission(permission: string): RequestHandler {
   };
 }
 
-// Strict admin gate — must run AFTER requireAuth. Rejects everything except
-// JWTs whose role claim is exactly "ADMIN". Use as a router-level middleware
-// for the entire /admin tree, not per-route.
+// Admin gate — must run AFTER requireAuth. Admin access is permission-based,
+// not role-name based: any role whose permissions include the "*" wildcard
+// is an admin (the built-in ADMIN role, plus any custom role the deployer
+// grants full access). Use as a router-level middleware for the entire
+// /admin tree, not per-route.
 export const requireAdmin: RequestHandler = (req, _res, next) => {
   if (!req.user) return next(new HttpError(401, "unauthenticated", "Not authenticated"));
-  if (req.user.role !== "ADMIN") {
-    return next(new HttpError(403, "forbidden", "Admin role required"));
+  if (!hasPermission(req.user, "*")) {
+    return next(new HttpError(403, "forbidden", "Admin access required"));
   }
   next();
 };

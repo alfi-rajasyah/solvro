@@ -27,7 +27,7 @@ import {
   useUpdateService,
 } from "@/lib/queries";
 import type { Role } from "@/lib/auth";
-import { useAuth } from "@/lib/auth";
+import { PERMISSION_CATALOG, useAuth } from "@/lib/auth";
 
 type Tab = "users" | "roles" | "signin" | "projects" | "services";
 
@@ -456,6 +456,63 @@ function AdminKpi({
 
 // ---- Roles tab ------------------------------------------------------------
 
+// Tick-box editor over the curated PERMISSION_CATALOG. "*" (Full access)
+// supersedes the rest: when it's on, the specific permissions show as
+// implied + disabled; ticking a specific one drops the wildcard.
+function PermissionPicker({
+  value,
+  onChange,
+}: {
+  value: string[];
+  onChange: (v: string[]) => void;
+}) {
+  const all = value.includes("*");
+  function toggle(perm: string) {
+    if (perm === "*") {
+      onChange(all ? [] : ["*"]);
+      return;
+    }
+    if (all) {
+      onChange([perm]); // selecting a specific permission drops the wildcard
+      return;
+    }
+    onChange(
+      value.includes(perm)
+        ? value.filter((p) => p !== perm)
+        : [...value, perm],
+    );
+  }
+  return (
+    <ul className="divide-y divide-outline-variant/60 rounded border border-outline-variant bg-surface">
+      {PERMISSION_CATALOG.map((perm) => {
+        const isWildcard = perm.value === "*";
+        const checked = isWildcard ? all : all || value.includes(perm.value);
+        const disabled = all && !isWildcard;
+        return (
+          <li key={perm.value}>
+            <label
+              title={perm.hint}
+              className={`flex items-center gap-2.5 px-3 py-1.5 text-[13px] ${
+                disabled ? "opacity-50" : "cursor-pointer hover:bg-surface-container-low"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={checked}
+                disabled={disabled}
+                onChange={() => toggle(perm.value)}
+                className="accent-primary"
+              />
+              <span className="font-mono text-on-surface">{perm.value}</span>
+              <span className="text-on-surface-variant">— {perm.label}</span>
+            </label>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
 function RolesTab() {
   const { data: roles, isLoading, isError } = useAdminRoles();
   const createRole = useAdminCreateRole();
@@ -463,19 +520,13 @@ function RolesTab() {
   const deleteRole = useAdminDeleteRole();
   const [error, setError] = useState<string | null>(null);
   const [newName, setNewName] = useState("");
-  const [newPerms, setNewPerms] = useState("");
+  const [newPerms, setNewPerms] = useState<string[]>([]);
   const [editingId, setEditingId] = useState<number | null>(null);
-  const [editPerms, setEditPerms] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editPerms, setEditPerms] = useState<string[]>([]);
 
   if (isLoading) return <p className="text-on-surface-variant">Loading roles…</p>;
   if (isError || !roles) return <p className="text-error">Failed to load roles.</p>;
-
-  function parsePerms(raw: string): string[] {
-    return raw
-      .split(/[,\n]/)
-      .map((p) => p.trim())
-      .filter((p) => p.length > 0);
-  }
 
   async function handleCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -489,10 +540,10 @@ function RolesTab() {
     try {
       await createRole.mutateAsync({
         roleName: trimmed,
-        permissions: parsePerms(newPerms),
+        permissions: newPerms,
       });
       setNewName("");
-      setNewPerms("");
+      setNewPerms([]);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create role.");
     }
@@ -500,21 +551,33 @@ function RolesTab() {
 
   function startEdit(r: AdminRole) {
     setEditingId(r.id);
-    setEditPerms(r.permissions.join(", "));
+    setEditName(r.roleName);
+    setEditPerms(r.permissions);
     setError(null);
   }
 
-  async function saveEdit() {
+  async function saveEdit(original: AdminRole) {
     if (editingId === null) return;
     setError(null);
+    const trimmedName = editName.trim().toUpperCase();
+    if (!trimmedName) {
+      setError("Role name is required.");
+      return;
+    }
+    if (!/^[A-Z0-9_]+$/.test(trimmedName)) {
+      setError("Role name must be uppercase letters, digits, or underscores.");
+      return;
+    }
+    const renamed = trimmedName !== original.roleName;
     try {
       await updatePerms.mutateAsync({
         id: editingId,
-        permissions: parsePerms(editPerms),
+        permissions: editPerms,
+        ...(renamed ? { roleName: trimmedName } : {}),
       });
       setEditingId(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save permissions.");
+      setError(err instanceof ApiError ? err.message : "Could not save role.");
     }
   }
 
@@ -530,14 +593,16 @@ function RolesTab() {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-on-surface-variant">
-        Built-in roles (ADMIN, SA, TAM, STAKEHOLDER, PENDING) are referenced by
-        name in backend code and cannot be deleted or renamed. PENDING is the
-        auto-provisioning role for first-time Google sign-ins — assign a real
-        role from the Users tab to grant access. Custom roles you create here
-        can be assigned to users but won't trigger built-in code paths (e.g.
-        project visibility filters) — grant access by assigning users directly
-        as TAM/SA on specific projects.
+      <p className="text-sm leading-relaxed text-on-surface-variant">
+        Create, rename and delete roles; tick permissions.{" "}
+        <code className="font-mono text-on-surface">*</code> grants admin
+        access.{" "}
+        <code className="font-mono text-on-surface">project:view-all</code>{" "}
+        reveals every project — without it, users only see projects where
+        they're the assigned SA or TAM. The last full-access admin can't be
+        removed.{" "}
+        <code className="font-mono text-on-surface">PENDING</code> is reserved
+        (Google first-login landing role).
       </p>
 
       {error && (
@@ -548,11 +613,11 @@ function RolesTab() {
 
       <form
         onSubmit={handleCreate}
-        className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
+        className="space-y-3 rounded border border-outline-variant bg-surface-container-lowest p-3"
       >
-        <label className="w-full md:flex-1 md:min-w-[160px]">
+        <label className="block">
           <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-            Role name (uppercase)
+            Role name
           </span>
           <input
             type="text"
@@ -563,25 +628,21 @@ function RolesTab() {
             className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm uppercase focus:border-primary focus:outline-none"
           />
         </label>
-        <label className="w-full md:flex-[2] md:min-w-[240px]">
+        <div>
           <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-            Permissions (comma-separated, optional)
+            Permissions
           </span>
-          <input
-            type="text"
-            value={newPerms}
-            onChange={(e) => setNewPerms(e.target.value)}
-            placeholder="project:read, task:write"
-            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={createRole.isPending || !newName.trim()}
-          className="w-full rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
-        >
-          {createRole.isPending ? "Adding…" : "Add role"}
-        </button>
+          <PermissionPicker value={newPerms} onChange={setNewPerms} />
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="submit"
+            disabled={createRole.isPending || !newName.trim()}
+            className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+          >
+            {createRole.isPending ? "Adding…" : "Add role"}
+          </button>
+        </div>
       </form>
 
       <div className="overflow-x-auto rounded border border-outline-variant bg-surface">
@@ -596,7 +657,6 @@ function RolesTab() {
           </thead>
           <tbody>
             {roles.map((r) => {
-              const isAdmin = r.roleName === "ADMIN";
               const isEditing = editingId === r.id;
               return (
                 <tr
@@ -604,29 +664,54 @@ function RolesTab() {
                   className="border-b border-outline-variant/60 last:border-0"
                 >
                   <td className="px-3 py-2 align-top">
-                    <span className="font-mono font-medium text-on-surface">
-                      {r.roleName}
-                    </span>
+                    {isEditing ? (
+                      <input
+                        type="text"
+                        value={editName}
+                        onChange={(e) => setEditName(e.target.value)}
+                        disabled={r.builtIn}
+                        maxLength={50}
+                        className="w-32 rounded border border-outline-variant bg-surface px-2 py-1 font-mono text-sm uppercase focus:border-primary focus:outline-none disabled:opacity-60"
+                        title={
+                          r.builtIn
+                            ? "This role is reserved and cannot be renamed"
+                            : undefined
+                        }
+                      />
+                    ) : (
+                      <span className="font-mono font-medium text-on-surface">
+                        {r.roleName}
+                      </span>
+                    )}
                     {r.builtIn && (
-                      <span className="ml-2 rounded-full bg-primary/10 px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-primary">
-                        Built-in
+                      <span className="ml-2 rounded-full bg-surface-container-high px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                        Reserved
                       </span>
                     )}
                   </td>
                   <td className="px-3 py-2 align-top text-on-surface-variant">
                     {isEditing ? (
-                      <input
-                        type="text"
+                      <PermissionPicker
                         value={editPerms}
-                        onChange={(e) => setEditPerms(e.target.value)}
-                        className="w-full rounded border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                        onChange={setEditPerms}
                       />
                     ) : r.permissions.length === 0 ? (
                       <span className="text-on-surface-variant/60">—</span>
                     ) : (
-                      <span className="font-mono text-[13px]">
-                        {r.permissions.join(", ")}
-                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {r.permissions.map((p) => (
+                          <span
+                            key={p}
+                            className={`rounded px-1.5 py-0.5 font-mono text-[11px] ${
+                              p === "*"
+                                ? "bg-primary/15 text-primary"
+                                : "bg-surface-container-high text-on-surface"
+                            }`}
+                          >
+                            {p === "*" ? "* full access" : p}
+                          </span>
+                        ))}
+                      </div>
                     )}
                   </td>
                   <td className="px-3 py-2 align-top text-right font-mono text-[13px] text-on-surface-variant">
@@ -638,7 +723,7 @@ function RolesTab() {
                         <>
                           <button
                             type="button"
-                            onClick={saveEdit}
+                            onClick={() => saveEdit(r)}
                             disabled={updatePerms.isPending}
                             className="rounded bg-primary px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
                           >
@@ -657,15 +742,9 @@ function RolesTab() {
                           <button
                             type="button"
                             onClick={() => startEdit(r)}
-                            disabled={isAdmin}
-                            className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
-                            title={
-                              isAdmin
-                                ? "ADMIN permissions are always full access"
-                                : undefined
-                            }
+                            className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                           >
-                            Edit perms
+                            Edit
                           </button>
                           <button
                             type="button"
@@ -674,7 +753,7 @@ function RolesTab() {
                             className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
                             title={
                               r.builtIn
-                                ? "Built-in role"
+                                ? "Reserved role"
                                 : r.userCount > 0
                                   ? "Reassign users first"
                                   : undefined
@@ -1133,11 +1212,10 @@ function ProjectsTab() {
   const reassign = useAdminReassignProject();
   const [error, setError] = useState<string | null>(null);
 
+  // Any active user can be a project's TAM — no role-name gate (role names
+  // no longer drive who's eligible). Admin's choice.
   const tamCandidates = useMemo(
-    () =>
-      (users ?? []).filter(
-        (u) => u.active && (u.role === "TAM" || u.role === "ADMIN"),
-      ),
+    () => (users ?? []).filter((u) => u.active),
     [users],
   );
 

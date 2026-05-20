@@ -12,9 +12,9 @@ const prisma = new PrismaClient();
 // state until the admin promotes the user from Admin > Users).
 const ROLE_PERMISSIONS: Record<string, string[]> = {
   ADMIN: ["*"],
-  SA: ["blueprint:create", "blueprint:read", "project:read"],
+  SA: ["project:read"],
   TAM: ["project:read", "project:write", "task:read", "task:write"],
-  STAKEHOLDER: ["project:read", "report:read"],
+  STAKEHOLDER: ["project:read", "report:read", "project:view-all"],
   PENDING: [],
 };
 
