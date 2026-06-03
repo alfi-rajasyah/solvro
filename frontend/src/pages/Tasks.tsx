@@ -123,7 +123,7 @@ export function Tasks() {
         <button
           type="button"
           onClick={() => setFilter({ topLevel: true })}
-          className="ml-auto rounded-lg border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+          className="ml-auto rounded border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
         >
           Reset
         </button>

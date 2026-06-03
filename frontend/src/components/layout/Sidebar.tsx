@@ -53,7 +53,7 @@ export function Sidebar() {
           // resolve to their `.dark` values even when the app is in light mode.
           "dark fixed left-0 top-0 z-50 h-screen flex-col overflow-hidden border-r border-black/30 font-display text-slate-300 transition-[width] duration-200 ease-out",
           SIDEBAR_BG,
-          open ? "flex w-sidebar" : "hidden w-16 md:flex",
+          open ? "flex w-sidebar" : "hidden w-sidebar-collapsed md:flex",
         ].join(" ")}
       >
         <div

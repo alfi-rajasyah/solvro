@@ -152,10 +152,9 @@ export function Login() {
             <span className="text-primary">Ship</span> on time.
           </h1>
           <p
-            className="mt-3"
+            className="mt-3 text-on-surface-variant/45"
             style={{
               fontSize: 12,
-              color: "rgba(255,255,255,0.45)",
               maxWidth: 240,
               lineHeight: 1.6,
             }}
@@ -167,13 +166,10 @@ export function Login() {
               (label) => (
                 <span
                   key={label}
-                  className="border-primary/30 text-primary/80"
+                  className="rounded-full border border-primary/30 text-primary/80"
                   style={{
                     fontSize: 10,
                     padding: "3px 10px",
-                    borderRadius: 20,
-                    borderWidth: "0.5px",
-                    borderStyle: "solid",
                   }}
                 >
                   {label}
@@ -185,8 +181,8 @@ export function Login() {
 
         {/* Footer version/build */}
         <div
-          className="relative z-10"
-          style={{ fontSize: 10, color: "rgba(255,255,255,0.2)" }}
+          className="relative z-10 text-on-surface-variant/20"
+          style={{ fontSize: 10 }}
         >
           v1.4.0 · build 2305
         </div>

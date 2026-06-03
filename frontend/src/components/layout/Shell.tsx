@@ -10,7 +10,7 @@ function ShellLayout() {
   // expanded sidebar overlays the content instead of pushing it. Desktop only:
   // open → 260px (ml-sidebar), collapsed → 64px (ml-16). On mobile the sidebar
   // is an overlay drawer, so no shift (base has no margin).
-  const shift = open ? "md:ml-sidebar" : "md:ml-16";
+  const shift = open ? "md:ml-sidebar" : "md:ml-sidebar-collapsed";
   return (
     <div className="h-screen w-full overflow-hidden bg-background text-on-surface">
       <Sidebar />

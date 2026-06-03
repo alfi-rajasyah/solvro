@@ -352,7 +352,7 @@ function UsersTab() {
                       className={[
                         "rounded-full px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
                         u.active
-                          ? "bg-emerald-100 text-emerald-700"
+                          ? "bg-chip-emerald-bg text-chip-emerald-text"
                           : "bg-surface-container-high text-on-surface-variant",
                       ].join(" ")}
                     >
@@ -820,7 +820,7 @@ function SignInTab() {
               className={[
                 "grid h-10 w-10 shrink-0 place-items-center rounded-full",
                 connected
-                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                  ? "bg-chip-emerald-bg text-chip-emerald-text"
                   : "bg-surface-container-high text-on-surface-variant",
               ].join(" ")}
             >
@@ -837,7 +837,7 @@ function SignInTab() {
                   className={[
                     "rounded-full px-2 py-0.5 font-display text-[11px] font-semibold uppercase tracking-wider",
                     connected
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                      ? "bg-chip-emerald-bg text-chip-emerald-text"
                       : halfConfigured
                         ? "bg-chip-amber-bg text-chip-amber-text"
                         : "bg-surface-container-high text-on-surface-variant",
@@ -1495,7 +1495,7 @@ function ServicesTab() {
                       className={[
                         "rounded-full px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
                         s.active
-                          ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
+                          ? "bg-chip-emerald-bg text-chip-emerald-text"
                           : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest",
                       ].join(" ")}
                       title="Click to toggle"

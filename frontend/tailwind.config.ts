@@ -112,6 +112,10 @@ const config: Config = {
       },
       spacing: {
         sidebar: "260px",
+        // Collapsed (icon-only) sidebar rail width. Shared by the rail itself
+        // (w-sidebar-collapsed) and the canvas/top-bar left offset
+        // (ml-sidebar-collapsed) so they can't drift. = old hardcoded w-16/ml-16.
+        "sidebar-collapsed": "4rem",
         "context-panel": "320px",
       },
     },

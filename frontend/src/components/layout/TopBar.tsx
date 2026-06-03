@@ -48,7 +48,7 @@ export function TopBar() {
   return (
     <header
       className={`sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-outline-variant bg-surface-container-lowest px-4 font-display transition-[margin] duration-200 ease-out md:gap-4 md:px-6 ${
-        open ? "md:ml-sidebar" : "md:ml-16"
+        open ? "md:ml-sidebar" : "md:ml-sidebar-collapsed"
       }`}
     >
       <button
