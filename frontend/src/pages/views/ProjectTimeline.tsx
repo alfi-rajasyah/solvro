@@ -177,7 +177,7 @@ function TimelineItem({
                 onClick={() => onChangeStatus(s)}
                 disabled={task.status === s}
                 className={[
-                  "rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider transition-colors",
+                  "rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider transition-colors",
                   task.status === s
                     ? "cursor-default bg-primary text-on-primary"
                     : "border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary",

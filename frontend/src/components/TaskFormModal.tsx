@@ -412,7 +412,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
 
         {/* Attachments placeholder */}
         <div>
-          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <p className="mb-1.5 text-label-caps uppercase tracking-wider text-on-surface-variant">
             Attachments
           </p>
           <button
@@ -426,7 +426,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
 
         {/* Description */}
         <div>
-          <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <p className="mb-1.5 text-label-caps uppercase tracking-wider text-on-surface-variant">
             Description
           </p>
           <textarea
@@ -443,7 +443,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
         {/* Subtasks */}
         {isEdit && editingTask && (
           <div>
-            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+            <p className="mb-1.5 text-label-caps uppercase tracking-wider text-on-surface-variant">
               Subtasks {subtasks.length > 0 && `· ${subtasks.length}`}
             </p>
             {subtasks.length === 0 ? (

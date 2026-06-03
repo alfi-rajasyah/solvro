@@ -163,14 +163,14 @@ export function ProjectList() {
 
   return (
     <>
-      <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest shadow-card">
+      <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest">
         {/* Toolbar */}
         <div className="flex items-center gap-2 border-b border-outline-variant px-3 py-2">
           {canEdit && (
             <button
               type="button"
               onClick={() => setCreateTaskCtx({ sectionId: null, parentTaskId: null })}
-              className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
+              className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Add task
@@ -180,7 +180,7 @@ export function ProjectList() {
             <button
               type="button"
               onClick={() => setAddingSection(true)}
-              className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+              className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Add section
@@ -198,7 +198,7 @@ export function ProjectList() {
         )}
 
         {/* Column headers */}
-        <div className="hidden grid-cols-[36px_minmax(240px,1fr)_190px_170px_80px_48px_28px] items-center border-b border-outline-variant bg-surface-container-low px-3 py-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant md:grid">
+        <div className="hidden grid-cols-[36px_minmax(240px,1fr)_190px_170px_80px_48px_28px] items-center border-b border-outline-variant bg-surface-container-low px-3 py-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant md:grid">
           <span></span>
           <span>Task</span>
           <span>Status</span>
@@ -263,7 +263,7 @@ export function ProjectList() {
             <button
               type="submit"
               disabled={createSection.isPending || !newSectionName.trim()}
-              className="rounded bg-primary px-2 py-1 font-display text-[11px] font-bold uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
             >
               Add
             </button>
@@ -381,7 +381,7 @@ function SectionBlock({
             />
             <button
               type="submit"
-              className="rounded bg-primary px-2 py-0.5 font-display text-[11px] font-bold uppercase text-on-primary"
+              className="rounded bg-primary px-2 py-0.5 font-display text-label-caps uppercase text-on-primary"
             >
               {section ? "Save" : "Create"}
             </button>

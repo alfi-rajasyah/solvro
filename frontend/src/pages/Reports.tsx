@@ -50,7 +50,7 @@ export function Reports() {
       <div className="grid gap-6 lg:grid-cols-[280px_1fr]">
         {/* Project picker — the TAM's ACTIVE projects only */}
         <aside className="space-y-2">
-          <h2 className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <h2 className="text-label-caps uppercase tracking-wider text-on-surface-variant">
             Your active projects
           </h2>
 

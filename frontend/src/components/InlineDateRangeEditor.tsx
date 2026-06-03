@@ -68,7 +68,7 @@ export function InlineDateRangeEditor({
       ].join(" ")}
     >
       <label className="flex items-center gap-2 py-0.5">
-        <span className="w-10 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+        <span className="w-10 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
           Start
         </span>
         <input
@@ -79,7 +79,7 @@ export function InlineDateRangeEditor({
         />
       </label>
       <label className="flex items-center gap-2 py-0.5">
-        <span className="w-10 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+        <span className="w-10 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
           Due
         </span>
         <input
@@ -93,13 +93,13 @@ export function InlineDateRangeEditor({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded px-1.5 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+          className="rounded px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="rounded bg-primary px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
+          className="rounded bg-primary px-2 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
         >
           Save
         </button>

@@ -80,7 +80,7 @@ export function ProjectOverview() {
       </div>
 
       {/* S-Curve segment */}
-      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
+      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="font-display text-base font-semibold text-on-surface">
@@ -154,9 +154,9 @@ function Kpi({
           ? "text-primary"
           : "text-on-surface";
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card">
+    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">{label}</span>
+        <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${accent === "primary" ? "text-primary" : accent === "emerald" ? "text-emerald-600" : accent === "error" ? "text-error" : "text-on-surface-variant"}`}>{icon}</span>
       </div>
       <div className={`mt-2 font-mono text-3xl font-bold tabular-nums ${accentClass}`}>{value}</div>

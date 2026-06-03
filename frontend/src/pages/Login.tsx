@@ -8,6 +8,7 @@ import {
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useGoogleAuthConfig } from "@/lib/queries";
+import { BrandMark } from "@/components/BrandMark";
 
 function messageForApiError(err: ApiError): string {
   const code =
@@ -89,10 +90,14 @@ export function Login() {
     }
   }
 
+  // `dark` is hard-pinned on the root below: the login screen always renders
+  // in dark mode regardless of the user's theme preference. Scoping the class
+  // to this subtree makes every CSS-var token resolve to its `.dark` value.
   return (
-    <div className="grid h-screen grid-cols-1 overflow-hidden bg-background md:grid-cols-[44%_1fr]">
-      {/* Left brand panel */}
-      <div className="relative hidden flex-col justify-between overflow-hidden bg-[#191919] p-10 md:flex">
+    <div className="dark grid h-screen grid-cols-1 overflow-hidden bg-background md:grid-cols-[44%_1fr]">
+      {/* Left brand panel. Wordmark pinned top, footer pinned bottom; the hero
+          copy gets `my-auto` to vertically center it in the space between. */}
+      <div className="relative hidden flex-col overflow-hidden bg-background p-10 md:flex">
         {/* Decorative rings */}
         <div
           aria-hidden
@@ -112,14 +117,7 @@ export function Login() {
 
         {/* Wordmark */}
         <div className="relative z-10 flex items-center gap-2.5">
-          <div
-            className="grid place-items-center bg-primary"
-            style={{ width: 32, height: 32, borderRadius: 7 }}
-          >
-            <span style={{ color: "#191919", fontSize: 13, fontWeight: 600 }}>
-              SV
-            </span>
-          </div>
+          <BrandMark className="h-8 w-8" />
           <span
             className="text-white"
             style={{ fontSize: 15, fontWeight: 500, letterSpacing: "-0.2px" }}
@@ -129,7 +127,7 @@ export function Login() {
         </div>
 
         {/* Hero copy */}
-        <div className="relative z-10">
+        <div className="relative z-10 my-auto">
           <div
             className="mb-3 font-semibold text-primary"
             style={{
@@ -138,20 +136,20 @@ export function Login() {
               letterSpacing: "0.1em",
             }}
           >
-            TAM Operations Platform
+            Project Operations
           </div>
           <h1
             className="text-white"
             style={{
-              fontSize: 26,
+              fontSize: 40,
               fontWeight: 600,
-              letterSpacing: "-0.4px",
-              lineHeight: 1.25,
+              letterSpacing: "-1px",
+              lineHeight: 1.1,
             }}
           >
-            Bridge SAs and TAMs.
+            Manage projects.
             <br />
-            <span className="text-primary">Ship projects</span> on time.
+            <span className="text-primary">Ship</span> on time.
           </h1>
           <p
             className="mt-3"
@@ -162,12 +160,10 @@ export function Login() {
               lineHeight: 1.6,
             }}
           >
-            Solution Architect blueprints flow into Solvro through a Secure
-            Ingestion Port and become actionable, scheduled work for the TAM
-            team.
+            One place to track projects, log updates, and report to customers.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            {["Blueprint ingestion", "Daily review", "Progress export"].map(
+            {["Project tracking", "Daily notes", "Customer reports"].map(
               (label) => (
                 <span
                   key={label}
@@ -197,18 +193,11 @@ export function Login() {
       </div>
 
       {/* Right form panel */}
-      <div className="flex flex-col items-center justify-center bg-surface-container-lowest px-8">
+      <div className="flex flex-col items-center justify-center bg-surface px-8">
         <div className="w-full" style={{ maxWidth: 280 }}>
           {/* Mobile-only wordmark */}
           <div className="mb-8 flex items-center gap-2.5 md:hidden">
-            <div
-              className="grid place-items-center bg-primary"
-              style={{ width: 32, height: 32, borderRadius: 7 }}
-            >
-              <span style={{ color: "#191919", fontSize: 13, fontWeight: 600 }}>
-                SV
-              </span>
-            </div>
+            <BrandMark className="h-8 w-8" />
             <span
               className="text-on-surface"
               style={{ fontSize: 15, fontWeight: 500, letterSpacing: "-0.2px" }}
@@ -298,10 +287,10 @@ export function Login() {
               noValidate
             >
               <label className="block">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">
                   Email
                 </span>
-                <div className="mt-1 flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-[#8DC63F] focus-within:shadow-[0_0_0_3px_rgba(141,198,63,0.15)]">
+                <div className="mt-1 flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
                   <span className="material-symbols-outlined text-base text-on-surface-variant">
                     mail
                   </span>
@@ -318,10 +307,10 @@ export function Login() {
               </label>
 
               <label className="block">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">
                   Password
                 </span>
-                <div className="mt-1 flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-[#8DC63F] focus-within:shadow-[0_0_0_3px_rgba(141,198,63,0.15)]">
+                <div className="mt-1 flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
                   <span className="material-symbols-outlined text-base text-on-surface-variant">
                     lock
                   </span>
@@ -350,7 +339,7 @@ export function Login() {
               <button
                 type="submit"
                 disabled={submitting}
-                className="mt-1 w-full rounded bg-[#191919] py-2 font-display text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-[#2e2e2e] disabled:opacity-60"
+                className="mt-1 w-full rounded bg-ink py-2 font-display text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-ink-hover disabled:opacity-60"
               >
                 {submitting ? "Signing in…" : "Sign in"}
               </button>

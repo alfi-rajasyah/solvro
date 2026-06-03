@@ -105,7 +105,7 @@ export function CustomerDetail() {
         </Link>
         <div className="mt-2 grid gap-4 md:grid-cols-3">
           {/* Identity card */}
-          <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card md:col-span-1">
+          <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 md:col-span-1">
             <div className="mb-3 flex items-center gap-3">
               <div
                 className="grid h-12 w-12 shrink-0 place-items-center rounded font-display text-lg font-bold text-white"
@@ -141,7 +141,7 @@ export function CustomerDetail() {
                 <button
                   type="button"
                   onClick={() => setEditOpen(true)}
-                  className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary"
+                  className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary"
                 >
                   <span className="material-symbols-outlined text-base">edit</span>
                   Edit
@@ -150,7 +150,7 @@ export function CustomerDetail() {
                   type="button"
                   onClick={handleDelete}
                   disabled={deleteCustomer.isPending}
-                  className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-error hover:text-error disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-error hover:text-error disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined text-base">delete</span>
                   Delete
@@ -348,7 +348,7 @@ function OverviewTab({
                       </Link>
                     </td>
                     <td className="px-3 py-2">
-                      <span className="rounded bg-surface-container-low px-1.5 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                      <span className="rounded bg-surface-container-low px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
                         {p.status}
                       </span>
                     </td>
@@ -390,9 +390,9 @@ function CustomerKpi({
           ? "text-amber-600"
           : "text-on-surface-variant";
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card">
+    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">{label}</span>
+        <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
@@ -560,7 +560,7 @@ function ProfileCompletionCard({
               <button
                 type="button"
                 onClick={item.onAction}
-                className="shrink-0 rounded border border-outline-variant px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+                className="shrink-0 rounded border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
               >
                 {item.actionLabel}
               </button>
@@ -767,7 +767,7 @@ function ToolsEditor({
 
   return (
     <div>
-      <p className="mb-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <p className="mb-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
         Tools used
       </p>
       <div className="flex flex-wrap items-center gap-1.5">

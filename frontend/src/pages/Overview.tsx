@@ -90,7 +90,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
 
       {/* Two-up: S-curve + recent */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card lg:col-span-2">
+        <div className="rounded border border-outline-variant bg-surface-container-lowest p-5 lg:col-span-2">
           <header className="mb-3 flex items-start justify-between gap-3">
             <div>
               <h3 className="font-display text-sm font-bold text-on-surface">Portfolio progress</h3>
@@ -145,7 +145,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
           </div>
         </div>
 
-        <div className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
+        <div className="rounded border border-outline-variant bg-surface-container-lowest p-5">
           <header className="mb-3 flex items-center justify-between">
             <h3 className="font-display text-sm font-bold text-on-surface">Recent activity</h3>
             <Link to="/projects" className="text-[11px] font-semibold text-primary hover:underline">
@@ -157,7 +157,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
       </div>
 
       {/* Recent projects strip */}
-      <div className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
+      <div className="rounded border border-outline-variant bg-surface-container-lowest p-5">
         <header className="mb-3 flex items-center justify-between">
           <h3 className="font-display text-sm font-bold text-on-surface">Projects needing attention</h3>
           <Link to="/projects" className="text-[11px] font-semibold text-primary hover:underline">
@@ -228,9 +228,9 @@ function Kpi({ label, value, hint, icon, tone }: KpiProps) {
           ? "text-amber-600"
           : "text-on-surface-variant";
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card">
+    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">{label}</span>
+        <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
@@ -282,7 +282,7 @@ function ProjectStatusPill({ status }: { status: string }) {
           ? "bg-error-container text-on-error-container"
           : "bg-surface-container text-on-surface-variant";
   return (
-    <span className={`shrink-0 rounded-full px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider ${tone}`}>
+    <span className={`shrink-0 rounded-full px-2 py-0.5 font-display text-label-caps uppercase tracking-wider ${tone}`}>
       {status.replace("_", " ")}
     </span>
   );

@@ -211,7 +211,7 @@ function UsersTab() {
           <button
             type="button"
             onClick={() => setResetResult(null)}
-            className="mt-2 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-on-surface"
+            className="mt-2 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:text-on-surface"
           >
             Dismiss
           </button>
@@ -222,7 +222,7 @@ function UsersTab() {
         className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
       >
         <label className="w-full md:flex-1 md:min-w-[160px]">
-          <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
             Email
           </span>
           <input
@@ -234,7 +234,7 @@ function UsersTab() {
           />
         </label>
         <label className="w-full md:flex-1 md:min-w-[120px]">
-          <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
             Username
           </span>
           <input
@@ -247,7 +247,7 @@ function UsersTab() {
           />
         </label>
         <label className="w-full md:flex-1 md:min-w-[140px]">
-          <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
             Password (min 8)
           </span>
           <input
@@ -259,7 +259,7 @@ function UsersTab() {
           />
         </label>
         <label className="w-full md:w-auto md:min-w-[120px]">
-          <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
             Role
           </span>
           <select
@@ -350,7 +350,7 @@ function UsersTab() {
                   <td className="px-3 py-2">
                     <span
                       className={[
-                        "rounded-full px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider",
+                        "rounded-full px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
                         u.active
                           ? "bg-emerald-100 text-emerald-700"
                           : "bg-surface-container-high text-on-surface-variant",
@@ -365,7 +365,7 @@ function UsersTab() {
                         type="button"
                         onClick={() => handleToggleActive(u)}
                         disabled={isSelf}
-                        className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
                         title={isSelf ? "You cannot deactivate yourself" : undefined}
                       >
                         {u.active ? "Deactivate" : "Reactivate"}
@@ -373,7 +373,7 @@ function UsersTab() {
                       <button
                         type="button"
                         onClick={() => handleResetPassword(u)}
-                        className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                        className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                       >
                         Reset password
                       </button>
@@ -381,7 +381,7 @@ function UsersTab() {
                         type="button"
                         onClick={() => handleDelete(u)}
                         disabled={isSelf || deleteUser.isPending}
-                        className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
                         title={
                           isSelf
                             ? "You cannot delete yourself"
@@ -441,9 +441,9 @@ function AdminKpi({
           ? "text-amber-600"
           : "text-on-surface-variant";
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card">
+    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
-        <span className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">{label}</span>
+        <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
@@ -616,7 +616,7 @@ function RolesTab() {
         className="space-y-3 rounded border border-outline-variant bg-surface-container-lowest p-3"
       >
         <label className="block">
-          <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
             Role name
           </span>
           <input
@@ -629,7 +629,7 @@ function RolesTab() {
           />
         </label>
         <div>
-          <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
             Permissions
           </span>
           <PermissionPicker value={newPerms} onChange={setNewPerms} />
@@ -725,14 +725,14 @@ function RolesTab() {
                             type="button"
                             onClick={() => saveEdit(r)}
                             disabled={updatePerms.isPending}
-                            className="rounded bg-primary px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
+                            className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
                           >
                             Save
                           </button>
                           <button
                             type="button"
                             onClick={() => setEditingId(null)}
-                            className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
                           >
                             Cancel
                           </button>
@@ -742,7 +742,7 @@ function RolesTab() {
                           <button
                             type="button"
                             onClick={() => startEdit(r)}
-                            className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                           >
                             Edit
                           </button>
@@ -750,7 +750,7 @@ function RolesTab() {
                             type="button"
                             onClick={() => handleDelete(r)}
                             disabled={r.builtIn || r.userCount > 0}
-                            className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
                             title={
                               r.builtIn
                                 ? "Reserved role"
@@ -870,7 +870,7 @@ function SignInTab() {
           <div className="mt-4 grid gap-3 border-t border-outline-variant pt-4 sm:grid-cols-2">
             <ClientIdField id={data.googleClientId!} />
             <div>
-              <div className="mb-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <div className="mb-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
                 Allowed domains
               </div>
               <div className="flex flex-wrap gap-1.5">
@@ -920,7 +920,7 @@ function ClientIdField({ id }: { id: string }) {
   return (
     <div>
       <div className="mb-1 flex items-center gap-2">
-        <span className="font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+        <span className="font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
           Client ID
         </span>
         <button
@@ -1114,7 +1114,7 @@ function SignInModal({
         <div>
           <label className="block">
             <span className="mb-1 flex items-center justify-between gap-2">
-              <span className="font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <span className="font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
                 Google OAuth Client ID
               </span>
               <button
@@ -1147,7 +1147,7 @@ function SignInModal({
         </div>
 
         <div>
-          <div className="mb-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <div className="mb-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
             Allowed email domains
           </div>
           <div className="flex flex-wrap gap-2">
@@ -1268,7 +1268,7 @@ function ProjectsTab() {
                 </td>
                 <td className="px-3 py-2 text-on-surface-variant">{p.sa.username}</td>
                 <td className="px-3 py-2">
-                  <span className="rounded bg-surface-container-low px-1.5 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                  <span className="rounded bg-surface-container-low px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
                     {p.status}
                   </span>
                 </td>
@@ -1400,7 +1400,7 @@ function ServicesTab() {
         className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
       >
         <label className="w-full md:flex-1 md:min-w-[160px]">
-          <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
             Name
           </span>
           <input
@@ -1413,7 +1413,7 @@ function ServicesTab() {
           />
         </label>
         <label className="w-full md:flex-[2] md:min-w-[240px]">
-          <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
             Description
           </span>
           <input
@@ -1493,7 +1493,7 @@ function ServicesTab() {
                       type="button"
                       onClick={() => toggleActive(s)}
                       className={[
-                        "rounded-full px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider",
+                        "rounded-full px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
                         s.active
                           ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-200"
                           : "bg-surface-container-high text-on-surface-variant hover:bg-surface-container-highest",
@@ -1511,7 +1511,7 @@ function ServicesTab() {
                             type="button"
                             onClick={saveEdit}
                             disabled={update.isPending || !editName.trim()}
-                            className="rounded bg-primary px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
+                            className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
                           >
                             Save
                           </button>
@@ -1519,7 +1519,7 @@ function ServicesTab() {
                             type="button"
                             onClick={() => setEditingId(null)}
                             disabled={update.isPending}
-                            className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
                           >
                             Cancel
                           </button>
@@ -1529,14 +1529,14 @@ function ServicesTab() {
                           <button
                             type="button"
                             onClick={() => startEdit(s)}
-                            className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDelete(s)}
-                            className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
+                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
                           >
                             Delete
                           </button>

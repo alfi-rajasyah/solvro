@@ -44,7 +44,7 @@ export function Modal({
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex max-h-screen w-full ${widthClass} flex-col rounded-none border-outline-variant bg-surface-container-lowest shadow-card md:h-auto md:max-h-[calc(100vh-2rem)] md:rounded md:border`}
+        className={`flex max-h-screen w-full ${widthClass} flex-col rounded-none border-outline-variant bg-surface-container-lowest shadow-overlay md:h-auto md:max-h-[calc(100vh-2rem)] md:rounded md:border`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {customHeader !== undefined ? (

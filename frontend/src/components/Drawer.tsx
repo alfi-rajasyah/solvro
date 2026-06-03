@@ -86,7 +86,7 @@ export function Drawer({
         role="dialog"
         aria-label={title}
         className={[
-          "flex h-full w-full flex-col border-l border-outline-variant bg-surface-container-lowest shadow-card transition-transform duration-200 ease-out",
+          "flex h-full w-full flex-col border-l border-outline-variant bg-surface-container-lowest shadow-overlay transition-transform duration-200 ease-out",
           widthClass,
           shown && !closing ? "translate-x-0" : "translate-x-full",
         ].join(" ")}

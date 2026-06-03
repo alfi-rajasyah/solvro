@@ -17,7 +17,7 @@ const PAGE_TITLES: Record<string, string> = {
 export function TopBar() {
   const { user, logout } = useAuth();
   const { resolved, toggle } = useTheme();
-  const { toggle: toggleSidebar } = useSidebar();
+  const { open, toggle: toggleSidebar } = useSidebar();
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
@@ -46,7 +46,11 @@ export function TopBar() {
   }
 
   return (
-    <header className="sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-outline-variant bg-surface-container-lowest px-4 font-display md:ml-16 md:gap-4 md:px-6">
+    <header
+      className={`sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-outline-variant bg-surface-container-lowest px-4 font-display transition-[margin] duration-200 ease-out md:gap-4 md:px-6 ${
+        open ? "md:ml-sidebar" : "md:ml-16"
+      }`}
+    >
       <button
         type="button"
         onClick={toggleSidebar}
@@ -139,7 +143,7 @@ export function TopBar() {
                 onClick={() => setMenuOpen(false)}
                 className="fixed inset-0 z-40 cursor-default"
               />
-              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded border border-outline-variant bg-surface-container-lowest py-1 shadow-card">
+              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
                 <div className="border-b border-outline-variant px-3 py-2 text-[12px] text-on-surface-variant">
                   <div className="font-medium text-on-surface">{user?.email}</div>
                   <div className="text-[10px] font-bold uppercase tracking-wider">

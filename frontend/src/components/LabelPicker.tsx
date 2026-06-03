@@ -74,7 +74,7 @@ export function LabelPicker({
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="rounded border border-dashed border-outline-variant px-1.5 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+            className="rounded border border-dashed border-outline-variant px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
           >
             + Label
           </button>
@@ -99,7 +99,7 @@ export function LabelPicker({
             <button
               type="submit"
               disabled={createLabel.isPending || !newName.trim()}
-              className="rounded bg-primary px-2 py-1 font-display text-[11px] font-bold uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
             >
               {createLabel.isPending ? "…" : "Add"}
             </button>

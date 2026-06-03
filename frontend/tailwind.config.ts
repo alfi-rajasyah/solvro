@@ -52,14 +52,25 @@ const config: Config = {
         "chip-rose-text": c("--rose-text"),
         "chip-violet-bg": c("--violet-bg"),
         "chip-violet-text": c("--violet-text"),
+        // Fixed brand "ink" — a near-black that does NOT flip with the theme.
+        // Used for always-dark brand chrome (login hero panel, dark CTA, the
+        // wordmark glyph on the green logo tile). Literal, not CSS-var-routed.
+        ink: "#191919",
+        "ink-hover": "#2e2e2e",
+        // Sidebar charcoal — DESIGN.md fixes this at #232321 in BOTH themes
+        // (the rail stays dark even in light mode). Fixed, not theme-flipping.
+        sidebar: "#232321",
       },
+      // Radius scale is canonical per DESIGN.md `rounded` frontmatter.
+      // 0.25rem default; large radii are forbidden. `full` is reserved for
+      // pill chips and avatars only. (No 2xl/3xl — DESIGN.md defines none.)
       borderRadius: {
-        sm: "0.25rem",
-        DEFAULT: "0.5rem",
-        md: "0.75rem",
-        lg: "1rem",
-        xl: "1.5rem",
-        "2xl": "2rem",
+        sm: "0.125rem",
+        DEFAULT: "0.25rem",
+        md: "0.375rem",
+        lg: "0.5rem",
+        xl: "0.75rem",
+        full: "9999px",
       },
       fontFamily: {
         display: ['"Source Sans 3"', "system-ui", "sans-serif"],
@@ -76,13 +87,15 @@ const config: Config = {
         "2xl": ["25px", { lineHeight: "1.4" }],
         "3xl": ["31px", { lineHeight: "1.3" }],
         "4xl": ["37px", { lineHeight: "1.2" }],
-        // App-specific tokens (also +1–2px).
-        h1: ["34px", { lineHeight: "1.2", fontWeight: "600" }],
-        h2: ["26px", { lineHeight: "1.2", fontWeight: "600" }],
-        "body-lg": ["17px", { lineHeight: "1.5", fontWeight: "400" }],
-        "body-sm": ["15px", { lineHeight: "1.5", fontWeight: "400" }],
+        // App-specific tokens — canonical per DESIGN.md `typography`
+        // frontmatter. Keep these exact; they are the named roles the spec
+        // defines (the xs..4xl scale above is a separate non-DESIGN override).
+        h1: ["32px", { lineHeight: "1.2", fontWeight: "600" }],
+        h2: ["24px", { lineHeight: "1.2", fontWeight: "600" }],
+        "body-lg": ["16px", { lineHeight: "1.5", fontWeight: "450" }],
+        "body-sm": ["15px", { lineHeight: "1.5", fontWeight: "450" }],
         "data-mono": [
-          "14px",
+          "13px",
           { lineHeight: "1.4", letterSpacing: "-0.01em", fontWeight: "500" },
         ],
         "label-caps": [
@@ -90,9 +103,12 @@ const config: Config = {
           { lineHeight: "1", letterSpacing: "0.05em", fontWeight: "700" },
         ],
       },
+      // DESIGN.md: elevation is 1px outlines + tonal shifts, NOT drop shadows.
+      // The single sanctioned exception is the floating overlay layer — modals,
+      // drawer, dropdown menus, context panel. Regular cards use borders only,
+      // so there is deliberately no `card` token.
       boxShadow: {
-        card: "0 1px 4px rgba(0,0,0,0.07), 0 2px 12px rgba(0,0,0,0.04)",
-        sidebar: "2px 0 8px rgba(0,0,0,0.05)",
+        overlay: "0 4px 24px rgba(0,0,0,0.18)",
       },
       spacing: {
         sidebar: "260px",

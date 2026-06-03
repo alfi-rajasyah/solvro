@@ -1,11 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
-import { projectVisibilityFilter } from "./projects.js";
+import { ensureProjectVisible } from "../lib/visibility.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -23,12 +22,9 @@ async function loadVisibleDependency(req: Parameters<typeof requireAuth>[0], id:
     select: { id: true, projectId: true },
   });
   if (!dep) throw new HttpError(404, "not_found", "Dependency not found");
-  const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
-  const project = await prisma.project.findFirst({
-    where: { id: dep.projectId, ...filter },
-    select: { id: true },
-  });
-  if (!project) throw new HttpError(404, "not_found", "Dependency not found");
+  // Reuse the shared helper for the parent-project visibility check, matching
+  // every other router (404 on not-visible).
+  await ensureProjectVisible(req.user!, dep.projectId);
   return dep;
 }
 

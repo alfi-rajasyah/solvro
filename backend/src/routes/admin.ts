@@ -12,7 +12,8 @@ import { bustAuthConfigCache } from "../authConfig.js";
 export const adminRouter = Router();
 
 // Strict admin gate for the entire tree. requireAuth populates req.user;
-// requireAdmin rejects anything that isn't role === "ADMIN".
+// requireAdmin is permission-based — it admits any user whose role grants the
+// "*" wildcard permission, not a role-name === "ADMIN" check. See e3f1cbd.
 adminRouter.use(requireAuth, requireAdmin);
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });

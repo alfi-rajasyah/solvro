@@ -44,7 +44,7 @@ export function Customers() {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary transition-colors hover:bg-primary-container"
+            className="inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-primary transition-colors hover:bg-primary-container"
           >
             <span className="material-symbols-outlined text-base">add</span>
             New customer
@@ -124,7 +124,7 @@ function CustomerCard({
   return (
     <Link
       to={`/customers/${customer.id}`}
-      className="group flex flex-col rounded border border-outline-variant bg-surface-container-lowest p-4 shadow-card transition-colors hover:border-primary"
+      className="group flex flex-col rounded border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary"
     >
       <div className="mb-3 flex items-center gap-3">
         <div
@@ -185,7 +185,7 @@ function CustomerCard({
                 e.preventDefault();
                 onEdit();
               }}
-              className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-primary"
+              className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-primary"
             >
               Edit
             </button>
@@ -195,7 +195,7 @@ function CustomerCard({
                 e.preventDefault();
                 onDelete();
               }}
-              className="rounded px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
+              className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
             >
               Delete
             </button>
