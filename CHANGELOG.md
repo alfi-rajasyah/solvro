@@ -15,6 +15,20 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-06-03 — Track DESIGN.md (remove from .gitignore)
+
+- **[.gitignore](.gitignore)** — removed `DESIGN.md` from the "design/product docs" ignore block so the canonical design source-of-truth is versioned. `PRD.md` and `UI Design/` stay local-only; `CLAUDE.md` remains gitignored (by request — its edits stay local).
+- **[DESIGN.md](DESIGN.md)** — now tracked, committed at its current state (Elitery-green/charcoal palette, spec radius scale, body weight 450, body-sm 15px, label-caps 12px, `#ebebe7` typo fix).
+
+### Changed — 2026-06-03 — CLAUDE.md: Daily Review marked SHIPPED
+
+- **[CLAUDE.md](CLAUDE.md)** — Daily Review is built, so: canonical-decisions line changed from "NOT YET BUILT" to "SHIPPED" (keeping the `INTERNAL`-default / never-exported invariant); `DailyReview.tsx` added to the "Shipped pages" routing list; removed the Daily Review spec from "Features Not Yet Built" and renumbered the remaining items (1. Secure Ingestion Port, 2. Reports Screen Revamp).
+- **[ISSUES.md](ISSUES.md)** — dropped the now-resolved "CLAUDE.md says Daily Review NOT YET BUILT" drift item.
+
+### Added — 2026-06-03 — ISSUES.md tracking doc
+
+- **[ISSUES.md](ISSUES.md)** (new, repo root) — known bugs / doc-drift, pending features, deferred decisions, tech debt, and verification debt, compiled from CLAUDE.md, this changelog, and session history.
+
 ### Fixed — 2026-06-03 — UI review: design-token compliance pass
 
 Reviewer line numbers were stale; located each by content.
