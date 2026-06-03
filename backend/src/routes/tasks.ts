@@ -5,7 +5,7 @@ import { prisma } from "../prisma.js";
 import { requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
-import { ensureTaskVisible, projectVisibilityFilter } from "./projects.js";
+import { ensureTaskVisible, projectVisibilityFilter } from "../lib/visibility.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -16,8 +16,11 @@ const updateTaskSchema = z.object({
   priority: z.nativeEnum(Priority).optional(),
   startDate: z.coerce.date().nullable().optional(),
   dueDate: z.coerce.date().nullable().optional(),
-  baselineStartDate: z.coerce.date().nullable().optional(),
-  baselineDueDate: z.coerce.date().nullable().optional(),
+  // baselineStartDate / baselineDueDate are intentionally NOT accepted here —
+  // they are server-set only, snapshotted by POST /projects/:id/baseline.
+  // Accepting them from clients would let any task:write user overwrite the
+  // Gantt planned-vs-actual baseline. (The data mapping never wrote them, but
+  // keep them out of the schema so that stays true.)
   assignedToId: z.number().int().positive().nullable().optional(),
   parentTaskId: z.number().int().positive().nullable().optional(),
   sectionId: z.number().int().positive().nullable().optional(),
@@ -104,10 +107,14 @@ tasksRouter.patch(
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const body = req.body as z.infer<typeof updateTaskSchema>;
 
+    // Visibility first: a caller who can't see the task must get a 404 before
+    // any field-level validation, so the self-parent guard can't be used as a
+    // 400-vs-404 existence oracle for tasks on projects they can't see.
+    await ensureTaskVisible(req.user!, id);
+
     if (body.parentTaskId === id) {
       throw new HttpError(400, "invalid_parent", "Task cannot be its own parent");
     }
-    await ensureTaskVisible(req.user!, id);
 
     const data: Prisma.TaskUpdateInput = {};
     if (body.title !== undefined) data.title = body.title;

@@ -33,8 +33,8 @@ export function ProjectDetail() {
   if (isLoading) {
     return (
       <div className="space-y-4">
-        <div className="h-24 animate-pulse rounded-xl bg-surface-container-low shadow-card" />
-        <div className="h-64 animate-pulse rounded-xl bg-surface-container-low shadow-card" />
+        <div className="h-24 animate-pulse rounded-xl bg-surface-container-low" />
+        <div className="h-64 animate-pulse rounded-xl bg-surface-container-low" />
       </div>
     );
   }

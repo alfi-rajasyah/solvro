@@ -3,39 +3,43 @@
 @tailwind utilities;
 
 @layer base {
-  /* Light theme — blue-gray base (#F0F4F9) derived from AProjectO design language. */
+  /* Light theme — off-white surfaces, Elitery Green primary darkened to
+     #2d9042 for WCAG contrast on white. Values from DESIGN.md frontmatter
+     light overrides; tokens the spec omits for light (inverse-*, *-container,
+     secondary/tertiary, error family) are derived from the same palette —
+     see CHANGELOG. */
   :root {
-    --surface: 240 244 249;
-    --surface-dim: 210 218 228;
-    --surface-bright: 248 250 253;
+    --surface: 249 249 247;
+    --surface-dim: 232 232 228;
+    --surface-bright: 255 255 255;
     --surface-container-lowest: 255 255 255;
-    --surface-container-low: 240 244 249;
-    --surface-container: 232 238 245;
-    --surface-container-high: 224 231 239;
-    --surface-container-highest: 213 221 232;
-    --on-surface: 25 27 35;
-    --on-surface-variant: 66 71 84;
-    --inverse-surface: 46 48 56;
-    --inverse-on-surface: 239 240 250;
-    --outline: 114 119 133;
-    --outline-variant: 209 214 226;
-    --primary: 141 198 63;
+    --surface-container-low: 242 242 238;
+    --surface-container: 235 235 231;
+    --surface-container-high: 228 228 224;
+    --surface-container-highest: 222 222 218;
+    --on-surface: 26 26 24;
+    --on-surface-variant: 74 74 71;
+    --inverse-surface: 35 35 33;
+    --inverse-on-surface: 240 237 232;
+    --outline: 154 154 151;
+    --outline-variant: 208 208 204;
+    --primary: 45 144 66;
     --on-primary: 255 255 255;
-    --primary-container: 122 181 47;
-    --on-primary-container: 254 252 255;
-    --inverse-primary: 173 198 255;
-    --secondary: 86 94 116;
+    --primary-container: 200 230 207;
+    --on-primary-container: 15 43 22;
+    --inverse-primary: 58 174 81;
+    --secondary: 95 94 87;
     --on-secondary: 255 255 255;
-    --secondary-container: 218 226 253;
-    --on-secondary-container: 92 100 122;
-    --tertiary: 88 93 96;
+    --secondary-container: 224 223 216;
+    --on-secondary-container: 50 50 48;
+    --tertiary: 90 95 90;
     --on-tertiary: 255 255 255;
     --error: 186 26 26;
     --on-error: 255 255 255;
     --error-container: 255 218 214;
     --on-error-container: 147 0 10;
-    --background: 240 244 249;
-    --on-background: 25 27 35;
+    --background: 249 249 247;
+    --on-background: 26 26 24;
     /* Chip / status palette — light tone bg + saturated text. */
     --emerald-bg: 220 252 231;
     --emerald-text: 22 163 74;
@@ -47,39 +51,40 @@
     --violet-text: 109 40 217;
   }
 
-  /* Dark theme — blue-gray dark palette derived from the same hue family. */
+  /* Dark theme (default) — warm charcoal surfaces + Elitery Green primary.
+     Exact values from DESIGN.md frontmatter (dark is the canonical default). */
   .dark {
-    --surface: 15 20 30;
-    --surface-dim: 11 15 22;
-    --surface-bright: 30 38 55;
-    --surface-container-lowest: 9 12 18;
-    --surface-container-low: 15 20 30;
-    --surface-container: 22 28 40;
-    --surface-container-high: 28 35 50;
-    --surface-container-highest: 36 44 62;
-    --on-surface: 220 226 238;
-    --on-surface-variant: 170 178 198;
-    --inverse-surface: 220 226 238;
-    --inverse-on-surface: 46 54 72;
-    --outline: 120 130 155;
-    --outline-variant: 50 60 80;
-    --primary: 141 198 63;
-    --on-primary: 0 48 99;
-    --primary-container: 122 181 47;
-    --on-primary-container: 216 226 255;
-    --inverse-primary: 0 88 190;
-    --secondary: 185 194 218;
-    --on-secondary: 36 44 62;
-    --secondary-container: 55 64 84;
-    --on-secondary-container: 218 226 253;
-    --tertiary: 188 196 202;
-    --on-tertiary: 38 46 50;
-    --error: 255 180 171;
-    --on-error: 105 0 5;
-    --error-container: 147 0 10;
-    --on-error-container: 255 218 214;
-    --background: 15 20 30;
-    --on-background: 220 226 238;
+    --surface: 35 35 33;
+    --surface-dim: 26 26 24;
+    --surface-bright: 42 42 40;
+    --surface-container-lowest: 26 26 24;
+    --surface-container-low: 35 35 33;
+    --surface-container: 42 42 40;
+    --surface-container-high: 50 50 48;
+    --surface-container-highest: 58 58 55;
+    --on-surface: 240 237 232;
+    --on-surface-variant: 176 173 168;
+    --inverse-surface: 240 237 232;
+    --inverse-on-surface: 35 35 33;
+    --outline: 74 74 71;
+    --outline-variant: 58 58 55;
+    --primary: 58 174 81;
+    --on-primary: 15 43 22;
+    --primary-container: 45 144 66;
+    --on-primary-container: 232 247 235;
+    --inverse-primary: 45 144 66;
+    --secondary: 136 135 128;
+    --on-secondary: 26 26 24;
+    --secondary-container: 50 50 48;
+    --on-secondary-container: 176 173 168;
+    --tertiary: 112 117 112;
+    --on-tertiary: 240 237 232;
+    --error: 248 113 113;
+    --on-error: 42 10 10;
+    --error-container: 61 18 18;
+    --on-error-container: 252 165 165;
+    --background: 26 26 24;
+    --on-background: 240 237 232;
     --emerald-bg: 6 78 59;
     --emerald-text: 167 243 208;
     --amber-bg: 120 53 15;
@@ -96,6 +101,10 @@
     height: 100%;
   }
   body {
+    /* Body weight is 450 (not 400), carried by the `text-body-sm` token in
+       tailwind.config.ts and inherited app-wide. Needs the Source Sans 3
+       variable font (loaded via the wght@300..700 range in index.html) to
+       render the 450 instance. */
     @apply bg-background text-on-surface font-body text-body-sm antialiased;
     transition: background-color 150ms ease, color 150ms ease;
   }
@@ -135,8 +144,8 @@
   --diagram-node-meta: #64748b;
   --diagram-grid: rgba(15, 23, 42, 0.10);
   --diagram-shadow: 0 2px 6px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
-  --diagram-glow: 0, 88, 190;
-  --cp-stroke: #0058be;
+  --diagram-glow: 58, 174, 81;
+  --cp-stroke: #3aae51;
 
   background: var(--diagram-canvas-bg);
 }

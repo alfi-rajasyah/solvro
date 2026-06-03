@@ -1,8 +1,22 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { requireAuth, requirePermission } from "../http/auth.js";
+import { requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
+import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
+import { ensureProjectVisible } from "../lib/visibility.js";
+
+// Resolve the label's owning project and 404 if the caller can't see it.
+// `task:write` alone doesn't scope the caller to a project, so without this any
+// writer could mutate labels by guessing the id (IDOR).
+async function ensureLabelVisible(user: JwtPayload, labelId: number) {
+  const label = await prisma.label.findUnique({
+    where: { id: labelId },
+    select: { projectId: true },
+  });
+  if (!label) throw new HttpError(404, "not_found", "Label not found");
+  await ensureProjectVisible(user, label.projectId);
+}
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -25,6 +39,7 @@ labelsRouter.patch(
   validate("body", updateLabelSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    await ensureLabelVisible(req.user!, id);
     const updated = await prisma.label.update({
       where: { id },
       data: req.body as z.infer<typeof updateLabelSchema>,
@@ -39,6 +54,7 @@ labelsRouter.delete(
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    await ensureLabelVisible(req.user!, id);
     await prisma.label.delete({ where: { id } });
     res.status(204).end();
   },

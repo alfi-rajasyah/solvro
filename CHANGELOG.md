@@ -15,6 +15,130 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-06-03 — Migrate caps labels to the `text-label-caps` token (now the single source of truth)
+
+Follow-up to the label-caps token bump: the token was previously unused (caps labels were hardcoded). Migrated all usages so the token actually drives card/section labels — they now render at the token's 12px.
+
+- **96 occurrences across 21 files** — replaced the ad-hoc `text-[11px] font-bold uppercase` with `text-label-caps uppercase`. The token supplies font-size (12px), font-weight (700), and letter-spacing (0.05em); only `uppercase` (text-transform, not part of the token) is kept inline. Net visual change vs. before: 11px → 12px, plus the token's 0.05em tracking (≈ `tracking-wider`) and `line-height: 1`.
+- Verified: `text-[11px] font-bold uppercase` now appears 0×; `.text-label-caps` compiles to `font-size:12px; font-weight:700; letter-spacing:0.05em`; no size-class collisions; typecheck clean.
+- Not migrated (intentional variants, left as-is): 4× `text-[11px] uppercase` (no bold) and 1× `text-[11px] font-semibold uppercase` (lighter weight) — adopting the 700-weight token would change their look.
+
+### Changed — 2026-06-03 — Bump body-sm 14→15px, label-caps 11→12px; login hero headline 26→40px
+
+- **[frontend/tailwind.config.ts](frontend/tailwind.config.ts)** + **[DESIGN.md](DESIGN.md)** — `body-sm` fontSize 14px → 15px; `label-caps` fontSize 11px → 12px (both files kept in sync). `body-sm` is live app-wide (inherited via `@apply text-body-sm` on `<body>`; confirmed 15px in served CSS). **Caveat:** the `text-label-caps` utility is referenced by **zero** components — the app's caps labels are hardcoded as `text-[11px] font-bold uppercase` (96 sites) — so the token bump is correct but has no rendered effect until those usages adopt the token (or are bumped to `text-[12px]`). Flagged for a follow-up decision.
+- **[frontend/src/pages/Login.tsx](frontend/src/pages/Login.tsx)** — login hero headline `fontSize` 26 → 40px (`lineHeight` 1.25 → 1.1, `letterSpacing` -0.4px → -1px) so it reads as a proper hero, not body text. Hero copy stays vertically centered via the existing `my-auto`.
+
+### Changed — 2026-06-03 — Login two-tone split (Direction A): hero #1a1a18 / form #232321
+
+- **[frontend/src/pages/Login.tsx](frontend/src/pages/Login.tsx)** — left hero panel `bg-ink` (#191919) → `bg-background` (#1a1a18, darker); right sign-in panel `bg-surface-container-lowest` → `bg-surface` (#232321, slightly lighter). The login is `dark`-pinned so these theme tokens resolve to the requested dark charcoal hexes (`--background` = 26 26 24, `--surface` = 35 35 33) in both app themes. Used the named DESIGN.md tokens rather than inline hex per the theme-token convention. The dark `bg-ink` CTA button and the `bg-surface-container-lowest` input wells now read as darker insets against the lighter form panel.
+
+### Changed — 2026-06-03 — Body text weight 400 → 450 (variable font)
+
+- **[frontend/tailwind.config.ts](frontend/tailwind.config.ts)** + **[DESIGN.md](DESIGN.md)** — `body-lg` / `body-sm` typography tokens `fontWeight` 400 → 450 (DESIGN.md frontmatter updated too, so the canonical spec doesn't drift). Headings (600), `data-mono` (500), and `label-caps` (700) unchanged. Body weight is inherited app-wide via `@apply text-body-sm` on `<body>`.
+- **[frontend/index.html](frontend/index.html)** — Source Sans 3 now loaded as the **variable** font (`wght@300..700` range) instead of discrete static instances (`wght@300;400;500;600;700`). Static instances would snap `font-weight:450` to the nearest available (500); the variable axis renders a true 450. Range covers all weights in use (300–700).
+- **[frontend/src/index.css](frontend/src/index.css)** — added a comment at the `body` rule documenting the 450 weight + variable-font dependency.
+- Two `font-normal` (400) usages (`DailyReview.tsx`, `GanttListRow.tsx`) are `font-mono` numeric labels — intentionally left at 400.
+
+### Fixed — 2026-06-03 — Stop generated tailwind.config.js from shadowing the .ts source (root-caused the session's "stale CSS")
+
+`npm run build` runs `tsc -b`, and `tsconfig.node.json` (`composite: true`) included `tailwind.config.ts` / `vite.config.ts`, so tsc emitted `tailwind.config.js` / `vite.config.js` **in the project root**. PostCSS/Tailwind (and Vite) resolve `.js` before `.ts`, so the stale compiled `tailwind.config.js` silently shadowed the real `tailwind.config.ts` — every `tailwind.config.ts` edit in dev had no effect until a build regenerated the `.js`. This caused repeated "stale CSS" misdiagnoses this session (ink/sidebar/radius/shadow/weight tokens appearing not to apply).
+
+- **[frontend/tsconfig.node.json](frontend/tsconfig.node.json)** — added `"outDir": "./node_modules/.cache/tsconfig-node"` so `tsc -b` emits the compiled config artifacts into a cache dir instead of next to the sources. `composite` forces emit, so redirecting it is the fix.
+- Deleted the stale generated `frontend/tailwind.config.js` and `frontend/vite.config.js`; added both to **[.gitignore](.gitignore)** (build artifacts, not sources — `postcss.config.js` is a real source and stays tracked).
+- Verified: after `npm run build`, no `*.config.js` shadow reappears in root; dev server serves the live `tailwind.config.ts` (body weight 450 confirmed in served CSS); typecheck clean.
+
+### Added — 2026-06-03 — Elitery brand mark assets + favicon
+
+- **[frontend/src/assets/brand/](frontend/src/assets/brand/)** (new dir) — `elitery-mark-on-dark.png` (light-grey "e" for dark surfaces) and `elitery-mark-on-light.png` (dark-grey "e" for light surfaces). Renamed from the supplied `BRAND MARK E-0{1,2}.png` (spaces removed, role baked into the name) so they import cleanly via the `@/` alias.
+- **[frontend/public/](frontend/public/)** (new dir) — `favicon.png` (copy of the on-light mark; dark ink reads on the usual light browser tab strip).
+
+### Changed — 2026-06-03 — Theme-adaptive BrandMark component
+
+- **[frontend/src/components/BrandMark.tsx](frontend/src/components/BrandMark.tsx)** (new) — renders both Elitery marks and toggles them via the `dark:` variant: dark-ink mark (`elitery-mark-on-light.png`) on light surfaces, light-ink mark (`elitery-mark-on-dark.png`) on dark surfaces. Keys off the nearest `.dark` context, so the mark is correct on any surface/theme without hardcoding a variant.
+- **[frontend/src/pages/Login.tsx](frontend/src/pages/Login.tsx)**, **[frontend/src/components/layout/Sidebar.tsx](frontend/src/components/layout/Sidebar.tsx)** — replaced the three hardcoded on-dark `<img>` uses with `<BrandMark>`; dropped the direct asset imports. Note: login + sidebar are `dark`-pinned surfaces, so `BrandMark` resolves to the light-ink mark on them in **both** app themes (correct — those surfaces are always dark). The adaptive swap only changes the mark where the surface itself follows the theme.
+
+### Changed — 2026-06-03 — Wire Elitery logo into login + sidebar; set favicon
+
+- **[frontend/src/pages/Login.tsx](frontend/src/pages/Login.tsx)** — replaced the placeholder green `bg-primary` "SV" tiles (desktop hero wordmark + mobile wordmark) with the on-dark Elitery mark (`<img class="h-8 w-8 object-contain">`). Login is pinned dark so both sit on dark surfaces. "Solvro" product wordmark text kept alongside (Elitery = company, Solvro = product).
+- **[frontend/src/components/layout/Sidebar.tsx](frontend/src/components/layout/Sidebar.tsx)** — replaced the green `terminal`-icon tile in the expanded-rail wordmark with the on-dark mark. Collapsed rail unchanged (toggle button only).
+- **[frontend/index.html](frontend/index.html)** — added `<link rel="icon" type="image/png" href="/favicon.png" />` (there was no favicon before).
+
+### Fixed — 2026-06-03 — Login hero copy vertically centered in the left panel
+
+- **[frontend/src/pages/Login.tsx](frontend/src/pages/Login.tsx)** — the left brand panel used `flex-col justify-between` across three children (wordmark / hero copy / footer), which spread them by equal gaps and pushed the hero copy low. Dropped `justify-between` and added `my-auto` to the hero-copy block: the wordmark stays pinned top, the footer bottom, and the equal auto top/bottom margins center the hero in the remaining space. Layout only.
+
+### Fixed — 2026-06-02 — Sidebar expansion now pushes the main canvas instead of overlaying it
+
+The `fixed`-positioned sidebar expands from 64px (collapsed) to 260px (`w-sidebar`), but the main canvas and top bar had a hardcoded `md:ml-16` (64px) offset, so an expanded sidebar covered the content.
+
+- **[frontend/src/components/layout/Shell.tsx](frontend/src/components/layout/Shell.tsx)** — extracted the layout into an inner `ShellLayout` component rendered *inside* `SidebarProvider` so it can read `useSidebar()`. The `<main>` left margin now tracks the live sidebar width on desktop: `md:ml-sidebar` (260px) when open, `md:ml-16` (64px) when collapsed; added `transition-[margin] duration-200 ease-out` to match the sidebar's width animation. Mobile is unchanged (no margin — the sidebar overlays as a drawer).
+- **[frontend/src/components/layout/TopBar.tsx](frontend/src/components/layout/TopBar.tsx)** — `<header>` given the same open-state-driven left offset + transition so it stays aligned with the canvas (was also pinned at `md:ml-16`). Pulled `open` from `useSidebar()`.
+
+### Changed — 2026-06-02 — Pin login + sidebar to dark; hide Work Logs from sidebar
+
+- **[frontend/src/pages/Login.tsx](frontend/src/pages/Login.tsx)** — login now always renders dark regardless of the user's theme preference. Added `dark` to the page root so every CSS-var token in the subtree resolves to its `.dark` value (the `.dark` rule in index.css sets the custom properties on the element and they cascade). No JS/theme-provider change.
+- **[frontend/src/components/layout/Sidebar.tsx](frontend/src/components/layout/Sidebar.tsx)** — added `dark` to the `<aside>` so the rail stays fully dark in light mode (fixed brand element per DESIGN.md). Previously only the background was fixed (`bg-sidebar`); token-based accents like `bg-primary`/`text-primary` still flipped to the lighter light-mode green. With `dark` pinned they resolve to the dark-mode Elitery green (`#3aae51`).
+- **[frontend/src/components/layout/Sidebar.tsx](frontend/src/components/layout/Sidebar.tsx)** — removed the "Work Logs" nav item (`WorkLogs.tsx` is an unbuilt iTop-integration placeholder). The `work-logs` route stays registered in `App.tsx` (same pattern as the hidden Tasks route). Nav now matches CLAUDE.md's canonical order exactly: Overview → Projects → Customers → Daily Review → Reports → Settings → Admin.
+
+### Changed — 2026-06-02 — Sidebar background → DESIGN.md charcoal #232321
+
+- **[frontend/tailwind.config.ts](frontend/tailwind.config.ts)** — added fixed (non-theme-flipping) `sidebar` color token (`#232321`).
+- **[frontend/src/components/layout/Sidebar.tsx](frontend/src/components/layout/Sidebar.tsx)** — `SIDEBAR_BG` was the old AProjectO blue-gray `bg-[#0F1623] dark:bg-[#060912]`; now `bg-sidebar`. Per DESIGN.md the rail stays charcoal in both themes, so there's no `dark:` variant. **Not changed**: the nav item text still uses Tailwind `slate-*` greys (cool-tinted vs the spec's warm `#888780` inactive). Migrating those needs a small set of fixed always-dark text tokens — deferred; contrast on the new charcoal is fine.
+
+### Fixed — 2026-06-02 — Second IDOR review: live GET /projects/:id hole, baseline-field bypass, design-token violations
+
+Follow-up review found a still-open IDOR plus assorted hardening/design items. (Two reported findings were verified as non-issues — see note.)
+
+- **[backend/src/routes/projects.ts](backend/src/routes/projects.ts)** — **live IDOR fixed.** `GET /:id` guarded the result with `"tamId" in filter`, but `projectVisibilityFilter` returns `{ OR: [{tamId},{saId}] }` (or `{}`), so that key never exists and the guard was a dead no-op — any authed user could fetch any project by id. Replaced the `findUnique` + dead 403 guard with `findFirst({ where: { id, ...projectVisibilityFilter(user) } })` → 404. Also removes the 403-vs-404 existence leak (the old guard threw 403; every other swept route returns 404).
+- **[backend/src/routes/tasks.ts](backend/src/routes/tasks.ts)** — stripped `baselineStartDate`/`baselineDueDate` from `updateTaskSchema`. These are server-set only (snapshotted by `POST /projects/:id/baseline`); accepting them from clients would let any `task:write` user overwrite the Gantt planned-vs-actual baseline. (The `data` mapping never actually wrote them, so this was latent, not live — but the schema shouldn't advertise them.)
+- **[backend/src/routes/admin.ts](backend/src/routes/admin.ts)** — corrected stale comment: `requireAdmin` is permission-based (`"*"` wildcard), not a `role === "ADMIN"` name check (post-e3f1cbd).
+- **[backend/src/routes/dependencies.ts](backend/src/routes/dependencies.ts)** — `loadVisibleDependency` now calls the shared `ensureProjectVisible` instead of hand-rolling the project-visibility query; dropped the now-unused `Prisma` import. Behaviour unchanged (still 404 on not-visible).
+- **[frontend/tailwind.config.ts](frontend/tailwind.config.ts)** — added fixed (non-theme-flipping) brand tokens `ink` (`#191919`) / `ink-hover` (`#2e2e2e`) for always-dark brand chrome. Replaced the `card`/`sidebar` `boxShadow` tokens with a single `overlay` shadow (`0 4px 24px rgba(0,0,0,0.18)`): DESIGN.md mandates elevation via 1px outlines + tone, with one shadow allowed only on the floating overlay layer — so there is deliberately no `card` token.
+- **[frontend/src/pages/Login.tsx](frontend/src/pages/Login.tsx)** — removed stale lime `#8DC63F` focus ring (old AProjectO palette) → `focus-within:border-primary`; recolored the focus glow rgba lime→Elitery green; replaced inlined `#191919`/`#2e2e2e` hex with `bg-ink`/`hover:bg-ink-hover`/`text-ink`.
+- **Shadow sweep**: `shadow-card` removed from ~24 card/skeleton surfaces across 14 files (they already carry `border border-outline-variant`, the spec's elevation); genuine overlays — `Modal.tsx`, `Drawer.tsx`, `TopBar.tsx` dropdown — switched to `shadow-overlay`; `Sidebar.tsx` dropped `shadow-sidebar` (keeps its border). **Visual impact**: cards lose a very faint (~4–7% opacity) drop shadow, becoming flat-with-outline per DESIGN.md.
+- **Verified non-issues (no change):** (1) reported risks.ts TOCTOU→500 — the global `errorHandler` ([backend/src/http/errors.ts](backend/src/http/errors.ts):40) already maps Prisma `P2025`→404 (and `P2002`→409), and `express-async-errors` routes async throws there, so a concurrent-delete race returns a clean 404, consistent with every sibling router (none carry local catches). (2) Suggestion to fold the visibility filter into `prisma.task.update`'s `where` — not applicable: `update` takes a unique `where` that can't carry a relation filter; `updateMany` would lose the included return record. Left `ensureTaskVisible` as-is.
+
+### Changed — 2026-06-02 — Login hero copy: drop SA/TAM/blueprint framing for plain project-ops language
+
+- **[frontend/src/pages/Login.tsx](frontend/src/pages/Login.tsx)** — reworded the marketing hero. Tagline "TAM Operations Platform" → "Project Operations"; H1 "Bridge SAs and TAMs. / Ship projects on time." → "Manage projects. / Ship on time."; subtitle (Secure Ingestion Port / SA-blueprint wording) → "One place to track projects, log updates, and report to customers."; feature pills "Blueprint ingestion / Daily review / Progress export" → "Project tracking / Daily notes / Customer reports". Copy only — no layout/style changes. (Tagline source stays title-case; it's uppercased via CSS `textTransform`.)
+
+### Changed — 2026-06-02 — Page title "Solvro Command Center" → "Solvro"
+
+- **[frontend/index.html](frontend/index.html)** — `<title>` shortened to "Solvro" to match the canonical app name.
+
+### Changed — 2026-06-02 — Migrate color system to DESIGN.md Elitery-Green/charcoal palette; label default → #3aae51
+
+Completes the DESIGN.md alignment started in the tailwind-token re-sync. The actual color values live as CSS custom properties in `index.css` (the config only references them via `rgb(var(--token))`), so the palette swap happens there. Replaces the old blue-gray/lime "AProjectO" palette with DESIGN.md's warm-charcoal surfaces + Elitery Green primary.
+
+- **[frontend/src/index.css](frontend/src/index.css)** — `.dark` block (canonical default) set to **exact** DESIGN.md dark frontmatter values: surfaces `#1a1a18`→`#3a3a37` charcoal ramp, `--primary` `#3aae51` (`58 174 81`), `--on-primary` `#0f2b16`, `--primary-container` `#2d9042`, neutral grey secondary/tertiary, softer red error family. Notably `--inverse-primary` was `0 88 190` (old Solvro Blue `#0058be`) → now `#2d9042`.
+- **[frontend/src/index.css](frontend/src/index.css)** — `:root` (light) block set to DESIGN.md light overrides where defined: off-white surfaces (`#f9f9f7`/`#f2f2ee`/`#ffffff`), `--primary` `#2d9042` (darkened green for WCAG on white), text `#1a1a18`/`#4a4a47`, outlines `#9a9a97`/`#d0d0cc`. **Derived (not specified by DESIGN.md for light mode):** `inverse-surface/-on-surface`, `primary-container` (`#c8e6cf`), `on-primary-container`, `inverse-primary`, `secondary`/`-container`/`on-`, `tertiary`/`on-`, and the error family (kept the existing M3 light reds). These are reasonable palette-consistent fills; adjust if the spec later defines them. Note: DESIGN.md's light `surface-container` comment value `#ebebе7` contains a stray Cyrillic `е` — used the intended `#ebebe7` (`235 235 231`).
+- **[frontend/src/index.css](frontend/src/index.css)** — Network Diagram critical-path accent migrated off blue to honor the single-accent rule: light-mode `--diagram-glow` `0, 88, 190` → `58, 174, 81` and `--cp-stroke` `#0058be` → `#3aae51`. Dark-mode diagram accent (white) unchanged.
+- **Not changed**: chip/status tokens (`--emerald/amber/rose/violet-*`) — these are intentionally high-saturation status indicators per DESIGN.md "Semantic colors," independent of the brand primary. The `LabelPicker` swatch palette and customer `AVATAR_PALETTE` arrays still list `#0058be` as one selectable option among many — left as-is (palette choices, not the brand accent).
+- **[backend/prisma/schema.prisma](backend/prisma/schema.prisma)** — `Label.color` default `#0058be` → `#3aae51`.
+- **[backend/src/routes/projects.ts](backend/src/routes/projects.ts)** — label-create fallback `body.color ?? "#0058be"` → `"#3aae51"` (kept in lockstep with the schema default).
+- **[backend/prisma/migrations/20260602223228_label_default_color_elitery_green/migration.sql](backend/prisma/migrations/20260602223228_label_default_color_elitery_green/migration.sql)** (new) — `ALTER TABLE "labels" ALTER COLUMN "color" SET DEFAULT '#3aae51'`. Generated via `prisma migrate diff` (non-interactive, per the migration gotcha), applied with `migrate deploy`, client regenerated; `migrate diff --exit-code` confirms zero remaining drift. Only changes the default for **new** labels — existing rows keep their stored color.
+
+### Changed — 2026-06-02 — tailwind.config.ts: re-sync radius + typography tokens to DESIGN.md frontmatter
+
+The literal-value tokens in the Tailwind theme had drifted larger than the canonical `DESIGN.md` frontmatter (`rounded` and `typography` blocks). Re-synced the two token groups that live as real values in the config; DESIGN.md frontmatter wins per CLAUDE.md.
+
+- **[frontend/tailwind.config.ts](frontend/tailwind.config.ts)** — `borderRadius` scale reset to the spec: `sm 0.125 / DEFAULT 0.25 / md 0.375 / lg 0.5 / xl 0.75rem / full 9999px`. Previously `DEFAULT 0.5 / lg 1 / xl 1.5 / 2xl 2rem` — larger than spec, which forbids large radii. **Visual impact**: `rounded` (256 uses) 8px→4px, `rounded-lg` (39) 16px→8px, `rounded-xl` (8) 24px→12px. `2xl` key dropped (DESIGN.md defines none); the single `rounded-2xl` site falls back to Tailwind's built-in `2xl` (1rem). `rounded-full` (50, pills/avatars) unchanged.
+- **[frontend/tailwind.config.ts](frontend/tailwind.config.ts)** — named `fontSize` roles reset to spec px: `h1 32 / h2 24 / body-lg 16 / body-sm 14 / data-mono 13 / label-caps 11`. Were inflated +1–2px. The generic `xs..4xl` scale (separate, deliberate +1px readability override, not a DESIGN.md token) is left untouched.
+- **Not touched**: color tokens. They are CSS-var-indirected (`rgb(var(--token))`), so their literal values live in `src/index.css`, not the config — and that file currently does **not** match the new DESIGN.md palette (Elitery Green `#3aae51` + warm-charcoal surfaces). `index.css` still carries `--primary: 141 198 63` (`#8DC63F`) and blue-gray surfaces. Migrating colors to DESIGN.md requires a separate `index.css` edit and is left pending a decision (large visual change).
+
+### Fixed — 2026-06-02 — IDOR follow-up: close remaining unguarded item routes; centralise visibility helpers
+
+Review of the prior IDOR sweep found four resources still reachable by id without a visibility check, plus a duplicated helper and a 400-vs-404 oracle. Closed all of them and moved the shared helpers out of the route file.
+
+- **[backend/src/lib/visibility.ts](backend/src/lib/visibility.ts)** (new) — canonical home for `projectVisibilityFilter`, `ensureProjectVisible`, `ensureTaskVisible`. Previously these lived in `routes/projects.ts` and were imported by sibling routers (`risks`, `tasks`, `dependencies`, `overview`), which is a latent circular-import hazard (projects.ts can't import a sibling route that imports it back). Lifting them to `lib/` removes that coupling. Behaviour identical.
+- **[backend/src/routes/sections.ts](backend/src/routes/sections.ts)** — `PATCH /:id` and `DELETE /:id` were gated only by `requirePermission("project:write")`; any writer could mutate sections on projects they can't see by guessing the id. Added `ensureSectionVisible` (resolve `projectId` → `ensureProjectVisible`, 404 if not visible) to both.
+- **[backend/src/routes/labels.ts](backend/src/routes/labels.ts)** — same IDOR on `PATCH /:id` / `DELETE /:id` (gated only by `task:write`). Added `ensureLabelVisible`.
+- **[backend/src/routes/tasks.ts](backend/src/routes/tasks.ts)** — `PATCH /:id` ran `ensureTaskVisible` *after* the `parentTaskId === id` self-parent guard, so a caller could distinguish "task exists but not visible" (400) from "no such task" (404) — an existence oracle. Moved the visibility check ahead of all field validation. Import now from `../lib/visibility.js`.
+- **[backend/src/routes/risks.ts](backend/src/routes/risks.ts)** — removed the local `ensureProjectVisible` copy (which carried a `req as never` cast hack) in favour of the canonical helper; calls now pass `req.user!` directly.
+- **[backend/src/routes/projects.ts](backend/src/routes/projects.ts)** — `POST /:id/baseline` had `project:write` but no visibility check; added `ensureProjectVisible`. Replaced six inline find-or-404 visibility blocks (risks/notes/dependencies GET+POST) with `ensureProjectVisible` calls. Helper definitions removed (now imported from `lib/visibility.js`).
+- **[backend/src/routes/dependencies.ts](backend/src/routes/dependencies.ts)**, **[backend/src/routes/overview.ts](backend/src/routes/overview.ts)** — import path updated to `../lib/visibility.js`; no logic change.
+- No schema/migration changes. Backend `tsc --noEmit` clean.
+
 ### Fixed — 2026-05-20 — IDOR cluster on task/section/label/project-PATCH endpoints
 
 A read-only audit found that `projectVisibilityFilter` was correctly applied on the routes added later (risks, notes, dependencies) but skipped on the older task/section/label routes and on the project PATCH route. As a result, any authed user with `task:write` or `project:write` (the default TAM role grants both globally) could read or mutate resources in any project by guessing the ID — the permission gate was the only thing scoping them, and permission ≠ visibility. Closed in one sweep across 11 routes.

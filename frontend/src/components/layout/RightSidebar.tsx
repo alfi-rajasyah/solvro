@@ -56,7 +56,7 @@ export function RightSidebar({
       ].join(" ")}
     >
       <div className="flex items-center justify-between border-b border-outline-variant px-5 py-4">
-        <span className="font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+        <span className="font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
           Project context
         </span>
         <button
@@ -85,7 +85,7 @@ export function RightSidebar({
         </section>
 
         <section>
-          <h3 className="mb-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <h3 className="mb-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
             Blueprint reference
           </h3>
           <div className="rounded border border-outline-variant bg-surface-container-lowest p-3">
@@ -120,7 +120,7 @@ export function RightSidebar({
         </section>
 
         <section>
-          <h3 className="mb-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <h3 className="mb-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
             Stakeholders
           </h3>
           <dl className="space-y-1.5 text-[13px]">
@@ -154,7 +154,7 @@ export function RightSidebar({
 
         {exportHandlers && (
           <section>
-            <h3 className="mb-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <h3 className="mb-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
               Export schedule
             </h3>
             <div className="grid grid-cols-2 gap-2">
@@ -197,7 +197,7 @@ export function RightSidebar({
 
         {project.customer && (
           <section>
-            <h3 className="mb-2 font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+            <h3 className="mb-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
               Documents
             </h3>
             <Link

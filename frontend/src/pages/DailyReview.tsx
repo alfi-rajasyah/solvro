@@ -352,7 +352,7 @@ function ProjectCard({
   const customerFacing = visibility === "CUSTOMER_FACING";
 
   return (
-    <article className="rounded border border-outline-variant bg-surface-container-lowest shadow-card">
+    <article className="rounded border border-outline-variant bg-surface-container-lowest">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-outline-variant px-4 py-3">
         <Link
           to={`/projects/${project.id}/overview`}

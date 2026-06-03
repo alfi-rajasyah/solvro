@@ -269,7 +269,7 @@ function TaskCard({
       style={style}
       onClick={handleClick}
       className={[
-        "rounded border border-outline-variant bg-surface-container-lowest p-3 shadow-card transition-shadow",
+        "rounded border border-outline-variant bg-surface-container-lowest p-3 transition-shadow",
         canDrag ? "cursor-grab active:cursor-grabbing" : "",
         isDragging ? "opacity-40" : "",
         dragging ? "ring-2 ring-primary" : "hover:shadow-[0_4px_16px_rgba(0,0,0,0.10)]",

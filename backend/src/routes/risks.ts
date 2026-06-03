@@ -1,11 +1,11 @@
 import { Router } from "express";
 import { z } from "zod";
-import { Prisma, RiskCategory, RiskStatus } from "@prisma/client";
+import { RiskCategory, RiskStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
-import { projectVisibilityFilter } from "./projects.js";
+import { ensureProjectVisible } from "../lib/visibility.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -23,15 +23,6 @@ export const risksRouter = Router();
 
 risksRouter.use(requireAuth);
 
-async function ensureProjectVisible(req: Parameters<typeof requireAuth>[0] & { user?: { sub: number; role: string; permissions: string[] } }, projectId: number) {
-  const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, ...filter },
-    select: { id: true },
-  });
-  if (!project) throw new HttpError(404, "not_found", "Project not found");
-}
-
 risksRouter.patch(
   "/:id",
   requirePermission("project:write"),
@@ -44,7 +35,7 @@ risksRouter.patch(
       select: { projectId: true },
     });
     if (!existing) throw new HttpError(404, "not_found", "Risk not found");
-    await ensureProjectVisible(req as never, existing.projectId);
+    await ensureProjectVisible(req.user!, existing.projectId);
 
     const updated = await prisma.risk.update({
       where: { id },
@@ -65,7 +56,7 @@ risksRouter.delete(
       select: { projectId: true },
     });
     if (!existing) throw new HttpError(404, "not_found", "Risk not found");
-    await ensureProjectVisible(req as never, existing.projectId);
+    await ensureProjectVisible(req.user!, existing.projectId);
 
     await prisma.risk.delete({ where: { id } });
     res.status(204).end();

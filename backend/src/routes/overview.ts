@@ -2,7 +2,7 @@ import { Router } from "express";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { requireAuth, type JwtPayload } from "../http/auth.js";
-import { projectVisibilityFilter } from "./projects.js";
+import { projectVisibilityFilter } from "../lib/visibility.js";
 
 export const overviewRouter = Router();
 

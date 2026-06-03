@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { useSidebar } from "./SidebarContext";
+import { BrandMark } from "@/components/BrandMark";
 
 interface NavItem {
   to: string;
@@ -14,15 +15,18 @@ const NAV_ITEMS: NavItem[] = [
   { to: "/projects", label: "Projects", icon: "folder_managed" },
   { to: "/customers", label: "Customers", icon: "groups" },
   { to: "/daily-review", label: "Daily Review", icon: "edit_note" },
-  // WorkLogs: iTop API integration for internal utilization
-  // data — not yet implemented, placeholder only.
-  { to: "/work-logs", label: "Work Logs", icon: "work_history" },
+  // Work Logs (WorkLogs.tsx) is an unbuilt placeholder (iTop API integration),
+  // so it's intentionally NOT in the sidebar. Route stays registered in
+  // App.tsx — mirror of how Tasks is kept routable but hidden. This also keeps
+  // the nav in CLAUDE.md's canonical order (no Work Logs entry).
   { to: "/reports", label: "Reports", icon: "analytics" },
   { to: "/settings", label: "Settings", icon: "settings" },
   { to: "/admin", label: "Admin", icon: "admin_panel_settings", adminOnly: true },
 ];
 
-const SIDEBAR_BG = "bg-[#0F1623] dark:bg-[#060912]";
+// DESIGN.md: sidebar is charcoal #232321 in both themes (stays dark in light
+// mode). Token defined in tailwind.config.ts — no theme-flipping `dark:` variant.
+const SIDEBAR_BG = "bg-sidebar";
 
 export function Sidebar() {
   const { open, toggle, close } = useSidebar();
@@ -44,7 +48,10 @@ export function Sidebar() {
 
       <aside
         className={[
-          "fixed left-0 top-0 z-50 h-screen flex-col overflow-hidden border-r border-black/30 font-display text-slate-300 shadow-sidebar transition-[width] duration-200 ease-out",
+          // `dark` is pinned so the rail renders dark in both themes (fixed
+          // brand element per DESIGN.md): token-based accents like `bg-primary`
+          // resolve to their `.dark` values even when the app is in light mode.
+          "dark fixed left-0 top-0 z-50 h-screen flex-col overflow-hidden border-r border-black/30 font-display text-slate-300 transition-[width] duration-200 ease-out",
           SIDEBAR_BG,
           open ? "flex w-sidebar" : "hidden w-16 md:flex",
         ].join(" ")}
@@ -57,14 +64,7 @@ export function Sidebar() {
         >
           {open && (
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded bg-primary">
-                <span
-                  className="material-symbols-outlined text-lg text-white"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  terminal
-                </span>
-              </div>
+              <BrandMark className="h-8 w-8 shrink-0" />
               <h1 className="truncate text-lg font-extrabold tracking-tight text-white">
                 Solvro
               </h1>

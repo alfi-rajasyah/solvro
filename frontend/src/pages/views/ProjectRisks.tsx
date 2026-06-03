@@ -190,7 +190,7 @@ export function ProjectRisks() {
         <>
           <div className="hidden overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest md:block">
             <table className="w-full text-sm">
-              <thead className="bg-surface-container-low text-left font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+              <thead className="bg-surface-container-low text-left font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
                 <tr>
                   <th className="px-3 py-2">Description</th>
                   <th className="px-3 py-2">Category</th>
@@ -389,7 +389,7 @@ function RiskRow({
         ) : (
           <span
             className={[
-              "inline-block rounded px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider",
+              "inline-block rounded px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
               STATUS_TONE[risk.status],
             ].join(" ")}
           >
@@ -463,7 +463,7 @@ function RiskCard({
         </span>
         <span
           className={[
-            "rounded px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider",
+            "rounded px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
             STATUS_TONE[risk.status],
           ].join(" ")}
         >

@@ -45,3 +45,8 @@ UI Design/
 PRD.md
 DESIGN.md
 .env.example
+
+# tsc -b (composite tsconfig.node.json) compiles these .ts configs; ignore the
+# generated .js so they never shadow the .ts sources for PostCSS/Vite resolution.
+/frontend/tailwind.config.js
+/frontend/vite.config.js

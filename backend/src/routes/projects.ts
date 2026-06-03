@@ -10,14 +10,13 @@ import {
   TaskStatus,
 } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import {
-  hasPermission,
-  requireAuth,
-  requirePermission,
-  type JwtPayload,
-} from "../http/auth.js";
+import { requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
+import {
+  ensureProjectVisible,
+  projectVisibilityFilter,
+} from "../lib/visibility.js";
 
 const createProjectSchema = z.object({
   name: z.string().min(1).max(200),
@@ -69,46 +68,6 @@ const taskListQuerySchema = z.object({
     .optional(),
 });
 
-export function projectVisibilityFilter(user: JwtPayload): Prisma.ProjectWhereInput {
-  // Permission-based, NOT role-name based. `project:view-all` (which "*"
-  // also satisfies via hasPermission) grants global visibility; everyone
-  // else sees only the projects they're attached to as the assigned TAM or
-  // SA on the project row. Admin grants broader access by adding
-  // "project:view-all" (or "*") to a role's permissions in Admin > Roles.
-  if (hasPermission(user, "project:view-all")) return {};
-  return { OR: [{ tamId: user.sub }, { saId: user.sub }] };
-}
-
-// 404-if-not-visible preamble for project-nested routes. Mirrors the
-// inline pattern at the risks/notes/dependencies endpoints; extracted so
-// new project-scoped routes can't accidentally skip the visibility check
-// while still passing the permission gate. Returns 404 (not 403) on
-// purpose — don't tell the caller a project exists if they shouldn't see
-// it.
-export async function ensureProjectVisible(
-  user: JwtPayload,
-  projectId: number,
-): Promise<void> {
-  const project = await prisma.project.findFirst({
-    where: { id: projectId, ...projectVisibilityFilter(user) },
-    select: { id: true },
-  });
-  if (!project) throw new HttpError(404, "not_found", "Project not found");
-}
-
-// Same idea for routes that key off a task id and need to verify the
-// caller can see the parent project (tasks.ts PATCH/DELETE/comments).
-export async function ensureTaskVisible(
-  user: JwtPayload,
-  taskId: number,
-): Promise<void> {
-  const task = await prisma.task.findFirst({
-    where: { id: taskId, project: projectVisibilityFilter(user) },
-    select: { id: true },
-  });
-  if (!task) throw new HttpError(404, "not_found", "Task not found");
-}
-
 export const projectsRouter = Router();
 
 projectsRouter.use(requireAuth);
@@ -154,8 +113,13 @@ projectsRouter.post(
 
 projectsRouter.get("/:id", validate("params", idParamSchema), async (req, res) => {
   const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
-  const project = await prisma.project.findUnique({
-    where: { id },
+  // Apply the visibility filter inside the lookup. The previous hand-rolled
+  // `"tamId" in filter` guard was a dead no-op — the filter shape is
+  // `{ OR: [{tamId}, {saId}] }`, so that key never exists — which left this
+  // endpoint open to IDOR. Returning 404 (not 403) also stops leaking
+  // existence, matching every other project-scoped route.
+  const project = await prisma.project.findFirst({
+    where: { id, ...projectVisibilityFilter(req.user!) },
     include: {
       sa: { select: { id: true, username: true, email: true } },
       tam: { select: { id: true, username: true, email: true } },
@@ -165,14 +129,6 @@ projectsRouter.get("/:id", validate("params", idParamSchema), async (req, res) =
     },
   });
   if (!project) throw new HttpError(404, "not_found", "Project not found");
-
-  const filter = projectVisibilityFilter(req.user!);
-  if ("tamId" in filter && project.tamId !== filter.tamId) {
-    throw new HttpError(403, "forbidden", "Project not visible to caller");
-  }
-  if ("saId" in filter && project.saId !== filter.saId) {
-    throw new HttpError(403, "forbidden", "Project not visible to caller");
-  }
 
   res.json(project);
 });
@@ -190,6 +146,7 @@ projectsRouter.post(
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const { asOfDate, clear } = req.body as z.infer<typeof lockBaselineSchema>;
+    await ensureProjectVisible(req.user!, id);
     const lockedAt = asOfDate ?? new Date();
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -385,12 +342,7 @@ projectsRouter.get(
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
-    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
-    const project = await prisma.project.findFirst({
-      where: { id, ...filter },
-      select: { id: true },
-    });
-    if (!project) throw new HttpError(404, "not_found", "Project not found");
+    await ensureProjectVisible(req.user!, id);
 
     const risks = await prisma.risk.findMany({
       where: { projectId: id },
@@ -407,12 +359,7 @@ projectsRouter.post(
   validate("body", createRiskSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
-    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
-    const project = await prisma.project.findFirst({
-      where: { id, ...filter },
-      select: { id: true },
-    });
-    if (!project) throw new HttpError(404, "not_found", "Project not found");
+    await ensureProjectVisible(req.user!, id);
 
     const body = req.body as z.infer<typeof createRiskSchema>;
     const risk = await prisma.risk.create({
@@ -453,12 +400,7 @@ projectsRouter.get(
     const { visibility, limit } = req.query as unknown as z.infer<
       typeof noteListQuerySchema
     >;
-    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
-    const project = await prisma.project.findFirst({
-      where: { id, ...filter },
-      select: { id: true },
-    });
-    if (!project) throw new HttpError(404, "not_found", "Project not found");
+    await ensureProjectVisible(req.user!, id);
 
     const notes = await prisma.projectNote.findMany({
       where: { projectId: id, ...(visibility && { visibility }) },
@@ -477,12 +419,7 @@ projectsRouter.post(
   validate("body", createNoteSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
-    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
-    const project = await prisma.project.findFirst({
-      where: { id, ...filter },
-      select: { id: true },
-    });
-    if (!project) throw new HttpError(404, "not_found", "Project not found");
+    await ensureProjectVisible(req.user!, id);
 
     const body = req.body as z.infer<typeof createNoteSchema>;
     const note = await prisma.projectNote.create({
@@ -517,12 +454,7 @@ projectsRouter.get(
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
-    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
-    const project = await prisma.project.findFirst({
-      where: { id, ...filter },
-      select: { id: true },
-    });
-    if (!project) throw new HttpError(404, "not_found", "Project not found");
+    await ensureProjectVisible(req.user!, id);
 
     const deps = await prisma.taskDependency.findMany({
       where: { projectId: id },
@@ -539,12 +471,7 @@ projectsRouter.post(
   validate("body", createDependencySchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
-    const filter: Prisma.ProjectWhereInput = projectVisibilityFilter(req.user!);
-    const project = await prisma.project.findFirst({
-      where: { id, ...filter },
-      select: { id: true },
-    });
-    if (!project) throw new HttpError(404, "not_found", "Project not found");
+    await ensureProjectVisible(req.user!, id);
 
     const body = req.body as z.infer<typeof createDependencySchema>;
     if (body.predecessorTaskId === body.successorTaskId) {
@@ -638,7 +565,7 @@ projectsRouter.post(
       data: {
         projectId: id,
         name: body.name,
-        color: body.color ?? "#0058be",
+        color: body.color ?? "#3aae51",
       },
     });
     res.status(201).json(label);

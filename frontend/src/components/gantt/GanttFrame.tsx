@@ -537,7 +537,7 @@ export function GanttFrame({
           type="button"
           onClick={scrollToToday}
           disabled={!chartStart}
-          className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary disabled:opacity-50"
+          className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary disabled:opacity-50"
         >
           <span className="material-symbols-outlined text-base">today</span>
           Today
@@ -548,7 +548,7 @@ export function GanttFrame({
             <button
               type="button"
               onClick={() => onCreateTaskOpen(null)}
-              className="inline-flex items-center gap-1 rounded bg-primary px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
+              className="inline-flex items-center gap-1 rounded bg-primary px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Task
@@ -556,7 +556,7 @@ export function GanttFrame({
             <button
               type="button"
               onClick={() => setAddingSection(true)}
-              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Section
@@ -572,8 +572,8 @@ export function GanttFrame({
               }
               className={
                 baselineLockedAt
-                  ? "inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
-                  : "inline-flex items-center gap-1 rounded border border-primary bg-primary px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
+                  ? "inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+                  : "inline-flex items-center gap-1 rounded border border-primary bg-primary px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
               }
             >
               <span className="material-symbols-outlined text-base">
@@ -588,7 +588,7 @@ export function GanttFrame({
           {canEdit && " · drag bars or edges to reschedule"}
         </span>
         <div className="ml-auto flex items-center gap-2">
-          <span className="font-display text-[11px] font-bold uppercase tracking-widest text-on-surface-variant">
+          <span className="font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
             Scale
           </span>
           <div className="inline-flex overflow-hidden rounded border border-outline-variant">
@@ -598,7 +598,7 @@ export function GanttFrame({
                 type="button"
                 onClick={() => setViewMode(v.mode)}
                 className={[
-                  "px-2.5 py-1 font-display text-[11px] font-bold uppercase tracking-wider",
+                  "px-2.5 py-1 font-display text-label-caps uppercase tracking-wider",
                   i > 0 ? "border-l border-outline-variant" : "",
                   v.mode === viewMode
                     ? "bg-primary text-on-primary"
@@ -629,7 +629,7 @@ export function GanttFrame({
           <button
             type="submit"
             disabled={createSection.isPending || !newSectionName.trim()}
-            className="rounded bg-primary px-2 py-1 font-display text-[11px] font-bold uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
           >
             Add
           </button>
@@ -757,7 +757,7 @@ export function GanttFrame({
               </p>
             )}
             <label className="block">
-              <span className="mb-1 block font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
                 Baseline as-of date
               </span>
               <input
@@ -790,7 +790,7 @@ export function GanttFrame({
                       setConfirmingBaseline(false);
                     }
                   }}
-                  className="font-display text-[11px] font-bold uppercase tracking-wider text-error hover:underline disabled:opacity-50"
+                  className="font-display text-label-caps uppercase tracking-wider text-error hover:underline disabled:opacity-50"
                 >
                   Clear baseline instead
                 </button>

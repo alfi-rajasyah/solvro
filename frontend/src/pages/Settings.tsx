@@ -53,7 +53,7 @@ export function Settings() {
 
       <ThemeCard />
 
-      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
+      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
         <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
           Profile
         </h2>
@@ -66,7 +66,7 @@ export function Settings() {
 
           <dt className="text-on-surface-variant">Role</dt>
           <dd>
-            <span className="rounded-full bg-surface-container-low px-2 py-0.5 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+            <span className="rounded-full bg-surface-container-low px-2 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
               {user.role}
             </span>
           </dd>
@@ -76,7 +76,7 @@ export function Settings() {
         </p>
       </section>
 
-      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
+      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
         <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
           Change password
         </h2>
@@ -156,7 +156,7 @@ function ThemeCard() {
     },
   ];
   return (
-    <section className="rounded border border-outline-variant bg-surface-container-lowest p-5 shadow-card">
+    <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
       <h2 className="mb-1 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
         Appearance
       </h2>

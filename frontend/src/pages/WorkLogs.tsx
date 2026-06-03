@@ -1,7 +1,7 @@
 export function WorkLogs() {
   return (
     <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
-      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-container shadow-card">
+      <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-container">
         <span className="material-symbols-outlined text-3xl text-on-surface-variant">schedule</span>
       </div>
 
@@ -12,7 +12,7 @@ export function WorkLogs() {
         </p>
       </div>
 
-      <span className="rounded-full bg-surface-container px-3 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <span className="rounded-full bg-surface-container px-3 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
         Preview only
       </span>
     </div>

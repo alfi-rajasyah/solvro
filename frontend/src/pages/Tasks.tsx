@@ -123,14 +123,14 @@ export function Tasks() {
         <button
           type="button"
           onClick={() => setFilter({ topLevel: true })}
-          className="ml-auto rounded-lg border border-outline-variant px-2 py-1 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+          className="ml-auto rounded-lg border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
         >
           Reset
         </button>
       </div>
 
       {isLoading && (
-        <div className="h-64 animate-pulse rounded-xl bg-surface-container-low shadow-card" />
+        <div className="h-64 animate-pulse rounded-xl bg-surface-container-low" />
       )}
 
       {isError && (
@@ -140,7 +140,7 @@ export function Tasks() {
       )}
 
       {sorted.length > 0 && (
-        <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest shadow-card">
+        <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest">
           <table className="w-full text-xs">
             <thead className="border-b border-outline-variant bg-surface-container-low text-on-surface-variant">
               <tr className="text-left">
@@ -264,7 +264,7 @@ function Th({
     <th
       onClick={sortable ? () => onSort!(sortKey) : undefined}
       className={[
-        "px-3 py-2 font-display text-[11px] font-bold uppercase tracking-widest",
+        "px-3 py-2 font-display text-label-caps uppercase tracking-widest",
         sortable ? "cursor-pointer hover:text-primary" : "",
         sortKey && current === sortKey ? "text-primary" : "",
       ].join(" ")}
@@ -288,7 +288,7 @@ function FilterSelect({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <span className="mb-1 block text-label-caps uppercase tracking-wider text-on-surface-variant">
         {label}
       </span>
       <select
