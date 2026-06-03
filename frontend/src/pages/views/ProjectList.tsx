@@ -170,7 +170,7 @@ export function ProjectList() {
             <button
               type="button"
               onClick={() => setCreateTaskCtx({ sectionId: null, parentTaskId: null })}
-              className="inline-flex items-center gap-1 rounded-lg bg-primary px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
+              className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Add task
@@ -180,7 +180,7 @@ export function ProjectList() {
             <button
               type="button"
               onClick={() => setAddingSection(true)}
-              className="inline-flex items-center gap-1 rounded-lg border border-outline-variant px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+              className="inline-flex items-center gap-1 rounded border border-outline-variant px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Add section

@@ -15,6 +15,19 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-06-03 — UI review: design-token compliance pass
+
+Reviewer line numbers were stale; located each by content.
+
+- **[ProjectKanban.tsx](frontend/src/pages/views/ProjectKanban.tsx)** — card hover `shadow-[…]` → `hover:border-primary` (border-color shift, per the no-card-shadows rule); `transition-shadow` → `transition-colors`.
+- **[ProjectOverview.tsx](frontend/src/pages/views/ProjectOverview.tsx)** — stat value `font-mono` → `font-body` (kills the off-spec monospace stack; kept `text-3xl tabular-nums`). **Note:** did *not* apply the suggested `text-data-mono` here — that token carries a fixed 13px (and weight 500) that would shrink/de-bold the `text-3xl` KPI number; `font-body` + existing `tabular-nums` achieves the intent. Removed the stray `text-[11px]` on the hint (now inherits body size).
+- **[Admin.tsx](frontend/src/pages/Admin.tsx)** — all 4 `bg-emerald-100 text-emerald-700` → `bg-chip-emerald-bg text-chip-emerald-text` (theme-aware tokens; dropped the now-redundant manual `dark:` emerald variants and a hardcoded `hover:bg-emerald-200`).
+- **[Login.tsx](frontend/src/pages/Login.tsx)** — inline `rgba(255,255,255,0.45)` / `0.2` → `text-on-surface-variant/45` / `/20`; hero pills `borderRadius: 20` → `rounded-full`, `borderWidth: 0.5px` → `border`.
+- **[Shell.tsx](frontend/src/components/layout/Shell.tsx)** / **[TopBar.tsx](frontend/src/components/layout/TopBar.tsx)** / **[Sidebar.tsx](frontend/src/components/layout/Sidebar.tsx)** + **[tailwind.config.ts](frontend/tailwind.config.ts)** — extracted the hardcoded collapsed-rail `w-16`/`ml-16` into a shared `sidebar-collapsed` (4rem) spacing token (`w-sidebar-collapsed` / `ml-sidebar-collapsed`) so the rail width and canvas offset can't drift.
+- **[Tasks.tsx](frontend/src/pages/Tasks.tsx)** / **[ProjectList.tsx](frontend/src/pages/views/ProjectList.tsx)** — `rounded-lg` → `rounded` on the 3 action buttons (per the small-radius scale). Error banners / inputs left as-is (not buttons).
+- **[index.css](frontend/src/index.css)** — diagram `--cp-stroke` hardcoded `#3aae51` → `rgb(var(--primary))` (now follows the theme primary).
+- Verified: host typecheck clean; zero leftover hardcoded values for any item.
+
 ### Changed — 2026-06-03 — Migrate caps labels to the `text-label-caps` token (now the single source of truth)
 
 Follow-up to the label-caps token bump: the token was previously unused (caps labels were hardcoded). Migrated all usages so the token actually drives card/section labels — they now render at the token's 12px.

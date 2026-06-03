@@ -159,8 +159,8 @@ function Kpi({
         <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${accent === "primary" ? "text-primary" : accent === "emerald" ? "text-emerald-600" : accent === "error" ? "text-error" : "text-on-surface-variant"}`}>{icon}</span>
       </div>
-      <div className={`mt-2 font-mono text-3xl font-bold tabular-nums ${accentClass}`}>{value}</div>
-      {hint && <div className="mt-1 text-[11px] text-on-surface-variant">{hint}</div>}
+      <div className={`mt-2 font-body text-3xl font-bold tabular-nums ${accentClass}`}>{value}</div>
+      {hint && <div className="mt-1 text-on-surface-variant">{hint}</div>}
     </div>
   );
 }
