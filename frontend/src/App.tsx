@@ -1,11 +1,13 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AdminGuard } from "@/components/AdminGuard";
 import { AuthGuard } from "@/components/AuthGuard";
+import { ExecutiveGuard } from "@/components/ExecutiveGuard";
 import { Shell } from "@/components/layout/Shell";
 import { Admin } from "@/pages/Admin";
 import { CustomerDetail } from "@/pages/CustomerDetail";
 import { Customers } from "@/pages/Customers";
 import { DailyReview } from "@/pages/DailyReview";
+import { Executive } from "@/pages/Executive";
 import { Login } from "@/pages/Login";
 import { Overview } from "@/pages/Overview";
 import { ProjectDetail } from "@/pages/ProjectDetail";
@@ -51,6 +53,14 @@ export function App() {
         <Route path="tasks" element={<Tasks />} />
         <Route path="work-logs" element={<WorkLogs />} />
         <Route path="reports" element={<Reports />} />
+        <Route
+          path="executive"
+          element={
+            <ExecutiveGuard>
+              <Executive />
+            </ExecutiveGuard>
+          }
+        />
         <Route path="settings" element={<Settings />} />
         <Route
           path="admin"
