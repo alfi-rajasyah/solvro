@@ -8,6 +8,7 @@ interface NavItem {
   label: string;
   icon: string;
   adminOnly?: boolean;
+  permission?: string;
 }
 
 const NAV_ITEMS: NavItem[] = [
@@ -20,6 +21,7 @@ const NAV_ITEMS: NavItem[] = [
   // App.tsx — mirror of how Tasks is kept routable but hidden. This also keeps
   // the nav in CLAUDE.md's canonical order (no Work Logs entry).
   { to: "/reports", label: "Reports", icon: "analytics" },
+  { to: "/executive", label: "Executive", icon: "leaderboard", permission: "report:executive" },
   { to: "/settings", label: "Settings", icon: "settings" },
   { to: "/admin", label: "Admin", icon: "admin_panel_settings", adminOnly: true },
 ];
@@ -32,7 +34,10 @@ export function Sidebar() {
   const { open, toggle, close } = useSidebar();
   const { user } = useAuth();
   const items = NAV_ITEMS.filter(
-    (i) => !i.adminOnly || hasPermission(user, "*"),
+    (i) =>
+      (!i.adminOnly && !i.permission) ||
+      (i.adminOnly && hasPermission(user, "*")) ||
+      (i.permission && hasPermission(user, i.permission)),
   );
 
   return (

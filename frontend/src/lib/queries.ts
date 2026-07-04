@@ -225,6 +225,7 @@ export const queryKeys = {
   customer: (id: number) => ["customers", id] as const,
   tasks: (filter?: TasksFilter) => ["tasks", filter ?? {}] as const,
   comments: (taskId: number) => ["tasks", taskId, "comments"] as const,
+  executiveReport: () => ["executive-report"] as const,
 };
 
 export function useOverview() {
@@ -1160,5 +1161,38 @@ export function useDeleteDependency(projectId: number) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.projectDependencies(projectId) });
     },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Executive dashboard — org-wide portfolio roll-up (GET /reports/executive)
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface ExecutiveProjectRow {
+  id: number;
+  name: string;
+  status: ProjectStatus;
+  tamName: string;
+  customerName: string | null;
+  start: string | null;
+  end: string | null;
+  totalTasks: number;
+  doneTasks: number;
+  progressPct: number;
+  isOverdue: boolean;
+  daysOverdue: number;
+  sections: { id: number; name: string; color: string }[];
+}
+
+export interface ExecutiveReport {
+  projects: ExecutiveProjectRow[];
+  generatedAt: string;
+}
+
+export function useExecutiveReport() {
+  return useQuery({
+    queryKey: queryKeys.executiveReport(),
+    queryFn: ({ signal }) =>
+      apiRequest<ExecutiveReport>("/reports/executive", { signal }),
   });
 }
