@@ -1,63 +1,30 @@
-import { type Row, type ViewMode, addDays, positionFor } from "@/lib/gantt/geometry";
 import { ROW_HEIGHT } from "@/lib/gantt/constants";
+import { DEFAULT_SECTION_COLOR } from "@/lib/gantt/palette";
 
-interface GanttSectionBarProps {
-  row: Row;
-  chartStart: Date;
-  viewMode: ViewMode;
-  columnWidth: number;
+interface GanttSectionBandProps {
+  color?: string;
+  contentWidth: number;
 }
 
-export function GanttSectionBar({
-  row,
-  chartStart,
-  viewMode,
-  columnWidth,
-}: GanttSectionBarProps) {
-  if (!row.start || !row.end) return null;
-  const left = positionFor(row.start, chartStart, viewMode, columnWidth).x;
-  const endPos = positionFor(addDays(row.end, 1), chartStart, viewMode, columnWidth).x;
-  const width = Math.max(8, endPos - left);
-  const lineColor = "#1f2937"; // slate-800
-  const lineY = ROW_HEIGHT / 2 - 1;
-  const capH = 6;
-
+/**
+ * Full-width, very subtle section-color tint behind a section header row —
+ * matches the mockup's `rgba(color, .06)` row bands (see docs/mockups
+ * "2 · Gantt v2"). Purely decorative.
+ */
+export function GanttSectionBand({ color, contentWidth }: GanttSectionBandProps) {
+  const hex = color ?? DEFAULT_SECTION_COLOR;
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
   return (
     <div
-      className="pointer-events-none absolute"
-      style={{ left, top: 0, width, height: ROW_HEIGHT, zIndex: 2 }}
+      className="pointer-events-none absolute inset-y-0 left-0"
+      style={{
+        width: contentWidth,
+        height: ROW_HEIGHT,
+        backgroundColor: `rgba(${r}, ${g}, ${b}, 0.07)`,
+      }}
       aria-hidden="true"
-    >
-      <div
-        className="absolute"
-        style={{
-          left: 0,
-          top: lineY,
-          width,
-          height: 2,
-          background: lineColor,
-        }}
-      />
-      <div
-        className="absolute"
-        style={{
-          left: 0,
-          top: lineY,
-          width: 2,
-          height: capH,
-          background: lineColor,
-        }}
-      />
-      <div
-        className="absolute"
-        style={{
-          left: width - 2,
-          top: lineY,
-          width: 2,
-          height: capH,
-          background: lineColor,
-        }}
-      />
-    </div>
+    />
   );
 }
