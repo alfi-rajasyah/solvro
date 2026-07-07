@@ -58,6 +58,24 @@ async function listProjectTasks(query = ""): Promise<TaskRow[]> {
   return res.body as TaskRow[];
 }
 
+async function createSection(inProjectId: number, name: string): Promise<number> {
+  const res = await request(app)
+    .post(`/projects/${inProjectId}/sections`)
+    .set("Authorization", `Bearer ${token}`)
+    .send({ name });
+  expect(res.status).toBe(201);
+  return res.body.id as number;
+}
+
+async function createLabel(inProjectId: number, name: string): Promise<number> {
+  const res = await request(app)
+    .post(`/projects/${inProjectId}/labels`)
+    .set("Authorization", `Bearer ${token}`)
+    .send({ name });
+  expect(res.status).toBe(201);
+  return res.body.id as number;
+}
+
 beforeAll(async () => {
   await seedRoles();
 });
@@ -267,5 +285,98 @@ describe("depth and parent validation", () => {
       .send({ title: "Bad", parentTaskId: foreignParent.id });
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("invalid_parent");
+  });
+});
+
+describe("status-only change and sibling ordering", () => {
+  it("keeps a subtask's position when only its status changes (checkbox toggle)", async () => {
+    const parent = await createTask({ title: "Parent" });
+    const s0 = await createTask({ title: "S0", parentTaskId: parent.id });
+    const s1 = await createTask({ title: "S1", parentTaskId: parent.id });
+    const s2 = await createTask({ title: "S2", parentTaskId: parent.id });
+
+    // Ticking the first subtask done must NOT bounce it to the bottom: a
+    // subtask's sibling list is keyed on parentTaskId only, so status is not
+    // an ordering change here.
+    const res = await patchTask(s0.id, { status: "DONE" });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("DONE");
+    expect(res.body.position).toBe(0);
+
+    const subtasks = await listProjectTasks(`?parentTaskId=${parent.id}`);
+    expect(subtasks.map((t) => t.id)).toEqual([s0.id, s1.id, s2.id]);
+    expect(subtasks.map((t) => t.position)).toEqual([0, 1, 2]);
+  });
+
+  it("still moves a top-level task to the destination column on a status change", async () => {
+    // Regression guard: the subtask fix must not stop genuine column moves,
+    // where status IS part of the top-level sibling key.
+    const a0 = await createTask({ title: "A0", status: "TODO" });
+    const a1 = await createTask({ title: "A1", status: "TODO" });
+
+    const res = await patchTask(a0.id, { status: "DONE" });
+    expect(res.status).toBe(200);
+    expect(res.body.status).toBe("DONE");
+    expect(res.body.position).toBe(0); // appended to the (empty) DONE column
+
+    const todo = await listProjectTasks("?status=TODO");
+    const relevant = todo.filter((t) => [a0.id, a1.id].includes(t.id));
+    expect(relevant.map((t) => t.id)).toEqual([a1.id]); // gap closed + re-packed
+    expect(relevant.map((t) => t.position)).toEqual([0]);
+  });
+});
+
+describe("cross-project section / label validation", () => {
+  it("rejects a sectionId from another project on create", async () => {
+    const otherProjectId = await createProject();
+    const foreignSection = await createSection(otherProjectId, "Foreign");
+
+    const res = await request(app)
+      .post(`/projects/${projectId}/tasks`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Bad", sectionId: foreignSection });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("invalid_section");
+  });
+
+  it("rejects a sectionId from another project on update", async () => {
+    const otherProjectId = await createProject();
+    const foreignSection = await createSection(otherProjectId, "Foreign");
+    const task = await createTask({ title: "Local" });
+
+    const res = await patchTask(task.id, { sectionId: foreignSection });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("invalid_section");
+  });
+
+  it("accepts a sectionId from the same project", async () => {
+    const section = await createSection(projectId, "Local Section");
+    const task = await createTask({ title: "Local" });
+
+    const res = await patchTask(task.id, { sectionId: section });
+    expect(res.status).toBe(200);
+    expect(res.body.sectionId).toBe(section);
+  });
+
+  it("rejects a labelId from another project on create", async () => {
+    const otherProjectId = await createProject();
+    const foreignLabel = await createLabel(otherProjectId, "foreign");
+
+    const res = await request(app)
+      .post(`/projects/${projectId}/tasks`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Bad", labelIds: [foreignLabel] });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("invalid_label");
+  });
+
+  it("rejects a labelId from another project on update", async () => {
+    const otherProjectId = await createProject();
+    const foreignLabel = await createLabel(otherProjectId, "foreign");
+    const task = await createTask({ title: "Local" });
+
+    const res = await patchTask(task.id, { labelIds: [foreignLabel] });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("invalid_label");
   });
 });
