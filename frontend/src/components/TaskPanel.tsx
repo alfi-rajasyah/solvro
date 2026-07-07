@@ -327,9 +327,9 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
               {task.title}
             </button>
           )}
-          <p className="mt-0.5 text-[11px] text-on-surface-variant">
-            in {sectionName} · ?task={task.id}
-          </p>
+          {task.section && (
+            <p className="mt-0.5 text-[11px] text-on-surface-variant">in {sectionName}</p>
+          )}
 
           {/* Meta grid */}
           <div className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2.5 text-sm">

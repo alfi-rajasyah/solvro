@@ -31,8 +31,11 @@ export const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "qa@solvro.test";
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "QaTest1234!";
 
 /**
- * Logs in through the UI, including the "Admin sign-in (password)" accordion
- * that must be expanded before the password form is visible/interactable.
+ * Logs in through the UI. When Google sign-in is configured, the password
+ * form lives behind the "Admin sign-in (password)" accordion and must be
+ * expanded first; when Google sign-in is NOT configured (the default for
+ * the seeded QA stack — no clientId/allowed domains), Login renders the
+ * password form directly with no accordion, so there's nothing to click.
  */
 export async function loginViaUi(
   page: Page,
@@ -40,7 +43,10 @@ export async function loginViaUi(
   password = ADMIN_PASSWORD,
 ): Promise<void> {
   await page.goto("/", { waitUntil: "networkidle" });
-  await page.getByText(/Admin sign-in/i).first().click();
+  const accordion = page.getByText(/Admin sign-in/i).first();
+  if (await accordion.isVisible().catch(() => false)) {
+    await accordion.click();
+  }
   const emailInput = page.locator('input[type="email"]');
   await emailInput.waitFor({ state: "visible" });
   await emailInput.fill(email);
