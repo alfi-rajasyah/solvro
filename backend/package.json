@@ -13,7 +13,8 @@
     "prisma:studio": "prisma studio",
     "db:seed": "prisma db seed",
     "db:reset": "prisma migrate reset",
-    "admin:create": "tsx scripts/create-admin.ts"
+    "admin:create": "tsx scripts/create-admin.ts",
+    "test": "vitest run"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
@@ -40,7 +41,10 @@
     "@types/express": "^4.17.21",
     "@types/jsonwebtoken": "^9.0.7",
     "@types/node": "^20.19.39",
+    "@types/supertest": "^7.2.0",
     "prisma": "^5.22.0",
-    "typescript": "^5.6.0"
+    "supertest": "^7.2.2",
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.10"
   }
 }
