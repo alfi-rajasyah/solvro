@@ -1,0 +1,136 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [develop]
+  push:
+    branches: [develop, main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # bcrypt ships a prebuilt binary download as part of `npm ci`; that
+  # download flakes transiently on GitHub's runners. Retrying the whole
+  # `npm ci` once is cheaper than diagnosing a specific transient host.
+  NPM_CI_RETRY_SLEEP: 10
+
+jobs:
+  backend-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: solvro
+          POSTGRES_PASSWORD: solvro_ci
+          POSTGRES_DB: solvro
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U solvro -d solvro"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    env:
+      DATABASE_URL: postgresql://solvro:solvro_ci@localhost:5432/solvro?schema=public
+      JWT_SECRET: ci-secret-at-least-32-characters-long-for-tests
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: npm ci (backend, retry once on failure)
+        working-directory: backend
+        run: |
+          npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
+
+      - name: Prisma migrate deploy
+        working-directory: backend
+        run: npx prisma migrate deploy
+
+      - name: Run backend test suite
+        working-directory: backend
+        run: npm test
+
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and start stack (retry once on failure)
+        run: |
+          docker compose -f ci/docker-compose.ci.yml up -d --build || (
+            echo "docker compose up failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && \
+            sleep "$NPM_CI_RETRY_SLEEP" && \
+            docker compose -f ci/docker-compose.ci.yml up -d --build
+          )
+
+      - name: Wait for backend health
+        run: |
+          for i in $(seq 1 60); do
+            if curl -fsS http://localhost:3300/health; then
+              echo "backend healthy"
+              exit 0
+            fi
+            echo "waiting for backend... ($i)"
+            sleep 2
+          done
+          echo "backend did not become healthy in time"
+          docker compose -f ci/docker-compose.ci.yml logs
+          exit 1
+
+      - name: Create e2e admin user
+        run: |
+          docker compose -f ci/docker-compose.ci.yml exec -T \
+            -e ADMIN_EMAIL=qa@solvro.test \
+            -e ADMIN_PASSWORD=QaTest1234! \
+            backend npx tsx scripts/create-admin.ts
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+
+      - name: npm ci (e2e)
+        working-directory: e2e
+        run: npm ci
+
+      - name: Install Playwright browsers (chromium)
+        working-directory: e2e
+        run: npx playwright install --with-deps chromium
+
+      - name: Run Playwright tests
+        working-directory: e2e
+        env:
+          BASE_URL: http://localhost:8080
+          ADMIN_EMAIL: qa@solvro.test
+          ADMIN_PASSWORD: QaTest1234!
+          CI: "true"
+        run: npx playwright test
+
+      - name: Dump container logs on failure
+        if: failure()
+        run: docker compose -f ci/docker-compose.ci.yml logs
+
+      - name: Upload Playwright traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: |
+            e2e/test-results/
+            e2e/playwright-report/
+          retention-days: 7
+
+      - name: Tear down stack
+        if: always()
+        run: docker compose -f ci/docker-compose.ci.yml down -v

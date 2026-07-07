@@ -1,71 +1,160 @@
 import { useMemo, useState, type FormEvent } from "react";
+import {
+  DndContext,
+  KeyboardSensor,
+  PointerSensor,
+  closestCenter,
+  useDroppable,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "../ProjectDetail";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
-import { InlineDateRangeEditor } from "@/components/InlineDateRangeEditor";
-import { PriorityBadge } from "@/components/PriorityBadge";
-import { TaskStatusChip } from "@/components/StatusChip";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import {
+  type Priority,
   type Section,
   type Task,
+  type TaskStatus,
   useCreateSection,
   useDeleteSection,
   useProjectSections,
   useProjectTasks,
   useUpdateSection,
   useUpdateTask,
+  useUsers,
 } from "@/lib/queries";
+
+const PRIORITY_ORDER: Priority[] = ["LOW", "MEDIUM", "HIGH"];
+const PRIORITY_ICON_CLASS: Record<Priority, string> = {
+  LOW: "text-on-surface-variant",
+  MEDIUM: "text-chip-amber-text",
+  HIGH: "text-error",
+  URGENT: "text-error",
+};
+
+function nextPriority(p: Priority): Priority {
+  const idx = PRIORITY_ORDER.indexOf(p);
+  if (idx === -1) return "LOW";
+  return PRIORITY_ORDER[(idx + 1) % PRIORITY_ORDER.length];
+}
+
+const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+const STATUS_LABEL: Record<TaskStatus, string> = {
+  TODO: "To do",
+  IN_PROGRESS: "Active",
+  DONE: "Done",
+};
+const STATUS_TONE_CLASS: Record<TaskStatus, string> = {
+  TODO: "bg-surface-container-high text-on-surface-variant",
+  IN_PROGRESS: "bg-chip-emerald-bg text-chip-emerald-text",
+  DONE: "bg-chip-emerald-bg text-chip-emerald-text",
+};
+
+interface TaskNode {
+  task: Task;
+  subtasks: Task[];
+}
+
+type GroupKey = number | "none";
+
+function groupKeyOf(sectionId: number | null): GroupKey {
+  return sectionId ?? "none";
+}
+
+function rowId(taskId: number): string {
+  return `row:${taskId}`;
+}
+function subId(taskId: number): string {
+  return `sub:${taskId}`;
+}
+function groupId(key: GroupKey): string {
+  return `group:${key}`;
+}
+function isRowId(id: string): boolean {
+  return id.startsWith("row:");
+}
+function isSubId(id: string): boolean {
+  return id.startsWith("sub:");
+}
+function isGroupId(id: string): boolean {
+  return id.startsWith("group:");
+}
+function numFromRowId(id: string): number {
+  return Number(id.slice(4));
+}
+function numFromSubId(id: string): number {
+  return Number(id.slice(4));
+}
+function keyFromGroupId(id: string): GroupKey {
+  const raw = id.slice(6);
+  return raw === "none" ? "none" : Number(raw);
+}
 
 export function ProjectList() {
   const { project } = useProjectContext();
   const { user } = useAuth();
   const canEdit = hasPermission(user, "task:write");
+  const [, setSearchParams] = useSearchParams();
 
   const { data: tasks, isLoading: tasksLoading, isError, error } = useProjectTasks(project.id);
   const { data: sections, isLoading: sectionsLoading } = useProjectSections(project.id);
+  const { data: users } = useUsers();
   const updateTask = useUpdateTask(project.id);
   const createSection = useCreateSection(project.id);
   const updateSection = useUpdateSection(project.id);
   const deleteSection = useDeleteSection(project.id);
 
-  const [collapsed, setCollapsed] = useState<Set<number | "none">>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<GroupKey>>(new Set());
   const [createTaskCtx, setCreateTaskCtx] = useState<{
     sectionId: number | null;
     parentTaskId: number | null;
   } | null>(null);
-  const [editTask, setEditTask] = useState<Task | null>(null);
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
-  // renamingSectionKey: a real section.id (number) OR the literal "none" for
-  // the synthetic (No section) group. When "none" is submitted, we create a
-  // real section and migrate every orphan task into it.
-  const [renamingSectionKey, setRenamingSectionKey] = useState<number | "none" | null>(null);
+  const [renamingSectionKey, setRenamingSectionKey] = useState<GroupKey | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  // Canonical ordering: the backend orders siblings by (status, position)
+  // within (parentTaskId). The List view groups by *section* instead, purely
+  // for display — within a rendered section group we sort by (position, id)
+  // as a stable proxy, since `position` is only guaranteed unique within a
+  // task's real (parentTaskId, status) sibling list, not within a section.
   const grouped = useMemo(() => groupBySection(tasks ?? [], sections ?? []), [tasks, sections]);
 
-  if (tasksLoading || sectionsLoading) {
-    return (
-      <div className="h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+  function openTask(id: number) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("task", String(id));
+        return next;
+      },
+      { replace: true },
     );
   }
 
-  if (isError) {
-    return (
-      <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-        Could not load tasks: {(error as Error).message}
-      </div>
-    );
-  }
-
-  function toggle(id: number | "none") {
+  function toggleGroup(key: GroupKey) {
     setCollapsed((prev) => {
       const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   }
@@ -83,10 +172,7 @@ export function ProjectList() {
     }
   }
 
-  async function handleRename(
-    key: number | "none",
-    event: FormEvent<HTMLFormElement>,
-  ) {
+  async function handleRename(key: GroupKey, event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const name = renameValue.trim();
     if (!name) {
@@ -96,8 +182,6 @@ export function ProjectList() {
     setActionError(null);
     try {
       if (key === "none") {
-        // Promote the synthetic (No section) group into a real section
-        // and migrate every orphan task into it.
         const created = await createSection.mutateAsync({ name });
         const orphans = (tasks ?? []).filter((t) => t.sectionId === null);
         await Promise.all(
@@ -111,31 +195,6 @@ export function ProjectList() {
       setRenamingSectionKey(null);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Could not rename section.");
-    }
-  }
-
-  async function handleUpdateTaskDates(
-    taskId: number,
-    startISO: string | null,
-    dueISO: string | null,
-  ) {
-    setActionError(null);
-    try {
-      await updateTask.mutateAsync({
-        id: taskId,
-        patch: { startDate: startISO, dueDate: dueISO },
-      });
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "Could not update dates.");
-    }
-  }
-
-  async function handleSectionColorChange(s: Section, color: string) {
-    setActionError(null);
-    try {
-      await updateSection.mutateAsync({ id: s.id, patch: { color } });
-    } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : "Could not update color.");
     }
   }
 
@@ -161,90 +220,199 @@ export function ProjectList() {
     });
   }
 
+  function cyclePriority(task: Task) {
+    updateTask.mutate({ id: task.id, patch: { priority: nextPriority(task.priority) } });
+  }
+
+  function setStatus(task: Task, status: TaskStatus) {
+    if (status === task.status) return;
+    updateTask.mutate({ id: task.id, patch: { status } });
+  }
+
+  function setAssignee(task: Task, assignedToId: number | null) {
+    if (assignedToId === task.assignedToId) return;
+    updateTask.mutate({ id: task.id, patch: { assignedToId } });
+  }
+
+  function setDates(task: Task, startDate: string | null, dueDate: string | null) {
+    updateTask.mutate({ id: task.id, patch: { startDate, dueDate } });
+  }
+
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over) return;
+    const activeId = String(active.id);
+    let overId = String(over.id);
+    if (activeId === overId) return;
+
+    // Subtask drag: reorder WITHIN the parent only (no re-parent/promote in
+    // the List view). Sibling list = the parent's subtasks — status doesn't
+    // partition subtask ordering (mirrors Kanban's handleSubtaskDrop and
+    // queries.ts siblingListId).
+    if (isSubId(activeId)) {
+      if (!isSubId(overId)) return;
+      const moved = (tasks ?? []).find((t) => t.id === numFromSubId(activeId));
+      const overSub = (tasks ?? []).find((t) => t.id === numFromSubId(overId));
+      if (!moved || !overSub || moved.parentTaskId === null) return;
+      if (overSub.parentTaskId !== moved.parentTaskId) return;
+      const siblings = (tasks ?? [])
+        .filter((t) => t.parentTaskId === moved.parentTaskId && t.id !== moved.id)
+        .sort((a, b) => a.position - b.position || a.id - b.id);
+      const idx = siblings.findIndex((t) => t.id === overSub.id);
+      const position = idx === -1 ? siblings.length : idx;
+      if (position === moved.position) return;
+      updateTask.mutate({ id: moved.id, patch: { position } });
+      return;
+    }
+
+    if (!isRowId(activeId)) return;
+
+    // A task row dropped over a subtask row means "dropped on that row's
+    // parent card area" — resolve to the parent so the drop isn't a silent
+    // no-op.
+    if (isSubId(overId)) {
+      const overSub = (tasks ?? []).find((t) => t.id === numFromSubId(overId));
+      if (!overSub || overSub.parentTaskId === null) return;
+      overId = rowId(overSub.parentTaskId);
+      if (activeId === overId) return;
+    }
+
+    const movedId = numFromRowId(activeId);
+    const moved = (tasks ?? []).find((t) => t.id === movedId);
+    if (!moved) return;
+
+    const movedGroupKey = groupKeyOf(moved.sectionId);
+
+    if (isGroupId(overId)) {
+      // Dropped on a section header (or empty group area) -> append into
+      // that section, keeping status/position semantics: position appended
+      // at the end of that task's (parentTaskId=null, status) sibling list
+      // isn't tracked per-section, so we just append within the group.
+      const targetKey = keyFromGroupId(overId);
+      const targetSectionId = targetKey === "none" ? null : targetKey;
+      if (targetSectionId === moved.sectionId) return;
+      updateTask.mutate({ id: moved.id, patch: { sectionId: targetSectionId } });
+      return;
+    }
+
+    if (!isRowId(overId)) return;
+    const overTaskId = numFromRowId(overId);
+    const overTask = (tasks ?? []).find((t) => t.id === overTaskId);
+    if (!overTask) return;
+    const overGroupKey = groupKeyOf(overTask.sectionId);
+
+    if (overGroupKey !== movedGroupKey) {
+      // Dropped onto another group's row area -> re-section, append at end.
+      updateTask.mutate({ id: moved.id, patch: { sectionId: overTask.sectionId } });
+      return;
+    }
+
+    // Reorder within the same group. Position is meaningful within the
+    // task's real (status, parentTaskId) sibling list on the backend, so we
+    // compute the new index among same-status siblings in this group only
+    // when statuses match; otherwise this is effectively a no-op position
+    // hint and we fall back to the over-task's position.
+    const groupTasks = (grouped.find((g) => groupKeyOf(g.section?.id ?? null) === movedGroupKey)
+      ?.tasks ?? []
+    ).map((n) => n.task);
+    const siblingsOfStatus = groupTasks.filter((t) => t.status === moved.status && t.id !== moved.id);
+    const idx = siblingsOfStatus.findIndex((t) => t.id === overTask.id);
+    const position = idx === -1 ? siblingsOfStatus.length : idx;
+    if (position === moved.position) return;
+    updateTask.mutate({ id: moved.id, patch: { position } });
+  }
+
+  if (tasksLoading || sectionsLoading) {
+    return (
+      <div className="h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+    );
+  }
+
+  if (isError) {
+    return (
+      <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+        Could not load tasks: {(error as Error).message}
+      </div>
+    );
+  }
+
   return (
     <>
-      <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest">
-        {/* Toolbar */}
-        <div className="flex items-center gap-2 border-b border-outline-variant px-3 py-2">
-          {canEdit && (
-            <button
-              type="button"
-              onClick={() => setCreateTaskCtx({ sectionId: null, parentTaskId: null })}
-              className="inline-flex items-center gap-1 rounded bg-primary px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
-            >
-              <span className="material-symbols-outlined text-base">add</span>
-              Add task
-            </button>
-          )}
-          {canEdit && (
-            <button
-              type="button"
-              onClick={() => setAddingSection(true)}
-              className="inline-flex items-center gap-1 rounded border border-outline-variant px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
-            >
-              <span className="material-symbols-outlined text-base">add</span>
-              Add section
-            </button>
-          )}
-          <span className="ml-auto font-mono text-[12px] text-on-surface-variant">
-            {tasks?.length ?? 0} tasks · {sections?.length ?? 0} sections
-          </span>
-        </div>
-
-        {actionError && (
-          <div className="border-b border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container">
-            {actionError}
-          </div>
+      <div className="mb-3 flex items-center justify-end gap-2">
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setAddingSection(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
+          >
+            <span className="material-symbols-outlined text-base">add</span>
+            Add section
+          </button>
         )}
+        {canEdit && (
+          <button
+            type="button"
+            onClick={() => setCreateTaskCtx({ sectionId: null, parentTaskId: null })}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary/90"
+          >
+            <span className="material-symbols-outlined text-base">add</span>
+            Add task
+          </button>
+        )}
+      </div>
 
+      {actionError && (
+        <div className="mb-3 rounded-lg border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container">
+          {actionError}
+        </div>
+      )}
+
+      <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest">
         {/* Column headers */}
-        <div className="hidden grid-cols-[36px_minmax(240px,1fr)_190px_170px_80px_48px_28px] items-center border-b border-outline-variant bg-surface-container-low px-3 py-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant md:grid">
+        <div className="hidden grid-cols-[28px_minmax(200px,1fr)_60px_70px_50px_100px] items-center gap-2 border-b border-outline-variant px-3 py-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant md:grid">
           <span></span>
-          <span>Task</span>
+          <span>Name</span>
+          <span>Owner</span>
+          <span>Due</span>
+          <span>Prio</span>
           <span>Status</span>
-          <span>Dates</span>
-          <span>Timer</span>
-          <span>Assignee</span>
-          <span></span>
         </div>
 
-        {/* Sections */}
-        {grouped.map((g) => (
-          <SectionBlock
-            key={g.section?.id ?? "none"}
-            section={g.section}
-            tasks={g.tasks}
-            collapsed={collapsed.has(g.section?.id ?? "none")}
-            canEdit={canEdit}
-            onToggle={() => toggle(g.section?.id ?? "none")}
-            onAddTask={() =>
-              setCreateTaskCtx({
-                sectionId: g.section?.id ?? null,
-                parentTaskId: null,
-              })
-            }
-            onAddSubtask={(parentId) =>
-              setCreateTaskCtx({
-                sectionId: g.section?.id ?? null,
-                parentTaskId: parentId,
-              })
-            }
-            onEditTask={setEditTask}
-            onToggleDone={toggleTaskDone}
-            onUpdateDates={handleUpdateTaskDates}
-            onRename={(s) => {
-              setRenamingSectionKey(s ? s.id : "none");
-              setRenameValue(s ? s.name : "");
-            }}
-            onDelete={handleDeleteSection}
-            onColorChange={handleSectionColorChange}
-            renamingKey={renamingSectionKey}
-            renameValue={renameValue}
-            onRenameChange={setRenameValue}
-            onRenameSubmit={handleRename}
-            onRenameCancel={() => setRenamingSectionKey(null)}
-          />
-        ))}
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          {grouped.map((g) => (
+            <SectionGroup
+              key={g.section?.id ?? "none"}
+              section={g.section}
+              nodes={g.tasks}
+              collapsed={collapsed.has(groupKeyOf(g.section?.id ?? null))}
+              canEdit={canEdit}
+              users={users ?? []}
+              onToggle={() => toggleGroup(groupKeyOf(g.section?.id ?? null))}
+              onAddTask={() =>
+                setCreateTaskCtx({ sectionId: g.section?.id ?? null, parentTaskId: null })
+              }
+              onAddSubtask={(parentId) =>
+                setCreateTaskCtx({ sectionId: g.section?.id ?? null, parentTaskId: parentId })
+              }
+              onOpenTask={openTask}
+              onToggleDone={toggleTaskDone}
+              onCyclePriority={cyclePriority}
+              onSetStatus={setStatus}
+              onSetAssignee={setAssignee}
+              onSetDates={setDates}
+              onRename={(s) => {
+                setRenamingSectionKey(s ? s.id : "none");
+                setRenameValue(s ? s.name : "");
+              }}
+              onDelete={handleDeleteSection}
+              renamingKey={renamingSectionKey}
+              renameValue={renameValue}
+              onRenameChange={setRenameValue}
+              onRenameSubmit={handleRename}
+              onRenameCancel={() => setRenamingSectionKey(null)}
+            />
+          ))}
+        </DndContext>
 
         {addingSection && (
           <form
@@ -291,68 +459,71 @@ export function ProjectList() {
           initialParentTaskId={createTaskCtx.parentTaskId}
         />
       )}
-
-      {editTask && (
-        <TaskFormModal
-          mode="edit"
-          open={editTask !== null}
-          onClose={() => setEditTask(null)}
-          projectId={project.id}
-          task={editTask}
-        />
-      )}
     </>
   );
 }
 
-interface SectionBlockProps {
+interface SectionGroupProps {
   section: Section | null;
-  tasks: TaskNode[];
+  nodes: TaskNode[];
   collapsed: boolean;
   canEdit: boolean;
+  users: { id: number; username: string }[];
   onToggle: () => void;
   onAddTask: () => void;
   onAddSubtask: (parentId: number) => void;
-  onEditTask: (t: Task) => void;
+  onOpenTask: (id: number) => void;
   onToggleDone: (t: Task) => void;
-  onUpdateDates: (taskId: number, startISO: string | null, dueISO: string | null) => void;
-  // s === null when the user clicks edit on the synthetic (No section) group;
-  // the parent then opens the rename input keyed on the literal "none".
+  onCyclePriority: (t: Task) => void;
+  onSetStatus: (t: Task, status: TaskStatus) => void;
+  onSetAssignee: (t: Task, assignedToId: number | null) => void;
+  onSetDates: (t: Task, start: string | null, due: string | null) => void;
   onRename: (s: Section | null) => void;
   onDelete: (s: Section) => void;
-  onColorChange: (s: Section, color: string) => void;
-  renamingKey: number | "none" | null;
+  renamingKey: GroupKey | null;
   renameValue: string;
   onRenameChange: (v: string) => void;
-  onRenameSubmit: (key: number | "none", e: FormEvent<HTMLFormElement>) => void;
+  onRenameSubmit: (key: GroupKey, e: FormEvent<HTMLFormElement>) => void;
   onRenameCancel: () => void;
 }
 
-function SectionBlock({
+function SectionGroup({
   section,
-  tasks,
+  nodes,
   collapsed,
   canEdit,
+  users,
   onToggle,
   onAddTask,
   onAddSubtask,
-  onEditTask,
+  onOpenTask,
   onToggleDone,
-  onUpdateDates,
+  onCyclePriority,
+  onSetStatus,
+  onSetAssignee,
+  onSetDates,
   onRename,
   onDelete,
-  onColorChange,
   renamingKey,
   renameValue,
   onRenameChange,
   onRenameSubmit,
   onRenameCancel,
-}: SectionBlockProps) {
-  const sectionKey: number | "none" = section ? section.id : "none";
-  const isRenaming = renamingKey === sectionKey;
+}: SectionGroupProps) {
+  const key = groupKeyOf(section?.id ?? null);
+  const isRenaming = renamingKey === key;
+  const { setNodeRef, isOver } = useDroppable({ id: groupId(key) });
+  const sortableIds = nodes.map((n) => rowId(n.task.id));
+
   return (
-    <div className="border-b border-outline-variant">
-      <div className="flex items-center gap-2 bg-surface-container-low px-3 py-1.5">
+    <div className="border-b border-outline-variant last:border-b-0">
+      <div
+        ref={setNodeRef}
+        className={[
+          "flex items-center gap-2 bg-surface-container-low px-3 py-1.5",
+          isOver ? "ring-2 ring-inset ring-primary/40" : "",
+        ].join(" ")}
+      >
         <button
           type="button"
           onClick={onToggle}
@@ -363,20 +534,16 @@ function SectionBlock({
             {collapsed ? "chevron_right" : "expand_more"}
           </span>
         </button>
+        {section && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: section.color }} />}
         {isRenaming ? (
-          <form
-            onSubmit={(e) => onRenameSubmit(sectionKey, e)}
-            className="flex items-center gap-2"
-          >
+          <form onSubmit={(e) => onRenameSubmit(key, e)} className="flex items-center gap-2">
             <input
               autoFocus
               type="text"
               value={renameValue}
               onChange={(e) => onRenameChange(e.target.value)}
               maxLength={100}
-              placeholder={
-                section ? section.name : "Name this section to promote it"
-              }
+              placeholder={section ? section.name : "Name this section to promote it"}
               className="w-64 rounded border border-outline-variant bg-surface-container-lowest px-2 py-0.5 text-sm font-semibold focus:border-primary focus:outline-none"
             />
             <button
@@ -385,11 +552,7 @@ function SectionBlock({
             >
               {section ? "Save" : "Create"}
             </button>
-            <button
-              type="button"
-              onClick={onRenameCancel}
-              className="text-[11px] text-on-surface-variant"
-            >
+            <button type="button" onClick={onRenameCancel} className="text-[11px] text-on-surface-variant">
               Cancel
             </button>
           </form>
@@ -400,29 +563,14 @@ function SectionBlock({
               section ? "text-on-surface" : "italic text-on-surface-variant",
             ].join(" ")}
           >
-            {section?.name ?? "(No section)"}
+            {section?.name ?? "No section"}
           </h3>
         )}
-        <span className="font-mono text-[12px] text-on-surface-variant">
-          · {tasks.length}
+        <span className="rounded-full bg-surface-container-high px-1.5 py-0 font-mono text-[11px] text-on-surface-variant">
+          {nodes.length}
         </span>
         {canEdit && !isRenaming && (
           <div className="ml-auto flex items-center gap-1">
-            {section && (
-              <label
-                className="relative flex h-6 w-6 cursor-pointer items-center justify-center rounded hover:ring-2 hover:ring-outline-variant"
-                title="Phase color (used in the Network Diagram)"
-                style={{ backgroundColor: section.color }}
-              >
-                <input
-                  type="color"
-                  value={section.color}
-                  onChange={(e) => onColorChange(section, e.target.value)}
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                  aria-label="Section color"
-                />
-              </label>
-            )}
             <button
               type="button"
               onClick={() => onRename(section)}
@@ -446,314 +594,234 @@ function SectionBlock({
       </div>
 
       {!collapsed && (
-        <>
-          {tasks.map((node, idx) => (
+        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+          {nodes.map((node) => (
             <TaskRow
               key={node.task.id}
               node={node}
-              index={idx + 1}
               canEdit={canEdit}
+              users={users}
               onAddSubtask={onAddSubtask}
-              onEdit={onEditTask}
+              onOpenTask={onOpenTask}
               onToggleDone={onToggleDone}
-              onUpdateDates={onUpdateDates}
+              onCyclePriority={onCyclePriority}
+              onSetStatus={onSetStatus}
+              onSetAssignee={onSetAssignee}
+              onSetDates={onSetDates}
             />
           ))}
 
-          {tasks.length === 0 && (
-            <div className="px-12 py-2 text-[12px] text-on-surface-variant">
-              No tasks in this section.
-            </div>
+          {nodes.length === 0 && (
+            <div className="px-10 py-2 text-[12px] text-on-surface-variant">No tasks in this section.</div>
           )}
 
           {canEdit && (
             <button
               type="button"
               onClick={onAddTask}
-              className="flex w-full items-center gap-2 px-12 py-1 text-left text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
+              className="flex w-full items-center gap-2 px-10 py-1 text-left text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
             >
               <span className="material-symbols-outlined text-[15px]">add</span>
-              Add task...
+              Add task…
             </button>
           )}
-        </>
+        </SortableContext>
       )}
     </div>
   );
 }
 
-interface TaskNode {
-  task: Task;
-  subtasks: Task[];
-}
-
 function TaskRow({
   node,
-  index,
   canEdit,
+  users,
   onAddSubtask,
-  onEdit,
+  onOpenTask,
   onToggleDone,
-  onUpdateDates,
+  onCyclePriority,
+  onSetStatus,
+  onSetAssignee,
+  onSetDates,
 }: {
   node: TaskNode;
-  index: number;
   canEdit: boolean;
+  users: { id: number; username: string }[];
   onAddSubtask: (parentId: number) => void;
-  onEdit: (t: Task) => void;
+  onOpenTask: (id: number) => void;
   onToggleDone: (t: Task) => void;
-  onUpdateDates: (taskId: number, startISO: string | null, dueISO: string | null) => void;
+  onCyclePriority: (t: Task) => void;
+  onSetStatus: (t: Task, status: TaskStatus) => void;
+  onSetAssignee: (t: Task, assignedToId: number | null) => void;
+  onSetDates: (t: Task, start: string | null, due: string | null) => void;
 }) {
-  const [expanded, setExpanded] = useState(node.subtasks.length > 0);
-  const [editingDates, setEditingDates] = useState(false);
-  const overdue =
-    node.task.dueDate &&
-    node.task.status !== "DONE" &&
-    new Date(node.task.dueDate) < startOfToday();
+  const { task, subtasks } = node;
+  const [expanded, setExpanded] = useState(subtasks.length > 0);
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id: rowId(task.id), disabled: !canEdit });
+
+  const style = { transform: CSS.Transform.toString(transform), transition };
 
   return (
     <>
-      {/* Desktop grid row */}
-      <div className="hidden grid-cols-[36px_minmax(240px,1fr)_190px_170px_80px_48px_28px] items-center border-t border-outline-variant px-3 py-1.5 hover:bg-surface-container-low md:grid">
-        {/* Done toggle */}
-        <button
-          type="button"
-          onClick={() => onToggleDone(node.task)}
+      <div
+        ref={setNodeRef}
+        style={style}
+        onClick={() => onOpenTask(task.id)}
+        className={[
+          "hidden cursor-pointer grid-cols-[28px_minmax(200px,1fr)_60px_70px_50px_100px] items-center gap-2 border-t border-outline-variant px-3 py-1.5 hover:bg-surface-container-low md:grid",
+          isDragging ? "opacity-40" : "",
+        ].join(" ")}
+      >
+        <span
+          ref={setActivatorNodeRef}
+          {...attributes}
+          {...listeners}
+          onClick={(e) => e.stopPropagation()}
           className={[
-            "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border transition-colors",
-            node.task.status === "DONE"
-              ? "border-emerald-500 bg-emerald-500 text-white"
-              : "border-outline-variant text-transparent hover:border-primary",
+            "material-symbols-outlined text-[16px] text-on-surface-variant/50",
+            canEdit ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-default",
           ].join(" ")}
-          aria-label="Toggle done"
+          aria-label="Drag to reorder"
         >
-          <span className="material-symbols-outlined text-[13px]">check</span>
-        </button>
-
-        {/* Title + subtext */}
-        <button
-          type="button"
-          onClick={() => onEdit(node.task)}
-          className="flex min-w-0 flex-col items-start text-left"
-        >
-          <span className="flex items-center gap-1.5">
-            {node.subtasks.length > 0 && (
-              <span
-                className="material-symbols-outlined text-[15px] text-on-surface-variant"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setExpanded((v) => !v);
-                }}
-              >
-                {expanded ? "expand_more" : "chevron_right"}
-              </span>
-            )}
-            <span
-              className={[
-                "truncate text-sm font-semibold",
-                node.task.status === "DONE"
-                  ? "text-on-surface-variant line-through"
-                  : "text-on-surface",
-              ].join(" ")}
-            >
-              {node.task.title}
-            </span>
-          </span>
-          <span className="text-[11px] text-on-surface-variant">
-            T-{String(node.task.id).padStart(3, "0")}
-            {node.task.assignedTo && ` · ${node.task.assignedTo.username}`}
-            {node.subtasks.length > 0 && ` · ${node.subtasks.length} subtask${node.subtasks.length === 1 ? "" : "s"}`}
-          </span>
-        </button>
-
-        {/* Status + priority chips */}
-        <div className="flex flex-wrap items-center gap-1">
-          <TaskStatusChip status={node.task.status} />
-          <PriorityBadge priority={node.task.priority} compact />
-        </div>
-
-        {/* Dates (editable) */}
-        <span className="relative">
-          <button
-            type="button"
-            disabled={!canEdit}
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingDates(true);
-            }}
-            className={[
-              "flex items-center gap-1 rounded px-1 text-left",
-              overdue
-                ? "font-mono text-[12px] font-bold text-error"
-                : "font-mono text-[12px] text-on-surface-variant",
-              canEdit ? "hover:bg-surface-container-low hover:text-primary" : "cursor-default",
-            ].join(" ")}
-            title={canEdit ? "Click to edit dates" : undefined}
-          >
-            <span className="material-symbols-outlined text-[13px]">calendar_today</span>
-            {fmtRange(node.task.startDate, node.task.dueDate)}
-            {overdue && " · OVERDUE"}
-          </button>
-          {editingDates && canEdit && (
-            <InlineDateRangeEditor
-              className="absolute left-0 top-full z-50 mt-1"
-              startISO={node.task.startDate}
-              endISO={node.task.dueDate}
-              onSave={(s, e) => {
-                onUpdateDates(node.task.id, s, e);
-                setEditingDates(false);
-              }}
-              onCancel={() => setEditingDates(false)}
-            />
-          )}
+          drag_indicator
         </span>
 
-        {/* Timer placeholder */}
-        <div className="flex items-center gap-1 font-mono text-[12px] text-on-surface-variant">
-          <span className="material-symbols-outlined text-[14px]">timer</span>
-          <span>--:--:--</span>
-        </div>
+        <span className="flex min-w-0 items-center gap-1.5">
+          {subtasks.length > 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded((v) => !v);
+              }}
+              className="text-on-surface-variant hover:text-on-surface"
+            >
+              <span className="material-symbols-outlined text-[15px]">
+                {expanded ? "expand_more" : "chevron_right"}
+              </span>
+            </button>
+          )}
+          <span
+            className={[
+              "truncate text-sm",
+              task.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface",
+            ].join(" ")}
+          >
+            {task.title}
+          </span>
+        </span>
 
-        {/* Assignee avatar */}
-        <AssigneeAvatar user={node.task.assignedTo} size="xs" />
+        <span onClick={(e) => e.stopPropagation()}>
+          <AssigneeSelect
+            canEdit={canEdit}
+            users={users}
+            value={task.assignedToId}
+            onChange={(id) => onSetAssignee(task, id)}
+          />
+        </span>
 
-        {/* Comment count */}
-        <div className="flex items-center gap-0.5 text-[12px] text-on-surface-variant">
-          <span className="material-symbols-outlined text-[14px]">chat_bubble</span>
-          {node.task._count.comments > 0 ? node.task._count.comments : ""}
-        </div>
+        <span onClick={(e) => e.stopPropagation()}>
+          <DueDateEditor
+            canEdit={canEdit}
+            startISO={task.startDate}
+            dueISO={task.dueDate}
+            onSave={(s, d) => onSetDates(task, s, d)}
+          />
+        </span>
+
+        <button
+          type="button"
+          disabled={!canEdit}
+          onClick={(e) => {
+            e.stopPropagation();
+            onCyclePriority(task);
+          }}
+          className="flex items-center justify-start disabled:cursor-default"
+          title={canEdit ? "Click to cycle priority" : undefined}
+        >
+          <span className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}>
+            flag
+          </span>
+        </button>
+
+        <span onClick={(e) => e.stopPropagation()}>
+          <StatusSelect canEdit={canEdit} value={task.status} onChange={(s) => onSetStatus(task, s)} />
+        </span>
       </div>
 
       {/* Mobile card */}
-      <div className="flex flex-col gap-2 border-t border-outline-variant px-3 py-2 md:hidden">
+      <div
+        onClick={() => onOpenTask(task.id)}
+        className="flex cursor-pointer flex-col gap-1.5 border-t border-outline-variant px-3 py-2 md:hidden"
+      >
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onToggleDone(node.task)}
-            className={[
-              "flex h-5 w-5 shrink-0 items-center justify-center rounded-full border",
-              node.task.status === "DONE"
-                ? "border-emerald-500 bg-emerald-500 text-white"
-                : "border-outline-variant text-transparent",
-            ].join(" ")}
-            aria-label="Toggle done"
-          >
-            <span className="material-symbols-outlined text-[15px]">check</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onEdit(node.task)}
-            className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
-          >
-            <span
-              className={[
-                "shrink-0 truncate text-sm",
-                node.task.status === "DONE"
-                  ? "text-on-surface-variant line-through"
-                  : "text-on-surface",
-              ].join(" ")}
-            >
-              <span className="mr-2 font-mono text-[11px] text-on-surface-variant">
-                #{index}
-              </span>
-              {node.task.title}
-            </span>
-            {node.task.description && (
-              <span className="min-w-0 truncate text-[12px] text-on-surface-variant">
-                — {node.task.description}
-              </span>
-            )}
-          </button>
-          {node.subtasks.length > 0 && (
+          {subtasks.length > 0 && (
             <button
               type="button"
-              onClick={() => setExpanded((v) => !v)}
-              className="shrink-0 rounded p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-              aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpanded((v) => !v);
+              }}
+              className="shrink-0 text-on-surface-variant"
             >
-              <span className="material-symbols-outlined text-[19px]">
+              <span className="material-symbols-outlined text-[17px]">
                 {expanded ? "expand_more" : "chevron_right"}
               </span>
             </button>
           )}
-        </div>
-        <div className="flex items-center justify-between gap-2 pl-7">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <AssigneeAvatar user={node.task.assignedTo} size="xs" />
-            {node.task.assignedTo && (
-              <span className="truncate text-[12px] text-on-surface-variant">
-                {node.task.assignedTo.username}
-              </span>
-            )}
+          <span
+            className={[
+              "min-w-0 flex-1 truncate text-sm",
+              task.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface",
+            ].join(" ")}
+          >
+            {task.title}
           </span>
-          <span className="relative">
-            <button
-              type="button"
-              disabled={!canEdit}
-              onClick={() => setEditingDates(true)}
-              className={[
-                "rounded px-1 text-right font-mono text-[12px]",
-                overdue ? "font-bold text-error" : "text-on-surface-variant",
-              ].join(" ")}
-            >
-              {fmtRange(node.task.startDate, node.task.dueDate)}
-              {overdue && " · OVERDUE"}
-            </button>
-            {editingDates && canEdit && (
-              <InlineDateRangeEditor
-                className="absolute right-0 top-full z-50 mt-1"
-                startISO={node.task.startDate}
-                endISO={node.task.dueDate}
-                onSave={(s, e) => {
-                  onUpdateDates(node.task.id, s, e);
-                  setEditingDates(false);
-                }}
-                onCancel={() => setEditingDates(false)}
-              />
-            )}
+          <span className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}>
+            flag
           </span>
         </div>
-        {node.subtasks.length > 0 && (
-          <span className="pl-7 font-mono text-[11px] text-on-surface-variant">
-            {node.subtasks.length} subtask{node.subtasks.length === 1 ? "" : "s"}
+        <div className="flex items-center justify-between gap-2 pl-0">
+          <span className="flex items-center gap-1.5">
+            <AssigneeAvatar user={task.assignedTo} size="xs" />
+            <span className="text-[11px] text-on-surface-variant">{fmt(task.dueDate)}</span>
           </span>
-        )}
+          <span
+            className={[
+              "rounded-full px-2 py-0.5 font-display text-[11px] font-semibold",
+              STATUS_TONE_CLASS[task.status],
+            ].join(" ")}
+          >
+            {STATUS_LABEL[task.status]}
+          </span>
+        </div>
       </div>
 
-      {expanded &&
-        node.subtasks.map((s, idx) => (
-          <SubtaskRow
-            key={s.id}
-            task={s}
-            index={idx + 1}
-            canEdit={canEdit}
-            onEdit={onEdit}
-            onToggleDone={onToggleDone}
-            onUpdateDates={onUpdateDates}
-          />
-        ))}
+      {expanded && (
+        <SortableContext
+          items={subtasks.map((s) => subId(s.id))}
+          strategy={verticalListSortingStrategy}
+        >
+          {subtasks.map((s) => (
+            <SubtaskRow
+              key={s.id}
+              task={s}
+              canEdit={canEdit}
+              onOpenTask={onOpenTask}
+              onToggleDone={onToggleDone}
+            />
+          ))}
+        </SortableContext>
+      )}
       {expanded && canEdit && (
-        <>
-          <button
-            type="button"
-            onClick={() => onAddSubtask(node.task.id)}
-            className="hidden w-full grid-cols-[36px_minmax(240px,1fr)_190px_170px_80px_48px_28px] items-center border-t border-outline-variant px-3 py-1 text-left text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary md:grid"
-          >
-            <span></span>
-            <span className="flex items-center gap-1 pl-5">
-              <span className="material-symbols-outlined text-[15px]">add</span>
-              Add subtask…
-            </span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onAddSubtask(node.task.id)}
-            className="flex w-full items-center gap-1 border-t border-outline-variant px-3 py-2 pl-10 text-left text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary md:hidden"
-          >
-            <span className="material-symbols-outlined text-[15px]">add</span>
-            Add subtask…
-          </button>
-        </>
+        <button
+          type="button"
+          onClick={() => onAddSubtask(task.id)}
+          className="flex w-full items-center gap-1.5 border-t border-outline-variant py-1 pl-[52px] text-left text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
+        >
+          <span className="material-symbols-outlined text-[14px]">add</span>
+          Add subtask…
+        </button>
       )}
     </>
   );
@@ -761,197 +829,248 @@ function TaskRow({
 
 function SubtaskRow({
   task,
-  index,
   canEdit,
-  onEdit,
+  onOpenTask,
   onToggleDone,
-  onUpdateDates,
 }: {
   task: Task;
-  index: number;
   canEdit: boolean;
-  onEdit: (t: Task) => void;
+  onOpenTask: (id: number) => void;
   onToggleDone: (t: Task) => void;
-  onUpdateDates: (taskId: number, startISO: string | null, dueISO: string | null) => void;
 }) {
-  const [editingDates, setEditingDates] = useState(false);
-  const overdue =
-    task.dueDate && task.status !== "DONE" && new Date(task.dueDate) < startOfToday();
+  const done = task.status === "DONE";
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id: subId(task.id), disabled: !canEdit });
+  const style = { transform: CSS.Transform.toString(transform), transition };
   return (
-    <>
-      {/* Desktop grid row (subtask, indented) */}
-      <div className="hidden grid-cols-[36px_minmax(240px,1fr)_190px_170px_80px_48px_28px] items-center border-t border-outline-variant bg-surface-container-low/40 px-3 py-1 hover:bg-surface-container-low md:grid">
-        {/* Done toggle */}
-        <button
-          type="button"
-          onClick={() => onToggleDone(task)}
-          className={[
-            "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
-            task.status === "DONE"
-              ? "border-emerald-500 bg-emerald-500 text-white"
-              : "border-outline-variant text-transparent hover:border-primary",
-          ].join(" ")}
-          aria-label="Toggle done"
-        >
-          <span className="material-symbols-outlined text-[12px]">check</span>
-        </button>
+    <div
+      ref={setNodeRef}
+      style={style}
+      onClick={() => onOpenTask(task.id)}
+      className={[
+        "flex cursor-pointer items-center gap-2 border-t border-outline-variant bg-surface-container-low/40 py-1 pl-[34px] pr-3 text-[12.5px] hover:bg-surface-container-low",
+        isDragging ? "opacity-40" : "",
+      ].join(" ")}
+    >
+      <span
+        ref={setActivatorNodeRef}
+        {...attributes}
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+        className={[
+          "material-symbols-outlined text-[14px] text-on-surface-variant/40",
+          canEdit ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-default",
+        ].join(" ")}
+        aria-label="Drag to reorder subtask"
+      >
+        drag_indicator
+      </span>
+      <button
+        type="button"
+        disabled={!canEdit}
+        onClick={(e) => {
+          e.stopPropagation();
+          onToggleDone(task);
+        }}
+        aria-label={done ? "Mark not done" : "Mark done"}
+        className={[
+          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors",
+          done ? "border-emerald-500 bg-emerald-500 text-white" : "border-outline-variant hover:border-primary",
+          canEdit ? "cursor-pointer" : "cursor-default",
+        ].join(" ")}
+      >
+        {done && <span className="material-symbols-outlined text-[10px] leading-none">check</span>}
+      </button>
+      <span className={["truncate", done ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
+        {task.title}
+      </span>
+    </div>
+  );
+}
 
-        {/* Title (indented) */}
-        <button
-          type="button"
-          onClick={() => onEdit(task)}
-          className="flex min-w-0 flex-col items-start pl-5 text-left"
-        >
-          <span
-            className={[
-              "truncate text-xs font-medium",
-              task.status === "DONE"
-                ? "text-on-surface-variant line-through"
-                : "text-on-surface",
-            ].join(" ")}
-          >
-            {task.title}
-          </span>
-          <span className="text-[11px] text-on-surface-variant">
-            T-{String(task.id).padStart(3, "0")}
-            {task.assignedTo && ` · ${task.assignedTo.username}`}
-          </span>
-        </button>
+function AssigneeSelect({
+  canEdit,
+  users,
+  value,
+  onChange,
+}: {
+  canEdit: boolean;
+  users: { id: number; username: string }[];
+  value: number | null;
+  onChange: (id: number | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const user = users.find((u) => u.id === value) ?? null;
 
-        {/* Status + priority */}
-        <div className="flex flex-wrap items-center gap-1">
-          <TaskStatusChip status={task.status} />
-          <PriorityBadge priority={task.priority} compact />
-        </div>
+  if (!canEdit) {
+    return <AssigneeAvatar user={user} size="xs" />;
+  }
 
-        {/* Dates */}
-        <span className="relative">
-          <button
-            type="button"
-            disabled={!canEdit}
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingDates(true);
-            }}
-            className={[
-              "flex items-center gap-1 rounded px-1 text-left",
-              overdue
-                ? "font-mono text-[12px] font-bold text-error"
-                : "font-mono text-[12px] text-on-surface-variant",
-              canEdit ? "hover:bg-surface-container-low hover:text-primary" : "cursor-default",
-            ].join(" ")}
-          >
-            <span className="material-symbols-outlined text-[13px]">calendar_today</span>
-            {fmtRange(task.startDate, task.dueDate)}
-          </button>
-          {editingDates && canEdit && (
-            <InlineDateRangeEditor
-              className="absolute left-0 top-full z-50 mt-1"
-              startISO={task.startDate}
-              endISO={task.dueDate}
-              onSave={(s, e) => {
-                onUpdateDates(task.id, s, e);
-                setEditingDates(false);
-              }}
-              onCancel={() => setEditingDates(false)}
-            />
-          )}
-        </span>
-
-        {/* Timer placeholder */}
-        <div className="flex items-center gap-1 font-mono text-[12px] text-on-surface-variant">
-          <span className="material-symbols-outlined text-[14px]">timer</span>
-          <span>--:--:--</span>
-        </div>
-
-        {/* Assignee */}
-        <AssigneeAvatar user={task.assignedTo} size="xs" />
-
-        {/* Comment count */}
-        <div className="flex items-center gap-0.5 text-[12px] text-on-surface-variant">
-          <span className="material-symbols-outlined text-[14px]">chat_bubble</span>
-          {task._count.comments > 0 ? task._count.comments : ""}
-        </div>
-      </div>
-
-      {/* Mobile subtask card */}
-      <div className="flex flex-col gap-1.5 border-t border-outline-variant bg-surface-container-low/40 px-3 py-1.5 pl-8 md:hidden">
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => onToggleDone(task)}
-            className={[
-              "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-              task.status === "DONE"
-                ? "border-emerald-500 bg-emerald-500 text-white"
-                : "border-outline-variant text-transparent",
-            ].join(" ")}
-            aria-label="Toggle done"
-          >
-            <span className="material-symbols-outlined text-[13px]">check</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => onEdit(task)}
-            className="flex min-w-0 flex-1 items-baseline gap-2 text-left"
-          >
-            <span
-              className={[
-                "shrink-0 truncate text-xs",
-                task.status === "DONE"
-                  ? "text-on-surface-variant line-through"
-                  : "text-on-surface",
-              ].join(" ")}
-            >
-              <span className="mr-2 font-mono text-[11px] text-on-surface-variant">
-                {index}
-              </span>
-              {task.title}
-            </span>
-            {task.description && (
-              <span className="min-w-0 truncate text-[12px] text-on-surface-variant">
-                — {task.description}
-              </span>
-            )}
-          </button>
-        </div>
-        <div className="flex items-center justify-between gap-2 pl-6">
-          <span className="flex min-w-0 items-center gap-1.5">
-            <AssigneeAvatar user={task.assignedTo} size="xs" />
-            {task.assignedTo && (
-              <span className="truncate text-[12px] text-on-surface-variant">
-                {task.assignedTo.username}
-              </span>
-            )}
-          </span>
-          <span className="relative">
+  return (
+    <span className="relative inline-block">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-label="Change assignee">
+        <AssigneeAvatar user={user} size="xs" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-20 mt-1 max-h-48 w-40 overflow-y-auto rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
             <button
               type="button"
-              disabled={!canEdit}
-              onClick={() => setEditingDates(true)}
-              className={[
-                "rounded px-1 text-right font-mono text-[12px]",
-                overdue ? "font-bold text-error" : "text-on-surface-variant",
-              ].join(" ")}
+              onClick={() => {
+                onChange(null);
+                setOpen(false);
+              }}
+              className="flex w-full items-center px-3 py-1.5 text-left text-xs text-on-surface-variant hover:bg-surface-container"
             >
-              {fmtRange(task.startDate, task.dueDate)}
+              Unassigned
             </button>
-            {editingDates && canEdit && (
-              <InlineDateRangeEditor
-                className="absolute right-0 top-full z-50 mt-1"
-                startISO={task.startDate}
-                endISO={task.dueDate}
-                onSave={(s, e) => {
-                  onUpdateDates(task.id, s, e);
-                  setEditingDates(false);
+            {users.map((u) => (
+              <button
+                key={u.id}
+                type="button"
+                onClick={() => {
+                  onChange(u.id);
+                  setOpen(false);
                 }}
-                onCancel={() => setEditingDates(false)}
-              />
-            )}
-          </span>
-        </div>
-      </div>
-    </>
+                className={[
+                  "flex w-full items-center px-3 py-1.5 text-left text-xs hover:bg-surface-container",
+                  u.id === value ? "font-bold text-primary" : "text-on-surface",
+                ].join(" ")}
+              >
+                {u.username}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
+function DueDateEditor({
+  canEdit,
+  startISO,
+  dueISO,
+  onSave,
+}: {
+  canEdit: boolean;
+  startISO: string | null;
+  dueISO: string | null;
+  onSave: (start: string | null, due: string | null) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [value, setValue] = useState(dueISO ? dueISO.slice(0, 10) : "");
+
+  if (!canEdit) {
+    return <span className="text-[12px] text-on-surface-variant">{fmt(dueISO)}</span>;
+  }
+
+  return (
+    <span className="relative inline-block">
+      <button
+        type="button"
+        onClick={() => {
+          setValue(dueISO ? dueISO.slice(0, 10) : "");
+          setOpen(true);
+        }}
+        className="text-left text-[12px] text-on-surface-variant hover:text-primary"
+      >
+        {fmt(dueISO)}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-20 mt-1 rounded-lg border border-outline-variant bg-surface-container-lowest p-2 shadow-overlay">
+            <input
+              autoFocus
+              type="date"
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              className="rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs focus:border-primary focus:outline-none"
+            />
+            <div className="mt-1.5 flex justify-end gap-1">
+              <button
+                type="button"
+                onClick={() => setOpen(false)}
+                className="rounded px-2 py-0.5 text-[11px] text-on-surface-variant hover:bg-surface-container"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const iso = value ? new Date(`${value}T00:00:00`).toISOString() : null;
+                  onSave(startISO, iso);
+                  setOpen(false);
+                }}
+                className="rounded bg-primary px-2 py-0.5 text-[11px] font-bold text-on-primary hover:bg-primary/90"
+              >
+                Save
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </span>
+  );
+}
+
+function StatusSelect({
+  canEdit,
+  value,
+  onChange,
+}: {
+  canEdit: boolean;
+  value: TaskStatus;
+  onChange: (s: TaskStatus) => void;
+}) {
+  const [open, setOpen] = useState(false);
+
+  const chip = (
+    <span
+      className={[
+        "inline-flex items-center gap-0.5 rounded-full px-2 py-0.5 font-display text-[11px] font-semibold",
+        STATUS_TONE_CLASS[value],
+        canEdit ? "cursor-pointer" : "",
+      ].join(" ")}
+    >
+      {STATUS_LABEL[value]}
+      {canEdit && <span className="material-symbols-outlined text-[11px]">expand_more</span>}
+    </span>
+  );
+
+  if (!canEdit) return chip;
+
+  return (
+    <span className="relative inline-block">
+      <button type="button" onClick={() => setOpen((v) => !v)}>
+        {chip}
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
+          <div className="absolute left-0 top-full z-20 mt-1 w-28 rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+            {STATUSES.map((s) => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => {
+                  onChange(s);
+                  setOpen(false);
+                }}
+                className={[
+                  "flex w-full items-center px-3 py-1.5 text-left text-xs hover:bg-surface-container",
+                  s === value ? "font-bold text-primary" : "text-on-surface",
+                ].join(" ")}
+              >
+                {STATUS_LABEL[s]}
+              </button>
+            ))}
+          </div>
+        </>
+      )}
+    </span>
   );
 }
 
@@ -968,6 +1087,9 @@ function groupBySection(
       subtasksByParent.set(t.parentTaskId, arr);
     }
   }
+  for (const arr of subtasksByParent.values()) {
+    arr.sort((a, b) => a.position - b.position || a.id - b.id);
+  }
 
   const bySection = new Map<number, TaskNode[]>();
   const noSection: TaskNode[] = [];
@@ -980,6 +1102,12 @@ function groupBySection(
       bySection.set(t.sectionId, arr);
     }
   }
+  // Within a section group, sort by (position, id) — see the comment on
+  // `grouped` above for why this is a display-only proxy ordering.
+  for (const arr of bySection.values()) {
+    arr.sort((a, b) => a.task.position - b.task.position || a.task.id - b.task.id);
+  }
+  noSection.sort((a, b) => a.task.position - b.task.position || a.task.id - b.task.id);
 
   const groups: { section: Section | null; tasks: TaskNode[] }[] = sections
     .slice()
@@ -993,25 +1121,7 @@ function groupBySection(
   return groups;
 }
 
-function fmt(iso: string | null) {
-  if (!iso) return null;
-  return new Date(iso).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function fmtRange(start: string | null, end: string | null) {
-  const s = fmt(start);
-  const e = fmt(end);
-  if (s && e) return `${s} – ${e}`;
-  if (s) return `${s} – —`;
-  if (e) return `— – ${e}`;
-  return "—";
-}
-
-function startOfToday() {
-  const d = new Date();
-  d.setHours(0, 0, 0, 0);
-  return d;
+function fmt(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }

@@ -11,7 +11,10 @@ import { hasPermission, useAuth } from "@/lib/auth";
 import {
   AXIS_HEIGHT,
   COLUMN_DEFAULT_WIDTH,
-  LIST_PANE_WIDTH,
+  DEFAULT_LIST_PANE_WIDTH,
+  DIVIDER_WIDTH,
+  MAX_LIST_PANE_WIDTH,
+  MIN_LIST_PANE_WIDTH,
   ROW_HEIGHT,
 } from "@/lib/gantt/constants";
 import {
@@ -32,7 +35,6 @@ import { exportGanttToExcel } from "@/lib/gantt/exportExcel";
 import { exportGanttToPdf } from "@/lib/gantt/exportPdf";
 import {
   type Task,
-  type TaskStatus,
   useCreateDependency,
   useCreateSection,
   useDeleteDependency,
@@ -62,6 +64,7 @@ const VIEW_MODES: { mode: ViewMode; label: string }[] = [
   { mode: "day", label: "Day" },
   { mode: "week", label: "Week" },
   { mode: "month", label: "Month" },
+  { mode: "quarter", label: "Quarter" },
 ];
 
 export function GanttFrame({
@@ -87,6 +90,13 @@ export function GanttFrame({
   const [confirmingBaseline, setConfirmingBaseline] = useState(false);
   const [baselineAsOf, setBaselineAsOf] = useState<string>("");
   const [baselineToast, setBaselineToast] = useState<string | null>(null);
+  // "Baseline" toolbar toggle — purely a display switch. Independent from
+  // whether a baseline has actually been locked (that's baselineLockedAt).
+  const [showBaseline, setShowBaseline] = useState(false);
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
+  const [hoveredRowId, setHoveredRowId] = useState<string | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Auto-dismiss the toast after 4s.
   useEffect(() => {
@@ -102,6 +112,17 @@ export function GanttFrame({
     }
   }, [confirmingBaseline]);
 
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    function onDocPointer(e: PointerEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", onDocPointer);
+    return () => document.removeEventListener("pointerdown", onDocPointer);
+  }, [exportMenuOpen]);
+
   const baselineLockedAtPretty = baselineLockedAt
     ? new Date(baselineLockedAt).toLocaleString()
     : null;
@@ -110,11 +131,42 @@ export function GanttFrame({
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
   );
 
-  const [viewMode, setViewMode] = useState<ViewMode>("day");
+  const [viewMode, setViewMode] = useState<ViewMode>("week");
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Resizable left (task table) pane. Draggable divider between the list
+  // pane and the timeline; clamped to [MIN_LIST_PANE_WIDTH, MAX_LIST_PANE_WIDTH].
+  const [listPaneWidth, setListPaneWidth] = useState(DEFAULT_LIST_PANE_WIDTH);
+  const resizeRef = useRef<{ originX: number; originWidth: number } | null>(null);
+
+  const handleDividerPointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+      resizeRef.current = { originX: e.clientX, originWidth: listPaneWidth };
+    },
+    [listPaneWidth],
+  );
+  const handleDividerPointerMove = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      const drag = resizeRef.current;
+      if (!drag) return;
+      const next = drag.originWidth + (e.clientX - drag.originX);
+      setListPaneWidth(Math.max(MIN_LIST_PANE_WIDTH, Math.min(MAX_LIST_PANE_WIDTH, next)));
+    },
+    [],
+  );
+  const handleDividerPointerUp = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      // already released
+    }
+    resizeRef.current = null;
+  }, []);
 
   // Declared early so connect-drag closures below can reach it; the
   // ref is attached to the scroller in the JSX further down.
@@ -148,10 +200,10 @@ export function GanttFrame({
       if (!scroller) return;
       const rect = scroller.getBoundingClientRect();
       // clientXY → chart-body-local coords. The chart body is offset by
-      // LIST_PANE_WIDTH from the left and AXIS_HEIGHT from the top of
+      // listPaneWidth from the left and AXIS_HEIGHT from the top of
       // the scroller's content origin.
       const toLocal = (cx: number, cy: number) => ({
-        x: cx - rect.left + scroller.scrollLeft - LIST_PANE_WIDTH,
+        x: cx - rect.left + scroller.scrollLeft - listPaneWidth,
         y: cy - rect.top + scroller.scrollTop - AXIS_HEIGHT,
       });
       const start = toLocal(clientX, clientY);
@@ -227,7 +279,7 @@ export function GanttFrame({
       window.addEventListener("pointerup", onUp);
       window.addEventListener("keydown", onKey);
     },
-    [createDep],
+    [createDep, listPaneWidth],
   );
 
   const handleDeleteDependency = useCallback(
@@ -317,21 +369,6 @@ export function GanttFrame({
     [updateTask],
   );
 
-  const handleToggleStatus = useCallback(
-    async (taskId: number, current: TaskStatus) => {
-      setActionError(null);
-      const next: TaskStatus = current === "DONE" ? "TODO" : "DONE";
-      try {
-        await updateTask.mutateAsync({ id: taskId, patch: { status: next } });
-      } catch (err) {
-        setActionError(
-          err instanceof ApiError ? err.message : "Could not update task status.",
-        );
-      }
-    },
-    [updateTask],
-  );
-
   const handleUpdateDates = useCallback(
     async (taskId: number, startISO: string | null, dueISO: string | null) => {
       setActionError(null);
@@ -413,20 +450,20 @@ export function GanttFrame({
       if (!el || !chartStart) return;
       const today = startOfDay(new Date());
       const { x } = positionFor(today, chartStart, viewMode, columnWidth);
-      const target = Math.max(0, x - (el.clientWidth - LIST_PANE_WIDTH) / 2);
+      const target = Math.max(0, x - (el.clientWidth - listPaneWidth) / 2);
       el.scrollTo({ left: target, behavior });
     },
-    [chartStart, viewMode, columnWidth],
+    [chartStart, viewMode, columnWidth, listPaneWidth],
   );
 
   const scrollToToday = useCallback(() => scrollToTodayPos("smooth"), [scrollToTodayPos]);
 
   // Register Excel/PDF export handlers in the shared context so the
   // RightSidebar (mounted by ProjectDetail, not by this component) can show
-  // an Export section while the Gantt is mounted. Re-registers when the
-  // dependent data changes; cleans up to null on unmount so the section
-  // hides when the user switches sub-routes.
-  const { register } = useGanttExport();
+  // an Export section while the Gantt is mounted, AND so this component's
+  // own toolbar "Export" button (matching the Gantt v2 mockup) can trigger
+  // the same handlers directly.
+  const { handlers: exportHandlers, register } = useGanttExport();
   useEffect(() => {
     if (!chartStart || !chartEnd) {
       register(null);
@@ -489,6 +526,23 @@ export function GanttFrame({
     columnWidth,
   ]);
 
+  const runExport = useCallback(
+    async (kind: "excel" | "pdf") => {
+      if (!exportHandlers || exporting) return;
+      setActionError(null);
+      setExporting(kind);
+      setExportMenuOpen(false);
+      try {
+        await exportHandlers[kind]();
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "Export failed.");
+      } finally {
+        setExporting(null);
+      }
+    },
+    [exportHandlers, exporting],
+  );
+
   // Auto-scroll to today only on first paint of the chart and on view-mode
   // swaps. Intentionally NOT triggered by chartStart / rows.length changes —
   // dragging a bar past the current chart's min or max recomputes chartStart
@@ -527,28 +581,35 @@ export function GanttFrame({
     [createSection, newSectionName],
   );
 
-  const sectionCount = sections?.length ?? 0;
-  const datedTaskCount = (tasks ?? []).filter((t) => t.startDate || t.dueDate).length;
-
   return (
     <div className="flex min-w-0 flex-col overflow-hidden rounded border border-outline-variant bg-surface-container-lowest">
       <div className="flex items-center gap-2 border-b border-outline-variant bg-surface-container-lowest px-3 py-1.5">
-        <button
-          type="button"
-          onClick={scrollToToday}
-          disabled={!chartStart}
-          className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary disabled:opacity-50"
-        >
-          <span className="material-symbols-outlined text-base">today</span>
-          Today
-        </button>
+        {/* Zoom pill group — Day / Week / Month / Quarter, active segment solid green */}
+        <div className="inline-flex overflow-hidden rounded-md bg-surface-container-low p-0.5">
+          {VIEW_MODES.map((v) => (
+            <button
+              key={v.mode}
+              type="button"
+              onClick={() => setViewMode(v.mode)}
+              className={[
+                "rounded px-2.5 py-1 font-display text-[11.5px] font-semibold tracking-wide transition-colors",
+                v.mode === viewMode
+                  ? "bg-primary text-on-primary"
+                  : "text-on-surface-variant hover:text-on-surface",
+              ].join(" ")}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+
         {canEdit && (
           <>
             <span className="mx-1 h-4 w-px bg-outline-variant" aria-hidden />
             <button
               type="button"
               onClick={() => onCreateTaskOpen(null)}
-              className="inline-flex items-center gap-1 rounded bg-primary px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
+              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Task
@@ -561,53 +622,83 @@ export function GanttFrame({
               <span className="material-symbols-outlined text-base">add</span>
               Section
             </button>
-            <span className="mx-1 h-4 w-px bg-outline-variant" aria-hidden />
+          </>
+        )}
+
+        <span className="ml-2 hidden font-mono text-[12px] text-on-surface-variant lg:inline">
+          {(tasks ?? []).filter((t) => t.startDate || t.dueDate).length} dated ·{" "}
+          {sections?.length ?? 0} sections
+        </span>
+
+        {/* Right-aligned: Today / Baseline / Export — outline-button style per mockup */}
+        <div className="ml-auto flex items-center gap-2">
+          <button
+            type="button"
+            onClick={scrollToToday}
+            disabled={!chartStart}
+            className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+          >
+            <span className="material-symbols-outlined text-[15px]">today</span>
+            Today
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowBaseline((v) => !v)}
+            title={
+              baselineLockedAt
+                ? `Baseline locked ${baselineLockedAtPretty}${baselineLockedBy ? ` by ${baselineLockedBy.username}` : ""}`
+                : "No baseline locked yet — lock one from the project menu"
+            }
+            className={[
+              "inline-flex items-center gap-1 rounded border px-2.5 py-1 font-display text-[11.5px] font-medium",
+              showBaseline
+                ? "border-primary bg-primary/10 text-primary"
+                : "border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary",
+            ].join(" ")}
+          >
+            <span className="material-symbols-outlined text-[15px]">show_chart</span>
+            Baseline
+          </button>
+          {canEdit && (
             <button
               type="button"
               onClick={() => setConfirmingBaseline(true)}
-              title={
-                baselineLockedAt
-                  ? `Baseline locked ${new Date(baselineLockedAt).toLocaleString()}${baselineLockedBy ? ` by ${baselineLockedBy.username}` : ""}`
-                  : "Snapshot the current schedule as the official baseline"
-              }
-              className={
-                baselineLockedAt
-                  ? "inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
-                  : "inline-flex items-center gap-1 rounded border border-primary bg-primary px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
-              }
+              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary"
             >
-              <span className="material-symbols-outlined text-base">
+              <span className="material-symbols-outlined text-[15px]">
                 {baselineLockedAt ? "bookmark" : "bookmark_add"}
               </span>
-              {baselineLockedAt ? "Reset Baseline" : "Lock Baseline"}
+              {baselineLockedAt ? "Reset baseline" : "Lock baseline"}
             </button>
-          </>
-        )}
-        <span className="ml-3 font-mono text-[12px] text-on-surface-variant">
-          {datedTaskCount} dated · {sectionCount} sections
-          {canEdit && " · drag bars or edges to reschedule"}
-        </span>
-        <div className="ml-auto flex items-center gap-2">
-          <span className="font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
-            Scale
-          </span>
-          <div className="inline-flex overflow-hidden rounded border border-outline-variant">
-            {VIEW_MODES.map((v, i) => (
-              <button
-                key={v.mode}
-                type="button"
-                onClick={() => setViewMode(v.mode)}
-                className={[
-                  "px-2.5 py-1 font-display text-label-caps uppercase tracking-wider",
-                  i > 0 ? "border-l border-outline-variant" : "",
-                  v.mode === viewMode
-                    ? "bg-primary text-on-primary"
-                    : "bg-surface-container-lowest text-on-surface-variant hover:text-primary",
-                ].join(" ")}
-              >
-                {v.label}
-              </button>
-            ))}
+          )}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setExportMenuOpen((v) => !v)}
+              disabled={!exportHandlers || exporting !== null}
+              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[15px]">download</span>
+              {exporting ? "Exporting…" : "Export"}
+            </button>
+            {exportMenuOpen && (
+              <div className="absolute right-0 top-full z-50 mt-1 w-32 rounded border border-outline-variant bg-surface-container-lowest py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => runExport("excel")}
+                  className="block w-full px-3 py-1.5 text-left text-[12px] text-on-surface hover:bg-surface-container-low"
+                >
+                  Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runExport("pdf")}
+                  className="block w-full px-3 py-1.5 text-left text-[12px] text-on-surface hover:bg-surface-container-low"
+                >
+                  PDF
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -676,18 +767,31 @@ export function GanttFrame({
           <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
             <div
               style={{
-                width: LIST_PANE_WIDTH + contentWidth,
+                width: listPaneWidth + contentWidth,
                 minHeight: AXIS_HEIGHT + rows.length * ROW_HEIGHT,
               }}
               className="relative flex items-stretch bg-surface-container-lowest"
             >
               <GanttListPane
                 rows={rows}
+                width={listPaneWidth}
                 canEdit={canEdit}
+                hoveredRowId={hoveredRowId}
                 onToggleSection={handleToggleSection}
                 onTaskClick={handleTaskClick}
-                onToggleStatus={handleToggleStatus}
                 onUpdateDates={handleUpdateDates}
+                onHoverChange={setHoveredRowId}
+              />
+              {/* Draggable divider to resize the left pane */}
+              <div
+                role="separator"
+                aria-orientation="vertical"
+                aria-label="Resize task list"
+                onPointerDown={handleDividerPointerDown}
+                onPointerMove={handleDividerPointerMove}
+                onPointerUp={handleDividerPointerUp}
+                className="sticky z-30 flex-shrink-0 cursor-col-resize bg-outline-variant/40 hover:bg-primary/60 active:bg-primary"
+                style={{ left: listPaneWidth, width: DIVIDER_WIDTH, touchAction: "none" }}
               />
               <div className="relative flex-shrink-0" style={{ width: contentWidth }}>
                 <GanttChartPane
@@ -699,7 +803,10 @@ export function GanttFrame({
                   contentWidth={contentWidth}
                   holidays={holidays}
                   canEdit={canEdit}
+                  showBaseline={showBaseline}
                   dependencies={dependencies ?? []}
+                  hoveredRowId={hoveredRowId}
+                  onHoverChange={setHoveredRowId}
                   connectDrag={connectDrag}
                   onCommit={handleCommit}
                   onTaskClick={handleTaskClick}
@@ -729,6 +836,7 @@ export function GanttFrame({
                 ? `Baseline overwritten — now anchored to ${stamp}`
                 : `Baseline locked as of ${stamp}`,
             );
+            setShowBaseline(true);
             setConfirmingBaseline(false);
           } catch (err) {
             setActionError(
