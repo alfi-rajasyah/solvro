@@ -1,30 +1,24 @@
 import { useState } from "react";
 import { useDraggable, useDroppable } from "@dnd-kit/core";
+import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { InlineDateRangeEditor } from "@/components/InlineDateRangeEditor";
-import { type Row, fmtDateDDMM } from "@/lib/gantt/geometry";
+import { type Row, fmtDateRangeDDMM } from "@/lib/gantt/geometry";
 import {
-  CHECKBOX_COL_WIDTH,
-  DATE_COL_WIDTH,
-  NAME_COL_WIDTH,
-  PCT_COL_WIDTH,
+  AVATAR_COL_WIDTH,
+  DATE_RANGE_COL_WIDTH,
   ROW_HEIGHT,
 } from "@/lib/gantt/constants";
-import type { TaskStatus } from "@/lib/queries";
+import { DEFAULT_SECTION_COLOR } from "@/lib/gantt/palette";
 
 interface GanttListRowProps {
   row: Row;
   canEdit: boolean;
+  hovered: boolean;
   onToggleSection: (id: string) => void;
   onTaskClick: (taskId: number) => void;
-  onToggleStatus: (taskId: number, current: TaskStatus) => void;
   onUpdateDates: (taskId: number, startISO: string | null, dueISO: string | null) => void;
+  onHoverChange: (rowId: string | null) => void;
 }
-
-const STATUS_PROGRESS: Record<TaskStatus, number> = {
-  TODO: 0,
-  IN_PROGRESS: 50,
-  DONE: 100,
-};
 
 export interface RowDragData {
   kind: "task" | "section";
@@ -40,10 +34,11 @@ export interface RowDropData {
 export function GanttListRow({
   row,
   canEdit,
+  hovered,
   onToggleSection,
   onTaskClick,
-  onToggleStatus,
   onUpdateDates,
+  onHoverChange,
 }: GanttListRowProps) {
   const [editingDates, setEditingDates] = useState(false);
   const isSection = row.kind === "section";
@@ -77,15 +72,12 @@ export function GanttListRow({
 
   const indent = row.depth * 14;
   const status = row.status ?? "TODO";
-  const progress = STATUS_PROGRESS[status];
-  const checkboxDisabled = isSection || !canEdit || row.taskId === undefined;
+  const dragHandleVisible = canEdit && (isTopLevelTask || realSection);
 
   const handleNameClick = () => {
     if (isSection) onToggleSection(row.id);
     else if (row.taskId !== undefined) onTaskClick(row.taskId);
   };
-
-  const dragHandleVisible = canEdit && (isTopLevelTask || realSection);
 
   return (
     <div
@@ -97,45 +89,17 @@ export function GanttListRow({
         "group flex items-stretch border-b border-outline-variant",
         isSection
           ? "bg-surface-container-low hover:bg-surface-container"
-          : "bg-surface-container-lowest hover:bg-surface-container-low",
+          : hovered
+            ? "bg-surface-container-low/70"
+            : "bg-surface-container-lowest hover:bg-surface-container-low",
         isOver && isSection ? "ring-2 ring-inset ring-primary" : "",
         isDragging ? "opacity-40" : "",
       ].join(" ")}
       style={{ height: ROW_HEIGHT }}
+      onMouseEnter={() => onHoverChange(row.id)}
+      onMouseLeave={() => onHoverChange(null)}
     >
-      <div
-        className="flex items-center justify-center"
-        style={{ width: CHECKBOX_COL_WIDTH }}
-      >
-        {!isSection && (
-          <button
-            type="button"
-            disabled={checkboxDisabled}
-            onClick={() =>
-              row.taskId !== undefined && onToggleStatus(row.taskId, status)
-            }
-            className={[
-              "flex h-4 w-4 items-center justify-center rounded-full border transition-colors",
-              status === "DONE"
-                ? "border-emerald-500 bg-emerald-500 text-white"
-                : "border-outline-variant bg-surface-container-lowest hover:border-primary",
-              checkboxDisabled ? "cursor-not-allowed opacity-60" : "cursor-pointer",
-            ].join(" ")}
-            aria-label={status === "DONE" ? "Mark incomplete" : "Mark complete"}
-            title={status === "DONE" ? "Mark incomplete" : "Mark complete"}
-          >
-            {status === "DONE" && (
-              <span className="material-symbols-outlined text-[13px] leading-none">
-                check
-              </span>
-            )}
-          </button>
-        )}
-      </div>
-      <div
-        className="flex items-center gap-1 border-r border-outline-variant pl-1 pr-2"
-        style={{ width: NAME_COL_WIDTH }}
-      >
+      <div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1.5 pr-2">
         <span style={{ width: indent }} aria-hidden="true" />
         {dragHandleVisible ? (
           <span
@@ -153,16 +117,23 @@ export function GanttListRow({
           <span className="w-4 shrink-0" aria-hidden="true" />
         )}
         {isSection ? (
-          <button
-            type="button"
-            onClick={() => onToggleSection(row.id)}
-            className="flex h-4 w-4 shrink-0 items-center justify-center text-on-surface-variant hover:text-on-surface"
-            aria-label={row.collapsed ? "Expand section" : "Collapse section"}
-          >
-            <span className="material-symbols-outlined text-[17px] leading-none">
-              {row.collapsed ? "chevron_right" : "expand_more"}
-            </span>
-          </button>
+          <>
+            <button
+              type="button"
+              onClick={() => onToggleSection(row.id)}
+              className="flex h-4 w-4 shrink-0 items-center justify-center text-on-surface-variant hover:text-on-surface"
+              aria-label={row.collapsed ? "Expand section" : "Collapse section"}
+            >
+              <span className="material-symbols-outlined text-[17px] leading-none">
+                {row.collapsed ? "chevron_right" : "expand_more"}
+              </span>
+            </button>
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{ backgroundColor: row.sectionColor ?? DEFAULT_SECTION_COLOR }}
+              aria-hidden="true"
+            />
+          </>
         ) : (
           <span className="w-4 shrink-0" aria-hidden="true" />
         )}
@@ -187,39 +158,32 @@ export function GanttListRow({
             </span>
           )}
         </button>
+        {!isSection && (
+          <span
+            className="flex shrink-0 items-center justify-center"
+            style={{ width: AVATAR_COL_WIDTH }}
+          >
+            <AssigneeAvatar user={row.task?.assignedTo ?? null} size="xs" />
+          </span>
+        )}
       </div>
-      <button
-        type="button"
-        disabled={isSection || !canEdit || row.taskId === undefined}
-        onClick={() => setEditingDates(true)}
-        className={[
-          "flex items-center justify-end border-r border-outline-variant px-2 font-mono text-[12px] text-on-surface-variant",
-          !isSection && canEdit && row.taskId !== undefined
-            ? "hover:bg-surface-container hover:text-primary"
-            : "cursor-default",
-        ].join(" ")}
-        style={{ width: DATE_COL_WIDTH }}
-        title={!isSection && canEdit ? "Click to edit dates" : undefined}
-      >
-        {row.start ? fmtDateDDMM(row.start) : "—"}
-      </button>
       <div
-        className="relative flex items-center justify-end border-r border-outline-variant"
-        style={{ width: DATE_COL_WIDTH }}
+        className="relative flex shrink-0 items-center justify-end px-2"
+        style={{ width: DATE_RANGE_COL_WIDTH }}
       >
         <button
           type="button"
           disabled={isSection || !canEdit || row.taskId === undefined}
           onClick={() => setEditingDates(true)}
           className={[
-            "flex h-full w-full items-center justify-end px-2 font-mono text-[12px] text-on-surface-variant",
+            "w-full truncate text-right font-mono text-[11px] text-on-surface-variant",
             !isSection && canEdit && row.taskId !== undefined
-              ? "hover:bg-surface-container hover:text-primary"
+              ? "hover:text-primary"
               : "cursor-default",
           ].join(" ")}
           title={!isSection && canEdit ? "Click to edit dates" : undefined}
         >
-          {row.end ? fmtDateDDMM(row.end) : "—"}
+          {isSection ? "" : fmtDateRangeDDMM(row.start, row.end)}
         </button>
         {editingDates && canEdit && row.taskId !== undefined && row.task && (
           <InlineDateRangeEditor
@@ -233,12 +197,6 @@ export function GanttListRow({
             onCancel={() => setEditingDates(false)}
           />
         )}
-      </div>
-      <div
-        className="flex items-center justify-end px-2 font-mono text-[12px] text-on-surface-variant"
-        style={{ width: PCT_COL_WIDTH }}
-      >
-        {isSection ? "" : `${progress}%`}
       </div>
     </div>
   );

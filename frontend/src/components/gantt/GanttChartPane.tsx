@@ -16,7 +16,10 @@ interface GanttChartPaneProps {
   contentWidth: number;
   holidays: Holiday[];
   canEdit: boolean;
+  showBaseline: boolean;
   dependencies: TaskDependency[];
+  hoveredRowId: string | null;
+  onHoverChange: (rowId: string | null) => void;
   /**
    * Active connect-drag state for the rubber-band line. `null` when no
    * drag is in progress.
@@ -42,7 +45,10 @@ export function GanttChartPane({
   contentWidth,
   holidays,
   canEdit,
+  showBaseline,
   dependencies,
+  hoveredRowId,
+  onHoverChange,
   connectDrag,
   onCommit,
   onTaskClick,
@@ -82,8 +88,11 @@ export function GanttChartPane({
               columnWidth={columnWidth}
               contentWidth={contentWidth}
               canEdit={canEdit}
+              showBaseline={showBaseline}
+              hovered={hoveredRowId === row.id}
               onCommit={onCommit}
               onTaskClick={onTaskClick}
+              onHoverChange={onHoverChange}
               onConnectStart={onConnectStart}
             />
           ))}
