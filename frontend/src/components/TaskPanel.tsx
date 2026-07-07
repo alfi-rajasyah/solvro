@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AssigneeAvatar } from "./AssigneeAvatar";
-import { CommentThread } from "./CommentThread";
 import { ConfirmModal } from "./ConfirmModal";
 import { LabelPicker } from "./LabelPicker";
 import { ApiError } from "@/lib/api";
@@ -9,6 +8,8 @@ import {
   type Priority,
   type Task,
   type TaskStatus,
+  useAddComment,
+  useComments,
   useCreateTask,
   useDeleteTask,
   useProjectSections,
@@ -564,7 +565,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
 
           {/* Comments */}
           <div className="mt-5 border-t border-outline-variant pt-4">
-            <CommentThread taskId={task.id} />
+            <PanelComments taskId={task.id} />
           </div>
         </div>
       </aside>
@@ -592,4 +593,106 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
       />
     </>
   );
+}
+
+/**
+ * Comment thread + single-line composer per the mockup ("Write a comment…"
+ * placeholder + green send icon). Uses the same data hooks as CommentThread
+ * (useComments / useAddComment) — CommentThread itself bundles a
+ * textarea-and-button composer that doesn't match the panel mockup, so the
+ * panel renders its own thin thread + composer instead of modifying it.
+ */
+function PanelComments({ taskId }: { taskId: number }) {
+  const { data: comments, isLoading, isError, error } = useComments(taskId);
+  const addComment = useAddComment(taskId);
+  const [body, setBody] = useState("");
+
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const trimmed = body.trim();
+    if (!trimmed || addComment.isPending) return;
+    try {
+      await addComment.mutateAsync(trimmed);
+      setBody("");
+    } catch {
+      // surfaced via mutation error state below
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <h3 className="font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+        Comments {comments && comments.length > 0 && `· ${comments.length}`}
+      </h3>
+
+      {isLoading && (
+        <div className="h-12 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+      )}
+
+      {isError && (
+        <div className="rounded border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container">
+          Could not load comments: {(error as Error).message}
+        </div>
+      )}
+
+      {comments && comments.length === 0 && (
+        <p className="text-xs text-on-surface-variant">No comments yet.</p>
+      )}
+
+      {comments && comments.length > 0 && (
+        <ol className="space-y-3">
+          {comments.map((c) => (
+            <li key={c.id} className="flex gap-2.5">
+              <AssigneeAvatar user={c.author} size="xs" />
+              <div className="min-w-0 flex-1 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2">
+                <div className="mb-0.5 flex items-center justify-between gap-2 text-[12px]">
+                  <span className="font-medium text-on-surface">{c.author.username}</span>
+                  <span className="text-on-surface-variant">{relativeTime(c.createdAt)}</span>
+                </div>
+                <p className="whitespace-pre-wrap text-xs text-on-surface">{c.body}</p>
+              </div>
+            </li>
+          ))}
+        </ol>
+      )}
+
+      <form
+        onSubmit={handleSubmit}
+        className="flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2"
+      >
+        <input
+          type="text"
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          maxLength={5000}
+          placeholder="Write a comment…"
+          className="min-w-0 flex-1 border-none bg-transparent text-xs text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:outline-none"
+        />
+        <button
+          type="submit"
+          disabled={addComment.isPending || !body.trim()}
+          aria-label="Send comment"
+          className="flex shrink-0 items-center text-primary disabled:opacity-40"
+        >
+          <span className="material-symbols-outlined text-[17px]">send</span>
+        </button>
+      </form>
+      {addComment.error && (
+        <p className="text-[12px] text-error">{(addComment.error as Error).message}</p>
+      )}
+    </div>
+  );
+}
+
+function relativeTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  const diffMs = Date.now() - then;
+  const diffMin = Math.round(diffMs / 60_000);
+  if (diffMin < 1) return "just now";
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.round(diffHr / 24);
+  if (diffDay < 7) return `${diffDay}d ago`;
+  return new Date(iso).toLocaleDateString();
 }

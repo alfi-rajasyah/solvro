@@ -76,16 +76,25 @@ function groupKeyOf(sectionId: number | null): GroupKey {
 function rowId(taskId: number): string {
   return `row:${taskId}`;
 }
+function subId(taskId: number): string {
+  return `sub:${taskId}`;
+}
 function groupId(key: GroupKey): string {
   return `group:${key}`;
 }
 function isRowId(id: string): boolean {
   return id.startsWith("row:");
 }
+function isSubId(id: string): boolean {
+  return id.startsWith("sub:");
+}
 function isGroupId(id: string): boolean {
   return id.startsWith("group:");
 }
 function numFromRowId(id: string): number {
+  return Number(id.slice(4));
+}
+function numFromSubId(id: string): number {
   return Number(id.slice(4));
 }
 function keyFromGroupId(id: string): GroupKey {
@@ -233,8 +242,40 @@ export function ProjectList() {
     const { active, over } = event;
     if (!over) return;
     const activeId = String(active.id);
-    const overId = String(over.id);
-    if (!isRowId(activeId) || activeId === overId) return;
+    let overId = String(over.id);
+    if (activeId === overId) return;
+
+    // Subtask drag: reorder WITHIN the parent only (no re-parent/promote in
+    // the List view). Sibling list = the parent's subtasks — status doesn't
+    // partition subtask ordering (mirrors Kanban's handleSubtaskDrop and
+    // queries.ts siblingListId).
+    if (isSubId(activeId)) {
+      if (!isSubId(overId)) return;
+      const moved = (tasks ?? []).find((t) => t.id === numFromSubId(activeId));
+      const overSub = (tasks ?? []).find((t) => t.id === numFromSubId(overId));
+      if (!moved || !overSub || moved.parentTaskId === null) return;
+      if (overSub.parentTaskId !== moved.parentTaskId) return;
+      const siblings = (tasks ?? [])
+        .filter((t) => t.parentTaskId === moved.parentTaskId && t.id !== moved.id)
+        .sort((a, b) => a.position - b.position || a.id - b.id);
+      const idx = siblings.findIndex((t) => t.id === overSub.id);
+      const position = idx === -1 ? siblings.length : idx;
+      if (position === moved.position) return;
+      updateTask.mutate({ id: moved.id, patch: { position } });
+      return;
+    }
+
+    if (!isRowId(activeId)) return;
+
+    // A task row dropped over a subtask row means "dropped on that row's
+    // parent card area" — resolve to the parent so the drop isn't a silent
+    // no-op.
+    if (isSubId(overId)) {
+      const overSub = (tasks ?? []).find((t) => t.id === numFromSubId(overId));
+      if (!overSub || overSub.parentTaskId === null) return;
+      overId = rowId(overSub.parentTaskId);
+      if (activeId === overId) return;
+    }
 
     const movedId = numFromRowId(activeId);
     const moved = (tasks ?? []).find((t) => t.id === movedId);
@@ -756,16 +797,22 @@ function TaskRow({
         </div>
       </div>
 
-      {expanded &&
-        subtasks.map((s) => (
-          <SubtaskRow
-            key={s.id}
-            task={s}
-            canEdit={canEdit}
-            onOpenTask={onOpenTask}
-            onToggleDone={onToggleDone}
-          />
-        ))}
+      {expanded && (
+        <SortableContext
+          items={subtasks.map((s) => subId(s.id))}
+          strategy={verticalListSortingStrategy}
+        >
+          {subtasks.map((s) => (
+            <SubtaskRow
+              key={s.id}
+              task={s}
+              canEdit={canEdit}
+              onOpenTask={onOpenTask}
+              onToggleDone={onToggleDone}
+            />
+          ))}
+        </SortableContext>
+      )}
       {expanded && canEdit && (
         <button
           type="button"
@@ -792,12 +839,32 @@ function SubtaskRow({
   onToggleDone: (t: Task) => void;
 }) {
   const done = task.status === "DONE";
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
+    useSortable({ id: subId(task.id), disabled: !canEdit });
+  const style = { transform: CSS.Transform.toString(transform), transition };
   return (
     <div
+      ref={setNodeRef}
+      style={style}
       onClick={() => onOpenTask(task.id)}
-      className="flex cursor-pointer items-center gap-2 border-t border-outline-variant bg-surface-container-low/40 py-1 pl-[34px] pr-3 text-[12.5px] hover:bg-surface-container-low"
+      className={[
+        "flex cursor-pointer items-center gap-2 border-t border-outline-variant bg-surface-container-low/40 py-1 pl-[34px] pr-3 text-[12.5px] hover:bg-surface-container-low",
+        isDragging ? "opacity-40" : "",
+      ].join(" ")}
     >
-      <span className="material-symbols-outlined text-[14px] text-on-surface-variant/40">drag_indicator</span>
+      <span
+        ref={setActivatorNodeRef}
+        {...attributes}
+        {...listeners}
+        onClick={(e) => e.stopPropagation()}
+        className={[
+          "material-symbols-outlined text-[14px] text-on-surface-variant/40",
+          canEdit ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-default",
+        ].join(" ")}
+        aria-label="Drag to reorder subtask"
+      >
+        drag_indicator
+      </span>
       <button
         type="button"
         disabled={!canEdit}
