@@ -7,8 +7,11 @@ import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { ensureTaskVisible, projectVisibilityFilter } from "../lib/visibility.js";
 import {
+  assertLabelsInProject,
+  assertSectionInProject,
   assertValidParent,
   moveTaskWithinSiblings,
+  siblingKeyEquals,
   type SiblingKey,
 } from "../lib/taskOrdering.js";
 
@@ -127,19 +130,40 @@ tasksRouter.patch(
       select: { projectId: true, status: true, parentTaskId: true, position: true },
     });
 
-    // Does this patch touch anything that affects sibling placement?
-    const touchesOrdering =
-      body.status !== undefined ||
-      body.parentTaskId !== undefined ||
-      body.position !== undefined;
-
     const nextStatus = body.status ?? current.status;
     const nextParentTaskId =
       body.parentTaskId !== undefined ? body.parentTaskId : current.parentTaskId;
 
+    const oldKey: SiblingKey = {
+      projectId: current.projectId,
+      parentTaskId: current.parentTaskId,
+      status: current.status,
+    };
+    const newKey: SiblingKey = {
+      projectId: current.projectId,
+      parentTaskId: nextParentTaskId,
+      status: nextStatus,
+    };
+
+    // A patch only re-orders when it sets an explicit position OR moves the
+    // task to a different sibling list. A status-only change on a SUBTASK is
+    // NOT a reorder: a subtask's sibling list is keyed on parentTaskId alone
+    // (status doesn't partition it), so siblingKeyEquals reports the keys equal
+    // and the row keeps its slot. Previously any status change re-appended the
+    // row to the end of its list, so ticking a subtask's checkbox bounced it to
+    // the bottom of the checklist.
+    const touchesOrdering =
+      body.position !== undefined || !siblingKeyEquals(oldKey, newKey);
+
     const updated = await prisma.$transaction(async (tx) => {
       if (nextParentTaskId !== null) {
         await assertValidParent(tx, current.projectId, id, nextParentTaskId);
+      }
+      if (body.sectionId != null) {
+        await assertSectionInProject(tx, current.projectId, body.sectionId);
+      }
+      if (body.labelIds && body.labelIds.length > 0) {
+        await assertLabelsInProject(tx, current.projectId, body.labelIds);
       }
 
       const data: Prisma.TaskUpdateInput = {};
@@ -173,17 +197,6 @@ tasksRouter.patch(
         // (subtasks already carry a status field) unless the caller also
         // passed a new one explicitly.
         data.status = nextStatus;
-
-        const oldKey: SiblingKey = {
-          projectId: current.projectId,
-          parentTaskId: current.parentTaskId,
-          status: current.status,
-        };
-        const newKey: SiblingKey = {
-          projectId: current.projectId,
-          parentTaskId: nextParentTaskId,
-          status: nextStatus,
-        };
 
         // Apply the non-ordering fields (and the parent/status change) first,
         // then compute the new dense position for this row and every sibling
