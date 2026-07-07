@@ -10,11 +10,11 @@ import {
 } from "@/lib/gantt/geometry";
 import {
   BAR_HEIGHT,
+  MILESTONE_SIZE,
   RESIZE_HANDLE_PX,
   ROW_HEIGHT,
 } from "@/lib/gantt/constants";
-import { PRIORITY_BORDER_HEX } from "@/lib/gantt/palette";
-import type { TaskStatus } from "@/lib/queries";
+import { BAR_TRACK_OPACITY, DEFAULT_SECTION_COLOR } from "@/lib/gantt/palette";
 
 type DragMode = "move" | "resize-start" | "resize-end";
 
@@ -24,6 +24,7 @@ interface GanttBarProps {
   viewMode: ViewMode;
   columnWidth: number;
   canEdit: boolean;
+  showBaseline: boolean;
   onCommit: (taskId: number, startDate: Date, dueDate: Date) => void;
   onClick: (taskId: number) => void;
   /**
@@ -41,17 +42,13 @@ interface GanttBarProps {
   ) => void;
 }
 
-const STATUS_FILL: Record<TaskStatus, string> = {
-  TODO: "bg-sky-200/90",
-  IN_PROGRESS: "bg-blue-400",
-  DONE: "bg-emerald-400",
-};
-
-const STATUS_PROGRESS: Record<TaskStatus, number> = {
-  TODO: 0,
-  IN_PROGRESS: 50,
-  DONE: 100,
-};
+function hexToRgb(hex: string): string {
+  const h = hex.replace(/^#/, "");
+  const r = parseInt(h.slice(0, 2), 16);
+  const g = parseInt(h.slice(2, 4), 16);
+  const b = parseInt(h.slice(4, 6), 16);
+  return `${r}, ${g}, ${b}`;
+}
 
 export function GanttBar({
   row,
@@ -59,6 +56,7 @@ export function GanttBar({
   viewMode,
   columnWidth,
   canEdit,
+  showBaseline,
   onCommit,
   onClick,
   onConnectStart,
@@ -74,13 +72,23 @@ export function GanttBar({
     moved: boolean;
   } | null>(null);
 
-  if (!row.start || !row.end || row.taskId === undefined) return null;
+  const isMilestone = Boolean(row.isMilestone);
+  const color = row.sectionColor ?? DEFAULT_SECTION_COLOR;
+  const rgb = hexToRgb(color);
 
-  const start = ghost?.start ?? row.start;
-  const end = ghost?.end ?? row.end;
+  // Milestones may only have a dueDate (no startDate) — anchor on whichever
+  // is set. Regular bars require both.
+  const milestoneDate = row.end ?? row.start ?? null;
+
+  if (row.taskId === undefined) return null;
+  if (!isMilestone && (!row.start || !row.end)) return null;
+  if (isMilestone && !milestoneDate) return null;
+
+  const start = ghost?.start ?? row.start ?? milestoneDate!;
+  const end = ghost?.end ?? row.end ?? milestoneDate!;
   const left = positionFor(start, chartStart, viewMode, columnWidth).x;
   const endPos = positionFor(addDays(end, 1), chartStart, viewMode, columnWidth).x;
-  const width = Math.max(columnWidth / 7, endPos - left);
+  const width = isMilestone ? 0 : Math.max(columnWidth / 7, endPos - left);
 
   const pxPerDay =
     positionFor(addDays(chartStart, 1), chartStart, viewMode, columnWidth).x;
@@ -183,164 +191,186 @@ export function GanttBar({
     return () => window.removeEventListener("keydown", onKey);
   }, [finishDrag]);
 
-  const priority = row.priority ?? "MEDIUM";
   const status = row.status ?? "TODO";
-  const progress = STATUS_PROGRESS[status];
+  const progress = row.progressPct ?? (status === "DONE" ? 100 : 0);
 
-  const heightPct = row.kind === "subtask" ? 0.78 : 1;
+  const heightPct = row.kind === "subtask" ? 0.8 : 1;
   const barHeight = BAR_HEIGHT * heightPct;
   const top = (ROW_HEIGHT - barHeight) / 2;
 
-  // Baseline ghost rect (only renders when baseline differs from current live dates).
+  // Baseline rect: only rendered when the toggle is on AND the task has
+  // baseline dates recorded. Thin (3px) gray bar under the main bar.
   const baselineStartIso = row.task?.baselineStartDate ?? null;
   const baselineEndIso = row.task?.baselineDueDate ?? null;
-  const baselineRect = (() => {
-    if (!baselineStartIso || !baselineEndIso) return null;
-    const bStart = startOfDay(parseISODate(baselineStartIso));
-    const bEnd = startOfDay(parseISODate(baselineEndIso));
-    const liveStart = startOfDay(row.start!);
-    const liveEnd = startOfDay(row.end!);
-    if (bStart.getTime() === liveStart.getTime() && bEnd.getTime() === liveEnd.getTime()) {
-      return null;
-    }
-    const bLeft = positionFor(bStart, chartStart, viewMode, columnWidth).x;
-    const bEndPos = positionFor(addDays(bEnd, 1), chartStart, viewMode, columnWidth).x;
-    const bWidth = Math.max(columnWidth / 7, bEndPos - bLeft);
-    const startSlipDays = Math.round(
-      (liveStart.getTime() - bStart.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    const endSlipDays = Math.round(
-      (liveEnd.getTime() - bEnd.getTime()) / (1000 * 60 * 60 * 24),
-    );
-    return { left: bLeft, width: bWidth, startSlipDays, endSlipDays };
-  })();
+  const baselineRect =
+    showBaseline && baselineStartIso && baselineEndIso
+      ? (() => {
+          const bStart = startOfDay(parseISODate(baselineStartIso));
+          const bEnd = startOfDay(parseISODate(baselineEndIso));
+          const bLeft = positionFor(bStart, chartStart, viewMode, columnWidth).x;
+          const bEndPos = positionFor(addDays(bEnd, 1), chartStart, viewMode, columnWidth).x;
+          const bWidth = Math.max(columnWidth / 7, bEndPos - bLeft);
+          return { left: bLeft, width: bWidth };
+        })()
+      : null;
 
-  const baselineTooltip = baselineRect
-    ? `Baseline: ${baselineStartIso!.slice(0, 10)} → ${baselineEndIso!.slice(0, 10)}` +
-      (baselineRect.startSlipDays || baselineRect.endSlipDays
-        ? ` · slip: start ${formatSlip(baselineRect.startSlipDays)}, end ${formatSlip(baselineRect.endSlipDays)}`
-        : "")
-    : "";
+  const baselineTooltip =
+    baselineRect && baselineStartIso && baselineEndIso
+      ? `Baseline: ${baselineStartIso.slice(0, 10)} → ${baselineEndIso.slice(0, 10)}`
+      : "";
+
+  if (isMilestone) {
+    const cx = left;
+    const cy = top + barHeight / 2;
+    const half = MILESTONE_SIZE / 2;
+    return (
+      <>
+        {baselineRect && (
+          <div
+            className="pointer-events-none absolute rounded-full"
+            style={{
+              left: baselineRect.left,
+              width: baselineRect.width,
+              top: ROW_HEIGHT / 2 + barHeight / 2 + 2,
+              height: 3,
+              background: "rgb(136, 135, 128)",
+              opacity: 0.6,
+              zIndex: 1,
+            }}
+            title={baselineTooltip}
+          />
+        )}
+        <div
+          data-task-id={row.taskId}
+          className={[
+            "absolute select-none",
+            canEdit ? "cursor-pointer" : "cursor-default",
+          ].join(" ")}
+          style={{
+            left: cx - half,
+            top: cy - half,
+            width: MILESTONE_SIZE,
+            height: MILESTONE_SIZE,
+            zIndex: 2,
+          }}
+          onPointerUp={(e) => {
+            if (dragRef.current) return;
+            e.stopPropagation();
+            onClick(row.taskId!);
+          }}
+          title={`${row.name} · milestone`}
+        >
+          {/* Milestone = green diamond per the Gantt v2 mockup (not section color) */}
+          <svg width={MILESTONE_SIZE} height={MILESTONE_SIZE} viewBox="0 0 12 12">
+            <path d="M6 0 L12 6 L6 12 L0 6 Z" fill="rgb(var(--primary))" />
+          </svg>
+        </div>
+      </>
+    );
+  }
 
   return (
     <>
       {baselineRect && (
         <div
-          className="absolute pointer-events-none rounded border border-dashed border-slate-500/70 bg-slate-300/15"
+          className="pointer-events-none absolute rounded-[1.5px]"
           style={{
             left: baselineRect.left,
             width: baselineRect.width,
-            top,
-            height: barHeight,
+            top: top + barHeight + 2,
+            height: 3,
+            background: "rgb(136, 135, 128)",
+            opacity: 0.6,
             zIndex: 1,
           }}
           title={baselineTooltip}
           aria-label={baselineTooltip}
         />
       )}
-    <div
-      data-task-id={row.taskId}
-      className={[
-        "absolute select-none rounded overflow-hidden",
-        STATUS_FILL[status],
-        canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
-        ghost ? "ring-2 ring-primary/60 shadow-md" : "shadow-sm",
-      ].join(" ")}
-      style={{
-        left,
-        width,
-        top,
-        height: barHeight,
-        zIndex: 2,
-        borderLeft: `3px solid ${PRIORITY_BORDER_HEX[priority]}`,
-      }}
-      onPointerDown={(e) => handlePointerDown(e, "move")}
-      onPointerMove={handlePointerMove}
-      onPointerUp={handlePointerUp}
-      onPointerCancel={handlePointerCancel}
-      title={`${row.name} · ${status} · ${priority}`}
-    >
-      {progress > 0 && progress < 100 && (
-        <div
-          className="absolute inset-y-0 left-0 bg-black/15"
-          style={{ width: `${progress}%` }}
-          aria-hidden="true"
-        />
-      )}
-      {canEdit && (
+      <div
+        data-task-id={row.taskId}
+        className={[
+          "group/bar absolute select-none overflow-hidden rounded-[3px]",
+          canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
+          ghost ? "ring-2 ring-primary/60" : "",
+        ].join(" ")}
+        style={{
+          left,
+          width,
+          top,
+          height: barHeight,
+          zIndex: 2,
+          backgroundColor: `rgba(${rgb}, ${BAR_TRACK_OPACITY})`,
+          touchAction: canEdit ? "none" : undefined,
+        }}
+        onPointerDown={(e) => handlePointerDown(e, "move")}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerCancel}
+        title={`${row.name} · ${status} · ${progress}%`}
+      >
+        {progress > 0 && (
+          <div
+            className="absolute inset-y-0 left-0 rounded-[3px]"
+            style={{ width: `${progress}%`, backgroundColor: color }}
+            aria-hidden="true"
+          />
+        )}
+        {canEdit && (
+          <>
+            <div
+              className="absolute inset-y-0 left-0 cursor-ew-resize opacity-0 group-hover/bar:opacity-100"
+              style={{ width: RESIZE_HANDLE_PX, background: "rgba(255,255,255,0.35)" }}
+              onPointerDown={(e) => handlePointerDown(e, "resize-start")}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
+            />
+            <div
+              className="absolute inset-y-0 right-0 cursor-ew-resize opacity-0 group-hover/bar:opacity-100"
+              style={{ width: RESIZE_HANDLE_PX, background: "rgba(255,255,255,0.35)" }}
+              onPointerDown={(e) => handlePointerDown(e, "resize-end")}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              onPointerCancel={handlePointerCancel}
+            />
+          </>
+        )}
+      </div>
+      {canEdit && onConnectStart && (
         <>
           <div
-            className="absolute inset-y-0 left-0 cursor-ew-resize"
-            style={{ width: RESIZE_HANDLE_PX }}
-            onPointerDown={(e) => handlePointerDown(e, "resize-start")}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerCancel}
+            title="Drag from another task to make this task depend on it"
+            className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+            style={{
+              left,
+              top: top + barHeight / 2,
+              transform: "translate(-50%, -50%)",
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onConnectStart(row.taskId!, "left", e.clientX, e.clientY);
+            }}
           />
           <div
-            className="absolute inset-y-0 right-0 cursor-ew-resize"
-            style={{ width: RESIZE_HANDLE_PX }}
-            onPointerDown={(e) => handlePointerDown(e, "resize-end")}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            onPointerCancel={handlePointerCancel}
+            title="Drag to a task to create a dependency"
+            className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+            style={{
+              left: left + width,
+              top: top + barHeight / 2,
+              transform: "translate(-50%, -50%)",
+            }}
+            onPointerDown={(e) => {
+              e.stopPropagation();
+              e.preventDefault();
+              onConnectStart(row.taskId!, "right", e.clientX, e.clientY);
+            }}
           />
         </>
       )}
-    </div>
-    {canEdit && onConnectStart && (
-      <>
-        <div
-          title="Drag from another task to make this task depend on it"
-          className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
-          style={{
-            left,
-            top: top + barHeight / 2,
-            transform: "translate(-50%, -50%)",
-          }}
-          onPointerDown={(e) => {
-            // Don't let the bar's onPointerDown fire — we own this gesture.
-            e.stopPropagation();
-            e.preventDefault();
-            onConnectStart(row.taskId!, "left", e.clientX, e.clientY);
-          }}
-        />
-        <div
-          title="Drag to a task to create a dependency"
-          className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
-          style={{
-            left: left + width,
-            top: top + barHeight / 2,
-            transform: "translate(-50%, -50%)",
-          }}
-          onPointerDown={(e) => {
-            // Don't let the bar's onPointerDown fire — we own this gesture.
-            e.stopPropagation();
-            e.preventDefault();
-            onConnectStart(row.taskId!, "right", e.clientX, e.clientY);
-          }}
-        />
-      </>
-    )}
-    <div
-      className="pointer-events-none absolute flex items-center whitespace-nowrap text-[12px] font-medium text-on-surface"
-      style={{
-        left: left + width + 14,
-        top,
-        height: barHeight,
-        zIndex: 2,
-      }}
-      aria-hidden="true"
-    >
-      {row.name}
-    </div>
     </>
   );
-}
-
-function formatSlip(days: number): string {
-  if (days === 0) return "0d";
-  return days > 0 ? `+${days}d` : `${days}d`;
 }
 
 export { dateFromX };

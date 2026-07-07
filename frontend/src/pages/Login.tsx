@@ -53,6 +53,8 @@ export function Login() {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const googleAvailable = Boolean(googleConfig?.enabled && googleConfig.clientId);
+
   if (status === "authenticated") {
     return <Navigate to={from} replace />;
   }
@@ -212,13 +214,15 @@ export function Login() {
             className="mb-8 mt-1 text-on-surface-variant"
             style={{ fontSize: 12 }}
           >
-            Use your work Google account.
+            {googleAvailable
+              ? "Use your work Google account."
+              : "Sign in with your Solvro credentials."}
           </p>
 
           {googleConfigLoading ? (
             <div className="h-10 animate-pulse rounded bg-surface-container" />
-          ) : googleConfig?.enabled && googleConfig.clientId ? (
-            <GoogleOAuthProvider clientId={googleConfig.clientId}>
+          ) : googleAvailable ? (
+            <GoogleOAuthProvider clientId={googleConfig!.clientId!}>
               <div className="flex justify-center">
                 <GoogleLogin
                   onSuccess={handleGoogleCredential}
@@ -232,12 +236,7 @@ export function Login() {
                 />
               </div>
             </GoogleOAuthProvider>
-          ) : (
-            <div className="rounded border border-amber-400/40 bg-amber-50 px-3 py-2 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
-              Google sign-in isn't configured yet. Ask an admin to set it up in{" "}
-              <span className="font-semibold">Admin → Sign-in</span>.
-            </div>
-          )}
+          ) : null}
 
           {error && (
             <div
@@ -248,99 +247,66 @@ export function Login() {
             </div>
           )}
 
-          {/* Divider */}
-          <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-wider text-on-surface-variant">
-            <div
-              className="flex-1 bg-outline-variant"
-              style={{ height: "0.5px" }}
-            />
-            <span>or</span>
-            <div
-              className="flex-1 bg-outline-variant"
-              style={{ height: "0.5px" }}
-            />
-          </div>
+          {googleAvailable && (
+            <>
+              {/* Divider */}
+              <div className="my-6 flex items-center gap-3 text-[11px] uppercase tracking-wider text-on-surface-variant">
+                <div
+                  className="flex-1 bg-outline-variant"
+                  style={{ height: "0.5px" }}
+                />
+                <span>or</span>
+                <div
+                  className="flex-1 bg-outline-variant"
+                  style={{ height: "0.5px" }}
+                />
+              </div>
 
-          {/* Admin sign-in (password fallback). Collapsed by default — only the
-              seeded admin and any explicitly password-provisioned account can
-              use this; every other user has passwordHash NULL server-side. */}
-          <details className="group rounded border border-outline-variant bg-surface-container-lowest open:bg-surface-container">
-            <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-on-surface marker:hidden">
-              <span className="flex items-center gap-2">
-                <span className="material-symbols-outlined text-base text-on-surface-variant">
-                  key
-                </span>
-                Admin sign-in (password)
-              </span>
-              <span className="material-symbols-outlined text-base text-on-surface-variant transition-transform group-open:rotate-180">
-                expand_more
-              </span>
-            </summary>
-
-            <form
-              onSubmit={handlePasswordSubmit}
-              className="space-y-3 border-t border-outline-variant px-3 py-3"
-              noValidate
-            >
-              <label className="block">
-                <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">
-                  Email
-                </span>
-                <div className="mt-1 flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
-                  <span className="material-symbols-outlined text-base text-on-surface-variant">
-                    mail
-                  </span>
-                  <input
-                    type="email"
-                    autoComplete="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="you@example.com"
-                    className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none"
-                  />
-                </div>
-              </label>
-
-              <label className="block">
-                <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">
-                  Password
-                </span>
-                <div className="mt-1 flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
-                  <span className="material-symbols-outlined text-base text-on-surface-variant">
-                    lock
-                  </span>
-                  <input
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    required
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none"
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword((v) => !v)}
-                    aria-label={showPassword ? "Hide password" : "Show password"}
-                    className="text-on-surface-variant hover:text-on-surface"
-                  >
-                    <span className="material-symbols-outlined text-base">
-                      {showPassword ? "visibility_off" : "visibility"}
+              {/* Admin sign-in (password fallback). Collapsed by default —
+                  only the seeded admin and any explicitly password-provisioned
+                  account can use this; every other user has passwordHash NULL
+                  server-side. */}
+              <details className="group rounded border border-outline-variant bg-surface-container-lowest open:bg-surface-container">
+                <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-on-surface marker:hidden">
+                  <span className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-base text-on-surface-variant">
+                      key
                     </span>
-                  </button>
-                </div>
-              </label>
+                    Admin sign-in (password)
+                  </span>
+                  <span className="material-symbols-outlined text-base text-on-surface-variant transition-transform group-open:rotate-180">
+                    expand_more
+                  </span>
+                </summary>
 
-              <button
-                type="submit"
-                disabled={submitting}
-                className="mt-1 w-full rounded bg-ink py-2 font-display text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-ink-hover disabled:opacity-60"
-              >
-                {submitting ? "Signing in…" : "Sign in"}
-              </button>
-            </form>
-          </details>
+                <div className="border-t border-outline-variant px-3 py-3">
+                  <PasswordForm
+                    email={email}
+                    setEmail={setEmail}
+                    password={password}
+                    setPassword={setPassword}
+                    showPassword={showPassword}
+                    setShowPassword={setShowPassword}
+                    submitting={submitting}
+                    onSubmit={handlePasswordSubmit}
+                  />
+                </div>
+              </details>
+            </>
+          )}
+
+          {!googleConfigLoading && !googleAvailable && (
+            <PasswordForm
+              email={email}
+              setEmail={setEmail}
+              password={password}
+              setPassword={setPassword}
+              showPassword={showPassword}
+              setShowPassword={setShowPassword}
+              submitting={submitting}
+              onSubmit={handlePasswordSubmit}
+            />
+          )}
 
           {/* Footer */}
           <p
@@ -352,5 +318,89 @@ export function Login() {
         </div>
       </div>
     </div>
+  );
+}
+
+interface PasswordFormProps {
+  email: string;
+  setEmail: (v: string) => void;
+  password: string;
+  setPassword: (v: string) => void;
+  showPassword: boolean;
+  setShowPassword: (fn: (v: boolean) => boolean) => void;
+  submitting: boolean;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}
+
+function PasswordForm({
+  email,
+  setEmail,
+  password,
+  setPassword,
+  showPassword,
+  setShowPassword,
+  submitting,
+  onSubmit,
+}: PasswordFormProps) {
+  return (
+    <form onSubmit={onSubmit} className="space-y-3" noValidate>
+      <label className="block">
+        <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">
+          Email
+        </span>
+        <div className="mt-1 flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
+          <span className="material-symbols-outlined text-base text-on-surface-variant">
+            mail
+          </span>
+          <input
+            type="email"
+            autoComplete="email"
+            required
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            placeholder="you@example.com"
+            className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none"
+          />
+        </div>
+      </label>
+
+      <label className="block">
+        <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">
+          Password
+        </span>
+        <div className="mt-1 flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
+          <span className="material-symbols-outlined text-base text-on-surface-variant">
+            lock
+          </span>
+          <input
+            type={showPassword ? "text" : "password"}
+            autoComplete="current-password"
+            required
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            placeholder="••••••••"
+            className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            aria-label={showPassword ? "Hide password" : "Show password"}
+            className="text-on-surface-variant hover:text-on-surface"
+          >
+            <span className="material-symbols-outlined text-base">
+              {showPassword ? "visibility_off" : "visibility"}
+            </span>
+          </button>
+        </div>
+      </label>
+
+      <button
+        type="submit"
+        disabled={submitting}
+        className="mt-1 w-full rounded bg-ink py-2 font-display text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-ink-hover disabled:opacity-60"
+      >
+        {submitting ? "Signing in…" : "Sign in"}
+      </button>
+    </form>
   );
 }

@@ -115,6 +115,11 @@ function barRightX(
   columnWidth: number,
 ): number | null {
   if (!row.end) return null;
+  // Milestones render as a single point (a diamond centered on the date),
+  // not a start→end span, so the "right edge" is just that date.
+  if (row.isMilestone) {
+    return positionFor(row.end, chartStart, viewMode, columnWidth).x;
+  }
   const after = addDays(row.end, 1);
   return positionFor(after, chartStart, viewMode, columnWidth).x;
 }
@@ -125,8 +130,11 @@ function barLeftX(
   viewMode: ViewMode,
   columnWidth: number,
 ): number | null {
-  if (!row.start) return null;
-  return positionFor(row.start, chartStart, viewMode, columnWidth).x;
+  // Milestones may only carry a dueDate (no startDate) — anchor on
+  // whichever is set, mirroring GanttBar's own milestone rendering.
+  const anchor = row.start ?? (row.isMilestone ? row.end : null);
+  if (!anchor) return null;
+  return positionFor(anchor, chartStart, viewMode, columnWidth).x;
 }
 
 export function GanttConnectors({
@@ -242,7 +250,7 @@ export function GanttConnectors({
           <path d="M0,0 L10,5 L0,10 z" fill="currentColor" />
         </marker>
       </defs>
-      <g style={{ color: "rgb(var(--primary))" }}>
+      <g style={{ color: "rgb(var(--on-surface-variant))" }}>
         {connectors.map((c) => {
           const hovered = interactive && hoveredId === c.id;
           return (
@@ -257,14 +265,15 @@ export function GanttConnectors({
                       setHoveredId((prev) => (prev === c.id ? null : prev))
                   : undefined
               }
+              style={hovered ? { color: "rgb(var(--primary))" } : undefined}
             >
               <path
                 d={c.d}
                 stroke="currentColor"
-                strokeWidth={hovered ? 2.5 : 1.5}
+                strokeWidth={hovered ? 2 : 1.25}
                 strokeDasharray={c.type === "SOFT" ? "5 4" : undefined}
                 fill="none"
-                opacity={hovered ? 1 : 0.85}
+                opacity={hovered ? 1 : 0.75}
                 markerEnd="url(#gantt-conn-arrow)"
               />
               {interactive && (

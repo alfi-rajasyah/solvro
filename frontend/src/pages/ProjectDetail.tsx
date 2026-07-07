@@ -1,7 +1,15 @@
 import { useState } from "react";
-import { Link, NavLink, Outlet, useOutletContext, useParams } from "react-router-dom";
+import {
+  Link,
+  NavLink,
+  Outlet,
+  useOutletContext,
+  useParams,
+  useSearchParams,
+} from "react-router-dom";
 import { RightSidebar } from "@/components/layout/RightSidebar";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
+import { TaskPanel } from "@/components/TaskPanel";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { GanttExportProvider } from "@/lib/gantt/exportContext";
 import { type ProjectDetail as ProjectDetailType, useProject } from "@/lib/queries";
@@ -25,8 +33,26 @@ export function ProjectDetail() {
   const { user } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const { data: project, isLoading, isError, error } = useProject(projectId);
+
+  // Task side panel is deep-linked via ?task=<id> so it works the same way
+  // from the Kanban and List views (and survives a page refresh / share).
+  const taskParam = searchParams.get("task");
+  const parsedTaskId = taskParam ? Number(taskParam) : NaN;
+  const openTaskId = Number.isFinite(parsedTaskId) ? parsedTaskId : null;
+
+  function closeTaskPanel() {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("task");
+        return next;
+      },
+      { replace: true },
+    );
+  }
 
   const canEdit = hasPermission(user, "project:write");
 
@@ -57,7 +83,7 @@ export function ProjectDetail() {
     <div
       className={[
         "flex h-full min-w-0 flex-col transition-[margin] duration-200 ease-out",
-        contextOpen ? "md:mr-80" : "mr-0",
+        contextOpen ? "md:mr-80" : openTaskId !== null ? "md:mr-[380px]" : "mr-0",
       ].join(" ")}
     >
       {/* Project name + status now live in the TopBar (see TopBar.tsx).
@@ -143,6 +169,15 @@ export function ProjectDetail() {
         open={contextOpen}
         onClose={() => setContextOpen(false)}
       />
+
+      {openTaskId !== null && (
+        <TaskPanel
+          key={openTaskId}
+          projectId={project.id}
+          taskId={openTaskId}
+          onClose={closeTaskPanel}
+        />
+      )}
     </div>
     </GanttExportProvider>
   );

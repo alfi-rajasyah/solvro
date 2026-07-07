@@ -2,6 +2,7 @@ node_modules/
 dist/
 backend/dist/
 frontend/dist/
+frontend/dev-dist/
 *.tsbuildinfo
 .vite/
 
@@ -30,6 +31,11 @@ docker-compose.yml
 # Prisma
 backend/prisma/migrations/dev.db*
 
+# Playwright e2e artifacts
+e2e/test-results/
+e2e/playwright-report/
+e2e/blob-report/
+
 # Editor / OS
 .DS_Store
 .vscode/
@@ -50,3 +56,6 @@ PRD.md
 # generated .js so they never shadow the .ts sources for PostCSS/Vite resolution.
 /frontend/tailwind.config.js
 /frontend/vite.config.js
+
+# Local CI-stack credentials (see ci/.env.ci.example)
+ci/.env

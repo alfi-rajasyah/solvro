@@ -29,11 +29,18 @@ export function GanttDateAxis({
     [chartStart, chartEnd, viewMode],
   );
 
-  const monthGroups = useMemo(() => {
+  const topLabelFor = (d: Date): string => {
+    if (viewMode === "quarter") {
+      return `${d.getFullYear()}`;
+    }
+    return fmtMonthYear(d);
+  };
+
+  const topGroups = useMemo(() => {
     const groups: { label: string; start: number; span: number }[] = [];
     let cur: { label: string; start: number; span: number } | null = null;
     columns.forEach((col, i) => {
-      const label = fmtMonthYear(col.date);
+      const label = topLabelFor(col.date);
       if (cur && cur.label === label) {
         cur.span += 1;
       } else {
@@ -43,7 +50,8 @@ export function GanttDateAxis({
     });
     if (cur) groups.push(cur);
     return groups;
-  }, [columns]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [columns, viewMode]);
 
   const halfHeight = AXIS_HEIGHT / 2;
 
@@ -63,7 +71,7 @@ export function GanttDateAxis({
         className="relative border-b border-outline-variant"
         style={{ height: halfHeight }}
       >
-        {monthGroups.map((g, i) => (
+        {topGroups.map((g, i) => (
           <div
             key={i}
             className="absolute top-0 flex h-full items-center justify-center border-r border-outline-variant/60 font-display text-[12px] font-semibold uppercase tracking-wider text-on-surface-variant"
@@ -98,15 +106,20 @@ export function GanttDateAxis({
                 {col.date.toLocaleString(undefined, { month: "short" })}
               </span>
             )}
+            {viewMode === "quarter" && (
+              <span className="font-display font-semibold">
+                Q{col.quarterNumber}
+              </span>
+            )}
           </div>
         ))}
         {todayPos && (
           <div
-            className="pointer-events-none absolute -top-1 flex h-7 w-7 items-center justify-center rounded-full bg-rose-500 text-[12px] font-bold text-white shadow"
-            style={{ left: todayCenterX - 14, zIndex: 6 }}
+            className="pointer-events-none absolute -bottom-2 flex h-4 items-center rounded-full bg-primary px-2 text-[11px] font-bold text-on-primary shadow"
+            style={{ left: todayCenterX, transform: "translateX(-50%)", zIndex: 21 }}
             aria-hidden="true"
           >
-            {today.getDate()}
+            Today
           </div>
         )}
       </div>

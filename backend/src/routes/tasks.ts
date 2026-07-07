@@ -6,6 +6,14 @@ import { requireAuth, requirePermission, type JwtPayload } from "../http/auth.js
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { ensureTaskVisible, projectVisibilityFilter } from "../lib/visibility.js";
+import {
+  assertLabelsInProject,
+  assertSectionInProject,
+  assertValidParent,
+  moveTaskWithinSiblings,
+  siblingKeyEquals,
+  type SiblingKey,
+} from "../lib/taskOrdering.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -25,6 +33,7 @@ const updateTaskSchema = z.object({
   parentTaskId: z.number().int().positive().nullable().optional(),
   sectionId: z.number().int().positive().nullable().optional(),
   labelIds: z.array(z.number().int().positive()).optional(),
+  position: z.number().int().min(0).optional(),
 });
 
 const tasksListQuerySchema = z.object({
@@ -80,7 +89,7 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
 
   const tasks = await prisma.task.findMany({
     where,
-    orderBy: [{ dueDate: "asc" }, { id: "asc" }],
+    orderBy: [{ position: "asc" }, { id: "asc" }],
     include: {
       assignedTo: { select: { id: true, username: true, email: true } },
       labels: true,
@@ -116,42 +125,116 @@ tasksRouter.patch(
       throw new HttpError(400, "invalid_parent", "Task cannot be its own parent");
     }
 
-    const data: Prisma.TaskUpdateInput = {};
-    if (body.title !== undefined) data.title = body.title;
-    if (body.description !== undefined) data.description = body.description;
-    if (body.status !== undefined) data.status = body.status;
-    if (body.priority !== undefined) data.priority = body.priority;
-    if (body.startDate !== undefined) data.startDate = body.startDate;
-    if (body.dueDate !== undefined) data.dueDate = body.dueDate;
-    if (body.assignedToId !== undefined) {
-      data.assignedTo = body.assignedToId === null
-        ? { disconnect: true }
-        : { connect: { id: body.assignedToId } };
-    }
-    if (body.parentTaskId !== undefined) {
-      data.parent = body.parentTaskId === null
-        ? { disconnect: true }
-        : { connect: { id: body.parentTaskId } };
-    }
-    if (body.sectionId !== undefined) {
-      data.section = body.sectionId === null
-        ? { disconnect: true }
-        : { connect: { id: body.sectionId } };
-    }
-    if (body.labelIds !== undefined) {
-      data.labels = { set: body.labelIds.map((lid) => ({ id: lid })) };
-    }
-
-    const updated = await prisma.task.update({
+    const current = await prisma.task.findUniqueOrThrow({
       where: { id },
-      data,
-      include: {
-        assignedTo: { select: { id: true, username: true, email: true } },
-        labels: true,
-        section: { select: { id: true, name: true, position: true, color: true } },
-        _count: { select: { subtasks: true, comments: true } },
-      },
+      select: { projectId: true, status: true, parentTaskId: true, position: true },
     });
+
+    const nextStatus = body.status ?? current.status;
+    const nextParentTaskId =
+      body.parentTaskId !== undefined ? body.parentTaskId : current.parentTaskId;
+
+    const oldKey: SiblingKey = {
+      projectId: current.projectId,
+      parentTaskId: current.parentTaskId,
+      status: current.status,
+    };
+    const newKey: SiblingKey = {
+      projectId: current.projectId,
+      parentTaskId: nextParentTaskId,
+      status: nextStatus,
+    };
+
+    // A patch only re-orders when it sets an explicit position OR moves the
+    // task to a different sibling list. A status-only change on a SUBTASK is
+    // NOT a reorder: a subtask's sibling list is keyed on parentTaskId alone
+    // (status doesn't partition it), so siblingKeyEquals reports the keys equal
+    // and the row keeps its slot. Previously any status change re-appended the
+    // row to the end of its list, so ticking a subtask's checkbox bounced it to
+    // the bottom of the checklist.
+    const touchesOrdering =
+      body.position !== undefined || !siblingKeyEquals(oldKey, newKey);
+
+    const updated = await prisma.$transaction(async (tx) => {
+      if (nextParentTaskId !== null) {
+        await assertValidParent(tx, current.projectId, id, nextParentTaskId);
+      }
+      if (body.sectionId != null) {
+        await assertSectionInProject(tx, current.projectId, body.sectionId);
+      }
+      if (body.labelIds && body.labelIds.length > 0) {
+        await assertLabelsInProject(tx, current.projectId, body.labelIds);
+      }
+
+      const data: Prisma.TaskUpdateInput = {};
+      if (body.title !== undefined) data.title = body.title;
+      if (body.description !== undefined) data.description = body.description;
+      if (body.priority !== undefined) data.priority = body.priority;
+      if (body.startDate !== undefined) data.startDate = body.startDate;
+      if (body.dueDate !== undefined) data.dueDate = body.dueDate;
+      if (body.assignedToId !== undefined) {
+        data.assignedTo = body.assignedToId === null
+          ? { disconnect: true }
+          : { connect: { id: body.assignedToId } };
+      }
+      if (body.parentTaskId !== undefined) {
+        data.parent = body.parentTaskId === null
+          ? { disconnect: true }
+          : { connect: { id: body.parentTaskId } };
+      }
+      if (body.sectionId !== undefined) {
+        data.section = body.sectionId === null
+          ? { disconnect: true }
+          : { connect: { id: body.sectionId } };
+      }
+      if (body.labelIds !== undefined) {
+        data.labels = { set: body.labelIds.map((lid) => ({ id: lid })) };
+      }
+
+      if (touchesOrdering) {
+        // Status is part of the sibling key only for top-level tasks;
+        // promoting a subtask to top-level keeps its current status value
+        // (subtasks already carry a status field) unless the caller also
+        // passed a new one explicitly.
+        data.status = nextStatus;
+
+        // Apply the non-ordering fields (and the parent/status change) first,
+        // then compute the new dense position for this row and every sibling
+        // it displaced. moveTaskWithinSiblings issues its own updates for
+        // position, so exclude it from `data` to avoid a redundant write.
+        await tx.task.update({ where: { id }, data });
+        const finalPosition = await moveTaskWithinSiblings(
+          tx,
+          id,
+          oldKey,
+          newKey,
+          body.position,
+        );
+        return tx.task.update({
+          where: { id },
+          data: { position: finalPosition },
+          include: {
+            assignedTo: { select: { id: true, username: true, email: true } },
+            labels: true,
+            section: { select: { id: true, name: true, position: true, color: true } },
+            _count: { select: { subtasks: true, comments: true } },
+          },
+        });
+      }
+
+      if (body.status !== undefined) data.status = body.status;
+      return tx.task.update({
+        where: { id },
+        data,
+        include: {
+          assignedTo: { select: { id: true, username: true, email: true } },
+          labels: true,
+          section: { select: { id: true, name: true, position: true, color: true } },
+          _count: { select: { subtasks: true, comments: true } },
+        },
+      });
+    });
+
     res.json(updated);
   },
 );

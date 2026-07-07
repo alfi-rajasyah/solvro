@@ -95,15 +95,6 @@ export function TopBar() {
 
         <button
           type="button"
-          aria-label="Notifications"
-          className="relative hidden h-8 w-8 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface md:flex"
-        >
-          <span className="material-symbols-outlined text-[20px]">notifications</span>
-          <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-error" />
-        </button>
-
-        <button
-          type="button"
           onClick={toggle}
           aria-label={resolved === "dark" ? "Switch to light theme" : "Switch to dark theme"}
           title={resolved === "dark" ? "Light mode" : "Dark mode"}

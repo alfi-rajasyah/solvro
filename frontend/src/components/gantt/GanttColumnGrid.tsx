@@ -34,6 +34,12 @@ export function GanttColumnGrid({
     [chartStart, chartEnd, viewMode],
   );
 
+  // Weekend shading only makes sense when each day gets its own visible
+  // slice of the chart — at Month/Quarter zoom a single weekend day is a
+  // sliver of a column and just adds visual noise, so we skip it there
+  // (holidays still shade at every zoom level).
+  const showWeekends = viewMode === "day" || viewMode === "week";
+
   const dayMarkers = useMemo(() => {
     const out: { x: number; width: number; kind: "weekend" | "holiday"; key: string; title?: string }[] = [];
     const holidayByDate = new Map(holidays.map((h) => [h.date, h]));
@@ -52,13 +58,13 @@ export function GanttColumnGrid({
           key: `h-${iso}`,
           title: `${holiday.name} — ${iso}`,
         });
-      } else if (day === 0 || day === 6) {
+      } else if (showWeekends && (day === 0 || day === 6)) {
         out.push({ x, width, kind: "weekend", key: `w-${iso}` });
       }
       cursor.setTime(cursor.getTime() + DAY_MS);
     }
     return out;
-  }, [chartStart, chartEnd, viewMode, columnWidth, holidays]);
+  }, [chartStart, chartEnd, viewMode, columnWidth, holidays, showWeekends]);
 
   return (
     <div

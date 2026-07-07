@@ -70,6 +70,14 @@ export interface CustomerDetail extends CustomerSummary {
   services: CustomerServiceAssignment[];
 }
 
+// Per-status-column WIP cap. null (or an absent key) means "no limit".
+// Visual only — see ProjectKanban's amber count-pill logic.
+export interface WipLimits {
+  TODO?: number | null;
+  IN_PROGRESS?: number | null;
+  DONE?: number | null;
+}
+
 export interface ProjectSummary {
   id: number;
   name: string;
@@ -78,6 +86,7 @@ export interface ProjectSummary {
   saId: number;
   tamId: number;
   customerId: number | null;
+  wipLimits: WipLimits | null;
   baselineLockedAt: string | null;
   baselineLockedById: number | null;
   createdAt: string;
@@ -112,6 +121,7 @@ export interface Task {
   parentTaskId: number | null;
   sectionId: number | null;
   section: { id: number; name: string; position: number; color: string } | null;
+  position: number;
   labels: Label[];
   _count: { subtasks: number; comments: number };
 }
@@ -323,6 +333,7 @@ export interface CreateProjectInput {
   tamId?: number;
   customerId: number;
   status?: ProjectStatus;
+  wipLimits?: WipLimits | null;
 }
 
 export function useCreateProject() {
@@ -345,6 +356,7 @@ export interface UpdateProjectInput {
   saId?: number;
   tamId?: number;
   customerId?: number;
+  wipLimits?: WipLimits | null;
 }
 
 export function useUpdateProject(id: number) {
@@ -481,6 +493,7 @@ export interface UpdateTaskInput {
   parentTaskId?: number | null;
   sectionId?: number | null;
   labelIds?: number[];
+  position?: number;
 }
 
 export interface LockBaselineInput {
@@ -504,6 +517,71 @@ export function useLockBaseline(projectId: number) {
   });
 }
 
+// Mirrors the server's sibling-list semantics (backend/src/lib/taskOrdering.ts)
+// so the optimistic cache update produces the exact same ordering the PATCH
+// response will settle to — this is what keeps drag-and-drop flicker-free.
+// A sibling list is: (parentTaskId, status) for top-level tasks, or just
+// "the parent's subtasks" (status doesn't partition) for subtasks.
+function siblingListId(t: Pick<Task, "parentTaskId" | "status">): string {
+  return t.parentTaskId === null ? `top:${t.status}` : `sub:${t.parentTaskId}`;
+}
+
+/**
+ * Reorders/re-parents `id` inside a locally-cached task list exactly the way
+ * the backend's moveTaskWithinSiblings does: remove from the old sibling
+ * list (re-packing it), then insert into the new sibling list at the
+ * clamped requested index (re-packing that too). Returns a new array;
+ * doesn't mutate `tasks`.
+ */
+export function reorderTasksLocally(
+  tasks: Task[],
+  id: number,
+  patch: Pick<UpdateTaskInput, "status" | "parentTaskId" | "position">,
+): Task[] {
+  const current = tasks.find((t) => t.id === id);
+  if (!current) return tasks;
+
+  const nextStatus = patch.status ?? current.status;
+  const nextParentTaskId =
+    patch.parentTaskId !== undefined ? patch.parentTaskId : current.parentTaskId;
+  const updatedTask: Task = { ...current, status: nextStatus, parentTaskId: nextParentTaskId };
+
+  const oldListId = siblingListId(current);
+  const newListId = siblingListId(updatedTask);
+
+  // Every other task, grouped by which sibling list it's currently in.
+  const byList = new Map<string, Task[]>();
+  for (const t of tasks) {
+    if (t.id === id) continue;
+    const key = siblingListId(t);
+    const arr = byList.get(key) ?? [];
+    arr.push(t);
+    byList.set(key, arr);
+  }
+  for (const arr of byList.values()) arr.sort((a, b) => a.position - b.position || a.id - b.id);
+
+  const newSiblings = [...(byList.get(newListId) ?? [])];
+  const clamped =
+    patch.position === undefined
+      ? newSiblings.length
+      : Math.max(0, Math.min(patch.position, newSiblings.length));
+  newSiblings.splice(clamped, 0, updatedTask);
+
+  // Re-pack positions for both the old list (gap closed) and the new list
+  // (insertion applied). If old === new, newSiblings already covers it.
+  const repacked = new Map<number, number>();
+  newSiblings.forEach((t, i) => repacked.set(t.id, i));
+  if (oldListId !== newListId) {
+    (byList.get(oldListId) ?? []).forEach((t, i) => repacked.set(t.id, i));
+  }
+
+  return tasks.map((t) => {
+    if (t.id === id) return { ...updatedTask, position: repacked.get(id) ?? updatedTask.position };
+    if (repacked.has(t.id)) return { ...t, position: repacked.get(t.id)! };
+    return t;
+  });
+}
+
 export function useUpdateTask(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
@@ -513,10 +591,26 @@ export function useUpdateTask(projectId: number) {
       await qc.cancelQueries({ queryKey: queryKeys.projectTasks(projectId) });
       const prev = qc.getQueryData<Task[]>(queryKeys.projectTasks(projectId));
       if (prev) {
-        qc.setQueryData<Task[]>(
-          queryKeys.projectTasks(projectId),
-          prev.map((t) => (t.id === id ? { ...t, ...patch } as Task : t)),
-        );
+        // Mirror the server's rule (backend/src/routes/tasks.ts): a patch only
+        // re-orders when it sets an explicit position or moves the task to a
+        // different sibling list. A status-only change on a subtask does NOT
+        // reorder — its sibling list is keyed on parentTaskId alone — so it
+        // must fall through to a plain field merge, not reorderTasksLocally
+        // (which would re-append the row to the end of its list).
+        const current = prev.find((t) => t.id === id);
+        const listChanged =
+          current !== undefined &&
+          siblingListId(current) !==
+            siblingListId({
+              parentTaskId:
+                patch.parentTaskId !== undefined ? patch.parentTaskId : current.parentTaskId,
+              status: patch.status ?? current.status,
+            });
+        const touchesOrdering = patch.position !== undefined || listChanged;
+        const next = touchesOrdering
+          ? reorderTasksLocally(prev, id, patch)
+          : prev.map((t) => (t.id === id ? ({ ...t, ...patch } as Task) : t));
+        qc.setQueryData<Task[]>(queryKeys.projectTasks(projectId), next);
       }
       return { prev };
     },
