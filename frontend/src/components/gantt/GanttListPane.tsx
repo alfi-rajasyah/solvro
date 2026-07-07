@@ -1,65 +1,45 @@
 import { type Row } from "@/lib/gantt/geometry";
-import {
-  AXIS_HEIGHT,
-  CHECKBOX_COL_WIDTH,
-  DATE_COL_WIDTH,
-  LIST_PANE_WIDTH,
-  NAME_COL_WIDTH,
-  PCT_COL_WIDTH,
-} from "@/lib/gantt/constants";
-import type { TaskStatus } from "@/lib/queries";
+import { AXIS_HEIGHT, DATE_RANGE_COL_WIDTH } from "@/lib/gantt/constants";
 import { GanttListRow } from "./GanttListRow";
 
 interface GanttListPaneProps {
   rows: Row[];
+  width: number;
   canEdit: boolean;
+  hoveredRowId: string | null;
   onToggleSection: (id: string) => void;
   onTaskClick: (taskId: number) => void;
-  onToggleStatus: (taskId: number, current: TaskStatus) => void;
   onUpdateDates: (taskId: number, startISO: string | null, dueISO: string | null) => void;
+  onHoverChange: (rowId: string | null) => void;
 }
 
 export function GanttListPane({
   rows,
+  width,
   canEdit,
+  hoveredRowId,
   onToggleSection,
   onTaskClick,
-  onToggleStatus,
   onUpdateDates,
+  onHoverChange,
 }: GanttListPaneProps) {
   return (
     <div
       className="sticky left-0 z-30 border-r border-outline-variant bg-surface-container-lowest"
-      style={{ width: LIST_PANE_WIDTH }}
+      style={{ width }}
     >
       <div
         className="sticky top-0 z-40 flex items-stretch border-b border-outline-variant bg-surface-container-low"
-        style={{ height: AXIS_HEIGHT, width: LIST_PANE_WIDTH }}
+        style={{ height: AXIS_HEIGHT, width }}
       >
-        <div style={{ width: CHECKBOX_COL_WIDTH }} />
-        <div
-          className="flex items-center border-r border-outline-variant px-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant"
-          style={{ width: NAME_COL_WIDTH }}
-        >
-          Name
+        <div className="flex flex-1 items-center px-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
+          Task
         </div>
         <div
-          className="flex items-center justify-end border-r border-outline-variant px-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant"
-          style={{ width: DATE_COL_WIDTH }}
+          className="flex shrink-0 items-center justify-end px-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant"
+          style={{ width: DATE_RANGE_COL_WIDTH }}
         >
-          Start
-        </div>
-        <div
-          className="flex items-center justify-end border-r border-outline-variant px-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant"
-          style={{ width: DATE_COL_WIDTH }}
-        >
-          Due
-        </div>
-        <div
-          className="flex items-center justify-end px-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant"
-          style={{ width: PCT_COL_WIDTH }}
-        >
-          %
+          Dates
         </div>
       </div>
       <div>
@@ -68,10 +48,11 @@ export function GanttListPane({
             key={row.id}
             row={row}
             canEdit={canEdit}
+            hovered={hoveredRowId === row.id}
             onToggleSection={onToggleSection}
             onTaskClick={onTaskClick}
-            onToggleStatus={onToggleStatus}
             onUpdateDates={onUpdateDates}
+            onHoverChange={onHoverChange}
           />
         ))}
       </div>

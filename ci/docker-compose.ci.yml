@@ -1,0 +1,41 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: solvro
+      POSTGRES_PASSWORD: solvro_ci
+      POSTGRES_DB: solvro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U solvro -d solvro"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  backend:
+    build:
+      context: ../backend
+      target: runtime
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      DATABASE_URL: postgresql://solvro:solvro_ci@postgres:5432/solvro?schema=public
+      JWT_SECRET: ci-secret
+      JWT_EXPIRES_IN: 8h
+      CORS_ORIGIN: "*"
+      LOG_LEVEL: info
+    command: >
+      sh -c "npx prisma migrate deploy && npx prisma db seed && node dist/index.js"
+    ports:
+      - "127.0.0.1:3300:3000"
+
+  frontend:
+    build:
+      context: ../frontend
+      target: runtime
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:8080:80"
