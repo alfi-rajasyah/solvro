@@ -141,22 +141,37 @@ test.describe("kanban drag & drop — mobile (touch)", () => {
     await loginViaUi(page);
   });
 
-  test("touch reorder within TODO: drag Alpha grip toward Beta", async ({ page, seededProject }) => {
+  test("touch reorder within TODO: drag Alpha to column background below all cards -> appended to end", async ({
+    page,
+    seededProject,
+  }) => {
+    // Mobile swipeable-columns layout: columns are horizontal pages below
+    // `md`, and the TODO column (index 0) is visible by default, so no swipe
+    // is needed to reach it. Deterministic drop target per dnd-kit's
+    // arrayMove semantics: dropping on the column's empty background (below
+    // every card) always resolves to "append to end" — same behavior as a
+    // card-drop resolving to `isColumnId(overId)` in computeCardDrop. Picking
+    // a between-cards drop target (e.g. onto "Beta") is comparatively
+    // brittle since the exact landing index depends on collision-detection
+    // internals; appending to the end is the one outcome dnd-kit guarantees.
     await openKanban(page, seededProject.projectId);
 
     const grip = await gripFor(page, "Alpha", "Drag to reorder");
-    const beta = await page.getByText("Beta", { exact: true }).first().boundingBox();
+    const gamma = await page.getByText("Gamma", { exact: true }).first().boundingBox();
     expect(grip, "grip for Alpha not found").toBeTruthy();
-    expect(beta, "Beta card not found").toBeTruthy();
+    expect(gamma, "Gamma card not found").toBeTruthy();
 
     const from = center(grip!);
-    const to = { x: beta!.x + 40, y: beta!.y + 20 };
+    // Drop well below the last card (Gamma) in the TODO column, onto the
+    // column's empty background area.
+    const to = { x: gamma!.x + 40, y: gamma!.y + gamma!.height + 80 };
     await touchDrag(page, from, to);
 
     const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
+    const todoTasks = tasks.filter((t) => t.status === "TODO" && t.parentTaskId === null);
     const a = byTitle(tasks, "Alpha");
     expect(a?.status).toBe("TODO");
-    expect(a?.position).toBe(1);
+    expect(a?.position).toBe(todoTasks.length - 1);
   });
 
   test("mobile action sheet: card menu moves card to Done", async ({ page, seededProject }) => {

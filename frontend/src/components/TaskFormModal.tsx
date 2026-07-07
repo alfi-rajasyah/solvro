@@ -254,7 +254,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
       }
     >
       <form id="task-form" onSubmit={handleSubmit} className="space-y-3.5">
-        {/* Title + timer */}
+        {/* Title */}
         <div className="flex items-start gap-3">
           <input
             type="text"
@@ -265,25 +265,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
             placeholder="Task title"
             className="flex-1 border-none bg-transparent text-lg font-bold text-on-surface outline-none placeholder:text-on-surface-variant/40 focus:outline-none"
           />
-          {isEdit && (
-            <div className="flex shrink-0 items-center gap-2">
-              <span className="rounded-lg bg-surface-container px-2 py-1 font-mono text-sm font-bold text-on-surface">
-                00:00:00
-              </span>
-              <button
-                type="button"
-                className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-on-primary"
-                title="Start timer (Work Logs — coming soon)"
-              >
-                <span
-                  className="material-symbols-outlined text-sm"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
-                  play_arrow
-                </span>
-              </button>
-            </div>
-          )}
         </div>
 
         {/* Icon field rows */}
@@ -408,20 +389,6 @@ export function TaskFormModal(props: TaskFormModalProps) {
             />
           </FieldRow>
 
-        </div>
-
-        {/* Attachments placeholder */}
-        <div>
-          <p className="mb-1.5 text-label-caps uppercase tracking-wider text-on-surface-variant">
-            Attachments
-          </p>
-          <button
-            type="button"
-            className="flex items-center gap-1.5 text-xs font-semibold text-teal-600 hover:text-teal-700"
-          >
-            <span className="material-symbols-outlined text-sm">add</span>
-            Add Attachment
-          </button>
         </div>
 
         {/* Description */}

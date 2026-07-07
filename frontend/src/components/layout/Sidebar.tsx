@@ -122,23 +122,6 @@ export function Sidebar() {
             </NavLink>
           ))}
         </nav>
-
-        <div className="mt-auto border-t border-white/5 p-3">
-          <div
-            className={[
-              "flex items-center gap-2.5 rounded text-[12px] text-emerald-400",
-              open ? "px-3 py-2" : "h-10 w-10 justify-center",
-            ].join(" ")}
-            title={open ? undefined : "Backend: UP"}
-          >
-            <span className="material-symbols-outlined text-[16px]">cloud_done</span>
-            {open && (
-              <span>
-                Backend: <span className="font-semibold">UP</span>
-              </span>
-            )}
-          </div>
-        </div>
       </aside>
     </>
   );

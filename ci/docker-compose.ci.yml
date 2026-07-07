@@ -22,7 +22,7 @@ services:
       NODE_ENV: production
       PORT: 3000
       DATABASE_URL: postgresql://solvro:solvro_ci@postgres:5432/solvro?schema=public
-      JWT_SECRET: ci-secret
+      JWT_SECRET: ci-secret-0123456789abcdef0123456789abcdef
       JWT_EXPIRES_IN: 8h
       CORS_ORIGIN: "*"
       LOG_LEVEL: info
