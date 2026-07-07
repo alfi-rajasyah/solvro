@@ -392,15 +392,12 @@ export function buildRows({ tasks, sections, collapsed }: BuildRowsOpts): Row[] 
     });
     if (isCollapsed || group.length === 0) return;
 
+    // Subtasks (parentTaskId !== null) are intentionally excluded from Gantt
+    // rows — their parent bars already roll up subtask progress via
+    // progressForTask, and rendering them as flat rows here (previously under
+    // a "(No section)" group when a subtask's own section diverged from its
+    // parent's) misrepresented the hierarchy.
     const parents = group.filter((t) => t.parentTaskId === null);
-    const childrenByParent = new Map<number, Task[]>();
-    for (const t of group) {
-      if (t.parentTaskId !== null) {
-        const arr = childrenByParent.get(t.parentTaskId) ?? [];
-        arr.push(t);
-        childrenByParent.set(t.parentTaskId, arr);
-      }
-    }
     for (const p of parents) {
       rows.push({
         id: `task-${p.id}`,
@@ -419,46 +416,6 @@ export function buildRows({ tasks, sections, collapsed }: BuildRowsOpts): Row[] 
         isMilestone: isMilestoneTask(p),
         progressPct: progressForTask(p, childrenById),
       });
-      for (const c of childrenByParent.get(p.id) ?? []) {
-        rows.push({
-          id: `task-${c.id}`,
-          kind: "subtask",
-          depth: 2,
-          name: c.title,
-          start: c.startDate ? parseISODate(c.startDate) : null,
-          end: c.dueDate ? parseISODate(c.dueDate) : null,
-          parentRowId: `task-${p.id}`,
-          taskId: c.id,
-          sectionId,
-          sectionColor,
-          task: c,
-          status: c.status,
-          priority: c.priority,
-          isMilestone: isMilestoneTask(c),
-          progressPct: progressForTask(c, childrenById),
-        });
-      }
-    }
-    for (const t of group) {
-      if (t.parentTaskId !== null && !parents.some((p) => p.id === t.parentTaskId)) {
-        rows.push({
-          id: `task-${t.id}`,
-          kind: "subtask",
-          depth: 2,
-          name: t.title,
-          start: t.startDate ? parseISODate(t.startDate) : null,
-          end: t.dueDate ? parseISODate(t.dueDate) : null,
-          parentRowId: rowId,
-          taskId: t.id,
-          sectionId,
-          sectionColor,
-          task: t,
-          status: t.status,
-          priority: t.priority,
-          isMilestone: isMilestoneTask(t),
-          progressPct: progressForTask(t, childrenById),
-        });
-      }
     }
   }
 

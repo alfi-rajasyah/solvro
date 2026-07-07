@@ -764,7 +764,7 @@ function SortableCard({
   onMenuClick: () => void;
   onToggleSubtask: (s: Task) => void;
 }) {
-  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging, isOver } =
+  const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({
       id: idOf("card", task.id),
       data: { type: "card", status: task.status } satisfies CardDragData,
@@ -778,11 +778,6 @@ function SortableCard({
 
   return (
     <div ref={setNodeRef} style={style} className="relative">
-      {isOver && !isDragging && (
-        <div className="pointer-events-none absolute -top-[7px] left-0.5 right-0.5 z-10 h-0.5 rounded-full bg-primary">
-          <span className="absolute -left-0.5 -top-[3px] h-2 w-2 rounded-full bg-primary" />
-        </div>
-      )}
       <TaskCard
         task={task}
         subtaskMap={subtaskMap}
