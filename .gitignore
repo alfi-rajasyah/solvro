@@ -56,3 +56,6 @@ PRD.md
 # generated .js so they never shadow the .ts sources for PostCSS/Vite resolution.
 /frontend/tailwind.config.js
 /frontend/vite.config.js
+
+# Local CI-stack credentials (see ci/.env.ci.example)
+ci/.env
