@@ -17,6 +17,24 @@ import {
   ensureProjectVisible,
   projectVisibilityFilter,
 } from "../lib/visibility.js";
+import {
+  assertLabelsInProject,
+  assertSectionInProject,
+  assertValidParent,
+  countSiblings,
+  type SiblingKey,
+} from "../lib/taskOrdering.js";
+
+// Kanban WIP limits — one optional positive-int cap per top-level status
+// column, or null/absent for "no limit". Visual-only on the board (amber
+// pill), never enforced server-side as a hard block.
+const wipLimitsSchema = z
+  .object({
+    TODO: z.number().int().positive().nullable().optional(),
+    IN_PROGRESS: z.number().int().positive().nullable().optional(),
+    DONE: z.number().int().positive().nullable().optional(),
+  })
+  .nullable();
 
 const createProjectSchema = z.object({
   name: z.string().min(1).max(200),
@@ -25,6 +43,7 @@ const createProjectSchema = z.object({
   tamId: z.number().int().positive().optional(),
   customerId: z.number().int().positive(),
   status: z.nativeEnum(ProjectStatus).optional(),
+  wipLimits: wipLimitsSchema.optional(),
 });
 
 const updateProjectSchema = z.object({
@@ -34,6 +53,7 @@ const updateProjectSchema = z.object({
   saId: z.number().int().positive().optional(),
   tamId: z.number().int().positive().optional(),
   customerId: z.number().int().positive().optional(),
+  wipLimits: wipLimitsSchema.optional(),
 });
 
 const projectListQuerySchema = z.object({
@@ -105,6 +125,7 @@ projectsRouter.post(
         tamId,
         customerId: body.customerId,
         status: body.status ?? "PLANNING",
+        wipLimits: body.wipLimits ?? undefined,
       },
     });
     res.status(201).json(project);
@@ -203,11 +224,23 @@ projectsRouter.patch(
   validate("body", updateProjectSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const body = req.body as z.infer<typeof updateProjectSchema>;
     await ensureProjectVisible(req.user!, id);
-    const updated = await prisma.project.update({
-      where: { id },
-      data: req.body as z.infer<typeof updateProjectSchema>,
-    });
+
+    const data: Prisma.ProjectUpdateInput = {};
+    if (body.name !== undefined) data.name = body.name;
+    if (body.description !== undefined) data.description = body.description;
+    if (body.status !== undefined) data.status = body.status;
+    if (body.saId !== undefined) data.sa = { connect: { id: body.saId } };
+    if (body.tamId !== undefined) data.tam = { connect: { id: body.tamId } };
+    if (body.customerId !== undefined) {
+      data.customer = { connect: { id: body.customerId } };
+    }
+    if (body.wipLimits !== undefined) {
+      data.wipLimits = body.wipLimits === null ? Prisma.JsonNull : body.wipLimits;
+    }
+
+    const updated = await prisma.project.update({ where: { id }, data });
     res.json(updated);
   },
 );
@@ -228,7 +261,7 @@ projectsRouter.get(
 
     const tasks = await prisma.task.findMany({
       where,
-      orderBy: { id: "asc" },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
       include: {
         assignedTo: { select: { id: true, username: true, email: true } },
         labels: true,
@@ -250,38 +283,53 @@ projectsRouter.post(
     const body = req.body as z.infer<typeof createTaskSchema>;
     await ensureProjectVisible(req.user!, id);
 
-    if (body.parentTaskId) {
-      const parent = await prisma.task.findUnique({
-        where: { id: body.parentTaskId },
-        select: { projectId: true },
-      });
-      if (!parent || parent.projectId !== id) {
-        throw new HttpError(400, "invalid_parent", "Parent task must belong to this project");
-      }
-    }
+    const status = body.status ?? "TODO";
 
-    const task = await prisma.task.create({
-      data: {
+    const task = await prisma.$transaction(async (tx) => {
+      if (body.parentTaskId) {
+        // assertValidParent needs a real taskId to compare against for the
+        // self-parent / subtask-depth checks; a not-yet-created task can't
+        // collide with those, so pass 0 (never a valid id) as a sentinel.
+        await assertValidParent(tx, id, 0, body.parentTaskId);
+      }
+      if (body.sectionId != null) {
+        await assertSectionInProject(tx, id, body.sectionId);
+      }
+      if (body.labelIds && body.labelIds.length > 0) {
+        await assertLabelsInProject(tx, id, body.labelIds);
+      }
+
+      const siblingKey: SiblingKey = {
         projectId: id,
-        title: body.title,
-        description: body.description,
-        status: body.status ?? "TODO",
-        priority: body.priority ?? "MEDIUM",
-        startDate: body.startDate ?? null,
-        dueDate: body.dueDate ?? null,
-        assignedToId: body.assignedToId ?? null,
         parentTaskId: body.parentTaskId ?? null,
-        sectionId: body.sectionId ?? null,
-        labels: body.labelIds && body.labelIds.length > 0
-          ? { connect: body.labelIds.map((lid) => ({ id: lid })) }
-          : undefined,
-      },
-      include: {
-        assignedTo: { select: { id: true, username: true, email: true } },
-        labels: true,
-        section: { select: { id: true, name: true, position: true, color: true } },
-        _count: { select: { subtasks: true, comments: true } },
-      },
+        status,
+      };
+      const position = await countSiblings(tx, siblingKey);
+
+      return tx.task.create({
+        data: {
+          projectId: id,
+          title: body.title,
+          description: body.description,
+          status,
+          priority: body.priority ?? "MEDIUM",
+          startDate: body.startDate ?? null,
+          dueDate: body.dueDate ?? null,
+          assignedToId: body.assignedToId ?? null,
+          parentTaskId: body.parentTaskId ?? null,
+          sectionId: body.sectionId ?? null,
+          position,
+          labels: body.labelIds && body.labelIds.length > 0
+            ? { connect: body.labelIds.map((lid) => ({ id: lid })) }
+            : undefined,
+        },
+        include: {
+          assignedTo: { select: { id: true, username: true, email: true } },
+          labels: true,
+          section: { select: { id: true, name: true, position: true, color: true } },
+          _count: { select: { subtasks: true, comments: true } },
+        },
+      });
     });
     res.status(201).json(task);
   },

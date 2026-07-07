@@ -25,7 +25,7 @@ export function GanttTodayLine({
       style={{ left: centerX - 1, width: 2, height: bodyHeight, zIndex: 5 }}
       aria-hidden="true"
     >
-      <div className="absolute inset-0 bg-rose-500" />
+      <div className="absolute inset-0 bg-primary" />
     </div>
   );
 }

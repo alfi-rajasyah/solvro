@@ -123,6 +123,12 @@ model Project {
   tam                User          @relation("ProjectTAM", fields: [tamId], references: [id])
   customer           Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
   status             ProjectStatus @default(PLANNING)
+  // Kanban WIP limits per top-level status column. Shape:
+  // {"TODO": number|null, "IN_PROGRESS": number|null, "DONE": number|null}.
+  // null (or an absent key) means "no limit" for that column. Visual only —
+  // the board never blocks a move when a column is over its limit, it just
+  // renders the count pill in amber.
+  wipLimits          Json?         @map("wip_limits") @db.JsonB
   baselineLockedAt   DateTime?     @map("baseline_locked_at")
   baselineLockedById Int?          @map("baseline_locked_by_id")
   baselineLockedBy   User?         @relation("ProjectBaselineLockedBy", fields: [baselineLockedById], references: [id])
@@ -201,6 +207,13 @@ model Task {
   parentTaskId      Int?       @map("parent_task_id")
   parent            Task?      @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
   subtasks          Task[]     @relation("TaskSubtasks")
+  // Sibling ordering. Siblings are tasks sharing (projectId, status,
+  // parentTaskId): for top-level tasks (parentTaskId null) the column is
+  // (projectId, status); for subtasks the column is the parent's subtask
+  // list (status does not partition subtasks). Dense 0..n-1 within a sibling
+  // list — maintained by the reorder/re-parent logic in routes/tasks.ts and
+  // routes/projects.ts.
+  position          Int        @default(0) @map("position")
   labels            Label[]
   comments          Comment[]
   // Dependency edges (Gantt connector arrows).
@@ -214,6 +227,7 @@ model Task {
   @@index([priority])
   @@index([dueDate])
   @@index([parentTaskId])
+  @@index([projectId, status, position])
   @@map("tasks")
 }
 

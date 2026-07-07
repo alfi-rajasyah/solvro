@@ -1,4 +1,5 @@
 import { Outlet } from "react-router-dom";
+import { InstallBanner } from "@/components/InstallBanner";
 import { Sidebar } from "./Sidebar";
 import { SidebarProvider, useSidebar } from "./SidebarContext";
 import { TopBar } from "./TopBar";
@@ -12,11 +13,15 @@ function ShellLayout() {
   // is an overlay drawer, so no shift (base has no margin).
   const shift = open ? "md:ml-sidebar" : "md:ml-sidebar-collapsed";
   return (
-    <div className="h-screen w-full overflow-hidden bg-background text-on-surface">
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-on-surface">
+      {/* In normal flow (unlike Sidebar/TopBar, which are fixed/sticky) so it
+          takes its own row at the very top; main below is flex-1 so it fills
+          whatever's left rather than assuming a fixed TopBar height. */}
+      <InstallBanner />
       <Sidebar />
       <TopBar />
       <main
-        className={`h-[calc(100vh-56px)] overflow-y-auto overflow-x-hidden bg-background p-4 transition-[margin] duration-200 ease-out md:p-6 ${shift}`}
+        className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background p-4 transition-[margin] duration-200 ease-out md:p-6 ${shift}`}
       >
         <Outlet />
       </main>
