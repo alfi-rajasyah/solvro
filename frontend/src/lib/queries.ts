@@ -591,10 +591,22 @@ export function useUpdateTask(projectId: number) {
       await qc.cancelQueries({ queryKey: queryKeys.projectTasks(projectId) });
       const prev = qc.getQueryData<Task[]>(queryKeys.projectTasks(projectId));
       if (prev) {
-        const touchesOrdering =
-          patch.status !== undefined ||
-          patch.parentTaskId !== undefined ||
-          patch.position !== undefined;
+        // Mirror the server's rule (backend/src/routes/tasks.ts): a patch only
+        // re-orders when it sets an explicit position or moves the task to a
+        // different sibling list. A status-only change on a subtask does NOT
+        // reorder — its sibling list is keyed on parentTaskId alone — so it
+        // must fall through to a plain field merge, not reorderTasksLocally
+        // (which would re-append the row to the end of its list).
+        const current = prev.find((t) => t.id === id);
+        const listChanged =
+          current !== undefined &&
+          siblingListId(current) !==
+            siblingListId({
+              parentTaskId:
+                patch.parentTaskId !== undefined ? patch.parentTaskId : current.parentTaskId,
+              status: patch.status ?? current.status,
+            });
+        const touchesOrdering = patch.position !== undefined || listChanged;
         const next = touchesOrdering
           ? reorderTasksLocally(prev, id, patch)
           : prev.map((t) => (t.id === id ? ({ ...t, ...patch } as Task) : t));

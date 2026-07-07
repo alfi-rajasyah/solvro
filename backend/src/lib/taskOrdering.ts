@@ -152,3 +152,45 @@ export async function assertValidParent(
     );
   }
 }
+
+/**
+ * Guard: a `sectionId` set on a task write must reference a section in the same
+ * project. Without this, a `task:write` caller could connect their task to a
+ * section id from a project they can't see — the task read-back then leaks that
+ * section's name/color (cross-project IDOR). Mirrors assertValidParent's
+ * same-project rule for parentTaskId. Returns a 404-free 400: the caller
+ * already proved they can see the task/project, so this is a request error.
+ */
+export async function assertSectionInProject(
+  tx: Tx,
+  projectId: number,
+  sectionId: number,
+): Promise<void> {
+  const section = await tx.section.findUnique({
+    where: { id: sectionId },
+    select: { projectId: true },
+  });
+  if (!section || section.projectId !== projectId) {
+    throw new HttpError(400, "invalid_section", "Section must belong to the same project");
+  }
+}
+
+/**
+ * Guard: every `labelId` set on a task write must reference a label in the same
+ * project. Same IDOR reasoning as assertSectionInProject — a foreign label id
+ * would otherwise attach and leak its name/color on read-back.
+ */
+export async function assertLabelsInProject(
+  tx: Tx,
+  projectId: number,
+  labelIds: number[],
+): Promise<void> {
+  const uniqueIds = [...new Set(labelIds)];
+  if (uniqueIds.length === 0) return;
+  const count = await tx.label.count({
+    where: { id: { in: uniqueIds }, projectId },
+  });
+  if (count !== uniqueIds.length) {
+    throw new HttpError(400, "invalid_label", "All labels must belong to the same project");
+  }
+}
