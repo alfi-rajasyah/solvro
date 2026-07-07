@@ -19,6 +19,17 @@ import {
 } from "../lib/visibility.js";
 import { assertValidParent, countSiblings, type SiblingKey } from "../lib/taskOrdering.js";
 
+// Kanban WIP limits — one optional positive-int cap per top-level status
+// column, or null/absent for "no limit". Visual-only on the board (amber
+// pill), never enforced server-side as a hard block.
+const wipLimitsSchema = z
+  .object({
+    TODO: z.number().int().positive().nullable().optional(),
+    IN_PROGRESS: z.number().int().positive().nullable().optional(),
+    DONE: z.number().int().positive().nullable().optional(),
+  })
+  .nullable();
+
 const createProjectSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
@@ -26,6 +37,7 @@ const createProjectSchema = z.object({
   tamId: z.number().int().positive().optional(),
   customerId: z.number().int().positive(),
   status: z.nativeEnum(ProjectStatus).optional(),
+  wipLimits: wipLimitsSchema.optional(),
 });
 
 const updateProjectSchema = z.object({
@@ -35,6 +47,7 @@ const updateProjectSchema = z.object({
   saId: z.number().int().positive().optional(),
   tamId: z.number().int().positive().optional(),
   customerId: z.number().int().positive().optional(),
+  wipLimits: wipLimitsSchema.optional(),
 });
 
 const projectListQuerySchema = z.object({
@@ -106,6 +119,7 @@ projectsRouter.post(
         tamId,
         customerId: body.customerId,
         status: body.status ?? "PLANNING",
+        wipLimits: body.wipLimits ?? undefined,
       },
     });
     res.status(201).json(project);
@@ -204,11 +218,23 @@ projectsRouter.patch(
   validate("body", updateProjectSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const body = req.body as z.infer<typeof updateProjectSchema>;
     await ensureProjectVisible(req.user!, id);
-    const updated = await prisma.project.update({
-      where: { id },
-      data: req.body as z.infer<typeof updateProjectSchema>,
-    });
+
+    const data: Prisma.ProjectUpdateInput = {};
+    if (body.name !== undefined) data.name = body.name;
+    if (body.description !== undefined) data.description = body.description;
+    if (body.status !== undefined) data.status = body.status;
+    if (body.saId !== undefined) data.sa = { connect: { id: body.saId } };
+    if (body.tamId !== undefined) data.tam = { connect: { id: body.tamId } };
+    if (body.customerId !== undefined) {
+      data.customer = { connect: { id: body.customerId } };
+    }
+    if (body.wipLimits !== undefined) {
+      data.wipLimits = body.wipLimits === null ? Prisma.JsonNull : body.wipLimits;
+    }
+
+    const updated = await prisma.project.update({ where: { id }, data });
     res.json(updated);
   },
 );
