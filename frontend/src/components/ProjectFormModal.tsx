@@ -5,6 +5,8 @@ import { useAuth } from "@/lib/auth";
 import {
   type ProjectDetail,
   type ProjectStatus,
+  type TaskStatus,
+  type WipLimits,
   useCreateProject,
   useCustomers,
   useUpdateProject,
@@ -18,6 +20,33 @@ const PROJECT_STATUSES: ProjectStatus[] = [
   "COMPLETED",
   "CANCELLED",
 ];
+
+const WIP_COLUMNS: { id: TaskStatus; label: string }[] = [
+  { id: "TODO", label: "To Do" },
+  { id: "IN_PROGRESS", label: "In Progress" },
+  { id: "DONE", label: "Done" },
+];
+
+// Form-local representation: each column's limit as the literal <input>
+// string value ("" = no limit) so the field can be edited freely without
+// fighting number coercion on every keystroke.
+type WipLimitsForm = Record<TaskStatus, string>;
+
+function wipLimitsToForm(limits: WipLimits | null | undefined): WipLimitsForm {
+  return {
+    TODO: limits?.TODO != null ? String(limits.TODO) : "",
+    IN_PROGRESS: limits?.IN_PROGRESS != null ? String(limits.IN_PROGRESS) : "",
+    DONE: limits?.DONE != null ? String(limits.DONE) : "",
+  };
+}
+
+function formToWipLimits(form: WipLimitsForm): WipLimits {
+  const toLimit = (v: string): number | null => {
+    const n = Number(v);
+    return v.trim() !== "" && Number.isFinite(n) && n > 0 ? Math.floor(n) : null;
+  };
+  return { TODO: toLimit(form.TODO), IN_PROGRESS: toLimit(form.IN_PROGRESS), DONE: toLimit(form.DONE) };
+}
 
 interface Props {
   open: boolean;
@@ -42,6 +71,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
   const [tamId, setTamId] = useState<number | "">("");
   const [customerId, setCustomerId] = useState<number | "">("");
   const [status, setStatus] = useState<ProjectStatus>("PLANNING");
+  const [wipLimits, setWipLimits] = useState<WipLimitsForm>(wipLimitsToForm(null));
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -54,6 +84,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
       setTamId(project.tamId);
       setCustomerId(project.customerId ?? "");
       setStatus(project.status);
+      setWipLimits(wipLimitsToForm(project.wipLimits));
     } else {
       setName("");
       setDescription("");
@@ -61,6 +92,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
       setTamId("");
       setCustomerId("");
       setStatus("PLANNING");
+      setWipLimits(wipLimitsToForm(null));
     }
   }, [open, project, user]);
 
@@ -96,6 +128,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
           tamId: tamId === "" ? undefined : Number(tamId),
           customerId: Number(customerId),
           status,
+          wipLimits: formToWipLimits(wipLimits),
         });
         onSaved?.(project.id);
       } else {
@@ -106,6 +139,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
           tamId: tamId === "" ? undefined : Number(tamId),
           customerId: Number(customerId),
           status,
+          wipLimits: formToWipLimits(wipLimits),
         });
         onSaved?.(created.id);
       }
@@ -233,6 +267,30 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             </select>
           </Field>
         )}
+
+        <Field label="WIP limit — leave empty for none">
+          <div className="grid grid-cols-3 gap-3">
+            {WIP_COLUMNS.map((col) => (
+              <label key={col.id} className="block">
+                <span className="mb-1 block text-[11px] text-on-surface-variant">
+                  {col.label}
+                </span>
+                <input
+                  type="number"
+                  min={1}
+                  step={1}
+                  inputMode="numeric"
+                  value={wipLimits[col.id]}
+                  onChange={(e) =>
+                    setWipLimits((prev) => ({ ...prev, [col.id]: e.target.value }))
+                  }
+                  placeholder="—"
+                  className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                />
+              </label>
+            ))}
+          </div>
+        </Field>
 
         {error && (
           <div
