@@ -2,7 +2,7 @@ name: CI
 
 on:
   pull_request:
-    branches: [develop]
+    branches: [develop, main]
   push:
     branches: [develop, main]
 
@@ -25,7 +25,9 @@ jobs:
         image: postgres:15
         env:
           POSTGRES_USER: solvro
-          POSTGRES_PASSWORD: solvro_ci
+          # Ephemeral service-container password. Supplied from a repo
+          # Actions secret so no credential literal lives in the repo.
+          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
           POSTGRES_DB: solvro
         ports:
           - 5432:5432
@@ -35,10 +37,13 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      DATABASE_URL: postgresql://solvro:solvro_ci@localhost:5432/solvro?schema=public
-      JWT_SECRET: ci-secret-at-least-32-characters-long-for-tests
+      DATABASE_URL: postgresql://solvro:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/solvro?schema=public
     steps:
       - uses: actions/checkout@v4
+
+      # Generate a throwaway JWT secret per run — never stored in the repo.
+      - name: Generate ephemeral JWT secret
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       - uses: actions/setup-node@v4
         with:
@@ -62,8 +67,18 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    env:
+      # Consumed by ci/docker-compose.ci.yml via ${VAR} interpolation and by
+      # the admin-creation / Playwright steps below. Passwords come from repo
+      # Actions secrets; JWT_SECRET is generated per run (step below).
+      POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
+      ADMIN_EMAIL: qa@solvro.test
+      ADMIN_PASSWORD: ${{ secrets.CI_ADMIN_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Generate ephemeral JWT secret
+        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
 
       - name: Build and start stack (retry once on failure)
         run: |
@@ -93,8 +108,8 @@ jobs:
       - name: Create e2e admin user
         run: |
           docker compose -f ci/docker-compose.ci.yml exec -T \
-            -e ADMIN_EMAIL=qa@solvro.test \
-            -e ADMIN_PASSWORD=QaTest1234! \
+            -e ADMIN_EMAIL="$ADMIN_EMAIL" \
+            -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
             backend npx tsx scripts/create-admin.ts
 
       - uses: actions/setup-node@v4
@@ -115,8 +130,6 @@ jobs:
         working-directory: e2e
         env:
           BASE_URL: http://localhost:8080
-          ADMIN_EMAIL: qa@solvro.test
-          ADMIN_PASSWORD: QaTest1234!
           CI: "true"
         run: npx playwright test
 
