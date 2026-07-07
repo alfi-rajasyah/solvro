@@ -1,16 +1,20 @@
 import { test, expect, loginViaUi, ADMIN_EMAIL, ADMIN_PASSWORD } from "../fixtures/test";
 
+// The seeded QA stack has Google sign-in NOT configured (no clientId, no
+// allowed domains — see backend/prisma/seed.ts). Login renders no Google
+// section at all in that case: just the password form, expanded by default
+// with no "Admin sign-in" accordion to click through (see frontend's
+// pages/Login.tsx). These specs assert that reality.
+
 test.describe("auth", () => {
-  test("Google sign-in is offered by default, password form is collapsed", async ({ page }) => {
+  test("Google not configured: password form renders directly, no accordion", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
-    await expect(page.getByText(/Admin sign-in/i).first()).toBeVisible();
-    // Password inputs live inside a <details> that starts collapsed.
-    await expect(page.locator('input[type="email"]')).toBeHidden();
+    await expect(page.getByText(/Admin sign-in/i)).toHaveCount(0);
+    await expect(page.locator('input[type="email"]')).toBeVisible();
   });
 
-  test("Admin sign-in (password) accordion expands and logs in", async ({ page }) => {
+  test("password sign-in logs in", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.getByText(/Admin sign-in/i).first().click();
 
     const emailInput = page.locator('input[type="email"]');
     await expect(emailInput).toBeVisible();
@@ -26,7 +30,6 @@ test.describe("auth", () => {
 
   test("invalid credentials show an error and keep the user on the login form", async ({ page }) => {
     await page.goto("/", { waitUntil: "networkidle" });
-    await page.getByText(/Admin sign-in/i).first().click();
 
     await page.fill('input[type="email"]', ADMIN_EMAIL);
     await page.fill('input[type="password"]', "definitely-wrong-password");
