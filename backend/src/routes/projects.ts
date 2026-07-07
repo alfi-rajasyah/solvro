@@ -17,7 +17,13 @@ import {
   ensureProjectVisible,
   projectVisibilityFilter,
 } from "../lib/visibility.js";
-import { assertValidParent, countSiblings, type SiblingKey } from "../lib/taskOrdering.js";
+import {
+  assertLabelsInProject,
+  assertSectionInProject,
+  assertValidParent,
+  countSiblings,
+  type SiblingKey,
+} from "../lib/taskOrdering.js";
 
 // Kanban WIP limits — one optional positive-int cap per top-level status
 // column, or null/absent for "no limit". Visual-only on the board (amber
@@ -285,6 +291,12 @@ projectsRouter.post(
         // self-parent / subtask-depth checks; a not-yet-created task can't
         // collide with those, so pass 0 (never a valid id) as a sentinel.
         await assertValidParent(tx, id, 0, body.parentTaskId);
+      }
+      if (body.sectionId != null) {
+        await assertSectionInProject(tx, id, body.sectionId);
+      }
+      if (body.labelIds && body.labelIds.length > 0) {
+        await assertLabelsInProject(tx, id, body.labelIds);
       }
 
       const siblingKey: SiblingKey = {
