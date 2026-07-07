@@ -1,0 +1,595 @@
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { AssigneeAvatar } from "./AssigneeAvatar";
+import { CommentThread } from "./CommentThread";
+import { ConfirmModal } from "./ConfirmModal";
+import { LabelPicker } from "./LabelPicker";
+import { ApiError } from "@/lib/api";
+import { hasPermission, useAuth } from "@/lib/auth";
+import {
+  type Priority,
+  type Task,
+  type TaskStatus,
+  useCreateTask,
+  useDeleteTask,
+  useProjectSections,
+  useProjectTasks,
+  useUpdateTask,
+  useUsers,
+} from "@/lib/queries";
+
+const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+const STATUS_LABEL: Record<TaskStatus, string> = {
+  TODO: "To do",
+  IN_PROGRESS: "In progress",
+  DONE: "Done",
+};
+const STATUS_TONE_CLASS: Record<TaskStatus, string> = {
+  TODO: "bg-surface-container-high text-on-surface-variant",
+  IN_PROGRESS: "bg-chip-emerald-bg text-chip-emerald-text",
+  DONE: "bg-chip-emerald-bg text-chip-emerald-text",
+};
+
+const PRIORITY_ORDER: Priority[] = ["LOW", "MEDIUM", "HIGH"];
+const PRIORITY_LABEL: Record<Priority, string> = {
+  LOW: "Low",
+  MEDIUM: "Medium",
+  HIGH: "High",
+  URGENT: "Urgent",
+};
+const PRIORITY_ICON_CLASS: Record<Priority, string> = {
+  LOW: "text-on-surface-variant",
+  MEDIUM: "text-chip-amber-text",
+  HIGH: "text-error",
+  URGENT: "text-error",
+};
+
+function nextPriority(p: Priority): Priority {
+  const idx = PRIORITY_ORDER.indexOf(p);
+  if (idx === -1) return "LOW";
+  return PRIORITY_ORDER[(idx + 1) % PRIORITY_ORDER.length];
+}
+
+function fmtShort(iso: string | null): string {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+}
+
+function toDateInput(iso: string | null): string {
+  if (!iso) return "";
+  return iso.slice(0, 10);
+}
+
+function fromDateInput(value: string): string | null {
+  if (!value) return null;
+  const d = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
+}
+
+interface TaskPanelProps {
+  projectId: number;
+  taskId: number;
+  onClose: () => void;
+}
+
+/**
+ * Right-anchored task detail panel, deep-linked via `?task=<id>`. Replaces
+ * TaskFormModal's edit mode everywhere it's opened from a card/row click —
+ * TaskFormModal itself is kept around for CREATE only.
+ */
+export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
+  const { user } = useAuth();
+  const canEdit = hasPermission(user, "task:write");
+
+  const { data: tasks } = useProjectTasks(projectId);
+  const { data: sections } = useProjectSections(projectId);
+  const { data: users } = useUsers();
+  const updateTask = useUpdateTask(projectId);
+  const createTask = useCreateTask(projectId);
+  const deleteTask = useDeleteTask(projectId);
+
+  const task = (tasks ?? []).find((t) => t.id === taskId) ?? null;
+  const subtasks = (tasks ?? []).filter((t) => t.parentTaskId === taskId);
+  const subtasksDone = subtasks.filter((s) => s.status === "DONE").length;
+
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [statusMenuOpen, setStatusMenuOpen] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState("");
+  const [editingDates, setEditingDates] = useState(false);
+  const [startDraft, setStartDraft] = useState("");
+  const [dueDraft, setDueDraft] = useState("");
+  const [editingAssignee, setEditingAssignee] = useState(false);
+  const [editingSection, setEditingSection] = useState(false);
+  const [newSubtask, setNewSubtask] = useState("");
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const panelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  useEffect(() => {
+    setEditingTitle(false);
+    setEditingDates(false);
+    setEditingAssignee(false);
+    setEditingSection(false);
+    setMenuOpen(false);
+    setStatusMenuOpen(false);
+    setError(null);
+  }, [taskId]);
+
+  if (!task) {
+    return (
+      <aside
+        ref={panelRef}
+        className="fixed right-0 top-14 bottom-0 z-40 flex w-full flex-col border-l border-outline-variant bg-surface-container px-5 py-4 md:w-[380px]"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-sm text-on-surface-variant">Loading task…</span>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high"
+            aria-label="Close"
+          >
+            <span className="material-symbols-outlined text-base">close</span>
+          </button>
+        </div>
+      </aside>
+    );
+  }
+
+  function patch(body: Parameters<typeof updateTask.mutate>[0]["patch"]) {
+    if (!task) return;
+    setError(null);
+    updateTask.mutate(
+      { id: task.id, patch: body },
+      {
+        onError: (err) => {
+          setError(err instanceof ApiError ? err.message : "Update failed.");
+        },
+      },
+    );
+  }
+
+  function handleTitleSubmit(e: FormEvent) {
+    e.preventDefault();
+    const trimmed = titleDraft.trim();
+    setEditingTitle(false);
+    if (trimmed && trimmed !== task!.title) patch({ title: trimmed });
+  }
+
+  function handleDatesSubmit(e: FormEvent) {
+    e.preventDefault();
+    setEditingDates(false);
+    patch({ startDate: fromDateInput(startDraft), dueDate: fromDateInput(dueDraft) });
+  }
+
+  async function handleAddSubtask(e: FormEvent) {
+    e.preventDefault();
+    const title = newSubtask.trim();
+    if (!title || !task) return;
+    setError(null);
+    try {
+      await createTask.mutateAsync({
+        title,
+        parentTaskId: task.id,
+        sectionId: task.sectionId,
+        status: "TODO",
+      });
+      setNewSubtask("");
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not add subtask.");
+    }
+  }
+
+  function toggleSubtask(s: Task) {
+    updateTask.mutate({ id: s.id, patch: { status: s.status === "DONE" ? "TODO" : "DONE" } });
+  }
+
+  async function handleDelete() {
+    if (!task) return;
+    setError(null);
+    try {
+      await deleteTask.mutateAsync(task.id);
+      setConfirmDelete(false);
+      onClose();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Delete failed.");
+      setConfirmDelete(false);
+    }
+  }
+
+  const sectionName = task.section?.name ?? "No section";
+
+  return (
+    <>
+      <aside
+        ref={panelRef}
+        role="dialog"
+        aria-label="Task details"
+        className="fixed right-0 top-14 bottom-0 z-40 flex w-full flex-col border-l border-outline-variant bg-surface-container shadow-overlay md:w-[380px]"
+      >
+        {/* Header */}
+        <div className="flex items-center gap-2 border-b border-outline-variant px-4 py-3">
+          <div className="relative">
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => setStatusMenuOpen((v) => !v)}
+              className={[
+                "inline-flex items-center gap-1 rounded-full px-2.5 py-1 font-display text-[11px] font-semibold",
+                STATUS_TONE_CLASS[task.status],
+                canEdit ? "cursor-pointer" : "cursor-default",
+              ].join(" ")}
+            >
+              {STATUS_LABEL[task.status]}
+              {canEdit && (
+                <span className="material-symbols-outlined text-[13px]">expand_more</span>
+              )}
+            </button>
+            {statusMenuOpen && canEdit && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setStatusMenuOpen(false)} />
+                <div className="absolute left-0 z-20 mt-1 w-36 rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+                  {STATUSES.map((s) => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => {
+                        patch({ status: s });
+                        setStatusMenuOpen(false);
+                      }}
+                      className={[
+                        "flex w-full items-center px-3 py-1.5 text-left text-xs hover:bg-surface-container",
+                        s === task.status ? "font-bold text-primary" : "text-on-surface",
+                      ].join(" ")}
+                    >
+                      {STATUS_LABEL[s]}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+          <span className="flex-1" />
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setMenuOpen((v) => !v)}
+              className="material-symbols-outlined rounded p-1 text-base text-on-surface-variant hover:bg-surface-container-high"
+              aria-label="Task options"
+            >
+              more_horiz
+            </button>
+            {menuOpen && (
+              <>
+                <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
+                <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+                  <button
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setConfirmDelete(true);
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-error hover:bg-error-container disabled:cursor-default disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-sm">delete</span>
+                    Delete task
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high"
+            aria-label="Close"
+          >
+            <span className="material-symbols-outlined text-base">close</span>
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-4 py-4">
+          {/* Title + subtitle */}
+          {editingTitle ? (
+            <form onSubmit={handleTitleSubmit}>
+              <input
+                autoFocus
+                type="text"
+                value={titleDraft}
+                onChange={(e) => setTitleDraft(e.target.value)}
+                onBlur={handleTitleSubmit}
+                maxLength={200}
+                className="w-full border-none bg-transparent text-lg font-bold text-on-surface outline-none focus:outline-none"
+              />
+            </form>
+          ) : (
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => {
+                setTitleDraft(task.title);
+                setEditingTitle(true);
+              }}
+              className="block w-full rounded text-left text-lg font-bold text-on-surface hover:bg-surface-container-high disabled:cursor-default"
+            >
+              {task.title}
+            </button>
+          )}
+          <p className="mt-0.5 text-[11px] text-on-surface-variant">
+            in {sectionName} · ?task={task.id}
+          </p>
+
+          {/* Meta grid */}
+          <div className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2.5 text-sm">
+            <span className="self-center font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Assignee
+            </span>
+            <div className="relative">
+              {editingAssignee && canEdit ? (
+                <select
+                  autoFocus
+                  value={task.assignedToId ?? ""}
+                  onChange={(e) => {
+                    patch({ assignedToId: e.target.value === "" ? null : Number(e.target.value) });
+                    setEditingAssignee(false);
+                  }}
+                  onBlur={() => setEditingAssignee(false)}
+                  className="w-full rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-none"
+                >
+                  <option value="">Unassigned</option>
+                  {(users ?? []).map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.username}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() => setEditingAssignee(true)}
+                  className="flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
+                >
+                  <AssigneeAvatar user={task.assignedTo} size="xs" />
+                  <span className="text-on-surface">
+                    {task.assignedTo ? task.assignedTo.username : "Unassigned"}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            <span className="self-center font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Dates
+            </span>
+            <div className="relative">
+              {editingDates && canEdit ? (
+                <form
+                  onSubmit={handleDatesSubmit}
+                  className="flex flex-col gap-1 rounded border border-outline-variant bg-surface-container-lowest p-2"
+                >
+                  <label className="flex items-center gap-2 text-[11px]">
+                    <span className="w-8 uppercase text-on-surface-variant">Start</span>
+                    <input
+                      type="date"
+                      value={startDraft}
+                      onChange={(e) => setStartDraft(e.target.value)}
+                      className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-xs focus:border-primary focus:outline-none"
+                    />
+                  </label>
+                  <label className="flex items-center gap-2 text-[11px]">
+                    <span className="w-8 uppercase text-on-surface-variant">Due</span>
+                    <input
+                      type="date"
+                      value={dueDraft}
+                      onChange={(e) => setDueDraft(e.target.value)}
+                      className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-xs focus:border-primary focus:outline-none"
+                    />
+                  </label>
+                  <div className="flex justify-end gap-1 pt-0.5">
+                    <button
+                      type="button"
+                      onClick={() => setEditingDates(false)}
+                      className="rounded px-2 py-0.5 text-[11px] text-on-surface-variant hover:bg-surface-container-high"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      className="rounded bg-primary px-2 py-0.5 text-[11px] font-bold text-on-primary hover:bg-primary/90"
+                    >
+                      Save
+                    </button>
+                  </div>
+                </form>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() => {
+                    setStartDraft(toDateInput(task.startDate));
+                    setDueDraft(toDateInput(task.dueDate));
+                    setEditingDates(true);
+                  }}
+                  className="rounded px-1 py-0.5 text-left text-on-surface hover:bg-surface-container-high disabled:cursor-default"
+                >
+                  {fmtShort(task.startDate)} – {fmtShort(task.dueDate)}
+                </button>
+              )}
+            </div>
+
+            <span className="self-center font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Priority
+            </span>
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => patch({ priority: nextPriority(task.priority) })}
+              className="flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
+              title={canEdit ? "Click to cycle priority" : undefined}
+            >
+              <span
+                className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}
+              >
+                flag
+              </span>
+              <span className="text-on-surface">{PRIORITY_LABEL[task.priority]}</span>
+            </button>
+
+            <span className="self-center font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Section
+            </span>
+            <div className="relative">
+              {editingSection && canEdit ? (
+                <select
+                  autoFocus
+                  value={task.sectionId ?? ""}
+                  onChange={(e) => {
+                    patch({ sectionId: e.target.value === "" ? null : Number(e.target.value) });
+                    setEditingSection(false);
+                  }}
+                  onBlur={() => setEditingSection(false)}
+                  className="w-full rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-none"
+                >
+                  <option value="">No section</option>
+                  {(sections ?? []).map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!canEdit}
+                  onClick={() => setEditingSection(true)}
+                  className="flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
+                >
+                  {task.section && (
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-full"
+                      style={{ backgroundColor: task.section.color }}
+                    />
+                  )}
+                  <span className="text-on-surface">{sectionName}</span>
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Labels */}
+          <div className="mt-4">
+            <p className="mb-1.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Labels
+            </p>
+            <LabelPicker
+              projectId={projectId}
+              selectedIds={task.labels.map((l) => l.id)}
+              onChange={canEdit ? (ids) => patch({ labelIds: ids }) : () => {}}
+            />
+          </div>
+
+          {/* Subtasks */}
+          <div className="mt-4">
+            <p className="mb-1.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Subtasks {subtasks.length > 0 && `${subtasksDone}/${subtasks.length}`}
+            </p>
+            <ul className="space-y-0.5">
+              {subtasks.map((s) => (
+                <li key={s.id} className="flex items-center gap-2 rounded px-1 py-1 text-[13px]">
+                  <button
+                    type="button"
+                    disabled={!canEdit}
+                    onClick={() => toggleSubtask(s)}
+                    aria-label={s.status === "DONE" ? "Mark not done" : "Mark done"}
+                    className={[
+                      "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+                      s.status === "DONE"
+                        ? "border-emerald-500 bg-emerald-500 text-white"
+                        : "border-outline-variant hover:border-primary",
+                      canEdit ? "cursor-pointer" : "cursor-default",
+                    ].join(" ")}
+                  >
+                    {s.status === "DONE" && (
+                      <span className="material-symbols-outlined text-[11px] leading-none">
+                        check
+                      </span>
+                    )}
+                  </button>
+                  <span
+                    className={
+                      s.status === "DONE"
+                        ? "truncate text-on-surface-variant line-through"
+                        : "truncate text-on-surface"
+                    }
+                  >
+                    {s.title}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {canEdit && (
+              <form onSubmit={handleAddSubtask} className="mt-1.5 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-[13px] text-primary">add</span>
+                <input
+                  type="text"
+                  value={newSubtask}
+                  onChange={(e) => setNewSubtask(e.target.value)}
+                  placeholder="Add subtask"
+                  maxLength={200}
+                  className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:outline-none"
+                />
+              </form>
+            )}
+          </div>
+
+          {error && (
+            <div
+              role="alert"
+              className="mt-4 rounded border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
+            >
+              {error}
+            </div>
+          )}
+
+          {/* Comments */}
+          <div className="mt-5 border-t border-outline-variant pt-4">
+            <CommentThread taskId={task.id} />
+          </div>
+        </div>
+      </aside>
+
+      <ConfirmModal
+        open={confirmDelete}
+        onClose={() => setConfirmDelete(false)}
+        onConfirm={handleDelete}
+        title="Delete task"
+        body={
+          <>
+            Delete task &quot;{task.title}&quot;? This cannot be undone.
+            {subtasks.length > 0 && (
+              <>
+                <br />
+                <br />
+                This task has {subtasks.length} subtask(s) which will also be deleted.
+              </>
+            )}
+          </>
+        }
+        confirmLabel="Delete"
+        confirmTone="warning"
+        busy={deleteTask.isPending}
+      />
+    </>
+  );
+}

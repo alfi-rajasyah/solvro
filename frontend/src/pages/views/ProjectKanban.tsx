@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   DndContext,
   DragOverlay,
@@ -134,13 +135,13 @@ export function ProjectKanban() {
   const { data: tasks, isLoading, isError, error } = useProjectTasks(project.id);
   const { data: users } = useUsers();
   const updateTask = useUpdateTask(project.id);
+  const [, setSearchParams] = useSearchParams();
 
   const canMove = hasPermission(user, "task:write");
 
   const [activeCard, setActiveCard] = useState<Task | null>(null);
   const [activeSubtask, setActiveSubtask] = useState<Task | null>(null);
   const [createStatus, setCreateStatus] = useState<TaskStatus | null>(null);
-  const [editTask, setEditTask] = useState<Task | null>(null);
   const [dropError, setDropError] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
   const [filterAssigneeId, setFilterAssigneeId] = useState<number | "">("");
@@ -490,7 +491,16 @@ export function ProjectKanban() {
               canDrag={canMove}
               canToggleSubtasks={canMove}
               onAdd={() => setCreateStatus(col.id)}
-              onCardClick={(t) => setEditTask(t)}
+              onCardClick={(t) =>
+                setSearchParams(
+                  (prev) => {
+                    const next = new URLSearchParams(prev);
+                    next.set("task", String(t.id));
+                    return next;
+                  },
+                  { replace: true },
+                )
+              }
               onCardMenuClick={(t) => setMobileSheetTask(t)}
               onToggleSubtask={toggleSubtaskStatus}
             />
@@ -518,16 +528,6 @@ export function ProjectKanban() {
           onClose={() => setCreateStatus(null)}
           projectId={project.id}
           initialStatus={createStatus}
-        />
-      )}
-
-      {editTask && (
-        <TaskFormModal
-          mode="edit"
-          open={editTask !== null}
-          onClose={() => setEditTask(null)}
-          projectId={project.id}
-          task={editTask}
         />
       )}
 
