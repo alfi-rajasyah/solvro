@@ -6,9 +6,11 @@ import {
   PointerSensor,
   TouchSensor,
   closestCorners,
+  pointerWithin,
   useDroppable,
   useSensor,
   useSensors,
+  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
@@ -73,6 +75,58 @@ function numFromId(id: string): number {
 function statusFromColumnId(colId: string): TaskStatus {
   return colId.split(":")[1] as TaskStatus;
 }
+
+// Custom collision detection. Bare closestCorners has two failure modes on
+// this board (both found by real-browser drag testing):
+//   1. A dragged CARD dropped over another card's subtask region resolves to
+//      the `subtask:*` droppable, which card-drop handling didn't recognise
+//      → silent no-op. Cards must never resolve to subtask rows, so subtask
+//      droppables are filtered out of card-drag candidates entirely.
+//   2. A tall card dragged a short distance can resolve to its OWN ghost
+//      rect (the original slot is still a registered droppable), making
+//      over.id === active.id → the drag-end no-op guard fires. The active
+//      id is filtered out of the candidate set for every drag.
+// Strategy: pointerWithin first (most faithful to where the user actually
+// points, especially inside nested droppables), falling back to
+// closestCorners (needed when the pointer is outside every rect, e.g.
+// during touch drags with the overlay offset) — both over the filtered
+// candidate list.
+const boardCollisionDetection: CollisionDetection = (args) => {
+  const activeId = String(args.active.id);
+  const cardDrag = isCardId(activeId);
+
+  const droppableContainers = args.droppableContainers.filter((container) => {
+    const id = String(container.id);
+    if (id === activeId) return false;
+    if (cardDrag && isSubtaskId(id)) return false;
+    return true;
+  });
+
+  // With the active card filtered out, a pointer that is still inside the
+  // card's ORIGINAL slot would otherwise be captured by the enclosing
+  // column rect and read as "append to end of column". Dropping a card
+  // back where it was picked up must be a no-op, so report no collision.
+  // (pointerCoordinates is null for keyboard drags — guard skipped.)
+  if (cardDrag) {
+    const initial = args.active.rect.current.initial;
+    const p = args.pointerCoordinates;
+    if (
+      initial &&
+      p &&
+      p.x >= initial.left &&
+      p.x <= initial.left + initial.width &&
+      p.y >= initial.top &&
+      p.y <= initial.top + initial.height
+    ) {
+      return [];
+    }
+  }
+
+  const filteredArgs = { ...args, droppableContainers };
+  const within = pointerWithin(filteredArgs);
+  if (within.length > 0) return within;
+  return closestCorners(filteredArgs);
+};
 
 export function ProjectKanban() {
   const { project } = useProjectContext();
@@ -167,16 +221,34 @@ export function ProjectKanban() {
       const list = groupedAll[status].filter((t) => t.id !== activeId);
       return { status, position: list.length };
     }
-    if (isCardId(overId)) {
-      const overTask = topLevelAll.find((t) => t.id === numFromId(overId));
+
+    // A card landing on a subtask row means "dropped on that row's parent
+    // card" — resolve to the parent and fall through to the card branch.
+    // (boardCollisionDetection already filters subtask candidates out of
+    // card drags, so this is a safety net for any path that still yields
+    // one, e.g. keyboard-sensor moves.)
+    let effectiveOverId = overId;
+    if (isSubtaskId(overId)) {
+      const overSub = (tasks ?? []).find((t) => t.id === numFromId(overId));
+      if (!overSub || overSub.parentTaskId === null) return null;
+      effectiveOverId = idOf("card", overSub.parentTaskId);
+    }
+
+    if (isCardId(effectiveOverId)) {
+      const overTask = topLevelAll.find((t) => t.id === numFromId(effectiveOverId));
       if (!overTask) return null;
       const status = overTask.status;
-      // Index within the *full* (unfiltered) sibling list — this must match
-      // what the backend's insertAt will do, which knows nothing about the
-      // client's active filter.
-      const list = groupedAll[status].filter((t) => t.id !== activeId);
-      const idx = list.findIndex((t) => t.id === overTask.id);
-      return { status, position: idx === -1 ? list.length : idx };
+      // Index of the over-card within the *full* (unfiltered) sibling list,
+      // INCLUDING the active card when it's in the same column. This is
+      // arrayMove semantics: the backend's insertAt excludes the moved row
+      // first, so sending the over-card's pre-move index makes a downward
+      // move land *after* it and an upward move land *before* it — matching
+      // what the user sees. (Excluding the active here would make a
+      // one-slot downward drag compute the card's own current position and
+      // silently no-op.) The list must also be unfiltered: an index counted
+      // over a filtered view would land on the wrong server-side slot.
+      const idx = groupedAll[status].findIndex((t) => t.id === overTask.id);
+      return { status, position: idx === -1 ? groupedAll[status].length : idx };
     }
     return null;
   }
@@ -402,7 +474,7 @@ export function ProjectKanban() {
 
       <DndContext
         sensors={sensors}
-        collisionDetection={closestCorners}
+        collisionDetection={boardCollisionDetection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
