@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -147,6 +147,18 @@ export function ProjectKanban() {
   const [filterPriority, setFilterPriority] = useState<Priority | "">("");
   const [mobileSheetTask, setMobileSheetTask] = useState<Task | null>(null);
 
+  // Mobile swipeable-columns pager (<md). The board itself is unchanged on
+  // desktop — this only tracks which column page is centered in the
+  // scroll-snap container so the pager header/dots can reflect it.
+  const [activeColIdx, setActiveColIdx] = useState(0);
+  const boardScrollRef = useRef<HTMLDivElement | null>(null);
+  const columnRefs = useRef<(HTMLDivElement | null)[]>([]);
+
+  function scrollToColumn(idx: number) {
+    const clamped = Math.max(0, Math.min(COLUMNS.length - 1, idx));
+    columnRefs.current[clamped]?.scrollIntoView({ behavior: "smooth", inline: "center", block: "nearest" });
+  }
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
@@ -199,6 +211,30 @@ export function ProjectKanban() {
   }, [topLevel]);
 
   const filterActive = filterAssigneeId !== "" || filterPriority !== "";
+
+  // Tracks which column page is centered in the mobile scroll-snap container,
+  // so the pager header/dots stay in sync with manual swipes (not just
+  // chevron taps). Scoped to the scroll container itself (`root`) so it only
+  // observes intersections within the pager, not the whole viewport.
+  useEffect(() => {
+    const root = boardScrollRef.current;
+    if (!root) return;
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const mostVisible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+        if (!mostVisible) return;
+        const idx = columnRefs.current.findIndex((el) => el === mostVisible.target);
+        if (idx !== -1) setActiveColIdx(idx);
+      },
+      { root, threshold: [0.5, 0.75, 1] },
+    );
+    for (const el of columnRefs.current) {
+      if (el) observer.observe(el);
+    }
+    return () => observer.disconnect();
+  }, []);
 
   function handleDragStart(event: DragStartEvent) {
     setDropError(null);
@@ -472,28 +508,80 @@ export function ProjectKanban() {
         </div>
       )}
 
+      {/* Mobile pager header: chevrons step to the prev/next column page,
+          center label shows the currently-centered column + its count.
+          Desktop (md+) doesn't render this — the 3-column grid is always
+          fully visible there. */}
+      <div className="mb-1 flex items-center justify-center gap-2 md:hidden">
+        <button
+          type="button"
+          onClick={() => scrollToColumn(activeColIdx - 1)}
+          disabled={activeColIdx === 0}
+          aria-label="Previous column"
+          className="material-symbols-outlined text-on-surface-variant disabled:opacity-30"
+        >
+          chevron_left
+        </button>
+        <span className="text-sm font-semibold text-on-surface">{COLUMNS[activeColIdx].label}</span>
+        <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-[11px] font-medium text-on-surface-variant">
+          {grouped[COLUMNS[activeColIdx].id].length}
+        </span>
+        <button
+          type="button"
+          onClick={() => scrollToColumn(activeColIdx + 1)}
+          disabled={activeColIdx === COLUMNS.length - 1}
+          aria-label="Next column"
+          className="material-symbols-outlined text-on-surface-variant disabled:opacity-30"
+        >
+          chevron_right
+        </button>
+      </div>
+      <div className="mb-3 flex items-center justify-center gap-1.5 md:hidden">
+        {COLUMNS.map((col, idx) => (
+          <button
+            key={col.id}
+            type="button"
+            onClick={() => scrollToColumn(idx)}
+            aria-label={`Go to ${col.label} column`}
+            className={`h-1.5 w-1.5 rounded-full transition-colors ${
+              idx === activeColIdx ? "bg-primary" : "bg-outline-variant"
+            }`}
+          />
+        ))}
+      </div>
+
       <DndContext
         sensors={sensors}
         collisionDetection={boardCollisionDetection}
         onDragStart={handleDragStart}
         onDragEnd={handleDragEnd}
       >
-        <div className="grid h-full grid-cols-1 gap-4 md:grid-cols-3">
-          {COLUMNS.map((col) => (
-            <Column
+        <div
+          ref={boardScrollRef}
+          className="flex h-full snap-x snap-mandatory gap-4 overflow-x-auto md:grid md:grid-cols-3 md:overflow-visible md:snap-none"
+        >
+          {COLUMNS.map((col, idx) => (
+            <div
               key={col.id}
-              id={col.id}
-              label={col.label}
-              tasks={grouped[col.id]}
-              subtaskMap={subtaskMapAll}
-              wipLimit={project.wipLimits?.[col.id] ?? null}
-              canDrag={canMove}
-              canToggleSubtasks={canMove}
-              onAdd={() => setCreateStatus(col.id)}
-              onCardClick={(t) => setEditTask(t)}
-              onCardMenuClick={(t) => setMobileSheetTask(t)}
-              onToggleSubtask={toggleSubtaskStatus}
-            />
+              ref={(el) => {
+                columnRefs.current[idx] = el;
+              }}
+              className="w-full shrink-0 snap-center md:w-auto md:shrink md:snap-align-none"
+            >
+              <Column
+                id={col.id}
+                label={col.label}
+                tasks={grouped[col.id]}
+                subtaskMap={subtaskMapAll}
+                wipLimit={project.wipLimits?.[col.id] ?? null}
+                canDrag={canMove}
+                canToggleSubtasks={canMove}
+                onAdd={() => setCreateStatus(col.id)}
+                onCardClick={(t) => setEditTask(t)}
+                onCardMenuClick={(t) => setMobileSheetTask(t)}
+                onToggleSubtask={toggleSubtaskStatus}
+              />
+            </div>
           ))}
         </div>
         <DragOverlay>
