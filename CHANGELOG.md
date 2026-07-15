@@ -15,6 +15,15 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-15 — `ProjectService` join model + start-fresh catalogue reset
+
+- **[backend/prisma/schema.prisma](backend/prisma/schema.prisma)** — new `ProjectService` model mirroring `CustomerService` exactly: `(projectId, serviceId, tools[] String[], createdAt)`, `@@unique([projectId, serviceId])`, indexes on both FKs, `onDelete: Cascade` both sides, `@@map("project_services")`. Back-relations added: `Project.services` and `Service.projects`. This is the data layer for per-project service scoping (each project declares which catalogue services are in play for that engagement, independent of — and beyond — the customer's subscription set).
+- **[backend/prisma/migrations/20260715221031_add_project_services/migration.sql](backend/prisma/migrations/20260715221031_add_project_services/migration.sql)** (new) — creates `project_services`, then **destructively resets the catalogue**: `DELETE FROM "customer_services"; DELETE FROM "services";`. This "start fresh" wipe was explicitly user-approved as part of retiring the admin-curated catalogue (existing mappings were dev-stage throwaway data). Any environment applying this migration loses existing service/customer-service rows by design.
+
+### Changed — 2026-07-15 — Service catalogue writes opened to TAMs
+
+- **[backend/src/routes/services.ts](backend/src/routes/services.ts)** — `POST /services`, `PATCH /services/:id`, `DELETE /services/:id` are now gated by `requirePermission("project:write")` instead of `requireAdmin`. The catalogue stays shared/global, but any TAM can curate it (create inline from pickers, rename, deactivate, delete) — the admin-only gate was a bottleneck in a solo-use tool. `GET /services` unchanged (any authenticated user). Admin UI relocation to Settings follows in a later change this cycle.
+
 ### Fixed — 2026-07-04 — PortfolioCalendar track-alignment bugs
 
 - **[frontend/src/pages/Executive.tsx](frontend/src/pages/Executive.tsx)** — two alignment regressions in the new Calendar view. (1) The 12-month axis header spanned the full `min-w-[720px]` width while each project row indents its bar track behind a `w-48` label column + `gap-3`, so month labels sat ~192px left of the bars ("Jun" was not above the June bars). The header now mirrors the row structure — a `flex items-center gap-3 px-3` wrapper with a `w-48 shrink-0` spacer and the 12-col grid inside a `flex-1`, so its columns sit directly over the bar track. (2) The dashed "Today" line was positioned `left: todayFrac%` of the full `.relative` rows container, which includes the `w-48` label gutter, while bars are positioned as a % of the `flex-1` track only — so the line missed the bars. It's now rendered in a full-height `absolute inset-0` overlay that reuses the same `w-48` spacer + `flex-1` track, so `todayFrac%` is measured against the track and lines up with the bars. Header, per-row gridlines, bars, and today line now share one 12-column coordinate system. Today-line current-year gating and the Today pill are unchanged.
