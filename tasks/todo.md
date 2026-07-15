@@ -18,8 +18,8 @@ Orchestrator: Fable · Implementors: Sonnet agents · Detail: see tasks/plan.md
 - [x] ✅ Checkpoint 2: both typechecks clean · Vite compiles both modules (200) · CustomerDetail −231 lines, logic extracted verbatim
 
 ## Phase 3 — Project vertical
-- [ ] 3.1 ProjectServices page + route in `App.tsx` + tab in `ProjectDetail.tsx` TABS; subscribed badges via `useCustomer`; "Add all subscribed" (M)
-- [ ] ✅ Checkpoint 3: browser E2E of full TAM flow
+- [x] 3.1 ProjectServices page + route in `App.tsx` + tab in `ProjectDetail.tsx` TABS; subscribed badges via `useCustomer`; "Add all subscribed" (M)
+- [x] ✅ Checkpoint 3: typecheck clean · Vite compiles all 3 modules · API E2E verified (customer subscriptions → add-all merge keeps project tools + inherits customer tools for new → GET round-trip)
 
 ## Phase 4 — Relocate & retire
 - [ ] 4.1 `ServiceCatalogueManager` → Settings section (project:write-gated); remove Admin Service Catalogue tab (M)
