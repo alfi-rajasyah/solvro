@@ -7,8 +7,8 @@ Orchestrator: Fable · Implementors: Sonnet agents · Detail: see tasks/plan.md
 - [x] Stack up + baseline typechecks (backend `tsc --noEmit`, frontend `npm run typecheck`)
 
 ## Phase 1 — Backend
-- [ ] 1.1 Prisma: `ProjectService` model + `add_project_services` migration + start-fresh DELETEs (S)
-- [ ] 1.2 `services.ts`: writes `requireAdmin` → `requirePermission("project:write")` (XS, ∥ 1.1)
+- [x] 1.1 Prisma: `ProjectService` model + `add_project_services` migration + start-fresh DELETEs (S)
+- [x] 1.2 `services.ts`: writes `requireAdmin` → `requirePermission("project:write")` (XS, ∥ 1.1)
 - [ ] 1.3 `projects.ts`: `PUT /:id/services` (mirror customers.ts transaction) + `services` in detail include (M)
 - [ ] ✅ Checkpoint 1: typecheck + curl smoke (create → assign → replace → RBAC 403)
 
