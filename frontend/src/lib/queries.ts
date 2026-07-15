@@ -65,6 +65,15 @@ export interface CustomerServiceAssignment {
   createdAt: string;
 }
 
+export interface ProjectServiceAssignment {
+  id: number;
+  projectId: number;
+  serviceId: number;
+  service: Service;
+  tools: string[];
+  createdAt: string;
+}
+
 export interface CustomerDetail extends CustomerSummary {
   projects: ProjectSummary[];
   services: CustomerServiceAssignment[];
@@ -102,6 +111,7 @@ export interface ProjectDetail extends ProjectSummary {
   tam: { id: number; username: string; email: string };
   customer: { id: number; name: string } | null;
   baselineLockedBy: { id: number; username: string } | null;
+  services: ProjectServiceAssignment[];
   _count: { tasks: number; blueprints: number };
 }
 
@@ -444,6 +454,7 @@ export function useUpdateService() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["services"] });
       qc.invalidateQueries({ queryKey: queryKeys.customers });
+      qc.invalidateQueries({ queryKey: ["projects"] });
     },
   });
 }
@@ -456,6 +467,7 @@ export function useDeleteService() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["services"] });
       qc.invalidateQueries({ queryKey: queryKeys.customers });
+      qc.invalidateQueries({ queryKey: ["projects"] });
     },
   });
 }
@@ -476,6 +488,21 @@ export function useUpdateCustomerServices(customerId: number) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.customer(customerId) });
       qc.invalidateQueries({ queryKey: queryKeys.customers });
+    },
+  });
+}
+
+export function useUpdateProjectServices(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (assignments: ServiceAssignmentInput[]) =>
+      apiRequest<ProjectDetail>(`/projects/${projectId}/services`, {
+        method: "PUT",
+        body: { assignments },
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.project(projectId) });
+      qc.invalidateQueries({ queryKey: ["projects"] });
     },
   });
 }
