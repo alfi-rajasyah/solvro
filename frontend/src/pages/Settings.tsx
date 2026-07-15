@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from "react";
+import { ServiceCatalogueManager } from "@/components/services/ServiceCatalogueManager";
 import { ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import { useChangeMyPassword } from "@/lib/queries";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
@@ -75,6 +76,15 @@ export function Settings() {
           Username, email, and role can only be changed by an Admin.
         </p>
       </section>
+
+      {hasPermission(user, "project:write") && (
+        <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
+          <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
+            Service Catalogue
+          </h2>
+          <ServiceCatalogueManager />
+        </section>
+      )}
 
       <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
         <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">

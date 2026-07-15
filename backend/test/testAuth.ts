@@ -23,20 +23,22 @@ export async function seedRoles(): Promise<void> {
   }
 }
 
-let adminCounter = 0;
+let userCounter = 0;
 
 /**
- * Creates a fresh admin user (mirrors scripts/create-admin.ts) and returns a
- * bearer token for it, issued the same way src/routes/auth.ts does on login
- * (see src/http/auth.ts#signToken).
+ * Creates a fresh user for any seeded role and returns a bearer token for
+ * it, issued the same way src/routes/auth.ts does on login (see
+ * src/http/auth.ts#signToken). Username/email are unique per call.
  */
-export async function createAdminAndToken(): Promise<{ userId: number; token: string }> {
-  const role = await prisma.role.findUniqueOrThrow({ where: { roleName: "ADMIN" } });
-  adminCounter += 1;
+export async function createUserWithRole(
+  roleName: string,
+): Promise<{ userId: number; token: string }> {
+  const role = await prisma.role.findUniqueOrThrow({ where: { roleName } });
+  userCounter += 1;
   const user = await prisma.user.create({
     data: {
-      username: `test-admin-${adminCounter}-${Date.now()}`,
-      email: `test-admin-${adminCounter}-${Date.now()}@example.com`,
+      username: `test-${roleName.toLowerCase()}-${userCounter}-${Date.now()}`,
+      email: `test-${roleName.toLowerCase()}-${userCounter}-${Date.now()}@example.com`,
       passwordHash: null,
       roleId: role.id,
       active: true,
@@ -44,4 +46,12 @@ export async function createAdminAndToken(): Promise<{ userId: number; token: st
   });
   const token = signToken({ sub: user.id, role: role.roleName, permissions: role.permissions as string[] });
   return { userId: user.id, token };
+}
+
+/**
+ * Creates a fresh admin user (mirrors scripts/create-admin.ts) and returns a
+ * bearer token for it.
+ */
+export async function createAdminAndToken(): Promise<{ userId: number; token: string }> {
+  return createUserWithRole("ADMIN");
 }
