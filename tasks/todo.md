@@ -22,7 +22,7 @@ Orchestrator: Fable · Implementors: Sonnet agents · Detail: see tasks/plan.md
 - [x] ✅ Checkpoint 3: typecheck clean · Vite compiles all 3 modules · API E2E verified (customer subscriptions → add-all merge keeps project tools + inherits customer tools for new → GET round-trip)
 
 ## Phase 4 — Relocate & retire
-- [ ] 4.1 `ServiceCatalogueManager` → Settings section (project:write-gated); remove Admin Service Catalogue tab (M)
+- [x] 4.1 `ServiceCatalogueManager` → Settings section (project:write-gated); remove Admin Service Catalogue tab (M) — Admin.tsx −261 lines, zero stale refs
 
 ## Phase 5 — Review & ship (orchestrator)
 - [ ] solvro-code-reviewer + solvro-ui-reviewer passes; fix findings
