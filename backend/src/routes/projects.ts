@@ -239,6 +239,13 @@ projectsRouter.put(
     // - delete rows whose serviceId is no longer in the list
     // - upsert each desired (serviceId, tools)
     const desiredIds = assignments.map((a) => a.serviceId);
+    const uniqueIds = [...new Set(desiredIds)];
+    if (uniqueIds.length > 0) {
+      const found = await prisma.service.count({ where: { id: { in: uniqueIds } } });
+      if (found !== uniqueIds.length) {
+        throw new HttpError(400, "service_not_found", "One or more services do not exist");
+      }
+    }
     await prisma.$transaction([
       prisma.projectService.deleteMany({
         where: {
