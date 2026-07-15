@@ -62,6 +62,21 @@ const projectListQuerySchema = z.object({
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
+// Shared "full project detail" include — used by GET /:id and both branches
+// of POST /:id/baseline (previously duplicated three times). Keep list-view
+// includes (GET /, /:id/tasks, etc.) separate — they're intentionally lighter.
+const projectDetailInclude = {
+  sa: { select: { id: true, username: true, email: true } },
+  tam: { select: { id: true, username: true, email: true } },
+  customer: { select: { id: true, name: true } },
+  baselineLockedBy: { select: { id: true, username: true } },
+  _count: { select: { tasks: true, blueprints: true } },
+  services: {
+    orderBy: { service: { name: "asc" } },
+    include: { service: true },
+  },
+} satisfies Prisma.ProjectInclude;
+
 const createTaskSchema = z.object({
   title: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
@@ -141,13 +156,7 @@ projectsRouter.get("/:id", validate("params", idParamSchema), async (req, res) =
   // existence, matching every other project-scoped route.
   const project = await prisma.project.findFirst({
     where: { id, ...projectVisibilityFilter(req.user!) },
-    include: {
-      sa: { select: { id: true, username: true, email: true } },
-      tam: { select: { id: true, username: true, email: true } },
-      customer: { select: { id: true, name: true } },
-      baselineLockedBy: { select: { id: true, username: true } },
-      _count: { select: { tasks: true, blueprints: true } },
-    },
+    include: projectDetailInclude,
   });
   if (!project) throw new HttpError(404, "not_found", "Project not found");
 
@@ -181,13 +190,7 @@ projectsRouter.post(
         return tx.project.update({
           where: { id },
           data: { baselineLockedAt: null, baselineLockedById: null },
-          include: {
-            sa: { select: { id: true, username: true, email: true } },
-            tam: { select: { id: true, username: true, email: true } },
-            customer: { select: { id: true, name: true } },
-            baselineLockedBy: { select: { id: true, username: true } },
-            _count: { select: { tasks: true, blueprints: true } },
-          },
+          include: projectDetailInclude,
         });
       }
       // Column-to-column copy: live → baseline for every task in the project.
@@ -204,14 +207,59 @@ projectsRouter.post(
           baselineLockedAt: lockedAt,
           baselineLockedById: req.user!.sub,
         },
-        include: {
-          sa: { select: { id: true, username: true, email: true } },
-          tam: { select: { id: true, username: true, email: true } },
-          customer: { select: { id: true, name: true } },
-          baselineLockedBy: { select: { id: true, username: true } },
-          _count: { select: { tasks: true, blueprints: true } },
-        },
+        include: projectDetailInclude,
       });
+    });
+    res.json(updated);
+  },
+);
+
+// Project-scoped service catalogue assignment — mirrors the customer-side
+// mapping in routes/customers.ts (same replace-whole-set transaction shape).
+const assignServicesSchema = z.object({
+  assignments: z.array(
+    z.object({
+      serviceId: z.number().int().positive(),
+      tools: z.array(z.string().trim().min(1).max(100)).default([]),
+    }),
+  ),
+});
+
+projectsRouter.put(
+  "/:id/services",
+  requirePermission("project:write"),
+  validate("params", idParamSchema),
+  validate("body", assignServicesSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const { assignments } = req.body as z.infer<typeof assignServicesSchema>;
+    await ensureProjectVisible(req.user!, id);
+
+    // Replace the whole assignment set in a single transaction:
+    // - delete rows whose serviceId is no longer in the list
+    // - upsert each desired (serviceId, tools)
+    const desiredIds = assignments.map((a) => a.serviceId);
+    await prisma.$transaction([
+      prisma.projectService.deleteMany({
+        where: {
+          projectId: id,
+          ...(desiredIds.length > 0 && { serviceId: { notIn: desiredIds } }),
+        },
+      }),
+      ...assignments.map((a) =>
+        prisma.projectService.upsert({
+          where: {
+            projectId_serviceId: { projectId: id, serviceId: a.serviceId },
+          },
+          create: { projectId: id, serviceId: a.serviceId, tools: a.tools },
+          update: { tools: a.tools },
+        }),
+      ),
+    ]);
+
+    const updated = await prisma.project.findUniqueOrThrow({
+      where: { id },
+      include: projectDetailInclude,
     });
     res.json(updated);
   },
