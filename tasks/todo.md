@@ -13,9 +13,9 @@ Orchestrator: Fable · Implementors: Sonnet agents · Detail: see tasks/plan.md
 - [x] ✅ Checkpoint 1: backend tsc clean · 30/30 vitest tests pass · live curl smoke (login → create → assign → GET round-trip → 401 unauthenticated)
 
 ## Phase 2 — Frontend foundation
-- [ ] 2.1 `queries.ts`: `ProjectServiceAssignment`, `ProjectDetail.services`, `useUpdateProjectServices` (S)
-- [ ] 2.2 Extract `ServiceMappingList` + `ToolsEditor` + inline "Add service"; refit CustomerDetail tab (M, ∥ 2.1)
-- [ ] ✅ Checkpoint 2: typechecks + customer-tab regression + inline add
+- [x] 2.1 `queries.ts`: `ProjectServiceAssignment`, `ProjectDetail.services`, `useUpdateProjectServices` (S) — incl. cascade-invalidation fix on service update/delete
+- [x] 2.2 Extract `ServiceMappingList` + `ToolsEditor` + inline "Add service"; refit CustomerDetail tab (M, ∥ 2.1)
+- [x] ✅ Checkpoint 2: both typechecks clean · Vite compiles both modules (200) · CustomerDetail −231 lines, logic extracted verbatim
 
 ## Phase 3 — Project vertical
 - [ ] 3.1 ProjectServices page + route in `App.tsx` + tab in `ProjectDetail.tsx` TABS; subscribed badges via `useCustomer`; "Add all subscribed" (M)
