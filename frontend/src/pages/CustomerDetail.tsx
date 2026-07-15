@@ -1,17 +1,15 @@
-import { useEffect, useMemo, useState, type KeyboardEvent } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { CustomerFormModal } from "@/components/CustomerFormModal";
 import { EmptyState } from "@/components/EmptyState";
+import { ServiceMappingList } from "@/components/services/ServiceMappingList";
 import { Tabs } from "@/components/Tabs";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import {
   type CustomerDetail as CustomerDetailType,
-  type CustomerServiceAssignment,
-  type ServiceAssignmentInput,
   useCustomer,
   useDeleteCustomer,
-  useServices,
   useUpdateCustomerServices,
 } from "@/lib/queries";
 
@@ -579,235 +577,18 @@ function ServicesTab({
   customer: CustomerDetailType;
   canMutate: boolean;
 }) {
-  const { data: catalogue, isLoading } = useServices();
   const update = useUpdateCustomerServices(customer.id);
-  const [error, setError] = useState<string | null>(null);
 
-  const assignmentByServiceId = useMemo(() => {
-    const m = new Map<number, CustomerServiceAssignment>();
-    for (const a of customer.services) m.set(a.serviceId, a);
-    return m;
-  }, [customer.services]);
-
-  // Build the full assignment list for an idempotent PUT, optionally
-  // overriding one service's tools or toggling a service's presence.
-  function buildAssignments(
-    serviceId: number,
-    intent: "toggle" | "set-tools",
-    tools?: string[],
-  ): ServiceAssignmentInput[] {
-    const out: ServiceAssignmentInput[] = [];
-    const wasAssigned = assignmentByServiceId.has(serviceId);
-    for (const a of customer.services) {
-      if (a.serviceId === serviceId && intent === "toggle" && wasAssigned) continue; // remove
-      if (a.serviceId === serviceId && intent === "set-tools") {
-        out.push({ serviceId, tools: tools ?? [] });
-      } else {
-        out.push({ serviceId: a.serviceId, tools: a.tools });
+  return (
+    <ServiceMappingList
+      assignments={customer.services}
+      onSave={(assignments) => update.mutateAsync(assignments)}
+      canMutate={canMutate}
+      saving={update.isPending}
+      title="Service Catalogue Mapping"
+      description={
+        'Select the services this customer subscribes to and list the tools used for each — e.g. "Backup & Restore" → Acronis, Veeam.'
       }
-    }
-    if (intent === "toggle" && !wasAssigned) {
-      out.push({ serviceId, tools: [] });
-    }
-    return out;
-  }
-
-  async function toggle(serviceId: number) {
-    if (!canMutate) return;
-    setError(null);
-    try {
-      await update.mutateAsync(buildAssignments(serviceId, "toggle"));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not update services.");
-    }
-  }
-
-  async function setTools(serviceId: number, tools: string[]) {
-    if (!canMutate) return;
-    setError(null);
-    try {
-      await update.mutateAsync(buildAssignments(serviceId, "set-tools", tools));
-    } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not update tools.");
-    }
-  }
-
-  return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
-          Service Catalogue Mapping
-        </h2>
-        <p className="text-[12px] text-on-surface-variant">
-          Select the services this customer subscribes to and list the tools used for
-          each — e.g. "Backup &amp; Restore" → Acronis, Veeam.
-        </p>
-      </div>
-
-      {error && (
-        <div className="rounded border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">
-          {error}
-        </div>
-      )}
-
-      {isLoading ? (
-        <div className="h-24 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
-      ) : !catalogue || catalogue.length === 0 ? (
-        <EmptyState
-          icon="category"
-          message="No services in the catalogue yet. An Admin can add them via the Admin → Service Catalogue tab."
-        />
-      ) : (
-        <div className="space-y-1.5">
-          {catalogue.map((s) => {
-            const assignment = assignmentByServiceId.get(s.id);
-            const assigned = Boolean(assignment);
-            return (
-              <div
-                key={s.id}
-                className={[
-                  "rounded border px-3 py-2 transition-colors",
-                  assigned
-                    ? "border-primary bg-primary/5"
-                    : "border-outline-variant bg-surface-container-lowest",
-                  !s.active ? "opacity-60" : "",
-                ].join(" ")}
-              >
-                <button
-                  type="button"
-                  disabled={!canMutate || update.isPending}
-                  onClick={() => toggle(s.id)}
-                  className={[
-                    "flex w-full items-center justify-between gap-3 text-left text-sm",
-                    canMutate ? "" : "cursor-default",
-                  ].join(" ")}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span
-                      className={[
-                        "material-symbols-outlined text-[19px]",
-                        assigned ? "text-primary" : "text-on-surface-variant",
-                      ].join(" ")}
-                    >
-                      {assigned ? "check_box" : "check_box_outline_blank"}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="font-medium text-on-surface">
-                        {s.name}
-                        {!s.active && (
-                          <span className="ml-2 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                            inactive
-                          </span>
-                        )}
-                      </p>
-                      {s.description && (
-                        <p className="truncate text-[12px] text-on-surface-variant">
-                          {s.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </button>
-
-                {assigned && assignment && (
-                  <div className="mt-2 border-t border-outline-variant/60 pt-2">
-                    <ToolsEditor
-                      tools={assignment.tools}
-                      canMutate={canMutate}
-                      saving={update.isPending}
-                      onChange={(next) => setTools(s.id, next)}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ToolsEditor({
-  tools,
-  canMutate,
-  saving,
-  onChange,
-}: {
-  tools: string[];
-  canMutate: boolean;
-  saving: boolean;
-  onChange: (next: string[]) => void;
-}) {
-  const [draft, setDraft] = useState("");
-
-  function commit(value: string) {
-    const trimmed = value.trim();
-    if (!trimmed) return;
-    if (tools.some((t) => t.toLowerCase() === trimmed.toLowerCase())) {
-      setDraft("");
-      return;
-    }
-    onChange([...tools, trimmed]);
-    setDraft("");
-  }
-
-  function remove(idx: number) {
-    onChange(tools.filter((_, i) => i !== idx));
-  }
-
-  function onKeyDown(e: KeyboardEvent<HTMLInputElement>) {
-    if (e.key === "Enter" || e.key === ",") {
-      e.preventDefault();
-      commit(draft);
-    } else if (e.key === "Backspace" && draft === "" && tools.length > 0) {
-      onChange(tools.slice(0, -1));
-    }
-  }
-
-  return (
-    <div>
-      <p className="mb-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
-        Tools used
-      </p>
-      <div className="flex flex-wrap items-center gap-1.5">
-        {tools.map((t, i) => (
-          <span
-            key={`${t}-${i}`}
-            className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[12px] text-primary"
-          >
-            {t}
-            {canMutate && (
-              <button
-                type="button"
-                onClick={() => remove(i)}
-                disabled={saving}
-                aria-label={`Remove ${t}`}
-                className="rounded-full text-primary/70 hover:text-primary disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-[13px]">close</span>
-              </button>
-            )}
-          </span>
-        ))}
-        {canMutate && (
-          <input
-            type="text"
-            value={draft}
-            onChange={(e) => setDraft(e.target.value)}
-            onKeyDown={onKeyDown}
-            onBlur={() => commit(draft)}
-            disabled={saving}
-            placeholder={tools.length === 0 ? "e.g. Acronis, Crowdstrike" : "Add tool…"}
-            className="min-w-[140px] flex-1 rounded border border-outline-variant bg-surface px-2 py-0.5 text-[12px] focus:border-primary focus:outline-none disabled:opacity-50"
-          />
-        )}
-        {!canMutate && tools.length === 0 && (
-          <span className="text-[12px] italic text-on-surface-variant">
-            No tools listed.
-          </span>
-        )}
-      </div>
-    </div>
+    />
   );
 }

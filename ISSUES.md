@@ -62,6 +62,18 @@ product backlog. Update or prune items as they're resolved.
 
 ## Tech debt / follow-ups from recent work
 
+- **Service-mapping mutations lack the optimistic-update pattern** (2026-07-15
+  code review, deferred as inherited debt): `useUpdateProjectServices` and the
+  pre-existing `useUpdateCustomerServices` (`frontend/src/lib/queries.ts`) use
+  plain `onSuccess` + invalidate. The `ServiceMappingList` checkbox toggles and
+  tool chips disable while saving, so it's correct but not instant. Follow-up:
+  add `onMutate` snapshot → optimistic `services[]` patch → `onError` rollback →
+  `onSettled` invalidate, for both hooks together.
+- **Inactive services can still be assigned** — the mapping picker shows
+  deactivated services dimmed but toggleable (pre-existing), and the project
+  tab's "Add all subscribed" carries inactive legacy subscriptions over without
+  filtering. Consistent behavior, but a product call is pending on whether
+  `active: false` should block *new* assignments.
 - **`ensureTaskVisible` does 2 DB round-trips** per task mutation (visibility
   check, then the write). Folding the filter into the `where` isn't possible
   with Prisma `update` (unique `where` only). Watch against the sub-200ms NFR;
