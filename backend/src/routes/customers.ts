@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { requireAuth, requirePermission } from "../http/auth.js";
 // services router lives in ./services.ts; this file owns the customer-side mapping.
+import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -80,6 +81,13 @@ customersRouter.put(
     // - delete rows whose serviceId is no longer in the list
     // - upsert each desired (serviceId, tools)
     const desiredIds = assignments.map((a) => a.serviceId);
+    const uniqueIds = [...new Set(desiredIds)];
+    if (uniqueIds.length > 0) {
+      const found = await prisma.service.count({ where: { id: { in: uniqueIds } } });
+      if (found !== uniqueIds.length) {
+        throw new HttpError(400, "service_not_found", "One or more services do not exist");
+      }
+    }
     await prisma.$transaction([
       prisma.customerService.deleteMany({
         where: {

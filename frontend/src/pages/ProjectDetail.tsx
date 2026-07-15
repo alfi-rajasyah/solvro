@@ -21,6 +21,7 @@ const TABS = [
   { to: "gantt", label: "Gantt" },
   { to: "timeline", label: "Timeline" },
   { to: "risks", label: "Risks" },
+  { to: "services", label: "Services" },
 ];
 
 export interface ProjectOutletContext {
