@@ -21,6 +21,7 @@ import { ProjectKanban } from "@/pages/views/ProjectKanban";
 import { ProjectList } from "@/pages/views/ProjectList";
 import { ProjectOverview } from "@/pages/views/ProjectOverview";
 import { ProjectRisks } from "@/pages/views/ProjectRisks";
+import { ProjectServices } from "@/pages/views/ProjectServices";
 import { ProjectTimeline } from "@/pages/views/ProjectTimeline";
 
 export function App() {
@@ -46,6 +47,7 @@ export function App() {
           <Route path="gantt" element={<ProjectGantt />} />
           <Route path="timeline" element={<ProjectTimeline />} />
           <Route path="risks" element={<ProjectRisks />} />
+          <Route path="services" element={<ProjectServices />} />
         </Route>
         <Route path="customers" element={<Customers />} />
         <Route path="customers/:id" element={<CustomerDetail />} />
