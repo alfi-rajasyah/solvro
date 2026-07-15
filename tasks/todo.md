@@ -25,7 +25,7 @@ Orchestrator: Fable · Implementors: Sonnet agents · Detail: see tasks/plan.md
 - [x] 4.1 `ServiceCatalogueManager` → Settings section (project:write-gated); remove Admin Service Catalogue tab (M) — Admin.tsx −261 lines, zero stale refs
 
 ## Phase 5 — Review & ship (orchestrator)
-- [ ] solvro-code-reviewer + solvro-ui-reviewer passes; fix findings
-- [ ] ✅ Final checkpoint: E2E script, CHANGELOG complete, commits clean (no Claude attribution), PR on user go-ahead
+- [x] solvro-code-reviewer + solvro-ui-reviewer passes; fix findings — code review: no blockers, 1 should-fix FIXED (FK pre-check → clean 400, both routes, +2 tests), 2 findings deferred to ISSUES.md; UI review: clean (orchestrator fallback pass — reviewer agent idled without reporting)
+- [x] ✅ Final checkpoint: backend+frontend typechecks clean · 32/32 vitest · API E2E verified · CHANGELOG complete (7 entries) · commits clean (no Claude attribution) · PR awaiting user go-ahead
 
 **Standing rules baked into every task:** CHANGELOG.md entry in the same turn as the change · design tokens only, no inline hex · commit per task on the feature branch.
