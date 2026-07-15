@@ -157,4 +157,33 @@ describe("PUT /projects/:id/services", () => {
       .send({ assignments: [{ serviceId: -1 }] });
     expect(res.status).toBe(400);
   });
+
+  it("rejects a nonexistent serviceId with 400 instead of a raw FK 500", async () => {
+    const customerId = await createCustomer();
+    const projectId = await createProject(customerId);
+
+    const res = await request(app)
+      .put(`/projects/${projectId}/services`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ assignments: [{ serviceId: 999999, tools: [] }] });
+    expect(res.status).toBe(400);
+  });
+
+  it("PUT /customers/:id/services rejects a nonexistent serviceId with 400 and accepts a real one", async () => {
+    const customerId = await createCustomer();
+
+    const badRes = await request(app)
+      .put(`/customers/${customerId}/services`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ assignments: [{ serviceId: 999999, tools: [] }] });
+    expect(badRes.status).toBe(400);
+
+    const serviceA = await createService();
+    const goodRes = await request(app)
+      .put(`/customers/${customerId}/services`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ assignments: [{ serviceId: serviceA, tools: [] }] });
+    expect(goodRes.status).toBe(200);
+    expect(goodRes.body.services).toHaveLength(1);
+  });
 });
