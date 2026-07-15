@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { requireAdmin, requireAuth } from "../http/auth.js";
+import { requireAuth, requirePermission } from "../http/auth.js";
 import { validate } from "../http/validate.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -27,7 +27,7 @@ servicesRouter.get("/", async (_req, res) => {
 
 servicesRouter.post(
   "/",
-  requireAdmin,
+  requirePermission("project:write"),
   validate("body", createServiceSchema),
   async (req, res) => {
     const body = req.body as z.infer<typeof createServiceSchema>;
@@ -44,7 +44,7 @@ servicesRouter.post(
 
 servicesRouter.patch(
   "/:id",
-  requireAdmin,
+  requirePermission("project:write"),
   validate("params", idParamSchema),
   validate("body", updateServiceSchema),
   async (req, res) => {
@@ -66,7 +66,7 @@ servicesRouter.patch(
 
 servicesRouter.delete(
   "/:id",
-  requireAdmin,
+  requirePermission("project:write"),
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
