@@ -3,6 +3,7 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { requireAuth, type JwtPayload } from "../http/auth.js";
 import { projectVisibilityFilter } from "../lib/visibility.js";
+import { computePortfolioRows } from "../lib/portfolio.js";
 
 export const overviewRouter = Router();
 
@@ -18,7 +19,7 @@ overviewRouter.get("/", async (req, res) => {
   const user = req.user!;
   const scope = projectScope(user);
 
-  const [projectCount, projectsByStatus, taskGroups, recentProjects, recentTasks] =
+  const [projectCount, projectsByStatus, taskGroups, recentProjects, recentTasks, portfolio] =
     await Promise.all([
       prisma.project.count({ where: scope }),
       prisma.project.groupBy({
@@ -50,6 +51,7 @@ overviewRouter.get("/", async (req, res) => {
           assignedTo: { select: { id: true, username: true } },
         },
       }),
+      computePortfolioRows(scope),
     ]);
 
   const taskCounts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
@@ -65,5 +67,6 @@ overviewRouter.get("/", async (req, res) => {
     taskCounts,
     recentProjects,
     recentTasks,
+    portfolio,
   });
 });

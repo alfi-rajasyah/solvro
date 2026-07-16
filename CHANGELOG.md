@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-16 — Shared portfolio-row computation + `/overview` portfolio payload
+
+- **[backend/src/lib/portfolio.ts](backend/src/lib/portfolio.ts)** (new) — `computePortfolioRows(where)` extracted verbatim from the `/reports/executive` handler: per-project `start` (min task startDate), `end` (max task dueDate), `totalTasks`/`doneTasks`/`progressPct`, `isOverdue`/`daysOverdue` (end before start-of-today and status not COMPLETED/CANCELLED), ordered `sections`. Row type `PortfolioProjectRow` = old `ExecutiveProjectRow` + `updatedAt` (needed by Overview's attention-strip recency sort). Single `findMany` with scalar task selects — no N+1, per the sub-200ms NFR.
+- **[backend/src/routes/overview.ts](backend/src/routes/overview.ts)** — `GET /overview` response now carries `portfolio`: all visible projects (same `projectVisibilityFilter` scope as every other overview query, so TAMs get only their own projects) run through `computePortfolioRows`, added as a 6th member of the existing `Promise.all`. Why: real schedule/overdue data for the Overview "Portfolio timeline" replacing the synthetic S-curve (frontend lands in a follow-up entry).
+- **[backend/src/routes/reports.ts](backend/src/routes/reports.ts)** — `/reports/executive` now delegates to `computePortfolioRows({})` (still intentionally org-wide, permission-gated). Output contract unchanged except rows additively gain `updatedAt`.
+
 ### Added — 2026-07-15 — `ProjectService` join model + start-fresh catalogue reset
 
 - **[backend/prisma/schema.prisma](backend/prisma/schema.prisma)** — new `ProjectService` model mirroring `CustomerService` exactly: `(projectId, serviceId, tools[] String[], createdAt)`, `@@unique([projectId, serviceId])`, indexes on both FKs, `onDelete: Cascade` both sides, `@@map("project_services")`. Back-relations added: `Project.services` and `Service.projects`. This is the data layer for per-project service scoping (each project declares which catalogue services are in play for that engagement, independent of — and beyond — the customer's subscription set).
