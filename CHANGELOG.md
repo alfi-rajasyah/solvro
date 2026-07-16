@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-16 — `PortfolioCalendar` extracted into a shared component
+
+- **[frontend/src/components/portfolio/PortfolioCalendar.tsx](frontend/src/components/portfolio/PortfolioCalendar.tsx)** (new) — the Executive dashboard's calendar (month grid, bar positioning, `barTone` status coloring, year switcher, clip chevrons, Today line, legend, tooltips) plus `fmtDate` moved **verbatim** out of `Executive.tsx` so the Overview page can reuse it (next entry). Two additions: exported `sortPortfolioRows()` (the overdue-first → end-asc → name comparator previously inlined in `PortfolioTimelinesSection`) and an optional `unscheduledNote` prop for the footnote copy (default reproduces the Executive wording exactly — Overview has no List view to point at). Known pre-existing nits carried over deliberately to keep the extraction byte-identical: `rounded-full` on the timeline bar and raw `font-mono` for the year display.
+- **[frontend/src/pages/Executive.tsx](frontend/src/pages/Executive.tsx)** — imports the shared component/helpers; inline sort replaced by `sortPortfolioRows()`. Zero behavior change (extraction mechanically verified line-by-line against the deleted block).
+- **[frontend/src/lib/queries.ts](frontend/src/lib/queries.ts)** — `ExecutiveProjectRow` renamed to `PortfolioProjectRow`, moved next to the overview types, gained `updatedAt: string` (mirrors `backend/src/lib/portfolio.ts`, same field order); `OverviewResponse` gained `portfolio: PortfolioProjectRow[]`; `ExecutiveReport.projects` re-pointed. No new hooks.
+
 ### Added — 2026-07-16 — Shared portfolio-row computation + `/overview` portfolio payload
 
 - **[backend/src/lib/portfolio.ts](backend/src/lib/portfolio.ts)** (new) — `computePortfolioRows(where)` extracted verbatim from the `/reports/executive` handler: per-project `start` (min task startDate), `end` (max task dueDate), `totalTasks`/`doneTasks`/`progressPct`, `isOverdue`/`daysOverdue` (end before start-of-today and status not COMPLETED/CANCELLED), ordered `sections`. Row type `PortfolioProjectRow` = old `ExecutiveProjectRow` + `updatedAt` (needed by Overview's attention-strip recency sort). Single `findMany` with scalar task selects — no N+1, per the sub-200ms NFR.
