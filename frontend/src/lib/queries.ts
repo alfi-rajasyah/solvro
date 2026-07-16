@@ -172,12 +172,32 @@ export interface OverviewTask {
   assignedTo: { id: number; username: string } | null;
 }
 
+// Mirrors backend/src/lib/portfolio.ts (PortfolioProjectRow) — org-wide
+// portfolio roll-up row shape shared by GET /overview and GET /reports/executive.
+export interface PortfolioProjectRow {
+  id: number;
+  name: string;
+  status: ProjectStatus;
+  tamName: string;
+  customerName: string | null;
+  start: string | null;
+  end: string | null;
+  totalTasks: number;
+  doneTasks: number;
+  progressPct: number;
+  isOverdue: boolean;
+  daysOverdue: number;
+  updatedAt: string;
+  sections: { id: number; name: string; color: string }[];
+}
+
 export interface OverviewResponse {
   projectCount: number;
   projectStatusCounts: Partial<Record<ProjectStatus, number>>;
   taskCounts: Record<TaskStatus, number>;
   recentProjects: OverviewProject[];
   recentTasks: OverviewTask[];
+  portfolio: PortfolioProjectRow[];
 }
 
 export type NoteVisibility = "INTERNAL" | "CUSTOMER_FACING";
@@ -1289,24 +1309,8 @@ export function useDeleteDependency(projectId: number) {
 // Executive dashboard — org-wide portfolio roll-up (GET /reports/executive)
 // ─────────────────────────────────────────────────────────────────────────
 
-export interface ExecutiveProjectRow {
-  id: number;
-  name: string;
-  status: ProjectStatus;
-  tamName: string;
-  customerName: string | null;
-  start: string | null;
-  end: string | null;
-  totalTasks: number;
-  doneTasks: number;
-  progressPct: number;
-  isOverdue: boolean;
-  daysOverdue: number;
-  sections: { id: number; name: string; color: string }[];
-}
-
 export interface ExecutiveReport {
-  projects: ExecutiveProjectRow[];
+  projects: PortfolioProjectRow[];
   generatedAt: string;
 }
 
