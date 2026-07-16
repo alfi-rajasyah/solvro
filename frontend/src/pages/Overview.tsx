@@ -1,19 +1,15 @@
 import { Link } from "react-router-dom";
 import {
-  Area,
-  AreaChart,
-  CartesianGrid,
-  Line,
-  ResponsiveContainer,
-  XAxis,
-  YAxis,
-  Tooltip,
-} from "recharts";
+  PortfolioCalendar,
+  sortPortfolioRows,
+} from "@/components/portfolio/PortfolioCalendar";
+import { ProjectStatusChip } from "@/components/StatusChip";
 import { useAuth } from "@/lib/auth";
 import {
   type OverviewProject,
   type OverviewResponse,
   type OverviewTask,
+  type ProjectStatus,
   type TaskStatus,
   useOverview,
 } from "@/lib/queries";
@@ -52,8 +48,6 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
   const openTasks = data.taskCounts.TODO + data.taskCounts.IN_PROGRESS;
   const completionRate = totalTasks === 0 ? 0 : Math.round((data.taskCounts.DONE / totalTasks) * 100);
 
-  const sCurve = buildSCurve(data.taskCounts.DONE, totalTasks);
-
   return (
     <>
       {/* KPI strip */}
@@ -88,61 +82,76 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
         />
       </div>
 
-      {/* Two-up: S-curve + recent */}
+      {/* Full-width portfolio timeline */}
+      <section className="space-y-3">
+        <header>
+          <h3 className="font-display text-sm font-bold text-on-surface">Portfolio timeline</h3>
+          <p className="text-[11px] text-on-surface-variant">
+            Where each of your projects sits across the year
+          </p>
+        </header>
+        {data.portfolio.length === 0 ? (
+          <EmptyHint label="No projects yet." />
+        ) : (
+          <PortfolioCalendar
+            projects={sortPortfolioRows(data.portfolio)}
+            unscheduledNote={(n) =>
+              `${n} project${n === 1 ? "" : "s"} ha${n === 1 ? "s" : "ve"} no scheduled dates.`
+            }
+          />
+        )}
+      </section>
+
+      {/* Two-up: attention + recent activity */}
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="rounded border border-outline-variant bg-surface-container-lowest p-5 lg:col-span-2">
-          <header className="mb-3 flex items-start justify-between gap-3">
-            <div>
-              <h3 className="font-display text-sm font-bold text-on-surface">Portfolio progress</h3>
-              <p className="text-[11px] text-on-surface-variant">
-                Cumulative completed tasks vs. an even-pace baseline
-              </p>
-            </div>
-            <div className="flex items-center gap-3 text-[11px] text-on-surface-variant">
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-primary" /> Actual
-              </span>
-              <span className="flex items-center gap-1">
-                <span className="inline-block h-2 w-2 rounded-full bg-outline" /> Baseline
-              </span>
-            </div>
+          <header className="mb-3 flex items-center justify-between">
+            <h3 className="font-display text-sm font-bold text-on-surface">Projects needing attention</h3>
+            <Link to="/projects" className="text-[11px] font-semibold text-primary hover:underline">
+              View all →
+            </Link>
           </header>
-          <div className="h-52">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={sCurve} margin={{ top: 4, right: 8, bottom: 0, left: -20 }}>
-                <CartesianGrid stroke="rgb(var(--outline-variant))" strokeDasharray="3 3" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 10, fill: "rgb(var(--on-surface-variant))" }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fontSize: 10, fill: "rgb(var(--on-surface-variant))" }} axisLine={false} tickLine={false} allowDecimals={false} />
-                <Tooltip
-                  contentStyle={{
-                    fontSize: 11,
-                    borderRadius: 4,
-                    border: "1px solid rgb(var(--outline-variant))",
-                    background: "rgb(var(--surface-container-lowest))",
-                    color: "rgb(var(--on-surface))",
-                  }}
-                />
-                <Area
-                  type="monotone"
-                  dataKey="actual"
-                  name="Actual"
-                  stroke="rgb(var(--primary))"
-                  strokeWidth={2.5}
-                  fill="rgb(var(--primary))"
-                  fillOpacity={0.10}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="baseline"
-                  name="Baseline"
-                  stroke="rgb(var(--outline))"
-                  strokeWidth={2}
-                  strokeDasharray="5 4"
-                  dot={false}
-                />
-              </AreaChart>
-            </ResponsiveContainer>
-          </div>
+          {data.portfolio.length === 0 ? (
+            <EmptyHint label="No projects yet." />
+          ) : (
+            <ul className="grid gap-2 md:grid-cols-2">
+              {[...data.portfolio]
+                .sort((a, b) => {
+                  const ra = healthRank(a);
+                  const rb = healthRank(b);
+                  if (ra !== rb) return ra - rb;
+                  if (ra === 0) return b.daysOverdue - a.daysOverdue;
+                  return (
+                    new Date(b.updatedAt).getTime() -
+                    new Date(a.updatedAt).getTime()
+                  );
+                })
+                .slice(0, 6)
+                .map((p) => (
+                  <li key={p.id}>
+                    <Link
+                      to={`/projects/${p.id}`}
+                      style={{
+                        borderLeftWidth: 3,
+                        borderLeftStyle: "solid",
+                        borderLeftColor: healthColor(p),
+                      }}
+                      className="flex items-center gap-3 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 transition-colors hover:border-primary"
+                    >
+                      <span className="font-mono text-[11px] text-on-surface-variant">P-{String(p.id).padStart(3, "0")}</span>
+                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-on-surface">{p.name}</span>
+                      {p.isOverdue && (
+                        <span className="shrink-0 whitespace-nowrap text-[11px] font-semibold text-chip-amber-text">
+                          {p.daysOverdue}d overdue
+                        </span>
+                      )}
+                      <span className="text-[11px] text-on-surface-variant">{p.totalTasks} tasks</span>
+                      <ProjectStatusChip status={p.status} />
+                    </Link>
+                  </li>
+                ))}
+            </ul>
+          )}
         </div>
 
         <div className="rounded border border-outline-variant bg-surface-container-lowest p-5">
@@ -154,57 +163,6 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
           </header>
           <ActivityFeed projects={data.recentProjects} tasks={data.recentTasks} />
         </div>
-      </div>
-
-      {/* Recent projects strip */}
-      <div className="rounded border border-outline-variant bg-surface-container-lowest p-5">
-        <header className="mb-3 flex items-center justify-between">
-          <h3 className="font-display text-sm font-bold text-on-surface">Projects needing attention</h3>
-          <Link to="/projects" className="text-[11px] font-semibold text-primary hover:underline">
-            View all →
-          </Link>
-        </header>
-        {data.recentProjects.length === 0 ? (
-          <EmptyHint label="No projects yet." />
-        ) : (
-          <ul className="grid gap-2 md:grid-cols-2">
-            {[...data.recentProjects]
-              // Health-signal priority: at-risk (amber) → on-track (green)
-              // → neutral (gray); within a bucket, most-recently-updated
-              // first. The amber bucket is currently unreachable because it
-              // needs a per-project overdue count the overview query does
-              // not return.
-              // TODO(health-signal): once overdue counts are available,
-              // re-rank ACTIVE+overdue>0 ahead of on-track here.
-              .sort((a, b) => {
-                const r = healthRank(a.status) - healthRank(b.status);
-                if (r !== 0) return r;
-                return (
-                  new Date(b.updatedAt).getTime() -
-                  new Date(a.updatedAt).getTime()
-                );
-              })
-              .slice(0, 6)
-              .map((p) => (
-                <li key={p.id}>
-                  <Link
-                    to={`/projects/${p.id}`}
-                    style={{
-                      borderLeftWidth: 3,
-                      borderLeftStyle: "solid",
-                      borderLeftColor: healthColor(p.status),
-                    }}
-                    className="flex items-center gap-3 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 transition-colors hover:border-primary"
-                  >
-                    <span className="font-mono text-[11px] text-on-surface-variant">P-{String(p.id).padStart(3, "0")}</span>
-                    <span className="min-w-0 flex-1 truncate text-sm font-semibold text-on-surface">{p.name}</span>
-                    <span className="text-[11px] text-on-surface-variant">{p._count.tasks} tasks</span>
-                    <ProjectStatusPill status={p.status} />
-                  </Link>
-                </li>
-              ))}
-          </ul>
-        )}
       </div>
     </>
   );
@@ -272,22 +230,6 @@ function ActivityFeed({ projects, tasks }: { projects: OverviewProject[]; tasks:
   );
 }
 
-function ProjectStatusPill({ status }: { status: string }) {
-  const tone =
-    status === "ACTIVE"
-      ? "bg-emerald-100 text-emerald-700"
-      : status === "COMPLETED"
-        ? "bg-primary/10 text-primary"
-        : status === "ON_HOLD" || status === "CANCELLED"
-          ? "bg-error-container text-on-error-container"
-          : "bg-surface-container text-on-surface-variant";
-  return (
-    <span className={`shrink-0 rounded-full px-2 py-0.5 font-display text-label-caps uppercase tracking-wider ${tone}`}>
-      {status.replace("_", " ")}
-    </span>
-  );
-}
-
 function EmptyHint({ label }: { label: string }) {
   return (
     <p className="rounded border border-dashed border-outline-variant px-4 py-6 text-center text-xs text-on-surface-variant">
@@ -304,26 +246,13 @@ function SkeletonGrid() {
           <div key={i} className="h-24 animate-pulse rounded bg-surface-container-low" />
         ))}
       </div>
+      <div className="h-64 animate-pulse rounded bg-surface-container-low" />
       <div className="grid gap-4 lg:grid-cols-3">
         <div className="h-64 animate-pulse rounded bg-surface-container-low lg:col-span-2" />
         <div className="h-64 animate-pulse rounded bg-surface-container-low" />
       </div>
     </>
   );
-}
-
-// Build a 6-bucket fake S-curve from current done/total. Baseline is a flat
-// even pace; actual sweeps from 0 to current done. Used purely for showing
-// progress shape until a real time-series endpoint lands.
-function buildSCurve(done: number, total: number) {
-  const points = ["W-5", "W-4", "W-3", "W-2", "W-1", "Now"];
-  const baselinePerStep = total === 0 ? 0 : total / 5;
-  const actualSeries = [0, done * 0.15, done * 0.4, done * 0.65, done * 0.85, done];
-  return points.map((label, i) => ({
-    label,
-    actual: Math.round(actualSeries[i]),
-    baseline: Math.round(baselinePerStep * i),
-  }));
 }
 
 function taskVerb(status: TaskStatus) {
@@ -351,18 +280,15 @@ function firstNameOf(
   return head.charAt(0).toUpperCase() + head.slice(1);
 }
 
-// Health-signal left-border color, derived from project status only.
-// TODO(health-signal): the overview query returns no per-project overdue
-// count, so ACTIVE always reads as on-track. When that count is exposed,
-// ACTIVE with overdue tasks should return "#F59E0B" (amber, at risk).
-function healthColor(status: OverviewProject["status"]): string {
-  if (status === "ACTIVE") return "#8DC63F"; // on track
-  return "#6B7280"; // PLANNING / ON_HOLD / COMPLETED / other — neutral
+// Health signal comes from portfolio[].isOverdue (real schedule data):
+// overdue (amber) → active on-track (green) → everything else (gray).
+function healthRank(p: { status: ProjectStatus; isOverdue: boolean }): number {
+  if (p.isOverdue) return 0;
+  if (p.status === "ACTIVE") return 1;
+  return 2;
 }
-
-// Sort priority for the same signal: 0 = at-risk (amber), 1 = on-track
-// (green), 2 = neutral (gray). Bucket 0 is unreachable until overdue
-// data exists (see healthColor's TODO).
-function healthRank(status: OverviewProject["status"]): number {
-  return status === "ACTIVE" ? 1 : 2;
+function healthColor(p: { status: ProjectStatus; isOverdue: boolean }): string {
+  if (p.isOverdue) return "#F59E0B";
+  if (p.status === "ACTIVE") return "#8DC63F";
+  return "#6B7280";
 }
