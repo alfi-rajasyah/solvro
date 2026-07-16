@@ -95,6 +95,27 @@ product backlog. Update or prune items as they're resolved.
   future review re-flags it.
 - **Favicon** is the flat on-light mark (no green tile); may read weakly on dark
   browser tab strips. Could add a `prefers-color-scheme` SVG favicon later.
+- **Overview.tsx pre-existing off-token styling** (2026-07-16 UI review of the
+  portfolio-timeline change; all predate that diff and were deliberately left
+  untouched to keep it minimal): KPI icon tones use raw `text-emerald-600` /
+  `text-amber-600` instead of chip tokens; `AVATAR_PALETTE` is 8 hardcoded hexes
+  incl. `#f59e0b` (the AI-Breakdown-reserved amber) applied via inline style;
+  `P-`/`T-` ids and the KPI number use raw `font-mono` instead of the
+  `data-mono` token; assorted `text-[11px]`/`text-[12px]` captions bypass the
+  type scale; `healthColor()` left-border hexes (`#F59E0B`/`#8DC63F`/`#6B7280`)
+  could migrate to `border-l-chip-amber-text`/`border-l-primary`/
+  `border-l-outline` token classes (note `#8DC63F` matches no current token).
+  Fix as one dedicated token-migration pass.
+- **`ActivityFeed` empty-state edge case** (`frontend/src/pages/Overview.tsx`,
+  pre-existing): the `projects` prop is only used in the combined empty guard —
+  with recent projects but zero recent tasks it renders an empty `<ul>` instead
+  of an empty state, and project activity is never rendered at all. Either
+  render project events or key the empty state off `tasks.length` alone.
+- **`PortfolioCalendar` carried-over nits** (2026-07-16 extraction review,
+  kept verbatim on purpose): `rounded-full` on the timeline bar (tailwind config
+  reserves `full` for pills/avatars) and raw `font-mono` for the year switcher
+  display. Fix in the shared component once, benefits both Executive and
+  Overview.
 
 ---
 
