@@ -448,6 +448,26 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
             </button>
 
             <span className="self-center font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Type
+            </span>
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => patch({ isMilestone: !task.isMilestone })}
+              className="flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
+              title={canEdit ? "Toggle between task bar and milestone diamond" : undefined}
+            >
+              <span
+                className={`material-symbols-outlined text-[15px] ${task.isMilestone ? "text-primary" : "text-on-surface-variant"}`}
+              >
+                {task.isMilestone ? "diamond" : "check_box_outline_blank"}
+              </span>
+              <span className="text-on-surface">
+                {task.isMilestone ? "Milestone" : "Task"}
+              </span>
+            </button>
+
+            <span className="self-center font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
               Section
             </span>
             <div className="relative">

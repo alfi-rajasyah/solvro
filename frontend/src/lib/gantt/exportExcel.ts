@@ -2,8 +2,9 @@ import { addDays, parseISODate, startOfDay, type Row } from "./geometry";
 import {
   HOLIDAY_HEX,
   PRIORITY_BORDER_HEX,
-  STATUS_FILL_HEX,
   WEEKEND_HEX,
+  barFillHex,
+  type ColorByMode,
 } from "./palette";
 import type { Holiday } from "@/lib/queries";
 
@@ -13,6 +14,7 @@ interface ExportExcelOpts {
   chartStart: Date;
   chartEnd: Date;
   holidays: Holiday[];
+  colorBy: ColorByMode;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -44,7 +46,7 @@ function argb(hex: string, alpha = "FF"): string {
 }
 
 export async function exportGanttToExcel(opts: ExportExcelOpts): Promise<void> {
-  const { projectName, rows, chartStart, chartEnd, holidays } = opts;
+  const { projectName, rows, chartStart, chartEnd, holidays, colorBy } = opts;
   const ExcelJS = (await import("exceljs")).default;
 
   const workbook = new ExcelJS.Workbook();
@@ -255,7 +257,10 @@ export async function exportGanttToExcel(opts: ExportExcelOpts): Promise<void> {
     if (r.start && r.end && (r.kind === "task" || r.kind === "subtask")) {
       const status = r.status ?? "TODO";
       const priority = r.priority ?? "MEDIUM";
-      const fillHex = STATUS_FILL_HEX[status].replace(/^#/, "");
+      const fillHex = barFillHex(
+        { status, priority, sectionColor: r.sectionColor },
+        colorBy,
+      ).replace(/^#/, "");
       const borderHex = PRIORITY_BORDER_HEX[priority].replace(/^#/, "");
       const startMs = startOfDay(r.start).getTime();
       const endMs = startOfDay(r.end).getTime();

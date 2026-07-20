@@ -8,7 +8,7 @@ import {
   DATE_RANGE_COL_WIDTH,
   ROW_HEIGHT,
 } from "@/lib/gantt/constants";
-import { DEFAULT_SECTION_COLOR } from "@/lib/gantt/palette";
+import { DEFAULT_SECTION_COLOR, SECTION_COLOR_PRESETS } from "@/lib/gantt/palette";
 
 interface GanttListRowProps {
   row: Row;
@@ -18,6 +18,7 @@ interface GanttListRowProps {
   onTaskClick: (taskId: number) => void;
   onUpdateDates: (taskId: number, startISO: string | null, dueISO: string | null) => void;
   onHoverChange: (rowId: string | null) => void;
+  onSetSectionColor: (sectionId: number, color: string) => void;
 }
 
 export interface RowDragData {
@@ -39,8 +40,10 @@ export function GanttListRow({
   onTaskClick,
   onUpdateDates,
   onHoverChange,
+  onSetSectionColor,
 }: GanttListRowProps) {
   const [editingDates, setEditingDates] = useState(false);
+  const [pickingColor, setPickingColor] = useState(false);
   const isSection = row.kind === "section";
   const isTopLevelTask = row.kind === "task";
   const isSubtask = row.kind === "subtask";
@@ -128,11 +131,50 @@ export function GanttListRow({
                 {row.collapsed ? "chevron_right" : "expand_more"}
               </span>
             </button>
-            <span
-              className="h-2 w-2 shrink-0 rounded-full"
-              style={{ backgroundColor: row.sectionColor ?? DEFAULT_SECTION_COLOR }}
-              aria-hidden="true"
-            />
+            <span className="relative flex shrink-0 items-center">
+              <button
+                type="button"
+                disabled={!canEdit || row.sectionId === null}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPickingColor((v) => !v);
+                }}
+                className="h-2 w-2 rounded-full disabled:cursor-default"
+                style={{ backgroundColor: row.sectionColor ?? DEFAULT_SECTION_COLOR }}
+                aria-label="Set section color"
+                title={canEdit ? "Set section color" : undefined}
+              />
+              {pickingColor && canEdit && row.sectionId !== null && (
+                <>
+                  <button
+                    type="button"
+                    className="fixed inset-0 z-40 cursor-default"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPickingColor(false);
+                    }}
+                    aria-label="Close color picker"
+                  />
+                  {/* Floating popover — sanctioned overlay shadow token (DESIGN.md exception) */}
+                  <div className="absolute left-0 top-4 z-50 flex gap-1 rounded border border-outline-variant bg-surface-container-lowest p-1.5 shadow-overlay">
+                    {SECTION_COLOR_PRESETS.map((hex) => (
+                      <button
+                        key={hex}
+                        type="button"
+                        className="h-4 w-4 rounded-full hover:ring-2 hover:ring-primary"
+                        style={{ backgroundColor: hex }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSetSectionColor(row.sectionId!, hex);
+                          setPickingColor(false);
+                        }}
+                        aria-label={`Section color ${hex}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </span>
           </>
         ) : (
           <span className="w-4 shrink-0" aria-hidden="true" />

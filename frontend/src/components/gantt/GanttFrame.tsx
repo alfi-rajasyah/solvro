@@ -33,6 +33,7 @@ import {
 import { useGanttExport } from "@/lib/gantt/exportContext";
 import { exportGanttToExcel } from "@/lib/gantt/exportExcel";
 import { exportGanttToPdf } from "@/lib/gantt/exportPdf";
+import { type ColorByMode, legendEntries } from "@/lib/gantt/palette";
 import {
   type Task,
   useCreateDependency,
@@ -66,6 +67,8 @@ const VIEW_MODES: { mode: ViewMode; label: string }[] = [
   { mode: "month", label: "Month" },
   { mode: "quarter", label: "Quarter" },
 ];
+
+const COLOR_BY_STORAGE_KEY = "solvro.gantt.colorBy";
 
 export function GanttFrame({
   projectId,
@@ -132,6 +135,15 @@ export function GanttFrame({
   );
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
+  // Default "section" (decided 2026-07-20): upgrade-day visuals stay exactly
+  // as before — status/priority coloring is one click away in the toolbar.
+  const [colorBy, setColorBy] = useState<ColorByMode>(() => {
+    const v = localStorage.getItem(COLOR_BY_STORAGE_KEY);
+    return v === "section" || v === "priority" || v === "status" ? v : "section";
+  });
+  useEffect(() => {
+    localStorage.setItem(COLOR_BY_STORAGE_KEY, colorBy);
+  }, [colorBy]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
@@ -444,6 +456,13 @@ export function GanttFrame({
     [sections, updateTask, updateSection],
   );
 
+  const onSetSectionColor = useCallback(
+    (sectionId: number, color: string) => {
+      updateSection.mutate({ id: sectionId, patch: { color } });
+    },
+    [updateSection],
+  );
+
   const scrollToTodayPos = useCallback(
     (behavior: ScrollBehavior) => {
       const el = scrollerRef.current;
@@ -488,6 +507,7 @@ export function GanttFrame({
             chartStart: excelStart,
             chartEnd: excelEnd,
             holidays: holidays ?? [],
+            colorBy,
           });
         } catch (err) {
           setActionError(
@@ -504,10 +524,29 @@ export function GanttFrame({
             exportStart: excelStart,
             exportEnd: excelEnd,
             holidays: holidays ?? [],
+            colorBy,
           });
         } catch (err) {
           setActionError(
             err instanceof Error ? err.message : "PDF export failed.",
+          );
+          throw err;
+        }
+      },
+      pdfTab: async (win) => {
+        try {
+          await exportGanttToPdf({
+            projectName,
+            rows,
+            exportStart: excelStart,
+            exportEnd: excelEnd,
+            holidays: holidays ?? [],
+            colorBy,
+            tabWindow: win,
+          });
+        } catch (err) {
+          setActionError(
+            err instanceof Error ? err.message : "PDF view failed.",
           );
           throw err;
         }
@@ -524,6 +563,7 @@ export function GanttFrame({
     holidays,
     viewMode,
     columnWidth,
+    colorBy,
   ]);
 
   const runExport = useCallback(
@@ -659,6 +699,45 @@ export function GanttFrame({
             <span className="material-symbols-outlined text-[15px]">show_chart</span>
             Baseline
           </button>
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Color
+            </span>
+            <div className="flex items-center gap-0.5 rounded border border-outline-variant p-0.5">
+              {(["status", "section", "priority"] as const).map((m) => (
+                <button
+                  key={m}
+                  type="button"
+                  onClick={() => setColorBy(m)}
+                  className={[
+                    "rounded px-2 py-0.5 text-[11px] capitalize",
+                    colorBy === m
+                      ? "bg-primary text-on-primary"
+                      : "text-on-surface-variant hover:bg-surface-container-high",
+                  ].join(" ")}
+                >
+                  {m}
+                </button>
+              ))}
+            </div>
+            {legendEntries(colorBy).length > 0 && (
+              <div className="ml-2 hidden items-center gap-2 lg:flex">
+                {legendEntries(colorBy).map(([label, hex]) => (
+                  <span
+                    key={label}
+                    className="flex items-center gap-1 text-[10px] text-on-surface-variant"
+                  >
+                    <span
+                      className="h-2 w-2 rounded-[2px]"
+                      style={{ backgroundColor: hex }}
+                      aria-hidden="true"
+                    />
+                    {label}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
           {canEdit && (
             <button
               type="button"
@@ -781,6 +860,7 @@ export function GanttFrame({
                 onTaskClick={handleTaskClick}
                 onUpdateDates={handleUpdateDates}
                 onHoverChange={setHoveredRowId}
+                onSetSectionColor={onSetSectionColor}
               />
               {/* Draggable divider to resize the left pane */}
               <div
@@ -804,6 +884,7 @@ export function GanttFrame({
                   holidays={holidays}
                   canEdit={canEdit}
                   showBaseline={showBaseline}
+                  colorBy={colorBy}
                   dependencies={dependencies ?? []}
                   hoveredRowId={hoveredRowId}
                   onHoverChange={setHoveredRowId}

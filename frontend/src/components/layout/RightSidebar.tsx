@@ -20,19 +20,22 @@ export function RightSidebar({
   blueprintDocsUrl = "https://docs.solvro.dev/blueprints/v2.4",
 }: RightSidebarProps) {
   const { handlers: exportHandlers } = useGanttExport();
-  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
+  const [exporting, setExporting] = useState<"excel" | "pdf" | "pdfTab" | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
 
-  async function runExport(kind: "excel" | "pdf") {
+  async function runExport(kind: "excel" | "pdf" | "pdfTab") {
     if (!exportHandlers || exporting) return;
     setExportError(null);
     setExporting(kind);
+    // Open the tab synchronously inside the click's user activation —
+    // opening after the async export work would be pop-up-blocked.
+    const win = kind === "pdfTab" ? window.open("", "_blank") : null;
     try {
-      await exportHandlers[kind]();
+      if (kind === "pdfTab") await exportHandlers.pdfTab(win);
+      else await exportHandlers[kind]();
     } catch (err) {
-      setExportError(
-        err instanceof Error ? err.message : "Export failed.",
-      );
+      win?.close();
+      setExportError(err instanceof Error ? err.message : "Export failed.");
     } finally {
       setExporting(null);
     }
@@ -157,7 +160,7 @@ export function RightSidebar({
             <h3 className="mb-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
               Export schedule
             </h3>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-3 gap-2">
               <button
                 type="button"
                 onClick={() => runExport("excel")}
@@ -180,9 +183,21 @@ export function RightSidebar({
                 </span>
                 {exporting === "pdf" ? "Exporting…" : "PDF"}
               </button>
+              <button
+                type="button"
+                onClick={() => runExport("pdfTab")}
+                disabled={exporting !== null}
+                className="inline-flex items-center justify-center gap-1.5 rounded border border-outline-variant bg-surface-container-lowest px-2.5 py-2 font-display text-[12px] font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                <span className="material-symbols-outlined text-[17px]">
+                  open_in_new
+                </span>
+                {exporting === "pdfTab" ? "Opening…" : "View"}
+              </button>
             </div>
             <p className="mt-2 text-[11px] text-on-surface-variant">
-              Excel: tasks + visual date grid · PDF: full Gantt screenshot + task table.
+              Excel: tasks + date grid · PDF: download · View: open the PDF in a
+              tab (use when downloads hang).
             </p>
             {exportError && (
               <div
