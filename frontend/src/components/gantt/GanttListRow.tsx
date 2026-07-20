@@ -176,6 +176,17 @@ export function GanttListRow({
               )}
             </span>
           </>
+        ) : isTopLevelTask && row.hasChildren ? (
+          <button
+            type="button"
+            onClick={() => onToggleSection(row.id)}
+            className="flex h-4 w-4 shrink-0 items-center justify-center text-on-surface-variant hover:text-on-surface"
+            aria-label={row.collapsed ? "Expand subtasks" : "Collapse subtasks"}
+          >
+            <span className="material-symbols-outlined text-[17px] leading-none">
+              {row.collapsed ? "chevron_right" : "expand_more"}
+            </span>
+          </button>
         ) : (
           <span className="w-4 shrink-0" aria-hidden="true" />
         )}
