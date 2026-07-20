@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-20 — Gantt dates column truncation
+
+- Gantt task-list dates column truncated every range ("12 Jul – 1…"); widened
+  `DATE_RANGE_COL_WIDTH` 92 → 118 in `frontend/src/lib/gantt/constants.ts` to
+  fit the bounded "DD Mon – DD Mon" format (window/divider resizing feeds the
+  flex name column, so the fixed sub-column could never grow).
+
 ### Changed — 2026-07-16 — Overview: fake "Portfolio progress" S-curve replaced by real Portfolio timeline
 
 - **[frontend/src/pages/Overview.tsx](frontend/src/pages/Overview.tsx)** — the synthetic S-curve chart (**Removed**: `buildSCurve()` fake 6-bucket ramp, the recharts AreaChart card, and this file's recharts imports — the dep stays for `ProjectOverview.tsx`) is replaced by the shared `PortfolioCalendar` fed by the new `GET /overview` `portfolio` payload, so each user sees a real year-roadmap of exactly the projects they can see (TAMs: their own). Rendered as a full-width bare section (header + the calendar's own bordered container, mirroring Executive — no double-carding) titled "Portfolio timeline"; footnote copy drops "see List view" (Overview has none). "Projects needing attention" + "Recent activity" now sit in a two-up row below; the attention strip's local `ProjectStatusPill` was **Removed** in favor of the canonical `ProjectStatusChip` (it duplicated chip styling with off-token colors and wrong ON_HOLD/CANCELLED semantics). `SkeletonGrid` mirrors the new layout.
