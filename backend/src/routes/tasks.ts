@@ -24,6 +24,7 @@ const updateTaskSchema = z.object({
   priority: z.nativeEnum(Priority).optional(),
   startDate: z.coerce.date().nullable().optional(),
   dueDate: z.coerce.date().nullable().optional(),
+  isMilestone: z.boolean().optional(),
   // baselineStartDate / baselineDueDate are intentionally NOT accepted here —
   // they are server-set only, snapshotted by POST /projects/:id/baseline.
   // Accepting them from clients would let any task:write user overwrite the
@@ -127,7 +128,14 @@ tasksRouter.patch(
 
     const current = await prisma.task.findUniqueOrThrow({
       where: { id },
-      select: { projectId: true, status: true, parentTaskId: true, position: true },
+      select: {
+        projectId: true,
+        status: true,
+        parentTaskId: true,
+        position: true,
+        isMilestone: true,
+        dueDate: true,
+      },
     });
 
     const nextStatus = body.status ?? current.status;
@@ -172,6 +180,13 @@ tasksRouter.patch(
       if (body.priority !== undefined) data.priority = body.priority;
       if (body.startDate !== undefined) data.startDate = body.startDate;
       if (body.dueDate !== undefined) data.dueDate = body.dueDate;
+      if (body.isMilestone !== undefined) data.isMilestone = body.isMilestone;
+      // Milestone due-date lockstep: whatever this patch results in, a
+      // milestone with a due date must have startDate === dueDate.
+      const willBeMilestone = body.isMilestone ?? current.isMilestone;
+      const effectiveDue =
+        body.dueDate !== undefined ? body.dueDate : current.dueDate;
+      if (willBeMilestone && effectiveDue) data.startDate = effectiveDue;
       if (body.assignedToId !== undefined) {
         data.assignedTo = body.assignedToId === null
           ? { disconnect: true }
