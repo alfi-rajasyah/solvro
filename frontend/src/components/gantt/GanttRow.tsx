@@ -2,6 +2,7 @@ import { GanttBar } from "./GanttBar";
 import { GanttSectionBand } from "./GanttSectionBar";
 import { type Row, type ViewMode } from "@/lib/gantt/geometry";
 import { ROW_HEIGHT } from "@/lib/gantt/constants";
+import type { ColorByMode } from "@/lib/gantt/palette";
 
 interface GanttRowProps {
   row: Row;
@@ -11,6 +12,7 @@ interface GanttRowProps {
   contentWidth: number;
   canEdit: boolean;
   showBaseline: boolean;
+  colorBy: ColorByMode;
   hovered: boolean;
   onCommit: (taskId: number, startDate: Date, dueDate: Date) => void;
   onTaskClick: (taskId: number) => void;
@@ -31,6 +33,7 @@ export function GanttRow({
   contentWidth,
   canEdit,
   showBaseline,
+  colorBy,
   hovered,
   onCommit,
   onTaskClick,
@@ -58,6 +61,7 @@ export function GanttRow({
           columnWidth={columnWidth}
           canEdit={canEdit}
           showBaseline={showBaseline}
+          colorBy={colorBy}
           onCommit={onCommit}
           onClick={onTaskClick}
           onConnectStart={onConnectStart}
