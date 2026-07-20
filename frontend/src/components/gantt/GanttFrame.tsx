@@ -533,6 +533,24 @@ export function GanttFrame({
           throw err;
         }
       },
+      pdfTab: async (win) => {
+        try {
+          await exportGanttToPdf({
+            projectName,
+            rows,
+            exportStart: excelStart,
+            exportEnd: excelEnd,
+            holidays: holidays ?? [],
+            colorBy,
+            tabWindow: win,
+          });
+        } catch (err) {
+          setActionError(
+            err instanceof Error ? err.message : "PDF view failed.",
+          );
+          throw err;
+        }
+      },
     });
     return () => register(null);
   }, [

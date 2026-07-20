@@ -3,6 +3,13 @@ import { createContext, useCallback, useContext, useMemo, useState, type ReactNo
 export interface GanttExportHandlers {
   excel: () => Promise<void>;
   pdf: () => Promise<void>;
+  /**
+   * Render the PDF into an already-open window instead of downloading.
+   * `win` MUST be opened synchronously inside the triggering click handler
+   * (pop-up blockers reject windows opened after async work); pass null if
+   * window.open was blocked and the handler will throw a friendly error.
+   */
+  pdfTab: (win: Window | null) => Promise<void>;
 }
 
 interface GanttExportContextValue {
