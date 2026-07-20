@@ -29,3 +29,55 @@ export const DEFAULT_SECTION_COLOR = "#94a3b8"; // slate-400
 // the base bar renders at this opacity over the section color, and the
 // progress fill renders solid from the left up to progressPct.
 export const BAR_TRACK_OPACITY = 0.28;
+
+export type ColorByMode = "status" | "section" | "priority";
+
+// Single fill resolver for live bars AND both exports — keeps the screen and
+// generated documents in agreement whichever mode is active. TaskStatus and
+// Priority are already imported at the top of this file, and the two Records
+// are strictly keyed — hence the enum-typed opts (not string).
+export function barFillHex(
+  opts: {
+    status?: TaskStatus | null;
+    priority?: Priority | null;
+    sectionColor?: string | null;
+  },
+  mode: ColorByMode,
+): string {
+  if (mode === "status") return STATUS_FILL_HEX[opts.status ?? "TODO"];
+  if (mode === "priority") return PRIORITY_BORDER_HEX[opts.priority ?? "MEDIUM"];
+  return opts.sectionColor ?? DEFAULT_SECTION_COLOR;
+}
+
+export function legendEntries(mode: ColorByMode): Array<[string, string]> {
+  if (mode === "status") {
+    return [
+      ["To Do", STATUS_FILL_HEX.TODO],
+      ["In Progress", STATUS_FILL_HEX.IN_PROGRESS],
+      ["Done", STATUS_FILL_HEX.DONE],
+    ];
+  }
+  if (mode === "priority") {
+    return [
+      ["Low", PRIORITY_BORDER_HEX.LOW],
+      ["Medium", PRIORITY_BORDER_HEX.MEDIUM],
+      ["High", PRIORITY_BORDER_HEX.HIGH],
+      ["Urgent", PRIORITY_BORDER_HEX.URGENT],
+    ];
+  }
+  // Section mode: the colored dots on section rows are the legend.
+  return [];
+}
+
+// Preset swatches for the section color picker (Task 6). First entry is the
+// schema default. Curated set that reads on both light and dark surfaces.
+export const SECTION_COLOR_PRESETS = [
+  "#94a3b8", // slate (default)
+  "#3b82f6", // blue
+  "#0ea5e9", // sky
+  "#14b8a6", // teal
+  "#10b981", // emerald
+  "#f59e0b", // amber
+  "#ef4444", // rose
+  "#8b5cf6", // violet
+] as const;

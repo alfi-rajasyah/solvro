@@ -2,8 +2,9 @@ import { addDays, parseISODate, startOfDay, type Row } from "./geometry";
 import {
   HOLIDAY_HEX,
   PRIORITY_BORDER_HEX,
-  STATUS_FILL_HEX,
   WEEKEND_HEX,
+  barFillHex,
+  type ColorByMode,
 } from "./palette";
 import type { Holiday } from "@/lib/queries";
 
@@ -13,6 +14,7 @@ interface ExportPdfOpts {
   exportStart: Date;
   exportEnd: Date;
   holidays: Holiday[];
+  colorBy: ColorByMode;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -47,7 +49,7 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
-  const { projectName, rows, exportStart, exportEnd, holidays } = opts;
+  const { projectName, rows, exportStart, exportEnd, holidays, colorBy } = opts;
 
   const jsPdfMod = await import("jspdf");
   const jsPDF = jsPdfMod.default;
@@ -289,7 +291,12 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
 
         const status = row.status ?? "TODO";
         const priority = row.priority ?? "MEDIUM";
-        const [fr, fg, fb] = hexToRgb(STATUS_FILL_HEX[status]);
+        const [fr, fg, fb] = hexToRgb(
+          barFillHex(
+            { status, priority, sectionColor: row.sectionColor },
+            colorBy,
+          ),
+        );
         const [pr, pg, pb] = hexToRgb(PRIORITY_BORDER_HEX[priority]);
         pdf.setFillColor(fr, fg, fb);
         pdf.rect(bx, by, Math.max(1, bw), bh, "F");

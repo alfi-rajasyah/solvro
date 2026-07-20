@@ -14,7 +14,11 @@ import {
   RESIZE_HANDLE_PX,
   ROW_HEIGHT,
 } from "@/lib/gantt/constants";
-import { BAR_TRACK_OPACITY, DEFAULT_SECTION_COLOR } from "@/lib/gantt/palette";
+import {
+  BAR_TRACK_OPACITY,
+  barFillHex,
+  type ColorByMode,
+} from "@/lib/gantt/palette";
 
 type DragMode = "move" | "resize-start" | "resize-end";
 
@@ -25,6 +29,7 @@ interface GanttBarProps {
   columnWidth: number;
   canEdit: boolean;
   showBaseline: boolean;
+  colorBy: ColorByMode;
   onCommit: (taskId: number, startDate: Date, dueDate: Date) => void;
   onClick: (taskId: number) => void;
   /**
@@ -57,6 +62,7 @@ export function GanttBar({
   columnWidth,
   canEdit,
   showBaseline,
+  colorBy,
   onCommit,
   onClick,
   onConnectStart,
@@ -73,7 +79,10 @@ export function GanttBar({
   } | null>(null);
 
   const isMilestone = Boolean(row.isMilestone);
-  const color = row.sectionColor ?? DEFAULT_SECTION_COLOR;
+  const color = barFillHex(
+    { status: row.status, priority: row.priority, sectionColor: row.sectionColor },
+    colorBy,
+  );
   const rgb = hexToRgb(color);
 
   // Milestones may only have a dueDate (no startDate) — anchor on whichever
