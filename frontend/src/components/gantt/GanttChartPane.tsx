@@ -1,5 +1,6 @@
 import { type Row, type ViewMode } from "@/lib/gantt/geometry";
 import { ROW_HEIGHT } from "@/lib/gantt/constants";
+import type { ColorByMode } from "@/lib/gantt/palette";
 import type { Holiday, TaskDependency } from "@/lib/queries";
 import { GanttColumnGrid } from "./GanttColumnGrid";
 import { GanttConnectors } from "./GanttConnectors";
@@ -17,6 +18,7 @@ interface GanttChartPaneProps {
   holidays: Holiday[];
   canEdit: boolean;
   showBaseline: boolean;
+  colorBy: ColorByMode;
   dependencies: TaskDependency[];
   hoveredRowId: string | null;
   onHoverChange: (rowId: string | null) => void;
@@ -46,6 +48,7 @@ export function GanttChartPane({
   holidays,
   canEdit,
   showBaseline,
+  colorBy,
   dependencies,
   hoveredRowId,
   onHoverChange,
@@ -89,6 +92,7 @@ export function GanttChartPane({
               contentWidth={contentWidth}
               canEdit={canEdit}
               showBaseline={showBaseline}
+              colorBy={colorBy}
               hovered={hoveredRowId === row.id}
               onCommit={onCommit}
               onTaskClick={onTaskClick}

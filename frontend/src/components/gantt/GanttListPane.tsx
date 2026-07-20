@@ -11,6 +11,7 @@ interface GanttListPaneProps {
   onTaskClick: (taskId: number) => void;
   onUpdateDates: (taskId: number, startISO: string | null, dueISO: string | null) => void;
   onHoverChange: (rowId: string | null) => void;
+  onSetSectionColor: (sectionId: number, color: string) => void;
 }
 
 export function GanttListPane({
@@ -22,6 +23,7 @@ export function GanttListPane({
   onTaskClick,
   onUpdateDates,
   onHoverChange,
+  onSetSectionColor,
 }: GanttListPaneProps) {
   return (
     <div
@@ -53,6 +55,7 @@ export function GanttListPane({
             onTaskClick={onTaskClick}
             onUpdateDates={onUpdateDates}
             onHoverChange={onHoverChange}
+            onSetSectionColor={onSetSectionColor}
           />
         ))}
       </div>

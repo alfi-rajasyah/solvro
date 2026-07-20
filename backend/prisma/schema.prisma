@@ -217,6 +217,10 @@ model Task {
   priority          Priority   @default(MEDIUM)
   startDate         DateTime?  @map("start_date")
   dueDate           DateTime?  @map("due_date")
+  // Explicit milestone flag. Historically derived in the frontend
+  // (startDate === dueDate, or dueDate-only); backfilled once by the
+  // task_is_milestone migration, user-controlled thereafter.
+  isMilestone       Boolean    @default(false) @map("is_milestone")
   baselineStartDate DateTime?  @map("baseline_start_date")
   baselineDueDate   DateTime?  @map("baseline_due_date")
   assignedToId      Int?       @map("assigned_to")

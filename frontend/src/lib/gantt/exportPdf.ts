@@ -2,8 +2,9 @@ import { addDays, parseISODate, startOfDay, type Row } from "./geometry";
 import {
   HOLIDAY_HEX,
   PRIORITY_BORDER_HEX,
-  STATUS_FILL_HEX,
   WEEKEND_HEX,
+  barFillHex,
+  type ColorByMode,
 } from "./palette";
 import type { Holiday } from "@/lib/queries";
 
@@ -13,6 +14,9 @@ interface ExportPdfOpts {
   exportStart: Date;
   exportEnd: Date;
   holidays: Holiday[];
+  colorBy: ColorByMode;
+  /** When set, render into this window instead of triggering a download. */
+  tabWindow?: Window | null;
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -47,7 +51,7 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
-  const { projectName, rows, exportStart, exportEnd, holidays } = opts;
+  const { projectName, rows, exportStart, exportEnd, holidays, colorBy, tabWindow } = opts;
 
   const jsPdfMod = await import("jspdf");
   const jsPDF = jsPdfMod.default;
@@ -289,7 +293,12 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
 
         const status = row.status ?? "TODO";
         const priority = row.priority ?? "MEDIUM";
-        const [fr, fg, fb] = hexToRgb(STATUS_FILL_HEX[status]);
+        const [fr, fg, fb] = hexToRgb(
+          barFillHex(
+            { status, priority, sectionColor: row.sectionColor },
+            colorBy,
+          ),
+        );
         const [pr, pg, pb] = hexToRgb(PRIORITY_BORDER_HEX[priority]);
         pdf.setFillColor(fr, fg, fb);
         pdf.rect(bx, by, Math.max(1, bw), bh, "F");
@@ -367,5 +376,22 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
     },
   });
 
-  pdf.save(`${slugify(projectName)}_gantt_${fmtIsoDate(new Date())}.pdf`);
+  if (tabWindow !== undefined) {
+    // Browser-viewer path: bypasses the download pipeline, which hangs on
+    // Safe Browsing finalization on the plain-HTTP prod origin (see
+    // docs/plans/gantt-ux-and-export-fixes-plan.md appendix).
+    const blobUrl = String(pdf.output("bloburl"));
+    if (tabWindow) {
+      tabWindow.location.href = blobUrl;
+    } else {
+      const w = window.open(blobUrl, "_blank");
+      if (!w) {
+        throw new Error(
+          "Pop-up blocked — allow pop-ups for this site to view the PDF.",
+        );
+      }
+    }
+  } else {
+    pdf.save(`${slugify(projectName)}_gantt_${fmtIsoDate(new Date())}.pdf`);
+  }
 }

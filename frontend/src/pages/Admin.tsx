@@ -23,6 +23,7 @@ import {
 } from "@/lib/queries";
 import type { Role } from "@/lib/auth";
 import { PERMISSION_CATALOG, useAuth } from "@/lib/auth";
+import { copyText } from "@/lib/clipboard";
 
 type Tab = "users" | "roles" | "signin" | "projects";
 
@@ -924,7 +925,7 @@ function ClientIdField({ id }: { id: string }) {
         </button>
         <button
           type="button"
-          onClick={() => void navigator.clipboard.writeText(id)}
+          onClick={() => void copyText(id)}
           title="Copy to clipboard"
           className="text-on-surface-variant hover:text-on-surface"
         >
