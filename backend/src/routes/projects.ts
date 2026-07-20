@@ -44,6 +44,7 @@ const createProjectSchema = z.object({
   customerId: z.number().int().positive(),
   status: z.nativeEnum(ProjectStatus).optional(),
   wipLimits: wipLimitsSchema.optional(),
+  excludeFromPortfolio: z.boolean().optional(),
 });
 
 const updateProjectSchema = z.object({
@@ -54,6 +55,7 @@ const updateProjectSchema = z.object({
   tamId: z.number().int().positive().optional(),
   customerId: z.number().int().positive().optional(),
   wipLimits: wipLimitsSchema.optional(),
+  excludeFromPortfolio: z.boolean().optional(),
 });
 
 const projectListQuerySchema = z.object({
@@ -147,6 +149,7 @@ projectsRouter.post(
         customerId: body.customerId,
         status: body.status ?? "PLANNING",
         wipLimits: body.wipLimits ?? undefined,
+        excludeFromPortfolio: body.excludeFromPortfolio ?? false,
       },
     });
     res.status(201).json(project);
@@ -299,6 +302,9 @@ projectsRouter.patch(
     }
     if (body.wipLimits !== undefined) {
       data.wipLimits = body.wipLimits === null ? Prisma.JsonNull : body.wipLimits;
+    }
+    if (body.excludeFromPortfolio !== undefined) {
+      data.excludeFromPortfolio = body.excludeFromPortfolio;
     }
 
     const updated = await prisma.project.update({ where: { id }, data });

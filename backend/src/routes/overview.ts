@@ -17,7 +17,13 @@ function projectScope(user: JwtPayload): Prisma.ProjectWhereInput {
 
 overviewRouter.get("/", async (req, res) => {
   const user = req.user!;
-  const scope = projectScope(user);
+  // Administrative containers (excludeFromPortfolio) are out of ALL Overview
+  // roll-ups — KPI counts and recent-lists included, not just the portfolio
+  // block — so they can't inflate the dashboard they were flagged to leave.
+  // (computePortfolioRows applies the same filter internally.)
+  const scope: Prisma.ProjectWhereInput = {
+    AND: [projectScope(user), { excludeFromPortfolio: false }],
+  };
 
   const [projectCount, projectsByStatus, taskGroups, recentProjects, recentTasks, portfolio] =
     await Promise.all([
