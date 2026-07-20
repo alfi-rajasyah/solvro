@@ -19,7 +19,7 @@ export interface Row {
   task?: Task;
   status?: Task["status"];
   priority?: Task["priority"];
-  /** True when the task has only a due date, or startDate === dueDate. */
+  /** Mirrors Task.isMilestone (explicit flag). */
   isMilestone?: boolean;
   /** 0-100. DONE tasks are 100; parents with subtasks use done/total; else 0. */
   progressPct?: number;
@@ -324,10 +324,9 @@ function progressForTask(task: Task, childrenById: Map<number, Task[]>): number 
 }
 
 function isMilestoneTask(task: Task): boolean {
-  if (task.startDate && task.dueDate) {
-    return parseISODate(task.startDate).getTime() === parseISODate(task.dueDate).getTime();
-  }
-  return Boolean(task.dueDate) && !task.startDate;
+  // Explicit flag (Task.isMilestone) — the old same-day/due-only derivation
+  // now lives only in the one-time DB backfill.
+  return task.isMilestone;
 }
 
 export function buildRows({ tasks, sections, collapsed }: BuildRowsOpts): Row[] {
@@ -404,7 +403,14 @@ export function buildRows({ tasks, sections, collapsed }: BuildRowsOpts): Row[] 
         kind: "task",
         depth: 1,
         name: p.title,
-        start: p.startDate ? parseISODate(p.startDate) : null,
+        // A due-only task that is NOT a milestone still needs a drawable
+        // range — anchor a 1-day bar on its due date. (GanttBar returns null
+        // for non-milestones missing either endpoint.)
+        start: p.startDate
+          ? parseISODate(p.startDate)
+          : !isMilestoneTask(p) && p.dueDate
+            ? parseISODate(p.dueDate)
+            : null,
         end: p.dueDate ? parseISODate(p.dueDate) : null,
         parentRowId: rowId,
         taskId: p.id,
