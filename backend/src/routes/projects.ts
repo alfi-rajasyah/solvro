@@ -84,6 +84,7 @@ const createTaskSchema = z.object({
   priority: z.nativeEnum(Priority).optional(),
   startDate: z.coerce.date().nullable().optional(),
   dueDate: z.coerce.date().nullable().optional(),
+  isMilestone: z.boolean().optional(),
   assignedToId: z.number().int().positive().nullable().optional(),
   parentTaskId: z.number().int().positive().nullable().optional(),
   sectionId: z.number().int().positive().nullable().optional(),
@@ -368,8 +369,14 @@ projectsRouter.post(
           description: body.description,
           status,
           priority: body.priority ?? "MEDIUM",
-          startDate: body.startDate ?? null,
+          // Milestones anchor to their due date; keep startDate in lockstep
+          // so geometry and exports see a single-day marker.
+          startDate:
+            body.isMilestone && body.dueDate
+              ? body.dueDate
+              : body.startDate ?? null,
           dueDate: body.dueDate ?? null,
+          isMilestone: body.isMilestone ?? false,
           assignedToId: body.assignedToId ?? null,
           parentTaskId: body.parentTaskId ?? null,
           sectionId: body.sectionId ?? null,
