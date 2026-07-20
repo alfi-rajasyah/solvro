@@ -22,7 +22,10 @@ export async function computePortfolioRows(
   where: Prisma.ProjectWhereInput,
 ): Promise<PortfolioProjectRow[]> {
   const projects = await prisma.project.findMany({
-    where,
+    // Administrative containers (excludeFromPortfolio) never appear in
+    // roll-ups regardless of what filter the caller passes — this is the
+    // single choke point for both GET /overview and GET /reports/executive.
+    where: { AND: [where, { excludeFromPortfolio: false }] },
     select: {
       id: true,
       name: true,

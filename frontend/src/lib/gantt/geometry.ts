@@ -16,6 +16,8 @@ export interface Row {
   /** Hex color for this row's section band / bar fill. Neutral default when unset. */
   sectionColor?: string;
   collapsed?: boolean;
+  /** Task rows with subtask children get an expand/collapse chevron. */
+  hasChildren?: boolean;
   task?: Task;
   status?: Task["status"];
   priority?: Task["priority"];
@@ -391,27 +393,34 @@ export function buildRows({ tasks, sections, collapsed }: BuildRowsOpts): Row[] 
     });
     if (isCollapsed || group.length === 0) return;
 
-    // Subtasks (parentTaskId !== null) are intentionally excluded from Gantt
-    // rows — their parent bars already roll up subtask progress via
-    // progressForTask, and rendering them as flat rows here (previously under
-    // a "(No section)" group when a subtask's own section diverged from its
-    // parent's) misrepresented the hierarchy.
+    // Non-milestone due-only tasks still need a drawable range — anchor a
+    // 1-day bar on the due date. (GanttBar returns null for non-milestones
+    // missing either endpoint.)
+    function taskDates(t: Task): { start: Date | null; end: Date | null } {
+      return {
+        start: t.startDate
+          ? parseISODate(t.startDate)
+          : !isMilestoneTask(t) && t.dueDate
+            ? parseISODate(t.dueDate)
+            : null,
+        end: t.dueDate ? parseISODate(t.dueDate) : null,
+      };
+    }
+
+    // Subtasks render nested under their parent (never as flat section
+    // members), grouped by the PARENT's section even when their own
+    // sectionId diverged — the hierarchy wins over section membership.
     const parents = group.filter((t) => t.parentTaskId === null);
     for (const p of parents) {
+      const parentRowIdStr = `task-${p.id}`;
+      const children = childrenById.get(p.id) ?? [];
+      const parentCollapsed = collapsed.has(parentRowIdStr);
       rows.push({
-        id: `task-${p.id}`,
+        id: parentRowIdStr,
         kind: "task",
         depth: 1,
         name: p.title,
-        // A due-only task that is NOT a milestone still needs a drawable
-        // range — anchor a 1-day bar on its due date. (GanttBar returns null
-        // for non-milestones missing either endpoint.)
-        start: p.startDate
-          ? parseISODate(p.startDate)
-          : !isMilestoneTask(p) && p.dueDate
-            ? parseISODate(p.dueDate)
-            : null,
-        end: p.dueDate ? parseISODate(p.dueDate) : null,
+        ...taskDates(p),
         parentRowId: rowId,
         taskId: p.id,
         sectionId,
@@ -421,7 +430,30 @@ export function buildRows({ tasks, sections, collapsed }: BuildRowsOpts): Row[] 
         priority: p.priority,
         isMilestone: isMilestoneTask(p),
         progressPct: progressForTask(p, childrenById),
+        hasChildren: children.length > 0,
+        collapsed: parentCollapsed,
       });
+      if (parentCollapsed) continue;
+      // Only direct children render (depth caps at 2); deeper nesting rolls
+      // up into each subtask's own progressPct.
+      for (const c of children) {
+        rows.push({
+          id: `task-${c.id}`,
+          kind: "subtask",
+          depth: 2,
+          name: c.title,
+          ...taskDates(c),
+          parentRowId: parentRowIdStr,
+          taskId: c.id,
+          sectionId,
+          sectionColor,
+          task: c,
+          status: c.status,
+          priority: c.priority,
+          isMilestone: isMilestoneTask(c),
+          progressPct: progressForTask(c, childrenById),
+        });
+      }
     }
   }
 

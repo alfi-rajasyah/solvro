@@ -72,6 +72,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
   const [customerId, setCustomerId] = useState<number | "">("");
   const [status, setStatus] = useState<ProjectStatus>("PLANNING");
   const [wipLimits, setWipLimits] = useState<WipLimitsForm>(wipLimitsToForm(null));
+  const [excludeFromPortfolio, setExcludeFromPortfolio] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -85,6 +86,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
       setCustomerId(project.customerId ?? "");
       setStatus(project.status);
       setWipLimits(wipLimitsToForm(project.wipLimits));
+      setExcludeFromPortfolio(project.excludeFromPortfolio);
     } else {
       setName("");
       setDescription("");
@@ -93,6 +95,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
       setCustomerId("");
       setStatus("PLANNING");
       setWipLimits(wipLimitsToForm(null));
+      setExcludeFromPortfolio(false);
     }
   }, [open, project, user]);
 
@@ -129,6 +132,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
           customerId: Number(customerId),
           status,
           wipLimits: formToWipLimits(wipLimits),
+          excludeFromPortfolio,
         });
         onSaved?.(project.id);
       } else {
@@ -140,6 +144,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
           customerId: Number(customerId),
           status,
           wipLimits: formToWipLimits(wipLimits),
+          excludeFromPortfolio,
         });
         onSaved?.(created.id);
       }
@@ -291,6 +296,24 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             ))}
           </div>
         </Field>
+
+        <label className="flex cursor-pointer items-start gap-2">
+          <input
+            type="checkbox"
+            checked={excludeFromPortfolio}
+            onChange={(e) => setExcludeFromPortfolio(e.target.checked)}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
+          />
+          <span className="min-w-0">
+            <span className="block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+              Administrative project
+            </span>
+            <span className="block text-[11px] text-on-surface-variant">
+              Exclude from portfolio roll-ups (Executive dashboard, Overview,
+              overdue monitoring). The project stays fully usable here.
+            </span>
+          </span>
+        </label>
 
         {error && (
           <div
