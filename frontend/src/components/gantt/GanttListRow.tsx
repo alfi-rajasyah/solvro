@@ -155,8 +155,8 @@ export function GanttListRow({
                     }}
                     aria-label="Close color picker"
                   />
-                  {/* Floating popover — shadow allowed per DESIGN.md exception */}
-                  <div className="absolute left-0 top-4 z-50 flex gap-1 rounded border border-outline-variant bg-surface-container-lowest p-1.5 shadow-lg">
+                  {/* Floating popover — sanctioned overlay shadow token (DESIGN.md exception) */}
+                  <div className="absolute left-0 top-4 z-50 flex gap-1 rounded border border-outline-variant bg-surface-container-lowest p-1.5 shadow-overlay">
                     {SECTION_COLOR_PRESETS.map((hex) => (
                       <button
                         key={hex}

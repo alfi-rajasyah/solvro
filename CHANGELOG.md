@@ -79,6 +79,18 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
   `frontend/src/lib/gantt/exportContext.tsx`, `exportPdf.ts`,
   `GanttFrame.tsx`, `frontend/src/components/layout/RightSidebar.tsx`.
 
+### Changed — 2026-07-20 — Review fixes: milestone validation + optimistic section updates
+
+- `useUpdateSection` now uses the canonical optimistic-update pattern
+  (snapshot/rollback/invalidate) so section color/rename/reorder feel
+  instant — `frontend/src/lib/queries.ts`.
+- Milestone validation guards: task create with `isMilestone: true` requires
+  a due date; task patch rejects `isMilestone: true` combined with clearing
+  the due date — `backend/src/routes/projects.ts`,
+  `backend/src/routes/tasks.ts`.
+- Section color popover uses the sanctioned `shadow-overlay` token instead
+  of `shadow-lg` — `frontend/src/components/gantt/GanttListRow.tsx`.
+
 ### Changed — 2026-07-16 — Overview: fake "Portfolio progress" S-curve replaced by real Portfolio timeline
 
 - **[frontend/src/pages/Overview.tsx](frontend/src/pages/Overview.tsx)** — the synthetic S-curve chart (**Removed**: `buildSCurve()` fake 6-bucket ramp, the recharts AreaChart card, and this file's recharts imports — the dep stays for `ProjectOverview.tsx`) is replaced by the shared `PortfolioCalendar` fed by the new `GET /overview` `portfolio` payload, so each user sees a real year-roadmap of exactly the projects they can see (TAMs: their own). Rendered as a full-width bare section (header + the calendar's own bordered container, mirroring Executive — no double-carding) titled "Portfolio timeline"; footnote copy drops "see List view" (Overview has none). "Projects needing attention" + "Recent activity" now sit in a two-up row below; the attention strip's local `ProjectStatusPill` was **Removed** in favor of the canonical `ProjectStatusChip` (it duplicated chip styling with off-token colors and wrong ON_HOLD/CANCELLED semantics). `SkeletonGrid` mirrors the new layout.
