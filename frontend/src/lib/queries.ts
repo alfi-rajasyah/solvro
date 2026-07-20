@@ -96,6 +96,8 @@ export interface ProjectSummary {
   tamId: number;
   customerId: number | null;
   wipLimits: WipLimits | null;
+  /** Administrative container (e.g. Opty Timelines) — hidden from portfolio roll-ups. */
+  excludeFromPortfolio: boolean;
   baselineLockedAt: string | null;
   baselineLockedById: number | null;
   createdAt: string;
@@ -365,6 +367,7 @@ export interface CreateProjectInput {
   customerId: number;
   status?: ProjectStatus;
   wipLimits?: WipLimits | null;
+  excludeFromPortfolio?: boolean;
 }
 
 export function useCreateProject() {
@@ -388,6 +391,7 @@ export interface UpdateProjectInput {
   tamId?: number;
   customerId?: number;
   wipLimits?: WipLimits | null;
+  excludeFromPortfolio?: boolean;
 }
 
 export function useUpdateProject(id: number) {
@@ -400,6 +404,8 @@ export function useUpdateProject(id: number) {
       qc.invalidateQueries({ queryKey: queryKeys.project(id) });
       qc.invalidateQueries({ queryKey: queryKeys.overview });
       qc.invalidateQueries({ queryKey: queryKeys.customers });
+      // excludeFromPortfolio changes reshape the executive roll-up too.
+      qc.invalidateQueries({ queryKey: queryKeys.executiveReport() });
     },
   });
 }

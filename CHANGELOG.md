@@ -15,6 +15,36 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-20 — Gantt renders subtasks as nested collapsible rows
+
+- `buildRows` (`frontend/src/lib/gantt/geometry.ts`) now emits `subtask` rows
+  (depth 2) nested under their parent task, always grouped by the parent's
+  section even when the subtask's own `sectionId` diverged. Parent task rows
+  gain a `hasChildren` flag + expand/collapse chevron
+  (`frontend/src/components/gantt/GanttListRow.tsx`) reusing the existing
+  `collapsed` row-id set. Only direct children render (depth caps at 2);
+  deeper nesting rolls up into each subtask's `progressPct`. Renderers,
+  connectors, and Excel/PDF exports already supported the `subtask` row kind
+  — previously nothing emitted it (subtasks were invisible on the Gantt).
+
+### Added — 2026-07-20 — `Project.excludeFromPortfolio` flag (admin containers)
+
+- `Project.excludeFromPortfolio` boolean (`projects.exclude_from_portfolio`,
+  default false), migration `project_exclude_from_portfolio` —
+  `backend/prisma/schema.prisma`. Marks administrative container projects
+  (e.g. per-TAM "Opty Timelines") that must not pollute portfolio roll-ups.
+- `computePortfolioRows` (`backend/src/lib/portfolio.ts`) AND-merges
+  `excludeFromPortfolio: false` into every caller's filter, covering
+  `GET /reports/executive` (Portfolio Timelines, overdue monitoring).
+  `GET /overview` (`backend/src/routes/overview.ts`) additionally applies the
+  same filter to its own queries (KPI counts, recent projects/tasks) so
+  flagged projects don't inflate any Overview roll-up. They stay fully
+  usable and visible in the Projects list.
+- `POST /projects` / `PATCH /projects/:id` accept `excludeFromPortfolio`
+  (`backend/src/routes/projects.ts`); "Administrative project" checkbox in
+  `frontend/src/components/ProjectFormModal.tsx`; types + executive-report
+  invalidation in `frontend/src/lib/queries.ts`.
+
 ### Fixed — 2026-07-20 — Gantt dates column truncation
 
 - Gantt task-list dates column truncated every range ("12 Jul – 1…"); widened
