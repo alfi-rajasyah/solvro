@@ -129,6 +129,10 @@ model Project {
   // the board never blocks a move when a column is over its limit, it just
   // renders the count pill in amber.
   wipLimits          Json?         @map("wip_limits") @db.JsonB
+  // Administrative containers (e.g. per-TAM "Opty Timelines") stay usable as
+  // projects but are excluded from portfolio roll-ups (Executive dashboard,
+  // Overview, overdue monitoring) via computePortfolioRows.
+  excludeFromPortfolio Boolean     @default(false) @map("exclude_from_portfolio")
   baselineLockedAt   DateTime?     @map("baseline_locked_at")
   baselineLockedById Int?          @map("baseline_locked_by_id")
   baselineLockedBy   User?         @relation("ProjectBaselineLockedBy", fields: [baselineLockedById], references: [id])
