@@ -124,6 +124,7 @@ export interface Task {
   priority: Priority;
   startDate: string | null;
   dueDate: string | null;
+  isMilestone: boolean;
   baselineStartDate: string | null;
   baselineDueDate: string | null;
   assignedToId: number | null;
@@ -534,6 +535,7 @@ export interface UpdateTaskInput {
   priority?: Priority;
   startDate?: string | null;
   dueDate?: string | null;
+  isMilestone?: boolean;
   baselineStartDate?: string | null;
   baselineDueDate?: string | null;
   assignedToId?: number | null;
@@ -693,6 +695,7 @@ export interface CreateTaskInput {
   priority?: Priority;
   startDate?: string | null;
   dueDate?: string | null;
+  isMilestone?: boolean;
   assignedToId?: number | null;
   parentTaskId?: number | null;
   sectionId?: number | null;
