@@ -456,6 +456,13 @@ export function GanttFrame({
     [sections, updateTask, updateSection],
   );
 
+  const onSetSectionColor = useCallback(
+    (sectionId: number, color: string) => {
+      updateSection.mutate({ id: sectionId, patch: { color } });
+    },
+    [updateSection],
+  );
+
   const scrollToTodayPos = useCallback(
     (behavior: ScrollBehavior) => {
       const el = scrollerRef.current;
@@ -835,6 +842,7 @@ export function GanttFrame({
                 onTaskClick={handleTaskClick}
                 onUpdateDates={handleUpdateDates}
                 onHoverChange={setHoveredRowId}
+                onSetSectionColor={onSetSectionColor}
               />
               {/* Draggable divider to resize the left pane */}
               <div
