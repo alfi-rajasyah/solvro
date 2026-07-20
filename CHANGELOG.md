@@ -38,6 +38,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
   `frontend/src/components/TaskPanel.tsx`, `frontend/src/lib/queries.ts`.
   Due-only non-milestone tasks render as 1-day bars.
 
+### Fixed — 2026-07-20 — Milestones can start dependency drags
+
+- Milestone diamonds can now initiate dependency drags (connector dots were
+  unreachable in the milestone render branch) —
+  `frontend/src/components/gantt/GanttBar.tsx`.
+
 ### Changed — 2026-07-16 — Overview: fake "Portfolio progress" S-curve replaced by real Portfolio timeline
 
 - **[frontend/src/pages/Overview.tsx](frontend/src/pages/Overview.tsx)** — the synthetic S-curve chart (**Removed**: `buildSCurve()` fake 6-bucket ramp, the recharts AreaChart card, and this file's recharts imports — the dep stays for `ProjectOverview.tsx`) is replaced by the shared `PortfolioCalendar` fed by the new `GET /overview` `portfolio` payload, so each user sees a real year-roadmap of exactly the projects they can see (TAMs: their own). Rendered as a full-width bare section (header + the calendar's own bordered container, mirroring Executive — no double-carding) titled "Portfolio timeline"; footnote copy drops "see List view" (Overview has none). "Projects needing attention" + "Recent activity" now sit in a two-up row below; the attention strip's local `ProjectStatusPill` was **Removed** in favor of the canonical `ProjectStatusChip` (it duplicated chip styling with off-token colors and wrong ON_HOLD/CANCELLED semantics). `SkeletonGrid` mirrors the new layout.

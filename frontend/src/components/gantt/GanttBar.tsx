@@ -265,6 +265,38 @@ export function GanttBar({
             <path d="M6 0 L12 6 L6 12 L0 6 Z" fill="rgb(var(--primary))" />
           </svg>
         </div>
+        {canEdit && onConnectStart && (
+          <>
+            <div
+              title="Drag from another task to make this milestone depend on it"
+              className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+              style={{
+                left: cx - half - 4,
+                top: cy,
+                transform: "translate(-50%, -50%)",
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onConnectStart(row.taskId!, "left", e.clientX, e.clientY);
+              }}
+            />
+            <div
+              title="Drag to a task to create a dependency"
+              className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+              style={{
+                left: cx + half + 4,
+                top: cy,
+                transform: "translate(-50%, -50%)",
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onConnectStart(row.taskId!, "right", e.clientX, e.clientY);
+              }}
+            />
+          </>
+        )}
       </>
     );
   }
