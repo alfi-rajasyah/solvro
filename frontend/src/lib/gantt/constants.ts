@@ -3,7 +3,9 @@
 // widths and the starting/min/max bounds for the draggable divider.
 export const AVATAR_COL_WIDTH = 22;
 export const NAME_COL_WIDTH = 220;
-export const DATE_RANGE_COL_WIDTH = 92;
+// Fits the widest fmtDateRangeDDMM output ("12 Jul – 16 Jul", 15 chars at
+// 11px mono ≈ 99px) plus the cell's px-2 padding. 92 truncated every range.
+export const DATE_RANGE_COL_WIDTH = 118;
 export const ROW_PAD_X = 8;
 export const DEFAULT_LIST_PANE_WIDTH =
   AVATAR_COL_WIDTH + NAME_COL_WIDTH + DATE_RANGE_COL_WIDTH + ROW_PAD_X * 3;

@@ -15,6 +15,82 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-20 — Gantt dates column truncation
+
+- Gantt task-list dates column truncated every range ("12 Jul – 1…"); widened
+  `DATE_RANGE_COL_WIDTH` 92 → 118 in `frontend/src/lib/gantt/constants.ts` to
+  fit the bounded "DD Mon – DD Mon" format (window/divider resizing feeds the
+  flex name column, so the fixed sub-column could never grow).
+
+### Added — 2026-07-20 — Explicit `Task.isMilestone` flag
+
+- `Task.isMilestone` boolean (`tasks.is_milestone`, default false) with
+  one-time backfill marking previously derived milestones (same-day range or
+  due-only) — `backend/prisma/schema.prisma`, migration
+  `task_is_milestone`. `POST /projects/:id/tasks` and `PATCH /tasks/:id`
+  accept `isMilestone`; both enforce startDate = dueDate for milestones.
+
+### Changed — 2026-07-20 — Gantt milestones follow the explicit flag
+
+- Gantt milestone rendering now follows the explicit `isMilestone` flag
+  (Task/Milestone toggle in TaskPanel) instead of inferring from same-day
+  dates — `frontend/src/lib/gantt/geometry.ts`,
+  `frontend/src/components/TaskPanel.tsx`, `frontend/src/lib/queries.ts`.
+  Due-only non-milestone tasks render as 1-day bars.
+
+### Fixed — 2026-07-20 — Milestones can start dependency drags
+
+- Milestone diamonds can now initiate dependency drags (connector dots were
+  unreachable in the milestone render branch) —
+  `frontend/src/components/gantt/GanttBar.tsx`.
+
+### Added — 2026-07-20 — Gantt "Color by" selector
+
+- Gantt "Color by" selector (Status | Section | Priority) with legend,
+  persisted in localStorage (`solvro.gantt.colorBy`), defaulting to Section
+  so upgrade-day visuals are unchanged; shared `barFillHex` resolver drives
+  live bars and both exports — `frontend/src/lib/gantt/palette.ts`,
+  `GanttFrame.tsx`, `GanttBar.tsx`, `exportPdf.ts`, `exportExcel.ts`.
+
+### Changed — 2026-07-20 — Exports color by the selected mode
+
+- Excel/PDF Gantt exports now color by the selected mode instead of always
+  status — in the default Section mode with unset section colors they render
+  grey until a mode is chosen or colors are set (screen and export now
+  always agree).
+
+### Added — 2026-07-20 — Section color swatch picker
+
+- Section color picker (8 preset swatches) on the Gantt section rows,
+  feeding the existing sections PATCH `color` field —
+  `frontend/src/components/gantt/GanttListRow.tsx`, `GanttListPane.tsx`,
+  `GanttFrame.tsx`, `frontend/src/lib/queries.ts`.
+
+### Fixed — 2026-07-20 — Clipboard copy on the HTTP prod origin
+
+- Copy-to-clipboard (Reports export packet, Admin ID copy) failed on the
+  plain-HTTP prod origin where `navigator.clipboard` is undefined; added
+  `frontend/src/lib/clipboard.ts` fallback (textarea + execCommand).
+
+### Added — 2026-07-20 — "View" opens the Gantt PDF in a browser tab
+
+- "View" export action opening the Gantt PDF in a browser tab (bypasses the
+  download pipeline that hangs on the HTTP-only prod origin) —
+  `frontend/src/lib/gantt/exportContext.tsx`, `exportPdf.ts`,
+  `GanttFrame.tsx`, `frontend/src/components/layout/RightSidebar.tsx`.
+
+### Changed — 2026-07-20 — Review fixes: milestone validation + optimistic section updates
+
+- `useUpdateSection` now uses the canonical optimistic-update pattern
+  (snapshot/rollback/invalidate) so section color/rename/reorder feel
+  instant — `frontend/src/lib/queries.ts`.
+- Milestone validation guards: task create with `isMilestone: true` requires
+  a due date; task patch rejects `isMilestone: true` combined with clearing
+  the due date — `backend/src/routes/projects.ts`,
+  `backend/src/routes/tasks.ts`.
+- Section color popover uses the sanctioned `shadow-overlay` token instead
+  of `shadow-lg` — `frontend/src/components/gantt/GanttListRow.tsx`.
+
 ### Changed — 2026-07-16 — Overview: fake "Portfolio progress" S-curve replaced by real Portfolio timeline
 
 - **[frontend/src/pages/Overview.tsx](frontend/src/pages/Overview.tsx)** — the synthetic S-curve chart (**Removed**: `buildSCurve()` fake 6-bucket ramp, the recharts AreaChart card, and this file's recharts imports — the dep stays for `ProjectOverview.tsx`) is replaced by the shared `PortfolioCalendar` fed by the new `GET /overview` `portfolio` payload, so each user sees a real year-roadmap of exactly the projects they can see (TAMs: their own). Rendered as a full-width bare section (header + the calendar's own bordered container, mirroring Executive — no double-carding) titled "Portfolio timeline"; footnote copy drops "see List view" (Overview has none). "Projects needing attention" + "Recent activity" now sit in a two-up row below; the attention strip's local `ProjectStatusPill` was **Removed** in favor of the canonical `ProjectStatusChip` (it duplicated chip styling with off-token colors and wrong ON_HOLD/CANCELLED semantics). `SkeletonGrid` mirrors the new layout.

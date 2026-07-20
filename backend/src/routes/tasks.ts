@@ -17,24 +17,30 @@ import {
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
-const updateTaskSchema = z.object({
-  title: z.string().min(1).max(200).optional(),
-  description: z.string().max(2000).nullable().optional(),
-  status: z.nativeEnum(TaskStatus).optional(),
-  priority: z.nativeEnum(Priority).optional(),
-  startDate: z.coerce.date().nullable().optional(),
-  dueDate: z.coerce.date().nullable().optional(),
-  // baselineStartDate / baselineDueDate are intentionally NOT accepted here —
-  // they are server-set only, snapshotted by POST /projects/:id/baseline.
-  // Accepting them from clients would let any task:write user overwrite the
-  // Gantt planned-vs-actual baseline. (The data mapping never wrote them, but
-  // keep them out of the schema so that stays true.)
-  assignedToId: z.number().int().positive().nullable().optional(),
-  parentTaskId: z.number().int().positive().nullable().optional(),
-  sectionId: z.number().int().positive().nullable().optional(),
-  labelIds: z.array(z.number().int().positive()).optional(),
-  position: z.number().int().min(0).optional(),
-});
+const updateTaskSchema = z
+  .object({
+    title: z.string().min(1).max(200).optional(),
+    description: z.string().max(2000).nullable().optional(),
+    status: z.nativeEnum(TaskStatus).optional(),
+    priority: z.nativeEnum(Priority).optional(),
+    startDate: z.coerce.date().nullable().optional(),
+    dueDate: z.coerce.date().nullable().optional(),
+    isMilestone: z.boolean().optional(),
+    // baselineStartDate / baselineDueDate are intentionally NOT accepted here —
+    // they are server-set only, snapshotted by POST /projects/:id/baseline.
+    // Accepting them from clients would let any task:write user overwrite the
+    // Gantt planned-vs-actual baseline. (The data mapping never wrote them, but
+    // keep them out of the schema so that stays true.)
+    assignedToId: z.number().int().positive().nullable().optional(),
+    parentTaskId: z.number().int().positive().nullable().optional(),
+    sectionId: z.number().int().positive().nullable().optional(),
+    labelIds: z.array(z.number().int().positive()).optional(),
+    position: z.number().int().min(0).optional(),
+  })
+  .refine((b) => !(b.isMilestone === true && b.dueDate === null), {
+    message: "A milestone requires a due date",
+    path: ["dueDate"],
+  });
 
 const tasksListQuerySchema = z.object({
   status: z.nativeEnum(TaskStatus).optional(),
@@ -127,7 +133,14 @@ tasksRouter.patch(
 
     const current = await prisma.task.findUniqueOrThrow({
       where: { id },
-      select: { projectId: true, status: true, parentTaskId: true, position: true },
+      select: {
+        projectId: true,
+        status: true,
+        parentTaskId: true,
+        position: true,
+        isMilestone: true,
+        dueDate: true,
+      },
     });
 
     const nextStatus = body.status ?? current.status;
@@ -172,6 +185,13 @@ tasksRouter.patch(
       if (body.priority !== undefined) data.priority = body.priority;
       if (body.startDate !== undefined) data.startDate = body.startDate;
       if (body.dueDate !== undefined) data.dueDate = body.dueDate;
+      if (body.isMilestone !== undefined) data.isMilestone = body.isMilestone;
+      // Milestone due-date lockstep: whatever this patch results in, a
+      // milestone with a due date must have startDate === dueDate.
+      const willBeMilestone = body.isMilestone ?? current.isMilestone;
+      const effectiveDue =
+        body.dueDate !== undefined ? body.dueDate : current.dueDate;
+      if (willBeMilestone && effectiveDue) data.startDate = effectiveDue;
       if (body.assignedToId !== undefined) {
         data.assignedTo = body.assignedToId === null
           ? { disconnect: true }

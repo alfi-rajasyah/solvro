@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { copyText } from "@/lib/clipboard";
 import {
   type ProjectSummary,
   useProjectDependencies,
@@ -189,7 +190,7 @@ function ExportPanel({ project }: { project: ProjectSummary }) {
     setBusy("copy");
     setBuildError(null);
     try {
-      await navigator.clipboard.writeText(markdown);
+      await copyText(markdown);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {

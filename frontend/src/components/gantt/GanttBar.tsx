@@ -14,7 +14,11 @@ import {
   RESIZE_HANDLE_PX,
   ROW_HEIGHT,
 } from "@/lib/gantt/constants";
-import { BAR_TRACK_OPACITY, DEFAULT_SECTION_COLOR } from "@/lib/gantt/palette";
+import {
+  BAR_TRACK_OPACITY,
+  barFillHex,
+  type ColorByMode,
+} from "@/lib/gantt/palette";
 
 type DragMode = "move" | "resize-start" | "resize-end";
 
@@ -25,6 +29,7 @@ interface GanttBarProps {
   columnWidth: number;
   canEdit: boolean;
   showBaseline: boolean;
+  colorBy: ColorByMode;
   onCommit: (taskId: number, startDate: Date, dueDate: Date) => void;
   onClick: (taskId: number) => void;
   /**
@@ -57,6 +62,7 @@ export function GanttBar({
   columnWidth,
   canEdit,
   showBaseline,
+  colorBy,
   onCommit,
   onClick,
   onConnectStart,
@@ -73,7 +79,10 @@ export function GanttBar({
   } | null>(null);
 
   const isMilestone = Boolean(row.isMilestone);
-  const color = row.sectionColor ?? DEFAULT_SECTION_COLOR;
+  const color = barFillHex(
+    { status: row.status, priority: row.priority, sectionColor: row.sectionColor },
+    colorBy,
+  );
   const rgb = hexToRgb(color);
 
   // Milestones may only have a dueDate (no startDate) — anchor on whichever
@@ -265,6 +274,38 @@ export function GanttBar({
             <path d="M6 0 L12 6 L6 12 L0 6 Z" fill="rgb(var(--primary))" />
           </svg>
         </div>
+        {canEdit && onConnectStart && (
+          <>
+            <div
+              title="Drag from another task to make this milestone depend on it"
+              className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+              style={{
+                left: cx - half - 4,
+                top: cy,
+                transform: "translate(-50%, -50%)",
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onConnectStart(row.taskId!, "left", e.clientX, e.clientY);
+              }}
+            />
+            <div
+              title="Drag to a task to create a dependency"
+              className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+              style={{
+                left: cx + half + 4,
+                top: cy,
+                transform: "translate(-50%, -50%)",
+              }}
+              onPointerDown={(e) => {
+                e.stopPropagation();
+                e.preventDefault();
+                onConnectStart(row.taskId!, "right", e.clientX, e.clientY);
+              }}
+            />
+          </>
+        )}
       </>
     );
   }
