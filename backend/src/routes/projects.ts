@@ -77,19 +77,24 @@ const projectDetailInclude = {
   },
 } satisfies Prisma.ProjectInclude;
 
-const createTaskSchema = z.object({
-  title: z.string().min(1).max(200),
-  description: z.string().max(2000).optional(),
-  status: z.nativeEnum(TaskStatus).optional(),
-  priority: z.nativeEnum(Priority).optional(),
-  startDate: z.coerce.date().nullable().optional(),
-  dueDate: z.coerce.date().nullable().optional(),
-  isMilestone: z.boolean().optional(),
-  assignedToId: z.number().int().positive().nullable().optional(),
-  parentTaskId: z.number().int().positive().nullable().optional(),
-  sectionId: z.number().int().positive().nullable().optional(),
-  labelIds: z.array(z.number().int().positive()).optional(),
-});
+const createTaskSchema = z
+  .object({
+    title: z.string().min(1).max(200),
+    description: z.string().max(2000).optional(),
+    status: z.nativeEnum(TaskStatus).optional(),
+    priority: z.nativeEnum(Priority).optional(),
+    startDate: z.coerce.date().nullable().optional(),
+    dueDate: z.coerce.date().nullable().optional(),
+    isMilestone: z.boolean().optional(),
+    assignedToId: z.number().int().positive().nullable().optional(),
+    parentTaskId: z.number().int().positive().nullable().optional(),
+    sectionId: z.number().int().positive().nullable().optional(),
+    labelIds: z.array(z.number().int().positive()).optional(),
+  })
+  .refine((b) => !b.isMilestone || b.dueDate != null, {
+    message: "A milestone requires a due date",
+    path: ["dueDate"],
+  });
 
 const createSectionSchema = z.object({
   name: z.string().min(1).max(100),
