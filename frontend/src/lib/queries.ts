@@ -124,6 +124,7 @@ export interface Task {
   priority: Priority;
   startDate: string | null;
   dueDate: string | null;
+  isMilestone: boolean;
   baselineStartDate: string | null;
   baselineDueDate: string | null;
   assignedToId: number | null;
@@ -534,6 +535,7 @@ export interface UpdateTaskInput {
   priority?: Priority;
   startDate?: string | null;
   dueDate?: string | null;
+  isMilestone?: boolean;
   baselineStartDate?: string | null;
   baselineDueDate?: string | null;
   assignedToId?: number | null;
@@ -693,6 +695,7 @@ export interface CreateTaskInput {
   priority?: Priority;
   startDate?: string | null;
   dueDate?: string | null;
+  isMilestone?: boolean;
   assignedToId?: number | null;
   parentTaskId?: number | null;
   sectionId?: number | null;
@@ -790,7 +793,22 @@ export function useUpdateSection(projectId: number) {
   return useMutation({
     mutationFn: ({ id, patch }: { id: number; patch: Partial<CreateSectionInput> }) =>
       apiRequest<Section>(`/sections/${id}`, { method: "PATCH", body: patch }),
-    onSuccess: () => {
+    onMutate: async ({ id, patch }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.projectSections(projectId) });
+      const prev = qc.getQueryData<Section[]>(queryKeys.projectSections(projectId));
+      if (prev) {
+        qc.setQueryData<Section[]>(
+          queryKeys.projectSections(projectId),
+          prev.map((s) => (s.id === id ? ({ ...s, ...patch } as Section) : s)),
+        );
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev)
+        qc.setQueryData(queryKeys.projectSections(projectId), ctx.prev);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
       // Tasks carry `section: { color }`; invalidate so the diagram repaints.
       qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
