@@ -15,6 +15,15 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-07-21 — Unused network-diagram dependencies
+
+- `@xyflow/react` and `dagre` removed from `frontend/package.json` — never
+  imported anywhere in `frontend/src` (verified against the current tree;
+  frontend typecheck clean after removal). Leftovers from the shelved
+  Network Diagram exploration, which stays not-built by decision. Dev-stack
+  note: run `docker compose exec frontend npm install` after pulling this so
+  the container's node_modules volume drops both packages.
+
 ### Removed — 2026-07-21 — Internal working documents
 
 - Removed internal working documents from the repository: `tasks/`
