@@ -15,6 +15,43 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-21 — CI/CD hardening (Prisma CLI pinning, Node 22, gated publishing, typecheck gate)
+
+- `prisma` moved from `devDependencies` to `dependencies` in
+  `backend/package.json` (+ lockfile). The `runtime` Docker image installs
+  with `npm ci --omit=dev` but runs `npx prisma migrate deploy && npx prisma
+  db seed` at container start (CI stack and prod via `setup.sh`) and `npx
+  prisma generate` at build — with the CLI absent, `npx` fetched the
+  **latest** prisma from the registry, an unpinned major-version skew
+  against `@prisma/client` 5.22 and a network fetch at container start.
+  Now the pinned 5.22 CLI ships in the image.
+- `backend/Dockerfile` and `frontend/Dockerfile`: `node:20-slim` →
+  `node:22-slim`; `.github/workflows/ci.yml`: `node-version: 20` → `22`
+  (three places). Node 20 reached end-of-life April 2026. Both runtime
+  images build-verified locally on 22.
+- `.github/workflows/docker-publish.yml`: publishing for `main` is now
+  gated on CI — trigger changed from `push: branches: [main]` (which ran
+  in parallel with CI, so a red build could still ship `latest` to GHCR)
+  to `workflow_run` on the CI workflow's success. Builds check out
+  `workflow_run.head_sha` (the exact commit CI validated) and the `sha-*`
+  image tag is computed from the checked-out commit for the same reason.
+  Tag (`v*`) and `workflow_dispatch` publishes are unchanged.
+- `.github/workflows/ci.yml`: new fast `typecheck` job (backend
+  `tsc --noEmit` after `prisma generate`, frontend `npm run typecheck`,
+  e2e `npm run typecheck`) — previously type errors only surfaced inside
+  the e2e job's Docker builds, and the e2e suite's own typecheck never ran
+  in CI at all. Also: top-level `permissions: contents: read` (least
+  privilege for the default token), the `npm ci` retry extended to the e2e
+  install (was backend-only), and the service container aligned to
+  `postgres:15-alpine` matching both compose files.
+
+### Added — 2026-07-21 — Dependabot configuration
+
+- `.github/dependabot.yml`: weekly update PRs for npm (`/backend`,
+  `/frontend`, `/e2e`), GitHub Actions, and the Docker base images in both
+  Dockerfiles. All entries `target-branch: develop` — `main` is the release
+  branch and only advances via release PRs.
+
 ### Changed — 2026-07-21 — README rewritten to match the shipped codebase
 
 - `README.md` fully revised: it still described the original PRD (HTMX,
