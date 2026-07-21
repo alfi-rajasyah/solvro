@@ -1,58 +1,116 @@
-# Solvro - Solution-to-Project Lifecycle Engine
+# Solvro — Solution-to-Project Lifecycle Engine
 
-Solvro is a specialized project management platform designed to bridge the gap between **Solution Design** and **Project Implementation**. By providing a unified workflow for Solution Architects (SAs) and Technical Account Managers (TAMs), Solvro ensures data integrity, reduces manual overhead, and optimizes the customer success lifecycle.
+Solvro is a project management platform that bridges the gap between **Solution Design** and **Project Implementation**. It gives Technical Account Managers (TAMs) a single high-density workspace to run customer projects that originate from Solution Architect (SA) blueprints — replacing the usual spread of a task tracker, a notes doc, and a reporting spreadsheet.
 
-## 🚀 Overview
+## Overview
 
-The transition from solution blueprints to technical execution is often fragmented. Solvro solves this by providing a secure ingestion port for technical designs and a comprehensive dashboard for project tracking, including Kanban, Gantt, and Timeline views.
+The core loop Solvro is built around:
 
-## ✨ Key Features
+1. A TAM logs **daily review notes** per project (internal or customer-facing).
+2. Solvro generates a **structured markdown export** per project — health, schedule variance vs. baseline, phase breakdown, task signals, open risks, and the last 14 days of customer-facing notes.
+3. The TAM drops that packet into their AI tool of choice and sends the summary to the customer.
 
-- **Secure SA Ingestion Port:** REST API/Webhook to receive and validate technical design blueprints automatically.
-- **TAM Dashboard:** A high-speed interface (React/HTMX) featuring:
-    - **Kanban Boards:** Visual task management with drag-and-drop.
-    - **Gantt Charts:** Dependency tracking and schedule management.
-    - **Timeline View:** Linear visualization of project phases.
-- **Centralized Repository:** PostgreSQL-backed storage for all technical requirements with document version control.
-- **Reporting & Analytics:** Real-time project health metrics, resource utilization, and stakeholder reports.
-- **RBAC Security:** Role-based access control for SAs, TAMs, and Project Stakeholders.
+Everything else — Kanban, Gantt, risks, portfolio roll-ups — exists to feed that loop with accurate data.
 
-## 🏗️ Architecture
+## Features
 
-Solvro follows a 3-tier client-server architecture:
+- **Project dashboard** — per-project Overview, List, Kanban, Gantt, Timeline, Risks, and Services views.
+- **Kanban board** — drag-and-drop task management (dnd-kit) with per-column WIP limits.
+- **Gantt chart** — hand-rolled, dependency arrows (hard/soft), milestones, unlimited subtask nesting, baseline lock for planned-vs-actual deviation, and Excel/PDF export.
+- **Timeline view** — phase-level linear visualization, distinct from the task-level Gantt.
+- **Daily Review** — dated project notes with `INTERNAL` / `CUSTOMER_FACING` visibility; internal notes never leak into exports.
+- **Reports** — one-click export packet per project (copy to clipboard or `.md` download), designed to be pasted into an external AI for customer summaries.
+- **Executive dashboard** — org-wide portfolio roll-up, gated behind its own permission.
+- **Risk register** — project-scoped risks with category, probability × impact scoring, and mitigation status.
+- **Customers & services** — customer directory with service assignments at both the customer and project level.
+- **RBAC** — permission-based access control with admin-managed custom roles; built-in ADMIN, SA, TAM, STAKEHOLDER, and PENDING roles.
+- **Authentication** — email/password (JWT) plus Google sign-in with an admin-managed domain allowlist; unknown Google users are auto-provisioned into a zero-permission PENDING role until promoted.
+- **PWA & mobile** — installable, responsive down to 375 px (Gantt is desktop-only with a list fallback on phones).
+- **Dark-first UI** — "Technical Precision" design system: charcoal surfaces, Elitery Green accent, light mode included.
 
-1.  **Frontend:** React SPA with TailwindCSS and HTMX for dynamic server-rendered components.
-2.  **Backend:** RESTful API (Node.js/FastAPI) with a dedicated secure ingestion gateway.
-3.  **Database:** PostgreSQL 15+ (Relational data + JSONB for flexible blueprint storage).
+## Roadmap
 
-## 🛠️ Tech Stack
+- **Secure Ingestion Port** — `POST /webhook/blueprint`: an API-key-authenticated webhook that receives SA blueprints and translates them into projects and tasks, with blueprint-generated tasks visually flagged as AI Breakdown cards.
+- **Utilization view** — iTop (ITSM) API integration for workload reporting.
 
-- **Frontend:** React, HTMX, TailwindCSS
-- **Backend:** Node.js or Python (FastAPI)
-- **Database:** PostgreSQL 15+
-- **DevOps:** Docker, Docker Compose
-- **Security:** JWT Authentication, TLS 1.2+, AES-256 Encryption
+## Architecture
 
-## 📈 Success Metrics
+Three tiers, one Docker network:
 
-- **Adoption:** 90% user adoption within 2 months of deployment.
-- **Accuracy:** 75% reduction in manual data entry errors.
-- **Savings:** 50% reduction in third-party project management tool costs by end of 2026.
+```
+┌──────────────────────────┐    ┌─────────────────────────┐    ┌────────────────────────┐
+│ Frontend                 │    │ Backend                 │    │ Database               │
+│ React SPA (Vite dev /    │───▶│ Express + Prisma (TS)   │───▶│ PostgreSQL 15          │
+│ nginx in prod)           │    │ REST, JWT, Zod, pino    │    │                        │
+└──────────────────────────┘    └─────────────────────────┘    └────────────────────────┘
+```
 
-## 📋 User Stories
+The frontend never calls the backend directly — it always requests same-origin `/api/*`, which is reverse-proxied to the backend by the Vite dev server in development and by nginx in production. This keeps the compiled bundle free of runtime configuration and lets it sit behind any TLS terminator or tunnel unchanged.
 
-- **Solution Architect:** "I want to export my technical blueprints directly into Solvro so information is accurately transferred to the implementation team."
-- **Technical Account Manager:** "I want to manage daily tasks and project health in a centralized dashboard."
-- **Stakeholder:** "I want to generate detailed reports to make informed project decisions."
+## Tech Stack
 
-## 🚦 Getting Started (Development)
+| Layer | Technology |
+|---|---|
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query, React Router, dnd-kit, Recharts |
+| Backend | Node.js 20, Express, TypeScript, Prisma ORM, Zod validation, JWT + Google OAuth, pino |
+| Database | PostgreSQL 15 |
+| Testing | Vitest (backend), Playwright (e2e, desktop + mobile viewports) |
+| CI/CD | GitHub Actions — backend suite + Playwright e2e on every PR; images published to GHCR on pushes to `main` |
+| Deployment | Docker Compose, prebuilt GHCR images, one-shot `setup.sh` installer |
 
-### Prerequisites
-- Docker & Docker Compose
+## Getting Started
 
-### **Installation**
-1. Oneliner:
-   ```
-   bash <(curl -sSL https://raw.githubusercontent.com/alfi-rajasyah/solvro/main/setup.sh)
-   ```
-4. Access at `http://localhost:8080`.
+### Production deployment
+
+On a server with Docker Engine and the Docker Compose plugin:
+
+```bash
+bash <(curl -sSL https://raw.githubusercontent.com/alfi-rajasyah/solvro/main/setup.sh)
+```
+
+The script prompts for an admin email/password and host ports (website defaults to `80`, API to `3000`, bound to `127.0.0.1` unless you say otherwise), generates secrets, writes `~/solvro/{docker-compose.yml,.env}`, pulls the GHCR images, and starts the stack. Re-running it on an existing install pulls new images and restarts without re-prompting.
+
+### Local development
+
+Prerequisites: Node.js 20+, PostgreSQL 15 (a local instance or a `postgres:15-alpine` container).
+
+```bash
+# Backend
+cd backend
+cp .env.example .env          # set DATABASE_URL; add a 32+ char JWT_SECRET
+npm install
+npx prisma migrate dev        # apply migrations
+npm run db:seed               # seed built-in roles (no default users)
+npm run dev                   # API on http://localhost:3000
+
+# Frontend (second terminal)
+cd frontend
+npm install
+npm run dev                   # app on http://localhost:5173, /api proxied to :3000
+```
+
+Create the first admin (the seed creates roles only — there is no default login):
+
+```bash
+cd backend
+ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=change-me npm run admin:create
+```
+
+### Tests
+
+```bash
+cd backend && npm test        # Vitest
+cd frontend && npm run typecheck
+cd e2e && npm test            # Playwright (desktop + mobile projects)
+```
+
+## Repository Layout
+
+| Path | Contents |
+|---|---|
+| `backend/` | Express API, Prisma schema & migrations, seed and admin scripts |
+| `frontend/` | React SPA, Tailwind theme, hand-rolled Gantt, export layer |
+| `e2e/` | Playwright suite (auth, Kanban drag-and-drop, PWA, smoke) |
+| `ci/` | CI compose stack used by GitHub Actions |
+| `setup.sh` | One-shot production installer / updater |
+| `CHANGELOG.md` | Running record of changes |
