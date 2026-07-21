@@ -28,7 +28,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: actions/setup-node@v4
         with:
@@ -92,7 +92,7 @@ jobs:
     env:
       DATABASE_URL: postgresql://solvro:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/solvro?schema=public
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Generate a throwaway JWT secret per run — never stored in the repo.
       - name: Generate ephemeral JWT secret
@@ -128,7 +128,7 @@ jobs:
       ADMIN_EMAIL: qa@solvro.test
       ADMIN_PASSWORD: ${{ secrets.CI_ADMIN_PASSWORD }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Generate ephemeral JWT secret
         run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
