@@ -15,6 +15,15 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-07-21 — Internal working documents
+
+- Removed internal working documents from the repository: `tasks/`
+  (`plan.md`, `todo.md`), `docs/ideas/`, `docs/intent/`, `docs/mockups/`,
+  `ISSUES.md`, and `DESIGN.md`. These are maintenance/planning references
+  kept locally; the repo now carries only what is needed to pull, run, and
+  deploy Solvro. `.gitignore` extended so they cannot return. (Note:
+  removed files remain in git history.)
+
 ### Fixed — 2026-07-21 — No stray "(No section)" Gantt header for subtask-only buckets
 
 - `buildRows` (`frontend/src/lib/gantt/geometry.ts`) now emits the
