@@ -317,14 +317,22 @@ export function GanttFrame({
 
   const dateRange = useMemo(() => rowsDateRange(rows), [rows]);
 
-  const chartStart = useMemo(
-    () => (dateRange ? computeChartStart(dateRange.min, viewMode) : null),
-    [dateRange, viewMode],
-  );
-  const chartEnd = useMemo(
-    () => (dateRange ? computeChartEnd(dateRange.max, viewMode) : null),
-    [dateRange, viewMode],
-  );
+  // When rows exist but none carry dates, fall back to a today-centered
+  // window so the frame still renders — undated tasks show as bar-less rows
+  // that can be scheduled via the task editor. Null only when there are no
+  // rows at all (empty state takes over).
+  const chartStart = useMemo(() => {
+    if (dateRange) return computeChartStart(dateRange.min, viewMode);
+    return rows.length > 0
+      ? computeChartStart(startOfDay(new Date()), viewMode)
+      : null;
+  }, [dateRange, rows.length, viewMode]);
+  const chartEnd = useMemo(() => {
+    if (dateRange) return computeChartEnd(dateRange.max, viewMode);
+    return rows.length > 0
+      ? computeChartEnd(startOfDay(new Date()), viewMode)
+      : null;
+  }, [dateRange, rows.length, viewMode]);
 
   const columnCount = useMemo(() => {
     if (!chartStart || !chartEnd) return 0;
@@ -490,22 +498,25 @@ export function GanttFrame({
     }
     // Excel export uses a tight ±7-day window around the actual task range,
     // not the chart's padded ±1-year window — otherwise the date grid is
-    // dominated by empty columns. Falls back to chartStart/chartEnd when
-    // there are no dated tasks (dateRange is null).
-    const excelStart = dateRange
-      ? startOfDay(addDays(dateRange.min, -7))
-      : chartStart;
-    const excelEnd = dateRange
-      ? startOfDay(addDays(dateRange.max, 7))
-      : chartEnd;
+    // dominated by empty columns. With no dated tasks (dateRange null) the
+    // same tight window is anchored on today, resolved at export time so a
+    // tab left open across day boundaries doesn't pin a stale anchor.
+    const exportWindow = () => {
+      const anchor = startOfDay(new Date());
+      return {
+        start: startOfDay(addDays(dateRange ? dateRange.min : anchor, -7)),
+        end: startOfDay(addDays(dateRange ? dateRange.max : anchor, 7)),
+      };
+    };
     register({
       excel: async () => {
         try {
+          const { start, end } = exportWindow();
           await exportGanttToExcel({
             projectName,
             rows,
-            chartStart: excelStart,
-            chartEnd: excelEnd,
+            chartStart: start,
+            chartEnd: end,
             holidays: holidays ?? [],
             colorBy,
           });
@@ -518,11 +529,12 @@ export function GanttFrame({
       },
       pdf: async () => {
         try {
+          const { start, end } = exportWindow();
           await exportGanttToPdf({
             projectName,
             rows,
-            exportStart: excelStart,
-            exportEnd: excelEnd,
+            exportStart: start,
+            exportEnd: end,
             holidays: holidays ?? [],
             colorBy,
           });
@@ -535,11 +547,12 @@ export function GanttFrame({
       },
       pdfTab: async (win) => {
         try {
+          const { start, end } = exportWindow();
           await exportGanttToPdf({
             projectName,
             rows,
-            exportStart: excelStart,
-            exportEnd: excelEnd,
+            exportStart: start,
+            exportEnd: end,
             holidays: holidays ?? [],
             colorBy,
             tabWindow: win,
@@ -833,7 +846,8 @@ export function GanttFrame({
       {!isLoading && !isError && rows.length === 0 && (
         <div className="m-3 rounded border border-dashed border-outline-variant p-12 text-center text-on-surface-variant">
           <p className="text-sm">
-            No tasks have start or due dates yet. Add dates from the task editor to see them here.
+            No tasks or sections yet. Use + Task or + Section above to start
+            building the plan.
           </p>
         </div>
       )}
