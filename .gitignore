@@ -45,9 +45,21 @@ e2e/blob-report/
 # Claude Code working files (local-only, not for the public repo)
 CLAUDE.md
 .claude/
+CONFIGURATION.md
+.understand-anything/
+
+# Internal working docs — maintained locally, not part of the public repo
+DESIGN.md
+ISSUES.md
+tasks/
+docs/ideas/
+docs/intent/
+docs/mockups/
+docs/plans/
+docs/prompts/
+docs/archive/
 
 # Design / product docs — kept locally for reference, not needed in the repo
-# (DESIGN.md is tracked — it's the canonical design source-of-truth per CLAUDE.md)
 UI Design/
 PRD.md
 .env.example
