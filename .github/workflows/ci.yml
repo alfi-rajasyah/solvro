@@ -10,6 +10,10 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The workflow only reads the repo; never grant the default token more.
+permissions:
+  contents: read
+
 env:
   # bcrypt ships a prebuilt binary download as part of `npm ci`; that
   # download flakes transiently on GitHub's runners. Retrying the whole
@@ -17,12 +21,61 @@ env:
   NPM_CI_RETRY_SLEEP: 10
 
 jobs:
+  # Fast-feedback gate: surfaces type errors in ~2 minutes instead of burying
+  # them inside the e2e job's Docker image builds. Covers all three packages,
+  # including the e2e suite whose typecheck is not exercised anywhere else.
+  typecheck:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+            e2e/package-lock.json
+
+      - name: npm ci (backend, retry once on failure)
+        working-directory: backend
+        run: |
+          npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
+
+      - name: Generate Prisma client
+        working-directory: backend
+        run: npx prisma generate
+
+      - name: Typecheck backend
+        working-directory: backend
+        run: npx tsc --noEmit
+
+      - name: npm ci (frontend, retry once on failure)
+        working-directory: frontend
+        run: |
+          npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
+
+      - name: Typecheck frontend
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: npm ci (e2e, retry once on failure)
+        working-directory: e2e
+        run: |
+          npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
+
+      - name: Typecheck e2e
+        working-directory: e2e
+        run: npm run typecheck
+
   backend-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     services:
       postgres:
-        image: postgres:15
+        image: postgres:15-alpine
         env:
           POSTGRES_USER: solvro
           # Ephemeral service-container password. Supplied from a repo
@@ -47,7 +100,7 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -114,13 +167,14 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           cache-dependency-path: e2e/package-lock.json
 
-      - name: npm ci (e2e)
+      - name: npm ci (e2e, retry once on failure)
         working-directory: e2e
-        run: npm ci
+        run: |
+          npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
 
       - name: Install Playwright browsers (chromium)
         working-directory: e2e
