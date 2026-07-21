@@ -15,7 +15,39 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
-### Added — 2026-07-20 — Gantt renders subtasks as nested collapsible rows
+### Fixed — 2026-07-21 — No stray "(No section)" Gantt header for subtask-only buckets
+
+- `buildRows` (`frontend/src/lib/gantt/geometry.ts`) now emits the
+  "(No section)" group only when the null-section bucket contains at least one
+  top-level task. A subtask created with `sectionId: null` (possible via
+  TaskFormModal when a parent is chosen but section left blank) renders nested
+  under its parent regardless of its own section, so a subtask-only bucket
+  previously produced an empty stray section header row. Verified with a
+  `buildRows` simulation (dated parents + undated subtasks + null-section
+  subtask): subtasks nest, chevron flags set, no stray header, collapse works.
+
+### Fixed — 2026-07-21 — Gantt renders when tasks exist but none have dates
+
+- `GanttFrame.tsx` (`frontend/src/components/gantt/`): `chartStart`/`chartEnd`
+  now fall back to a today-centered window (reusing
+  `computeChartStart`/`computeChartEnd`'s ±1-year padding) when `rowsDateRange`
+  is null but rows exist. Previously the render guard required a non-null
+  chart window while the empty state required `rows.length === 0`, so a
+  project with tasks/sections but zero dated tasks fell between the two and
+  rendered nothing at all. Undated tasks now appear as bar-less rows —
+  `GanttBar` and `GanttConnectors` already null-guard — and can be scheduled
+  by clicking the row to open the task editor.
+- Reworded the Gantt empty state (same file): it only fires when the project
+  has no tasks *and* no sections, but claimed "No tasks have start or due
+  dates yet" — now points at the + Task / + Section toolbar actions.
+- Excel/PDF export window fallback (same file): with no dated tasks it now
+  anchors the tight ±7-day grid on today instead of the previously dead
+  chartStart/chartEnd branch, which the render fix would otherwise have made
+  live and produced a ±1-year grid of empty columns. The anchor resolves at
+  export time (inside the handler closures), not when the registration effect
+  runs, so a tab left open across day boundaries can't export a stale window.
+- Filed the Phase 2 follow-up (drag-on-canvas to schedule undated tasks) as
+  `docs/ideas/gantt-drag-to-schedule.md`.
 
 - `buildRows` (`frontend/src/lib/gantt/geometry.ts`) now emits `subtask` rows
   (depth 2) nested under their parent task, always grouped by the parent's
