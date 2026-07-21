@@ -460,7 +460,11 @@ export function buildRows({ tasks, sections, collapsed }: BuildRowsOpts): Row[] 
   for (const s of sortedSections) {
     pushGroup(`sec-${s.id}`, s.id, s.name, bySection.get(s.id) ?? []);
   }
-  if ((bySection.get("none") ?? []).length > 0) {
+  // Only emit "(No section)" when it holds top-level tasks. Subtasks with a
+  // null sectionId render nested under their parent (hierarchy wins over
+  // section membership), so a subtask-only bucket would produce an empty
+  // stray section header.
+  if ((bySection.get("none") ?? []).some((t) => t.parentTaskId === null)) {
     pushGroup("sec-none", null, "(No section)", bySection.get("none") ?? []);
   }
   return rows;
