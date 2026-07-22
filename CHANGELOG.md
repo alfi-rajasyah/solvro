@@ -15,6 +15,93 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-22 — E2E regression coverage for List + Gantt reorder; unified-task-ordering closing sweep (plan Task 6)
+
+- `e2e/tests/list-dnd.spec.ts` (new) — desktop-project-only (mirrors
+  `kanban-dnd.spec.ts`'s `test.skip(test.info().project.name !== "desktop",
+  ...)` guard), asserting through the API exactly like `kanban-dnd.spec.ts`
+  does. Three cases:
+  - "cross-status reorder in one section sticks: Gamma onto Alpha" — drags
+    Gamma's row onto Alpha's on `/projects/:id/list`; asserts via API that
+    Gamma lands immediately before Alpha in the global (position, id)
+    top-level order, and that every top-level task's status (read
+    dynamically, not hardcoded) is unchanged by the reorder.
+  - "status chip change keeps the slot: Beta status flips, order stays" —
+    flips Beta's status via the List row's `StatusSelect` chip (a `<button>`
+    showing the current `STATUS_LABEL`; clicking opens a dropdown of
+    sibling `<button>`s for the other two labels) and asserts the sorted
+    top-level id sequence is identical before/after, with only Beta's
+    status changed. Reads Beta's *current* status via API rather than
+    assuming the raw seed value ("TODO"): `seededProject` is a
+    worker-scoped Playwright fixture, and when this worker also runs
+    `kanban-dnd.spec.ts` first (default file ordering, single worker),
+    that file's "cross-column drag: Beta -> In Progress column" case flips
+    the *same* seeded project's Beta to `IN_PROGRESS` before this spec's
+    tests start — confirmed by reproducing the failure with `git stash`
+    against the pre-Task-6 commit (identical failure, so unrelated to this
+    diff) and by inspecting per-attempt Playwright artifacts (the failing
+    attempt's precondition read `IN_PROGRESS`; a same-worker retry that
+    happened to land on a freshly-seeded worker read `TODO` and passed).
+    Hardcoding "TODO" was a false assumption about fixture isolation, not
+    a real product precondition, so the test now derives its target status
+    from whatever Beta's status actually is. Also replaced a fixed
+    `page.waitForTimeout(1000)` after the chip click with
+    `expect.poll(...)` against the tasks API so the assertions wait for the
+    PATCH to actually land instead of a guessed sleep.
+  - "gantt row drag: reorder sticks, dates untouched" (same file, not a
+    separate spec — keeps the shared local helpers in one place) — on
+    `/projects/:id/gantt`, drags the globally-last top-level task's row
+    (via its `aria-label="Drag handle"` grip) onto the globally-first
+    task's row; asserts via API that the dragged task lands immediately
+    before the target in the global order, and that its `startDate`/
+    `dueDate` are byte-identical before/after (row drags never touch
+    dates). The seed fixture (`e2e/fixtures/seed.ts`) already assigns every
+    top-level task a date range at creation, so no extra setup PATCH was
+    needed for this assertion to have teeth (explicitly asserted
+    non-null before comparing).
+  - Selector discipline: no `data-testid` added anywhere — List row grips
+    reuse the same `aria-label="Drag to reorder"` + `gripFor` heuristic
+    `kanban-dnd.spec.ts` already uses (List and Kanban grips happen to
+    share that aria-label), Gantt row grips use their existing
+    `aria-label="Drag handle"`, and the List status chip is located via a
+    local `desktopRow()` helper — `page.locator('div[class*="grid-cols-"]',
+    { hasText: title })` — exploiting the fact that only the column-header
+    row and each desktop `TaskRow` grid div carry that arbitrary-value
+    Tailwind class token (the mobile-card sibling the same component also
+    renders does not), so it uniquely resolves the row without touching
+    `ProjectList.tsx`/`GanttListRow.tsx`.
+- Confirmed pre-existing, unrelated `pwa.spec.ts` failures (`manifest link
+  is present`, `service worker registers`, desktop + mobile) reproduce
+  identically against the pre-Task-6 commit (`git stash` verification) —
+  a dev-server PWA registration quirk, not caused by this branch; left
+  untouched per scope. (Mechanism: `vite-plugin-pwa` serves manifest/SW only
+  in build/preview mode, so the spec structurally fails at `BASE_URL=5173`
+  and passes on the built CI stack at `:8080`.)
+- NFR re-check (200-task worst-case reorder PATCH, dev stack): Task 2's
+  calm-host set passed at 0.196/0.132/0.118s; Task 6's re-checks measured
+  0.20–0.47s — but every over-budget sample was taken at host load 6–15 on
+  an 8-core Mac with all three containers idle (<1% CPU), i.e. host
+  contention from the CI/e2e churn itself, not endpoint cost. Recorded
+  honestly rather than re-rolled; surfaced to the user per the plan's
+  hard-stop rule (2026-07-22) and carried forward on the calm-host set as
+  the working verdict — re-time on a quiet host before any release
+  decision if in doubt. Follow-up optimization
+  (batch the dense repack's per-row UPDATEs into one SQL statement) filed in
+  ISSUES.md in case real-world use ever feels slow.
+
+### Changed — 2026-07-22 — `Task.position` doc comment updated for the global top-level order (plan Task 6)
+
+- `backend/prisma/schema.prisma` (`Task.position` doc comment) — rewritten
+  to describe the model landed in plan Tasks 1–2: for top-level tasks
+  (`parentTaskId` null) the sibling list is the project's single dense
+  top-level order (`projectId` alone, status does not partition it, so a
+  status change keeps the task's slot); subtasks are unchanged (parent's
+  subtask list). The previous comment still described the removed
+  per-`(projectId, status)` sibling model (queued in ISSUES.md from plan
+  Task 2). Comment-only — `npx prisma migrate diff` against the live dev
+  DB confirms an empty migration (no schema drift), and `git diff` shows
+  only comment lines changed.
+
 ### Added — 2026-07-22 — Gantt list pane: between-row drag reorder (plan Task 5)
 
 - `frontend/src/components/gantt/GanttListRow.tsx` — task and subtask rows
