@@ -15,6 +15,87 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-22 — Top-level task ordering: status leaves the sibling key (plan Task 1)
+
+- `backend/src/lib/taskOrdering.ts` — `SiblingKey` no longer carries a
+  `status` field; `siblingWhere` and `siblingKeyEquals` re-scoped
+  accordingly. A top-level sibling list is now every top-level task in the
+  project (`(projectId, parentTaskId=null)`), one dense per-project manual
+  order — exactly how subtask lists already work per-parent
+  (`parentTaskId` alone). Status no longer partitions ordering anywhere; a
+  status change (alone) keeps the row's slot instead of re-appending it to
+  a destination "column."
+- `backend/src/routes/tasks.ts` — `PATCH /tasks/:id`: dropped `status` from
+  the `oldKey`/`newKey` `SiblingKey` construction (~line 150). A status-only
+  patch now takes the non-ordering branch and keeps its position; combined
+  `{status, position}` patches still land at the requested global index via
+  the existing `touchesOrdering` branch. Updated the two comments this
+  invalidated: the "status is part of the sibling key only for top-level
+  tasks" note (now false for every task, not just subtasks) and the
+  "must not stop genuine column moves" regression-guard comment.
+- `backend/src/routes/projects.ts` — `POST /projects/:id/tasks`: dropped
+  `status` from the create-path `countSiblings` `SiblingKey` (~line 369),
+  so a newly created task appends to the single per-project list regardless
+  of its initial status. (The plan text named this site as living in
+  `tasks.ts`; it's actually in `projects.ts` — `tsc --noEmit` located the
+  real construction site after the interface change.)
+- Why: List and Gantt render top-level tasks grouped/filtered by section or
+  date, not by status column — per-status positions interleaved three
+  independent sequences there, making a manual cross-status order
+  impossible to express or preserve. Re-scoping to one canonical
+  per-project order (status changes keep the slot) matches how subtasks
+  already behave and is required before the List/Kanban/Gantt drag layers
+  (later plan tasks) can share one ordering model.
+- `backend/test/taskOrdering.test.ts` — added a
+  `describe("global top-level ordering (status does not partition)")` block
+  (create-append across statuses, status-only patch keeps slot, explicit
+  position patch reorders across statuses, combined status+position patch)
+  per the plan's Step 1. Also updated two pre-existing tests that asserted
+  the now-removed per-status top-level behavior and would otherwise fail
+  against the new model: `"move across columns (status change)" > "appends
+  to the end of the destination column..."` (renamed to `"does not move or
+  re-pack any sibling on a status-only change"`, asserting the opposite of
+  its old title) and `"status-only change and sibling ordering" > "still
+  moves a top-level task to the destination column on a status change"`
+  (renamed to `"keeps a top-level task's slot on a status-only change, same
+  as a subtask"`). `backend/test/projectWipLimits.test.ts` asserts no
+  per-column positions and needed no changes.
+- Not fixed (pre-existing, out of scope): `taskOrdering.test.ts`'s
+  `"orders GET /tasks (cross-project) by position asc, then id asc"` test
+  fails independently of this change — the in-container `npm test` run
+  points at the persistent dev Postgres (not an isolated disposable DB per
+  the `globalSetup.ts` comment), which already holds hundreds of task rows
+  accumulated from prior work on this branch. The cross-project `/tasks`
+  endpoint's `take: 200` (ordered by `position asc, id asc`) is truncated
+  before reaching this test's newly-created rows. Reproduced on the
+  pre-change baseline run too, so it predates this task.
+
+### Added — 2026-07-22 — Plan + kickoff prompt: unified manual task ordering
+
+- `docs/plans/unified-task-ordering-plan.md` — six-task implementation plan
+  for the ordering re-architecture (backend sibling-key change → index swap +
+  section-major data repack migration → List + optimistic layer → Kanban +
+  its e2e assertions → Gantt between-row drag parity → new e2e + docs sync).
+  Contains the exact migration SQL, complete drop-math code per view, and
+  the NFR stop condition (reorder PATCH < 200ms at ~200 tasks).
+- `docs/prompts/unified-task-ordering.md` — orchestrator kickoff prompt:
+  branch `feat/unified-task-ordering` off freshly-pulled `develop`, per-task
+  agent pipeline, pre-approved per-task commits, hard stops (NFR miss,
+  plan/reality drift, PR draft only — never opened).
+
+### Added — 2026-07-22 — Idea doc: unified manual task ordering
+
+- `docs/ideas/unified-manual-task-ordering.md` — refined from the drag
+  bug report (List drags snap back, Kanban arrangements disturbed, Gantt
+  rows not reorderable). Diagnosis: `Task.position` is scoped per
+  `(projectId, status)` for top-level tasks, so only the Kanban column
+  matches the display grouping; List/Gantt interleave three independent
+  status sequences, and the Gantt has no between-row drop targets at all.
+  Direction (user-confirmed): one canonical per-project order — re-scope
+  top-level positions the way subtasks already work — status changes keep
+  the slot, and the Gantt list pane becomes a full drag peer of the List
+  view. No code changes yet; next step is a docs/plans implementation plan.
+
 ### Added — 2026-07-22 — Section rollup summary bars on the Gantt (plan Task 5)
 
 - `frontend/src/components/gantt/GanttSectionBar.tsx` (+ `GanttRow.tsx` wiring):
