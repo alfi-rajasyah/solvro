@@ -1,4 +1,5 @@
 import type { Section, Task } from "@/lib/queries";
+import { SECTION_COLOR_PRESETS } from "@/lib/gantt/palette";
 
 export type ViewMode = "day" | "week" | "month" | "quarter";
 export type RowKind = "section" | "task" | "subtask";
@@ -358,8 +359,27 @@ export function buildRows({ tasks, sections, collapsed }: BuildRowsOpts): Row[] 
   const sortedSections = [...sections].sort(
     (a, b) => a.position - b.position || a.id - b.id,
   );
+  // Sections whose Section.color is missing or still the Prisma schema
+  // default (`#94a3b8`, slate — see schema.prisma) have never been through
+  // the color picker; every pre-existing section stores exactly this hex,
+  // so a bare preset swap in palette.ts wouldn't change anything on screen.
+  // Treat that value (case-insensitively) as the "never customized" sentinel
+  // and assign a vivid preset deterministically by the section's position in
+  // the ordered list — Task 1 deliberately dropped `#94a3b8` from
+  // SECTION_COLOR_PRESETS so an explicit user pick can never collide with
+  // this sentinel. Sections with a real stored color always keep it. This is
+  // the single resolution point: bars, list dots, section bands, and the
+  // Excel/PDF exports all read `Row.sectionColor` produced below, so they
+  // inherit the fallback automatically.
   const colorBySection = new Map<number, string>();
-  for (const s of sortedSections) colorBySection.set(s.id, s.color || DEFAULT_SECTION_COLOR);
+  sortedSections.forEach((s, index) => {
+    const stored = s.color?.trim();
+    const isUnset = !stored || stored.toLowerCase() === DEFAULT_SECTION_COLOR.toLowerCase();
+    colorBySection.set(
+      s.id,
+      isUnset ? SECTION_COLOR_PRESETS[index % SECTION_COLOR_PRESETS.length] : stored,
+    );
+  });
 
   function rangeFor(group: Task[]): { start: Date | null; end: Date | null } {
     const stamps = group
