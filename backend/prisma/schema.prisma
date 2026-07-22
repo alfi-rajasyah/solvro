@@ -232,12 +232,13 @@ model Task {
   parentTaskId      Int?       @map("parent_task_id")
   parent            Task?      @relation("TaskSubtasks", fields: [parentTaskId], references: [id], onDelete: Cascade)
   subtasks          Task[]     @relation("TaskSubtasks")
-  // Sibling ordering. Siblings are tasks sharing (projectId, status,
-  // parentTaskId): for top-level tasks (parentTaskId null) the column is
-  // (projectId, status); for subtasks the column is the parent's subtask
-  // list (status does not partition subtasks). Dense 0..n-1 within a sibling
-  // list — maintained by the reorder/re-parent logic in routes/tasks.ts and
-  // routes/projects.ts.
+  // Sibling ordering. For top-level tasks (parentTaskId null) the sibling
+  // list is the project's single dense top-level order (projectId alone) —
+  // ONE canonical order shared by List, Kanban, and Gantt; status does NOT
+  // partition it, so a status change keeps the task's slot. For subtasks the
+  // sibling list is the parent's subtask list (unchanged: also unpartitioned
+  // by status). Dense 0..n-1 within a sibling list — maintained by the
+  // reorder/re-parent logic in routes/tasks.ts and routes/projects.ts.
   position          Int        @default(0) @map("position")
   labels            Label[]
   comments          Comment[]
@@ -252,7 +253,7 @@ model Task {
   @@index([priority])
   @@index([dueDate])
   @@index([parentTaskId])
-  @@index([projectId, status, position])
+  @@index([projectId, position])
   @@map("tasks")
 }
 

@@ -146,28 +146,31 @@ describe("reorder within the same column", () => {
 });
 
 describe("move across columns (status change)", () => {
-  it("appends to the end of the destination column and closes the gap in the source column", async () => {
+  // A status-only change (no explicit position) is no longer a "move across
+  // columns" for top-level tasks: status left the sibling key, so every
+  // sibling — including the one being patched — keeps its exact slot in the
+  // single per-project list. This is the same invariant the "status does not
+  // partition" describe block below asserts on the patched row alone; this
+  // test additionally proves the *other* siblings are untouched (no gap
+  // close, no re-pack, no append to a destination "column").
+  it("does not move or re-pack any sibling on a status-only change", async () => {
     const a0 = await createTask({ title: "A0", status: "TODO" });
     const a1 = await createTask({ title: "A1", status: "TODO" });
     const a2 = await createTask({ title: "A2", status: "TODO" });
     const b0 = await createTask({ title: "B0", status: "IN_PROGRESS" });
 
-    // Move the middle TODO task to IN_PROGRESS without specifying position
-    // -> should append (position 1, after b0).
     const res = await patchTask(a1.id, { status: "IN_PROGRESS" });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("IN_PROGRESS");
-    expect(res.body.position).toBe(1);
+    expect(res.body.position).toBe(1); // unchanged: a1 was created second
 
-    const listed = await listProjectTasks();
-    const todoTasks = listed.filter((t) => t.status === "TODO" && [a0.id, a1.id, a2.id].includes(t.id));
-    // Old column gap closed + re-packed: a0 stays at 0, a2 shifts down to 1.
-    expect(todoTasks.map((t) => t.id)).toEqual([a0.id, a2.id]);
-    expect(todoTasks.map((t) => t.position)).toEqual([0, 1]);
-
-    const inProgress = listed.filter((t) => t.status === "IN_PROGRESS" && [b0.id, a1.id].includes(t.id));
-    expect(inProgress.map((t) => t.id)).toEqual([b0.id, a1.id]);
-    expect(inProgress.map((t) => t.position)).toEqual([0, 1]);
+    const listed = await listProjectTasks("?parentTaskId=null");
+    const relevant = listed.filter((t) =>
+      [a0.id, a1.id, a2.id, b0.id].includes(t.id),
+    );
+    // Creation order preserved, positions untouched by the status change.
+    expect(relevant.map((t) => t.id)).toEqual([a0.id, a1.id, a2.id, b0.id]);
+    expect(relevant.map((t) => t.position)).toEqual([0, 1, 2, 3]);
   });
 
   it("inserts at an explicit position in the destination column", async () => {
@@ -308,21 +311,64 @@ describe("status-only change and sibling ordering", () => {
     expect(subtasks.map((t) => t.position)).toEqual([0, 1, 2]);
   });
 
-  it("still moves a top-level task to the destination column on a status change", async () => {
-    // Regression guard: the subtask fix must not stop genuine column moves,
-    // where status IS part of the top-level sibling key.
+  it("keeps a top-level task's slot on a status-only change, same as a subtask", async () => {
+    // Status left the top-level sibling key too: a top-level task's status
+    // change now behaves exactly like the subtask case above, not like a
+    // Kanban-column append. There is no per-status "destination column" to
+    // move into or gap to close.
     const a0 = await createTask({ title: "A0", status: "TODO" });
     const a1 = await createTask({ title: "A1", status: "TODO" });
 
     const res = await patchTask(a0.id, { status: "DONE" });
     expect(res.status).toBe(200);
     expect(res.body.status).toBe("DONE");
-    expect(res.body.position).toBe(0); // appended to the (empty) DONE column
+    expect(res.body.position).toBe(0); // unchanged: a0 was created first
 
-    const todo = await listProjectTasks("?status=TODO");
-    const relevant = todo.filter((t) => [a0.id, a1.id].includes(t.id));
-    expect(relevant.map((t) => t.id)).toEqual([a1.id]); // gap closed + re-packed
-    expect(relevant.map((t) => t.position)).toEqual([0]);
+    const all = await listProjectTasks("?parentTaskId=null");
+    const relevant = all.filter((t) => [a0.id, a1.id].includes(t.id));
+    expect(relevant.map((t) => t.id)).toEqual([a0.id, a1.id]);
+    expect(relevant.map((t) => t.position)).toEqual([0, 1]);
+  });
+});
+
+describe("global top-level ordering (status does not partition)", () => {
+  it("creates append to one per-project list regardless of status", async () => {
+    const a = await createTask({ title: "A", status: "TODO" });
+    const b = await createTask({ title: "B", status: "DONE" });
+    const c = await createTask({ title: "C", status: "TODO" });
+    expect([a.position, b.position, c.position]).toEqual([0, 1, 2]);
+  });
+
+  it("a status-only patch keeps the slot", async () => {
+    await createTask({ title: "A", status: "TODO" });
+    const b = await createTask({ title: "B", status: "TODO" });
+    await createTask({ title: "C", status: "TODO" });
+    const res = await patchTask(b.id, { status: "DONE" });
+    expect(res.status).toBe(200);
+    expect(res.body.position).toBe(1);
+    const all = await listProjectTasks("?parentTaskId=null");
+    expect(all.map((t) => t.title)).toEqual(["A", "B", "C"]);
+  });
+
+  it("an explicit position patch reorders across statuses", async () => {
+    const a = await createTask({ title: "A", status: "DONE" });
+    const b = await createTask({ title: "B", status: "TODO" });
+    const c = await createTask({ title: "C", status: "IN_PROGRESS" });
+    const res = await patchTask(c.id, { position: 0 });
+    expect(res.status).toBe(200);
+    const all = await listProjectTasks("?parentTaskId=null");
+    expect(all.map((t) => t.title)).toEqual(["C", "A", "B"]);
+    expect(all.map((t) => t.position)).toEqual([0, 1, 2]);
+  });
+
+  it("status + position combined lands at the requested global index", async () => {
+    await createTask({ title: "A", status: "TODO" });
+    await createTask({ title: "B", status: "TODO" });
+    const c = await createTask({ title: "C", status: "TODO" });
+    const res = await patchTask(c.id, { status: "IN_PROGRESS", position: 1 });
+    expect(res.status).toBe(200);
+    const all = await listProjectTasks("?parentTaskId=null");
+    expect(all.map((t) => t.title)).toEqual(["A", "C", "B"]);
   });
 });
 

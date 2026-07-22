@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   DndContext,
+  KeyboardSensor,
   PointerSensor,
   useSensor,
   useSensors,
@@ -130,8 +131,14 @@ export function GanttFrame({
     ? new Date(baselineLockedAt).toLocaleString()
     : null;
 
+  // KeyboardSensor uses dnd-kit's DEFAULT coordinateGetter (not
+  // sortableKeyboardCoordinates — that getter is built for SortableContext,
+  // which the Gantt deliberately doesn't use; it's raw useDraggable /
+  // useDroppable throughout). The default arrow-key 25px stepping + collision
+  // detection works fine against plain droppables.
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(KeyboardSensor),
   );
 
   const [viewMode, setViewMode] = useState<ViewMode>("week");
@@ -413,16 +420,109 @@ export function GanttFrame({
       const activeData = active.data.current as RowDragData | undefined;
       const overData = over.data.current as RowDropData | undefined;
       if (!activeData || !overData) return;
+
+      // Row drop: "insert BEFORE the row you drop on" (top-edge indicator
+      // in GanttListRow). Mirrors ProjectList.tsx's handleDragEnd row-drop
+      // math — same global top-level order, same arrayMove semantics.
+      if (overData.kind === "row-target") {
+        setActionError(null);
+        const list = tasks ?? [];
+
+        if (activeData.kind === "task" && activeData.taskId !== undefined) {
+          // Task dropped on a subtask row -> resolve to its parent card
+          // (List parity: a task row dropped on a subtask means "dropped on
+          // that row's parent card area").
+          const overTopId = overData.parentTaskId ?? overData.taskId;
+          const overTask = list.find((t) => t.id === overTopId);
+          const moved = list.find((t) => t.id === activeData.taskId);
+          if (!overTask || !moved || overTask.id === moved.id) return;
+
+          // One global top-level order per project — `position` indexes
+          // into it. Views group it by section for display; relative order
+          // is preserved (mirrors ProjectList.tsx's `topLevelOrdered`).
+          const topLevelOrdered = list
+            .filter((t) => t.parentTaskId === null)
+            .sort((a, b) => a.position - b.position || a.id - b.id);
+
+          // Insert relative to the over row — arrayMove semantics (the over
+          // row's pre-move global index: downward drags land after it,
+          // upward before it; backend insertAt excludes the moved row
+          // first).
+          const idx = topLevelOrdered.findIndex((t) => t.id === overTask.id);
+          const position = idx === -1 ? topLevelOrdered.length : idx;
+          const crossSection = overTask.sectionId !== moved.sectionId;
+          if (!crossSection && position === moved.position) return;
+          try {
+            await updateTask.mutateAsync({
+              id: moved.id,
+              patch: crossSection
+                ? { sectionId: overTask.sectionId, position }
+                : { position },
+            });
+          } catch (err) {
+            setActionError(
+              err instanceof ApiError ? err.message : "Could not move task.",
+            );
+          }
+          return;
+        }
+
+        if (activeData.kind === "subtask" && activeData.taskId !== undefined) {
+          // Reorder WITHIN the parent only (List parity — no re-parent via
+          // row drags in the Gantt). Ignore drops outside the sibling
+          // checklist.
+          const moved = list.find((t) => t.id === activeData.taskId);
+          if (!moved || moved.parentTaskId === null) return;
+          if (overData.parentTaskId !== moved.parentTaskId) return;
+          const siblings = list
+            .filter((t) => t.parentTaskId === moved.parentTaskId && t.id !== moved.id)
+            .sort((a, b) => a.position - b.position || a.id - b.id);
+          const idx = siblings.findIndex((t) => t.id === overData.taskId);
+          const position = idx === -1 ? siblings.length : idx;
+          if (position === moved.position) return;
+          try {
+            await updateTask.mutateAsync({ id: moved.id, patch: { position } });
+          } catch (err) {
+            setActionError(
+              err instanceof ApiError ? err.message : "Could not reorder subtask.",
+            );
+          }
+          return;
+        }
+
+        return;
+      }
+
       if (overData.kind !== "section-target") return;
 
       setActionError(null);
 
       if (activeData.kind === "task" && activeData.taskId !== undefined) {
         if (activeData.sectionId === overData.sectionId) return;
+        const moved = (tasks ?? []).find((t) => t.id === activeData.taskId);
+        if (!moved) return;
+        // Dropped on a section header / empty group -> append at the end of
+        // that section's block in the global order (List parity — see the
+        // Task 3 correction in docs/plans/unified-task-ordering-plan.md).
+        // Backend insertAt indexes into the sibling list EXCLUDING the moved
+        // row, so `last`'s append-after index must be found in that same
+        // moved-excluded list, or it overshoots by one slot whenever moved's
+        // old position precedes the target section.
+        const topLevelOrdered = (tasks ?? [])
+          .filter((t) => t.parentTaskId === null)
+          .sort((a, b) => a.position - b.position || a.id - b.id);
+        const others = topLevelOrdered.filter((t) => t.id !== moved.id);
+        const block = others.filter((t) => t.sectionId === overData.sectionId);
+        const last = block[block.length - 1];
         try {
           await updateTask.mutateAsync({
-            id: activeData.taskId,
-            patch: { sectionId: overData.sectionId },
+            id: moved.id,
+            patch: last
+              ? {
+                  sectionId: overData.sectionId,
+                  position: others.findIndex((t) => t.id === last.id) + 1,
+                }
+              : { sectionId: overData.sectionId },
           });
         } catch (err) {
           setActionError(
@@ -461,7 +561,7 @@ export function GanttFrame({
         }
       }
     },
-    [sections, updateTask, updateSection],
+    [tasks, sections, updateTask, updateSection],
   );
 
   const onSetSectionColor = useCallback(

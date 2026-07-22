@@ -22,15 +22,15 @@ interface GanttListRowProps {
 }
 
 export interface RowDragData {
-  kind: "task" | "section";
+  kind: "task" | "subtask" | "section";
   taskId?: number;
+  parentTaskId: number | null;
   sectionId: number | null;
 }
 
-export interface RowDropData {
-  kind: "section-target";
-  sectionId: number | null;
-}
+export type RowDropData =
+  | { kind: "section-target"; sectionId: number | null }
+  | { kind: "row-target"; taskId: number; parentTaskId: number | null; sectionId: number | null };
 
 export function GanttListRow({
   row,
@@ -56,26 +56,40 @@ export function GanttListRow({
 
   const draggable = useDraggable({
     id: `drag-${row.id}`,
-    disabled: !canEdit || (!isTopLevelTask && !realSection),
+    disabled: !canEdit || (!isTopLevelTask && !isSubtask && !realSection),
     data: {
-      kind: isTopLevelTask ? "task" : "section",
+      kind: isSubtask ? "subtask" : isTopLevelTask ? "task" : "section",
       taskId: row.taskId,
+      parentTaskId: row.task?.parentTaskId ?? null,
       sectionId: row.sectionId,
     } satisfies RowDragData,
   });
 
   const droppable = useDroppable({
     id: `drop-${row.id}`,
-    disabled: !isSection,
-    data: { kind: "section-target", sectionId: row.sectionId } satisfies RowDropData,
+    disabled: !isSection && !isTopLevelTask && !isSubtask,
+    data: isSection
+      ? ({ kind: "section-target", sectionId: row.sectionId } satisfies RowDropData)
+      : ({
+          kind: "row-target",
+          taskId: row.taskId!,
+          parentTaskId: row.task?.parentTaskId ?? null,
+          sectionId: row.sectionId,
+        } satisfies RowDropData),
   });
 
   const isDragging = draggable.isDragging;
   const isOver = droppable.isOver;
+  // Section drags land on section headers only (a section dropped on a
+  // row-target is a no-op — see GanttFrame's handleDragEnd) — the top-edge
+  // insert-before indicator would misrepresent that as a real drop, so it's
+  // gated to row drags (task/subtask) only.
+  const activeDragKind = (droppable.active?.data.current as RowDragData | undefined)?.kind;
+  const showRowInsertIndicator = isOver && !isSection && activeDragKind !== "section";
 
   const indent = row.depth * 14;
   const status = row.status ?? "TODO";
-  const dragHandleVisible = canEdit && (isTopLevelTask || realSection);
+  const dragHandleVisible = canEdit && (isTopLevelTask || isSubtask || realSection);
 
   const handleNameClick = () => {
     if (isSection) onToggleSection(row.id);
@@ -89,7 +103,7 @@ export function GanttListRow({
         droppable.setNodeRef(node);
       }}
       className={[
-        "group flex items-stretch border-b border-outline-variant",
+        "group relative flex items-stretch border-b border-outline-variant",
         isSection
           ? "bg-surface-container-low hover:bg-surface-container"
           : hovered
@@ -102,6 +116,9 @@ export function GanttListRow({
       onMouseEnter={() => onHoverChange(row.id)}
       onMouseLeave={() => onHoverChange(null)}
     >
+      {showRowInsertIndicator && (
+        <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-0.5 bg-primary" />
+      )}
       <div className="flex min-w-0 flex-1 items-center gap-1.5 pl-1.5 pr-2">
         <span style={{ width: indent }} aria-hidden="true" />
         {dragHandleVisible ? (
