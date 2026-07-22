@@ -15,6 +15,17 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-22 — Solid Gantt bar fills with progress overlay (plan Task 3)
+
+- `frontend/src/components/gantt/GanttBar.tsx` + `frontend/src/lib/gantt/palette.ts`:
+  rendering model inverted. Bars now render solid in their Color-by color
+  (was: 28%-opacity track via `BAR_TRACK_OPACITY`, solid only as progress
+  filled — the root cause of the washed-out Gantt). Progress is now a darker
+  left-anchored overlay (`rgba(0,0,0, PROGRESS_OVERLAY_ALPHA)`, only when
+  0% < progress < 100%). `BAR_TRACK_OPACITY` removed (GanttBar was its sole
+  consumer); `PROGRESS_OVERLAY_ALPHA = 0.28` added. Bar radius 3px → 4px.
+  Screen/export color parity unchanged — exports were already solid-fill.
+
 ### Changed — 2026-07-22 — Deterministic vivid fallback for uncustomized section colors (plan Task 2)
 
 - `frontend/src/lib/gantt/geometry.ts`: section color resolution now treats

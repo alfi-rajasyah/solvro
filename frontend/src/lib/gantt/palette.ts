@@ -1,7 +1,7 @@
 import type { Priority, TaskStatus } from "@/lib/queries";
 
 // Single source of truth for Gantt bar colors. The UI applies these via
-// Tailwind classes (see GanttBar.tsx); the Excel/PDF exports read the hex
+// inline styles (see GanttBar.tsx); the Excel/PDF exports read the hex
 // values directly so output matches what the user sees on screen.
 
 export const STATUS_FILL_HEX: Record<TaskStatus, string> = {
@@ -25,10 +25,11 @@ export const TODAY_HEX = "#3aae51";    // primary green — Gantt v2 today line/
 // `--phase` CSS fallback in index.css and geometry.ts's DEFAULT_SECTION_COLOR.
 export const DEFAULT_SECTION_COLOR = "#94a3b8"; // slate-400
 
-// Opacity used for the "track" portion of a bar (unfilled progress) —
-// the base bar renders at this opacity over the section color, and the
-// progress fill renders solid from the left up to progressPct.
-export const BAR_TRACK_OPACITY = 0.28;
+// Bars render solid in their resolved Color-by color. Progress is shown as a
+// darker overlay (black at this opacity) anchored to the left edge, covering
+// the completed portion of the bar — only drawn when 0% < progress < 100%,
+// so not-yet-started and fully-done bars stay clean solid fills.
+export const PROGRESS_OVERLAY_ALPHA = 0.28;
 
 export type ColorByMode = "status" | "section" | "priority";
 
