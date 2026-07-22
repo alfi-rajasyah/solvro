@@ -369,7 +369,6 @@ projectsRouter.post(
       const siblingKey: SiblingKey = {
         projectId: id,
         parentTaskId: body.parentTaskId ?? null,
-        status,
       };
       const position = await countSiblings(tx, siblingKey);
 

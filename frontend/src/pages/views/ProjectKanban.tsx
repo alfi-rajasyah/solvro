@@ -189,13 +189,18 @@ export function ProjectKanban() {
     return list;
   }, [topLevelAll, filterAssigneeId, filterPriority]);
 
-  // Unfiltered per-status groups — the real sibling lists the backend's
-  // `position` indexes into. All drop-position math MUST use this, never
-  // the filtered `grouped` below: when a filter hides some cards, an index
-  // counted only over the visible subset would land on the wrong slot in
-  // the server's full sibling list (see backend/src/lib/taskOrdering.ts
-  // insertAt, which inserts into every sibling regardless of what the
-  // client happens to be showing).
+  // Unfiltered per-status groups — used to find the boundary card (e.g. the
+  // last card in a column, for column-body drops AND subtask-promote drops
+  // — see columnEndPosition) and to render columns. `position` no longer
+  // indexes a per-status list: the backend's sibling list for top-level
+  // tasks is the whole project, status doesn't partition it (see
+  // computeCardDrop). All drop-position math MUST use the GLOBAL sorted
+  // order, never a per-column index — and always this unfiltered list,
+  // never the filtered `topLevel`/`grouped` below: when a filter hides some
+  // cards, an index counted only over the visible subset would land on the
+  // wrong slot in the server's full sibling list (see
+  // backend/src/lib/taskOrdering.ts insertAt, which inserts into every
+  // sibling regardless of what the client happens to be showing).
   const groupedAll = useMemo(() => {
     const map: Record<TaskStatus, Task[]> = { TODO: [], IN_PROGRESS: [], DONE: [] };
     for (const t of topLevelAll) map[t.status].push(t);
@@ -249,15 +254,57 @@ export function ProjectKanban() {
     }
   }
 
-  function computeCardDrop(activeId: number, overId: string): { status: TaskStatus; position: number } | null {
+  // Shared by computeCardDrop's column-body branch AND handleSubtaskDrop's
+  // promote-to-top-level branch — both mean "end of this column" in the
+  // GLOBAL top-level order. `excludeId` is the id to drop from both the
+  // column's boundary-card lookup and the global list before indexing:
+  // pass the dragged card's id for a card drop (it's already a row in
+  // `topLevelAll`/`groupedAll` and must not count itself), or `null` for a
+  // subtask promotion (it isn't a top-level row yet, so there's nothing to
+  // exclude — the moved-excluded and moved-inclusive views are identical).
+  // Returns undefined for an empty target column: status-only, no position
+  // (the row/subtask keeps its slot — or, for a fresh promotion, lands at
+  // the end of the whole project's top-level order, which is well-defined
+  // and fine when there's no in-column card to anchor after).
+  function columnEndPosition(status: TaskStatus, excludeId: number | null): number | undefined {
+    const colCards =
+      excludeId === null ? groupedAll[status] : groupedAll[status].filter((t) => t.id !== excludeId);
+    const last = colCards[colCards.length - 1];
+    if (!last) return undefined;
+    const globalOrdered = [...topLevelAll].sort((a, b) => a.position - b.position || a.id - b.id);
+    // Backend insertAt indexes into the sibling list EXCLUDING the moved
+    // row (see taskOrdering.ts) — so `last`'s append-after index must be
+    // found in that same moved-excluded list, or it overshoots by one slot
+    // whenever moved's old position precedes the target column's last card.
+    // (Mirrors ProjectList.tsx's header-drop branch — same comment there on
+    // this asymmetry with the card-drop branch below.)
+    const globalOthers =
+      excludeId === null ? globalOrdered : globalOrdered.filter((t) => t.id !== excludeId);
+    return globalOthers.findIndex((t) => t.id === last.id) + 1;
+  }
+
+  function computeCardDrop(
+    activeId: number,
+    overId: string,
+  ): { status: TaskStatus; position?: number } | null {
     const moved = topLevelAll.find((t) => t.id === activeId);
     if (!moved) return null;
 
     if (isColumnId(overId)) {
+      // Column-body drop = "end of that column": insert after its last
+      // card. Empty column: status-only patch — the card keeps its slot.
       const status = statusFromColumnId(overId);
-      const list = groupedAll[status].filter((t) => t.id !== activeId);
-      return { status, position: list.length };
+      const position = columnEndPosition(status, activeId);
+      return position === undefined ? { status } : { status, position };
     }
+
+    // `position` indexes into the project's single top-level order; columns
+    // render filtered subsequences of it. All drop math below uses the
+    // GLOBAL sorted list — a per-column (or filtered) index would land on
+    // the wrong server-side slot.
+    const globalOrdered = [...topLevelAll].sort(
+      (a, b) => a.position - b.position || a.id - b.id,
+    );
 
     // A card landing on a subtask row means "dropped on that row's parent
     // card" — resolve to the parent and fall through to the card branch.
@@ -274,18 +321,20 @@ export function ProjectKanban() {
     if (isCardId(effectiveOverId)) {
       const overTask = topLevelAll.find((t) => t.id === numFromId(effectiveOverId));
       if (!overTask) return null;
-      const status = overTask.status;
-      // Index of the over-card within the *full* (unfiltered) sibling list,
-      // INCLUDING the active card when it's in the same column. This is
-      // arrayMove semantics: the backend's insertAt excludes the moved row
+      // Over-card's pre-move GLOBAL index, moved-INCLUSIVE — arrayMove
+      // semantics as before, just against the global list instead of the
+      // per-column one. The backend's insertAt excludes the moved row
       // first, so sending the over-card's pre-move index makes a downward
-      // move land *after* it and an upward move land *before* it — matching
-      // what the user sees. (Excluding the active here would make a
-      // one-slot downward drag compute the card's own current position and
-      // silently no-op.) The list must also be unfiltered: an index counted
-      // over a filtered view would land on the wrong server-side slot.
-      const idx = groupedAll[status].findIndex((t) => t.id === overTask.id);
-      return { status, position: idx === -1 ? groupedAll[status].length : idx };
+      // move land *after* it and an upward move land *before* it (excluding
+      // the active row here would make a one-slot downward drag compute the
+      // card's own current position and silently no-op). This is the
+      // deliberate opposite of the column-drop branch above — same
+      // intentional asymmetry as ProjectList.tsx's row-drop vs header-drop.
+      const idx = globalOrdered.findIndex((t) => t.id === overTask.id);
+      return {
+        status: overTask.status,
+        position: idx === -1 ? globalOrdered.length : idx,
+      };
     }
     return null;
   }
@@ -306,10 +355,17 @@ export function ProjectKanban() {
       if (!drop) return;
       const moved = topLevelAll.find((t) => t.id === numFromId(activeId));
       if (!moved) return;
-      if (moved.status === drop.status && moved.position === drop.position) return;
+      if (
+        moved.status === drop.status &&
+        (drop.position === undefined || moved.position === drop.position)
+      )
+        return;
       updateTask.mutate({
         id: moved.id,
-        patch: { status: drop.status, position: drop.position },
+        patch:
+          drop.position === undefined
+            ? { status: drop.status }
+            : { status: drop.status, position: drop.position },
       });
       return;
     }
@@ -351,13 +407,21 @@ export function ProjectKanban() {
       return;
     }
 
-    // Dropped onto a column's empty background -> promote to top-level task
-    // in that column, appended at the end. Append length must come from the
-    // unfiltered sibling list — see the comment on `groupedAll` above.
+    // Dropped onto a column's empty background -> promote to top-level task,
+    // appended at the end of that column in the GLOBAL top-level order —
+    // same "end of column" rule as a card's column-body drop, shared via
+    // columnEndPosition (see its comment). This is a promotion, not a
+    // reorder within a sibling list the task is already in, so — unlike a
+    // card drop — there's no active row to exclude from the lookup.
     if (isColumnId(overId)) {
       const status = statusFromColumnId(overId);
-      const position = groupedAll[status].length;
-      submitSubtaskPatch(subtask, { parentTaskId: null, status, position });
+      const position = columnEndPosition(status, null);
+      submitSubtaskPatch(
+        subtask,
+        position === undefined
+          ? { parentTaskId: null, status }
+          : { parentTaskId: null, status, position },
+      );
     }
   }
 
@@ -625,9 +689,18 @@ export function ProjectKanban() {
           onClose={() => setMobileSheetTask(null)}
           onMove={(status) => {
             if (status !== mobileSheetTask.status) {
-              // Unfiltered append length — same reasoning as computeCardDrop.
-              const position = groupedAll[status].length;
-              updateTask.mutate({ id: mobileSheetTask.id, patch: { status, position } });
+              // Same column-append rule as a column-body drop — reuse
+              // computeCardDrop instead of re-deriving the math.
+              const drop = computeCardDrop(mobileSheetTask.id, idOf("column", status));
+              if (drop) {
+                updateTask.mutate({
+                  id: mobileSheetTask.id,
+                  patch:
+                    drop.position === undefined
+                      ? { status: drop.status }
+                      : { status: drop.status, position: drop.position },
+                });
+              }
             }
             setMobileSheetTask(null);
           }}
