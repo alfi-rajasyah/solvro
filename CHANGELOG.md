@@ -15,6 +15,469 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-22 — E2E regression coverage for List + Gantt reorder; unified-task-ordering closing sweep (plan Task 6)
+
+- `e2e/tests/list-dnd.spec.ts` (new) — desktop-project-only (mirrors
+  `kanban-dnd.spec.ts`'s `test.skip(test.info().project.name !== "desktop",
+  ...)` guard), asserting through the API exactly like `kanban-dnd.spec.ts`
+  does. Three cases:
+  - "cross-status reorder in one section sticks: Gamma onto Alpha" — drags
+    Gamma's row onto Alpha's on `/projects/:id/list`; asserts via API that
+    Gamma lands immediately before Alpha in the global (position, id)
+    top-level order, and that every top-level task's status (read
+    dynamically, not hardcoded) is unchanged by the reorder.
+  - "status chip change keeps the slot: Beta status flips, order stays" —
+    flips Beta's status via the List row's `StatusSelect` chip (a `<button>`
+    showing the current `STATUS_LABEL`; clicking opens a dropdown of
+    sibling `<button>`s for the other two labels) and asserts the sorted
+    top-level id sequence is identical before/after, with only Beta's
+    status changed. Reads Beta's *current* status via API rather than
+    assuming the raw seed value ("TODO"): `seededProject` is a
+    worker-scoped Playwright fixture, and when this worker also runs
+    `kanban-dnd.spec.ts` first (default file ordering, single worker),
+    that file's "cross-column drag: Beta -> In Progress column" case flips
+    the *same* seeded project's Beta to `IN_PROGRESS` before this spec's
+    tests start — confirmed by reproducing the failure with `git stash`
+    against the pre-Task-6 commit (identical failure, so unrelated to this
+    diff) and by inspecting per-attempt Playwright artifacts (the failing
+    attempt's precondition read `IN_PROGRESS`; a same-worker retry that
+    happened to land on a freshly-seeded worker read `TODO` and passed).
+    Hardcoding "TODO" was a false assumption about fixture isolation, not
+    a real product precondition, so the test now derives its target status
+    from whatever Beta's status actually is. Also replaced a fixed
+    `page.waitForTimeout(1000)` after the chip click with
+    `expect.poll(...)` against the tasks API so the assertions wait for the
+    PATCH to actually land instead of a guessed sleep.
+  - "gantt row drag: reorder sticks, dates untouched" (same file, not a
+    separate spec — keeps the shared local helpers in one place) — on
+    `/projects/:id/gantt`, drags the globally-last top-level task's row
+    (via its `aria-label="Drag handle"` grip) onto the globally-first
+    task's row; asserts via API that the dragged task lands immediately
+    before the target in the global order, and that its `startDate`/
+    `dueDate` are byte-identical before/after (row drags never touch
+    dates). The seed fixture (`e2e/fixtures/seed.ts`) already assigns every
+    top-level task a date range at creation, so no extra setup PATCH was
+    needed for this assertion to have teeth (explicitly asserted
+    non-null before comparing).
+  - Selector discipline: no `data-testid` added anywhere — List row grips
+    reuse the same `aria-label="Drag to reorder"` + `gripFor` heuristic
+    `kanban-dnd.spec.ts` already uses (List and Kanban grips happen to
+    share that aria-label), Gantt row grips use their existing
+    `aria-label="Drag handle"`, and the List status chip is located via a
+    local `desktopRow()` helper — `page.locator('div[class*="grid-cols-"]',
+    { hasText: title })` — exploiting the fact that only the column-header
+    row and each desktop `TaskRow` grid div carry that arbitrary-value
+    Tailwind class token (the mobile-card sibling the same component also
+    renders does not), so it uniquely resolves the row without touching
+    `ProjectList.tsx`/`GanttListRow.tsx`.
+- Confirmed pre-existing, unrelated `pwa.spec.ts` failures (`manifest link
+  is present`, `service worker registers`, desktop + mobile) reproduce
+  identically against the pre-Task-6 commit (`git stash` verification) —
+  a dev-server PWA registration quirk, not caused by this branch; left
+  untouched per scope. (Mechanism: `vite-plugin-pwa` serves manifest/SW only
+  in build/preview mode, so the spec structurally fails at `BASE_URL=5173`
+  and passes on the built CI stack at `:8080`.)
+- NFR re-check (200-task worst-case reorder PATCH, dev stack): Task 2's
+  calm-host set passed at 0.196/0.132/0.118s; Task 6's re-checks measured
+  0.20–0.47s — but every over-budget sample was taken at host load 6–15 on
+  an 8-core Mac with all three containers idle (<1% CPU), i.e. host
+  contention from the CI/e2e churn itself, not endpoint cost. Recorded
+  honestly rather than re-rolled; surfaced to the user per the plan's
+  hard-stop rule (2026-07-22) and carried forward on the calm-host set as
+  the working verdict — re-time on a quiet host before any release
+  decision if in doubt. Follow-up optimization
+  (batch the dense repack's per-row UPDATEs into one SQL statement) filed in
+  ISSUES.md in case real-world use ever feels slow.
+
+### Changed — 2026-07-22 — `Task.position` doc comment updated for the global top-level order (plan Task 6)
+
+- `backend/prisma/schema.prisma` (`Task.position` doc comment) — rewritten
+  to describe the model landed in plan Tasks 1–2: for top-level tasks
+  (`parentTaskId` null) the sibling list is the project's single dense
+  top-level order (`projectId` alone, status does not partition it, so a
+  status change keeps the task's slot); subtasks are unchanged (parent's
+  subtask list). The previous comment still described the removed
+  per-`(projectId, status)` sibling model (queued in ISSUES.md from plan
+  Task 2). Comment-only — `npx prisma migrate diff` against the live dev
+  DB confirms an empty migration (no schema drift), and `git diff` shows
+  only comment lines changed.
+
+### Added — 2026-07-22 — Gantt list pane: between-row drag reorder (plan Task 5)
+
+- `frontend/src/components/gantt/GanttListRow.tsx` — task and subtask rows
+  are now draggable AND droppable (previously only section headers were
+  drop targets; task rows could be dragged but had nowhere to land other
+  than a section header, and subtask rows couldn't be dragged at all).
+  Closes the "cannot drag at all" symptom from the original bug report.
+  Dropping on a row shows a top-edge insertion indicator (`bg-primary`
+  2px bar as the row's first child; the row root gained `relative` to
+  host it). The existing `isOver && isSection` ring affordance for
+  section-header drops is unchanged. The indicator is gated to row drags
+  only — `showRowInsertIndicator = isOver && !isSection &&
+  activeDragKind !== "section"`, reading the active drag's kind off
+  `droppable.active?.data.current` — so a section dragged over a task row
+  (a no-op drop, per `GanttFrame.handleDragEnd`) doesn't light a
+  misleading affordance.
+- `frontend/src/components/gantt/GanttFrame.tsx` — added
+  `useSensor(KeyboardSensor)` to the Gantt's `DndContext` sensors
+  (previously PointerSensor-only, so the row drag handles — which already
+  get `role`/`tabIndex` from `draggable.attributes`, per
+  `GanttListRow.tsx`'s `{...draggable.attributes}` spread — were
+  keyboard-dead). Uses dnd-kit's default `coordinateGetter`, not
+  `sortableKeyboardCoordinates`: that getter targets `SortableContext`,
+  which the Gantt deliberately doesn't use (raw `useDraggable`/
+  `useDroppable` throughout, per Task 5's design) — the default arrow-key
+  stepping works against plain droppables.
+- `RowDragData`/`RowDropData` (same file, `:24-33`) extended: `RowDragData`
+  gains `"subtask"` to its `kind` union plus a `parentTaskId: number |
+  null` field (populated from `row.task?.parentTaskId`, `null` for
+  section/top-level-task rows); `RowDropData` becomes a discriminated
+  union — the existing `{ kind: "section-target"; sectionId }` plus a new
+  `{ kind: "row-target"; taskId; parentTaskId; sectionId }`.
+- `frontend/src/components/gantt/GanttFrame.tsx` `handleDragEnd`
+  (`:409-535`) — new `row-target` branch, added before the existing
+  `section-target` early-return, mirroring `ProjectList.tsx`'s
+  `handleDragEnd` (plan Task 3) variable-for-variable so the two are
+  diffable by eye:
+  - Task row dropped on a task/subtask row: a subtask over-row resolves
+    to its parent (`overData.parentTaskId ?? overData.taskId`) so the
+    drop isn't a silent no-op; `topLevelOrdered` = every top-level task
+    sorted `(position, id)`; insert index = the over row's pre-move
+    index in that list (moved-INCLUSIVE — arrayMove/insert-before
+    semantics matching the top-edge indicator); patches `{ position }`
+    same-section or `{ sectionId, position }` cross-section; no-op guard
+    when neither the section nor the index actually changes.
+  - Subtask row dropped on a row: reorders WITHIN the parent only (List
+    parity — no re-parenting via Gantt row drags); requires
+    `overData.parentTaskId === moved.parentTaskId`, else returns;
+    siblings = the parent's other subtasks sorted `(position, id)`;
+    patches `{ position }`.
+  - Bars, dates, dependency arrows, baselines, and the section-reorder
+    branch are untouched.
+
+### Changed — 2026-07-22 — Gantt section-header drop now appends at section end (plan Task 5)
+
+- `GanttFrame.tsx`'s existing task-on-section-header branch (still gated
+  on `overData.kind === "section-target"`) no longer patches bare
+  `{ sectionId }`. It now adopts the corrected append-at-section-end rule
+  landed in `ProjectList.tsx` (plan Task 3's correction, not the plan's
+  original pre-correction block): `topLevelOrdered` filtered to `others`
+  (moved task excluded), `block` = that section's tasks within `others`,
+  and if non-empty, patch `{ sectionId, position: others.findIndex(last)
+  + 1 }` — indexing into the moved-EXCLUDED list because backend
+  `insertAt` excludes the moved row before clamping, so indexing the
+  moved-INCLUSIVE list would overshoot by one slot whenever the task's
+  old position precedes the target section. An empty target section still
+  patches `{ sectionId }` only (nothing to append after). Same-section
+  early return preserved.
+- No changes to `frontend/src/lib/gantt/geometry.ts` — verified by
+  reading `buildRows`: `parents = group.filter(t => t.parentTaskId ===
+  null)` and the subtask loop over `childrenById.get(p.id)` are plain
+  `Array.prototype.filter`/iteration over `tasks`, which preserves the
+  fetched `(position, id)` order end to end (the project tasks route
+  orders `[{ position: "asc" }, { id: "asc" }]` — `backend/src/routes/
+  projects.ts:331/418`), so section groups already render the canonical
+  order with zero changes needed here.
+
+### Changed — 2026-07-22 — Kanban speaks the global sibling order; e2e assertions follow (plan Task 4)
+
+- `frontend/src/pages/views/ProjectKanban.tsx` `computeCardDrop` (~:256-322)
+  — rewritten to compute every drop index against the project's single
+  global top-level order (`globalOrdered`, sorted `(position, id)` over
+  `topLevelAll`) instead of the old per-status `groupedAll[status]` list,
+  mirroring Task 1's backend re-scope and Task 3's List-view drop math. Two
+  branches, deliberately asymmetric (same as `ProjectList.tsx`'s
+  header-drop vs. row-drop, and commented the same way):
+  - Column-body drop (`isColumnId`) = "append after the column's last
+    card." Indexes a **moved-excluded** `globalOthers` list
+    (`globalOthers.findIndex(last) + 1`) to match backend `insertAt`,
+    which excludes the moved row from the sibling list before clamping.
+    An empty target column returns `{ status }` with no `position` —
+    status-only patch, the card keeps its global slot.
+  - Card drop (`isCardId`) = arrayMove semantics, **moved-inclusive**
+    (`globalOrdered.findIndex(overTask)`) — unchanged reasoning from
+    before, just against the global list instead of the per-column one.
+  - Return type is now `{ status: TaskStatus; position?: number } | null`
+    — `position` absent means "status-only, keep the slot."
+- `handleDragEnd`'s card-drop guard/patch (~:335-352) — optional-position
+  aware: the early-return no-op guard now short-circuits on `drop.position
+  === undefined` (status unchanged case) in addition to the old
+  `position` match; the mutation patch omits `position` entirely when
+  `drop.position` is `undefined` so a same-status card drag never fires,
+  and a cross-status drop onto an empty column sends `{ status }` only
+  (no repositioning PATCH).
+- Mobile move sheet's `onMove` (~:660-680) — no longer computes
+  `groupedAll[status].length` inline; now calls `computeCardDrop(task.id,
+  idOf("column", status))` and applies the same optional-position patch
+  shape, so the "append to end of column" rule has exactly one
+  implementation instead of two that could drift.
+- `groupedAll`'s doc comment updated: the invariant is now "drop-position
+  math MUST use the GLOBAL sorted order," not "the real per-status
+  sibling list" (that model no longer exists — see Task 1). `groupedAll`
+  itself stays: it's still needed to find each column's boundary card and
+  to render columns.
+- Subtask drag handlers (`handleSubtaskDrop`, `submitSubtaskPatch`,
+  ~:363-423) — untouched, out of scope for this task (per-parent
+  sibling lists, which Task 1 never changed).
+- `e2e/tests/kanban-dnd.spec.ts` — absolute-position assertions replaced
+  with relative-order ones now that `position` is a global index, not a
+  per-column one: added a `columnOrder(tasks, status)` helper (filters to
+  a status + top-level, sorts `(position, id)`, maps to titles). "reorder
+  within column" now asserts `Gamma` sorts before `Alpha` in the TODO
+  column instead of pinning `position === 0`. "cross-column drag" keeps
+  its status assertion and adds that `Beta` lands **last** in the
+  IN_PROGRESS column order, matching the column-body-drop = end-of-column
+  rule. Subtask-case and mobile-touch-case assertions are unchanged (not
+  in scope — their fixture layout keeps the pre-existing assertions valid
+  under the new global model; verified, not just assumed, via a full
+  local Playwright run).
+- Correction to the above (same task, caught by QA before commit): the
+  "subtask drag handlers untouched" bullet was wrong for one branch —
+  `handleSubtaskDrop`'s promote-to-top-level path (`isColumnId(overId)`,
+  previously ~:395-399) still patched `position: groupedAll[status].length`,
+  a correct *per-status-list* append index under the old model but a
+  *global* index under the new one: promoting a subtask into a column with
+  N existing cards landed it near the FRONT of the project's global order
+  (global slot N), not at the end of that column. The reparent
+  (`isCardId`) and reorder-within-parent (`isSubtaskId`) branches were
+  genuinely fine — per-parent subtask lists are unchanged by Task 1 — only
+  the promotion branch crosses into the top-level list. Fixed by extracting
+  `columnEndPosition(status, excludeId)` (~:256-283), shared by
+  `computeCardDrop`'s column-body branch (`excludeId` = the dragged card's
+  id, since it's already a row in `topLevelAll`) and the promote branch
+  (`excludeId = null`, since the subtask isn't a top-level row yet — the
+  moved-excluded and moved-inclusive views are identical there, so no
+  exclusion filter is needed or applied). Non-empty target column: global
+  append-after-last-card index, same math as the card-drop case. Empty
+  target column: `position` omitted entirely (`{ parentTaskId: null,
+  status }`) — backend `insertAt` then appends to the end of the whole
+  project's top-level order, which is well-defined for a column with no
+  card to anchor after. Traced the optimistic path
+  (`frontend/src/lib/queries.ts` `reorderTasksLocally`) for parity with
+  this backend behavior in both cases: a promotion's `oldListId`
+  (`sub:<parentId>`) always differs from `newListId` (`"top"`), so
+  `touchesOrdering` is always true regardless of `position`; on the "top"
+  list, `reorderTasksLocally`'s own clamp (`patch.position === undefined ?
+  newSiblings.length : ...`) mirrors `insertAt`'s identically, and because
+  the promoted subtask was never a member of the top-level sibling group to
+  begin with, `newSiblings` there is already the moved-excluded list — no
+  edit to `reorderTasksLocally` was needed. `e2e/tests/kanban-dnd.spec.ts`'s
+  "subtask promote" case extended: snapshots the other top-level tasks'
+  `(position, id)` order via the API immediately before the drag (the
+  worker-scoped `seededProject` carries mutations from earlier cases in the
+  same file, so the original seed order can't be assumed current), asserts
+  the promoted task lands last in `columnOrder(tasks, "DONE")`, and asserts
+  that snapshot is unchanged after the promotion — the assertion the stale
+  per-column-length math would have failed (it would have inserted near the
+  front, reshuffling the others). Re-ran frontend typecheck (exit 0) and
+  the full local `kanban-dnd.spec.ts` + `smoke.spec.ts` Playwright pass
+  (17 passed, 11 expected skips, 0 failed) after this fix.
+- Correction to the above (same task, caught by reviewer before commit):
+  overclaimed what the "subtask promote" e2e case's existing assertions
+  actually pin. With DONE empty at that point in the worker sequence, "last
+  in `columnOrder(tasks, "DONE")`" is trivially true for the only DONE card
+  under both the buggy and the fixed code, and the "other top-level tasks'
+  relative order unchanged" snapshot does NOT catch the defect either —
+  inserting one element via `splice` never permutes the relative order of
+  the pre-existing elements regardless of the insertion index, so both
+  `position: 0` (buggy) and "append at global end" (fixed) leave that
+  snapshot identical (traced concretely: buggy global order ends up
+  `[Sub two, Gamma, Alpha, Delta, Beta]`, fixed ends up `[Gamma, Alpha,
+  Delta, Beta, Sub two]` — same relative order for the other four either
+  way). Added the assertion that actually distinguishes them: the promoted
+  task must be last in the GLOBAL top-level order
+  (`tasks.filter(parentTaskId === null).sort(position, id)`), not merely
+  last within its own column. Both prior assertions are kept (harmless,
+  documentation value) but the test comment and this changelog block are
+  corrected to not overclaim what they cover. Re-ran the full local
+  `kanban-dnd.spec.ts` + `smoke.spec.ts` Playwright pass after adding the
+  global-order assertion: 17 passed, 11 expected skips, 0 failed — the
+  "subtask promote" case (now including the defect-pinning assertion)
+  still passes against the fixed code.
+
+### Fixed — 2026-07-22 — List view drags no longer snap back (plan Task 3)
+
+- `frontend/src/pages/views/ProjectList.tsx` `handleDragEnd` — the two
+  top-level drop branches (section-header drop, row drop) previously
+  computed the drop index against a same-section/same-status subsequence,
+  a leftover from the old per-`(project, status)` sibling key. Since Task 1
+  re-scoped top-level `position` to one dense per-project list, that index
+  no longer matched what the backend's `insertAt` expected, so the row
+  would land in the wrong slot and the next refetch (or the very next
+  optimistic pass) would appear to snap it back — the original bug report
+  symptom. Fixed by computing drop position against `topLevelOrdered`
+  (the full project top-level list sorted by `(position, id)`), mirroring
+  the backend exactly: header/empty-group drop appends after the target
+  section's last task in that global order (or is a section-only move,
+  keeping slot, if the section is empty); row drop inserts at the over
+  row's pre-move global index, carrying `sectionId` along only on a
+  cross-section drop. The subtask branch (reorder within parent) and the
+  row-dropped-on-subtask resolve-to-parent step were untouched — both
+  already used the parent-scoped sibling list Task 1 didn't change.
+- Correction to the above (same task, caught before commit): the initial
+  header-drop append index was computed against the *moved-inclusive*
+  `topLevelOrdered` list, one index space off from what `insertAt` expects
+  (moved-excluded) — this overshot by one slot whenever the dragged task's
+  old position preceded the target section, landing it past the next
+  section's first task instead of at the target section's end. Fixed by
+  indexing a moved-excluded `others` list instead; verified with a
+  standalone repro script for both the drag-down (previously broken) and
+  drag-up (previously correct, still correct) directions.
+
+### Changed — 2026-07-22 — List view + optimistic layer speak the global sibling model (plan Task 3)
+
+- `frontend/src/lib/queries.ts` `siblingListId` (~:580-582) — top-level
+  tasks now map to a single sibling-list id (`"top"`) instead of
+  `` `top:${status}` ``, mirroring Task 1's backend `SiblingKey` (status
+  no longer partitions ordering). Doc comment above it rewritten to match.
+  Signature keeps the `status` field in its `Pick<Task, ...>` parameter
+  type so no call site needed to change. The `listChanged` check inside
+  `useUpdateTask`'s `onMutate` needed zero edits — it's generic over
+  `siblingListId`, so a status-only patch now computes
+  `listChanged === false` and falls through to the plain field merge,
+  which is exactly "keeps its slot" for the optimistic cache update,
+  matching the backend's non-ordering PATCH branch.
+- `frontend/src/lib/queries.ts` `reorderTasksLocally` — correction (same
+  task, caught before commit): this one *did* need an edit, contrary to
+  the plan's assumption. Its `Pick<UpdateTaskInput, ...>` patch type and
+  merged `updatedTask` now also carry `sectionId` (previously only
+  `status`/`parentTaskId` were applied on top of `current`). List view's
+  new cross-section row drop and non-empty header drop both patch
+  `{ sectionId, position }` together — a combination the pre-Task-3 code
+  never produced — and without this, the optimistic cache kept the moved
+  row under its *old* section (right position, wrong section) until
+  `onSettled` refetched. `sectionId` still isn't part of `siblingListId`
+  (unchanged — section never partitions ordering), so this only affects
+  which section the row renders under, not the position math.
+- `frontend/src/pages/views/ProjectList.tsx` — stale "per-section proxy
+  ordering" comments (on the `grouped` memo at ~:135-140, and its
+  cross-reference inside `groupBySection` at ~:1112) rewritten: `(position,
+  id)` sort within a rendered section group is not a stand-in for a
+  separate per-section order, it's the canonical global per-project order
+  projected onto that section (position is unique per-project, not merely
+  per-section).
+
+### Changed — 2026-07-22 — Task index swapped to match the global sibling key (plan Task 2)
+
+- `backend/prisma/schema.prisma:255` — `Task` index
+  `@@index([projectId, status, position])` → `@@index([projectId, position])`.
+  Why: Task 1 re-scoped the top-level sibling key from
+  `(projectId, status, parentTaskId)` to `(projectId, parentTaskId)`; the hot
+  list query (`(projectId, parentTaskId) ORDER BY position`) is now
+  index-backed by the narrower composite instead of a stale
+  status-prefixed one. The single-column `@@index([status])` (line 251)
+  is untouched — Kanban/status filters still use it.
+
+### Added — 2026-07-22 — Migration: index swap + section-major position repack (plan Task 2)
+
+- `backend/prisma/migrations/20260722121825_unified_task_ordering/migration.sql`
+  — generated non-interactively via `prisma migrate diff` (index DDL) with
+  the plan's section-major repack `UPDATE` appended by hand. Drops
+  `tasks_project_id_status_position_idx`, creates
+  `tasks_project_id_position_idx`, then repacks every project's top-level
+  `position` values into one dense `0..n-1` list per project so existing
+  data satisfies Task 1's new semantics. Repack order: section `position`
+  (tasks with no section sort last via `COALESCE(..., 2147483647)`), then
+  the task's old `(position, id)` as a tiebreak — preserves today's List
+  view appearance (section-major) even though positions were previously
+  scoped per `(project, status)`. Applied via `prisma migrate deploy` +
+  `prisma generate` + backend restart on the dev DB; verified via psql that
+  every project's top-level tasks now have dense, gapless positions with
+  zero anomalies, and spot-checked a real 4-section project
+  (`Planning → Pre-Implementation → Implementation → Closing`, mixed
+  statuses) landed at positions `0,1,2,3` in section order.
+- NFR spot-check (plan Task 2 Step 5): seeded 200 top-level tasks into a
+  scratch project, timed three worst-case reorder `PATCH`es alternating the
+  last task between position 0 and 199 (full-list shift each time):
+  `0.196s`, `0.132s`, `0.118s` — all under the 200ms budget (first includes
+  connection warmup). Scratch project deleted after measurement (no
+  `DELETE /projects/:id` route exists — Task API is create/read/update
+  only — so cleanup went through a direct DB delete, which cascades to the
+  project's tasks via the existing `onDelete: Cascade` FK; verified 0 rows
+  remain for both). Scratch admin user (`nfr-scratch@example.com`)
+  intentionally left in place for reuse by later plan tasks.
+
+### Changed — 2026-07-22 — Top-level task ordering: status leaves the sibling key (plan Task 1)
+
+- `backend/src/lib/taskOrdering.ts` — `SiblingKey` no longer carries a
+  `status` field; `siblingWhere` and `siblingKeyEquals` re-scoped
+  accordingly. A top-level sibling list is now every top-level task in the
+  project (`(projectId, parentTaskId=null)`), one dense per-project manual
+  order — exactly how subtask lists already work per-parent
+  (`parentTaskId` alone). Status no longer partitions ordering anywhere; a
+  status change (alone) keeps the row's slot instead of re-appending it to
+  a destination "column."
+- `backend/src/routes/tasks.ts` — `PATCH /tasks/:id`: dropped `status` from
+  the `oldKey`/`newKey` `SiblingKey` construction (~line 150). A status-only
+  patch now takes the non-ordering branch and keeps its position; combined
+  `{status, position}` patches still land at the requested global index via
+  the existing `touchesOrdering` branch. Updated the two comments this
+  invalidated: the "status is part of the sibling key only for top-level
+  tasks" note (now false for every task, not just subtasks) and the
+  "must not stop genuine column moves" regression-guard comment.
+- `backend/src/routes/projects.ts` — `POST /projects/:id/tasks`: dropped
+  `status` from the create-path `countSiblings` `SiblingKey` (~line 369),
+  so a newly created task appends to the single per-project list regardless
+  of its initial status. (The plan text named this site as living in
+  `tasks.ts`; it's actually in `projects.ts` — `tsc --noEmit` located the
+  real construction site after the interface change.)
+- Why: List and Gantt render top-level tasks grouped/filtered by section or
+  date, not by status column — per-status positions interleaved three
+  independent sequences there, making a manual cross-status order
+  impossible to express or preserve. Re-scoping to one canonical
+  per-project order (status changes keep the slot) matches how subtasks
+  already behave and is required before the List/Kanban/Gantt drag layers
+  (later plan tasks) can share one ordering model.
+- `backend/test/taskOrdering.test.ts` — added a
+  `describe("global top-level ordering (status does not partition)")` block
+  (create-append across statuses, status-only patch keeps slot, explicit
+  position patch reorders across statuses, combined status+position patch)
+  per the plan's Step 1. Also updated two pre-existing tests that asserted
+  the now-removed per-status top-level behavior and would otherwise fail
+  against the new model: `"move across columns (status change)" > "appends
+  to the end of the destination column..."` (renamed to `"does not move or
+  re-pack any sibling on a status-only change"`, asserting the opposite of
+  its old title) and `"status-only change and sibling ordering" > "still
+  moves a top-level task to the destination column on a status change"`
+  (renamed to `"keeps a top-level task's slot on a status-only change, same
+  as a subtask"`). `backend/test/projectWipLimits.test.ts` asserts no
+  per-column positions and needed no changes.
+- Not fixed (pre-existing, out of scope): `taskOrdering.test.ts`'s
+  `"orders GET /tasks (cross-project) by position asc, then id asc"` test
+  fails independently of this change — the in-container `npm test` run
+  points at the persistent dev Postgres (not an isolated disposable DB per
+  the `globalSetup.ts` comment), which already holds hundreds of task rows
+  accumulated from prior work on this branch. The cross-project `/tasks`
+  endpoint's `take: 200` (ordered by `position asc, id asc`) is truncated
+  before reaching this test's newly-created rows. Reproduced on the
+  pre-change baseline run too, so it predates this task.
+
+### Added — 2026-07-22 — Plan + kickoff prompt: unified manual task ordering
+
+- `docs/plans/unified-task-ordering-plan.md` — six-task implementation plan
+  for the ordering re-architecture (backend sibling-key change → index swap +
+  section-major data repack migration → List + optimistic layer → Kanban +
+  its e2e assertions → Gantt between-row drag parity → new e2e + docs sync).
+  Contains the exact migration SQL, complete drop-math code per view, and
+  the NFR stop condition (reorder PATCH < 200ms at ~200 tasks).
+- `docs/prompts/unified-task-ordering.md` — orchestrator kickoff prompt:
+  branch `feat/unified-task-ordering` off freshly-pulled `develop`, per-task
+  agent pipeline, pre-approved per-task commits, hard stops (NFR miss,
+  plan/reality drift, PR draft only — never opened).
+
+### Added — 2026-07-22 — Idea doc: unified manual task ordering
+
+- `docs/ideas/unified-manual-task-ordering.md` — refined from the drag
+  bug report (List drags snap back, Kanban arrangements disturbed, Gantt
+  rows not reorderable). Diagnosis: `Task.position` is scoped per
+  `(projectId, status)` for top-level tasks, so only the Kanban column
+  matches the display grouping; List/Gantt interleave three independent
+  status sequences, and the Gantt has no between-row drop targets at all.
+  Direction (user-confirmed): one canonical per-project order — re-scope
+  top-level positions the way subtasks already work — status changes keep
+  the slot, and the Gantt list pane becomes a full drag peer of the List
+  view. No code changes yet; next step is a docs/plans implementation plan.
+
 ### Added — 2026-07-22 — Section rollup summary bars on the Gantt (plan Task 5)
 
 - `frontend/src/components/gantt/GanttSectionBar.tsx` (+ `GanttRow.tsx` wiring):
