@@ -15,7 +15,7 @@ import {
   ROW_HEIGHT,
 } from "@/lib/gantt/constants";
 import {
-  BAR_TRACK_OPACITY,
+  PROGRESS_OVERLAY_ALPHA,
   barFillHex,
   type ColorByMode,
 } from "@/lib/gantt/palette";
@@ -47,14 +47,6 @@ interface GanttBarProps {
   ) => void;
 }
 
-function hexToRgb(hex: string): string {
-  const h = hex.replace(/^#/, "");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `${r}, ${g}, ${b}`;
-}
-
 export function GanttBar({
   row,
   chartStart,
@@ -83,7 +75,6 @@ export function GanttBar({
     { status: row.status, priority: row.priority, sectionColor: row.sectionColor },
     colorBy,
   );
-  const rgb = hexToRgb(color);
 
   // Milestones may only have a dueDate (no startDate) — anchor on whichever
   // is set. Regular bars require both.
@@ -331,7 +322,7 @@ export function GanttBar({
       <div
         data-task-id={row.taskId}
         className={[
-          "group/bar absolute select-none overflow-hidden rounded-[3px]",
+          "group/bar absolute select-none overflow-hidden rounded-[4px]",
           canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
           ghost ? "ring-2 ring-primary/60" : "",
         ].join(" ")}
@@ -341,7 +332,7 @@ export function GanttBar({
           top,
           height: barHeight,
           zIndex: 2,
-          backgroundColor: `rgba(${rgb}, ${BAR_TRACK_OPACITY})`,
+          backgroundColor: color,
           touchAction: canEdit ? "none" : undefined,
         }}
         onPointerDown={(e) => handlePointerDown(e, "move")}
@@ -350,10 +341,13 @@ export function GanttBar({
         onPointerCancel={handlePointerCancel}
         title={`${row.name} · ${status} · ${progress}%`}
       >
-        {progress > 0 && (
+        {progress > 0 && progress < 100 && (
           <div
-            className="absolute inset-y-0 left-0 rounded-[3px]"
-            style={{ width: `${progress}%`, backgroundColor: color }}
+            className="absolute inset-y-0 left-0 rounded-l-[4px]"
+            style={{
+              width: `${progress}%`,
+              backgroundColor: `rgba(0, 0, 0, ${PROGRESS_OVERLAY_ALPHA})`,
+            }}
             aria-hidden="true"
           />
         )}
