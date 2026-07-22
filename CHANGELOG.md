@@ -15,6 +15,46 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-22 — Task index swapped to match the global sibling key (plan Task 2)
+
+- `backend/prisma/schema.prisma:255` — `Task` index
+  `@@index([projectId, status, position])` → `@@index([projectId, position])`.
+  Why: Task 1 re-scoped the top-level sibling key from
+  `(projectId, status, parentTaskId)` to `(projectId, parentTaskId)`; the hot
+  list query (`(projectId, parentTaskId) ORDER BY position`) is now
+  index-backed by the narrower composite instead of a stale
+  status-prefixed one. The single-column `@@index([status])` (line 251)
+  is untouched — Kanban/status filters still use it.
+
+### Added — 2026-07-22 — Migration: index swap + section-major position repack (plan Task 2)
+
+- `backend/prisma/migrations/20260722121825_unified_task_ordering/migration.sql`
+  — generated non-interactively via `prisma migrate diff` (index DDL) with
+  the plan's section-major repack `UPDATE` appended by hand. Drops
+  `tasks_project_id_status_position_idx`, creates
+  `tasks_project_id_position_idx`, then repacks every project's top-level
+  `position` values into one dense `0..n-1` list per project so existing
+  data satisfies Task 1's new semantics. Repack order: section `position`
+  (tasks with no section sort last via `COALESCE(..., 2147483647)`), then
+  the task's old `(position, id)` as a tiebreak — preserves today's List
+  view appearance (section-major) even though positions were previously
+  scoped per `(project, status)`. Applied via `prisma migrate deploy` +
+  `prisma generate` + backend restart on the dev DB; verified via psql that
+  every project's top-level tasks now have dense, gapless positions with
+  zero anomalies, and spot-checked a real 4-section project
+  (`Planning → Pre-Implementation → Implementation → Closing`, mixed
+  statuses) landed at positions `0,1,2,3` in section order.
+- NFR spot-check (plan Task 2 Step 5): seeded 200 top-level tasks into a
+  scratch project, timed three worst-case reorder `PATCH`es alternating the
+  last task between position 0 and 199 (full-list shift each time):
+  `0.196s`, `0.132s`, `0.118s` — all under the 200ms budget (first includes
+  connection warmup). Scratch project deleted after measurement (no
+  `DELETE /projects/:id` route exists — Task API is create/read/update
+  only — so cleanup went through a direct DB delete, which cascades to the
+  project's tasks via the existing `onDelete: Cascade` FK; verified 0 rows
+  remain for both). Scratch admin user (`nfr-scratch@example.com`)
+  intentionally left in place for reuse by later plan tasks.
+
 ### Changed — 2026-07-22 — Top-level task ordering: status leaves the sibling key (plan Task 1)
 
 - `backend/src/lib/taskOrdering.ts` — `SiblingKey` no longer carries a
