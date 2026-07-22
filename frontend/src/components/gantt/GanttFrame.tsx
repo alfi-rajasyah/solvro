@@ -71,6 +71,10 @@ const VIEW_MODES: { mode: ViewMode; label: string }[] = [
 
 const COLOR_BY_STORAGE_KEY = "solvro.gantt.colorBy";
 
+// Section legends on section-heavy projects get capped; the rest collapse
+// into a "+N more" chip whose title lists the hidden names.
+const LEGEND_CAP = 6;
+
 export function GanttFrame({
   projectId,
   projectName,
@@ -734,6 +738,13 @@ export function GanttFrame({
     [createSection, newSectionName],
   );
 
+  const legend = useMemo(
+    () => legendEntries(colorBy, sections ?? []),
+    [colorBy, sections],
+  );
+  const legendShown = legend.slice(0, LEGEND_CAP);
+  const legendOverflow = legend.slice(LEGEND_CAP);
+
   return (
     <div className="flex min-w-0 flex-col overflow-hidden rounded border border-outline-variant bg-surface-container-lowest">
       <div className="flex items-center gap-2 border-b border-outline-variant bg-surface-container-lowest px-3 py-1.5">
@@ -812,32 +823,29 @@ export function GanttFrame({
             <span className="material-symbols-outlined text-[15px]">show_chart</span>
             Baseline
           </button>
-          <div className="flex items-center gap-1">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Color
-            </span>
-            <div className="flex items-center gap-0.5 rounded border border-outline-variant p-0.5">
-              {(["status", "section", "priority"] as const).map((m) => (
-                <button
-                  key={m}
-                  type="button"
-                  onClick={() => setColorBy(m)}
-                  className={[
-                    "rounded px-2 py-0.5 text-[11px] capitalize",
-                    colorBy === m
-                      ? "bg-primary text-on-primary"
-                      : "text-on-surface-variant hover:bg-surface-container-high",
-                  ].join(" ")}
-                >
-                  {m}
-                </button>
-              ))}
-            </div>
-            {legendEntries(colorBy).length > 0 && (
-              <div className="ml-2 hidden items-center gap-2 lg:flex">
-                {legendEntries(colorBy).map(([label, hex]) => (
+          <div className="flex items-center gap-1.5">
+            <label className="flex items-center gap-1.5">
+              <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                Color by
+              </span>
+              <select
+                value={colorBy}
+                onChange={(e) => setColorBy(e.target.value as ColorByMode)}
+                className="rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[11.5px] font-medium text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              >
+                <option value="status">Status</option>
+                <option value="section">Section</option>
+                <option value="priority">Priority</option>
+              </select>
+            </label>
+            {legendShown.length > 0 && (
+              <div
+                data-testid="gantt-legend"
+                className="ml-1 flex flex-wrap items-center gap-2"
+              >
+                {legendShown.map(([label, hex], i) => (
                   <span
-                    key={label}
+                    key={`${colorBy}-${i}-${label}`}
                     className="flex items-center gap-1 text-[10px] text-on-surface-variant"
                   >
                     <span
@@ -848,6 +856,14 @@ export function GanttFrame({
                     {label}
                   </span>
                 ))}
+                {legendOverflow.length > 0 && (
+                  <span
+                    title={legendOverflow.map(([label]) => label).join(", ")}
+                    className="text-[10px] text-on-surface-variant"
+                  >
+                    +{legendOverflow.length} more
+                  </span>
+                )}
               </div>
             )}
           </div>

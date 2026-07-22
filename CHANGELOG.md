@@ -15,6 +15,16 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-23 — Gantt "Color by" dropdown + sustained legend (plan Task 3)
+
+- Gantt toolbar color control is now a labeled "Color by" dropdown (native select, theme tokens) replacing the unlabeled segmented buttons (`frontend/src/components/gantt/GanttFrame.tsx`).
+- Gantt color legend is sustained in all three modes: Section mode now lists each section's name + resolved color (capped at 6 with "+N more"), and the legend is no longer hidden below 1024px (`GanttFrame.tsx`, `frontend/src/lib/gantt/palette.ts`).
+- Section-color fallback resolution extracted to `resolveSectionColors()` in `palette.ts`, shared by `geometry.ts`'s buildRows and the new legend so bars and legend can never disagree (`frontend/src/lib/gantt/geometry.ts`).
+
+### Added — 2026-07-23 — E2E regression coverage for the Gantt color-by legend (plan Task 3)
+
+- `e2e/tests/gantt-legend.spec.ts` (new) — asserts the legend persists across Status/Section/Priority modes. Default `colorBy` is `"section"` (a pre-existing, unrelated 2026-07-20 decision), so the spec's initial assertion checks the select's value is `"section"` and the Section legend shows first — this is also the mode that previously rendered no legend at all.
+
 ### Changed — 2026-07-23 — SA optional end-to-end: frontend form, types, renderers, export (plan Task 2)
 
 - New-project form no longer requires a Solution Architect — "No SA" is a valid choice, and edit mode can clear an existing assignment (`frontend/src/components/ProjectFormModal.tsx`, `frontend/src/lib/queries.ts`).
