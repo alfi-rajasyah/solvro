@@ -15,6 +15,122 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-22 — Kanban speaks the global sibling order; e2e assertions follow (plan Task 4)
+
+- `frontend/src/pages/views/ProjectKanban.tsx` `computeCardDrop` (~:256-322)
+  — rewritten to compute every drop index against the project's single
+  global top-level order (`globalOrdered`, sorted `(position, id)` over
+  `topLevelAll`) instead of the old per-status `groupedAll[status]` list,
+  mirroring Task 1's backend re-scope and Task 3's List-view drop math. Two
+  branches, deliberately asymmetric (same as `ProjectList.tsx`'s
+  header-drop vs. row-drop, and commented the same way):
+  - Column-body drop (`isColumnId`) = "append after the column's last
+    card." Indexes a **moved-excluded** `globalOthers` list
+    (`globalOthers.findIndex(last) + 1`) to match backend `insertAt`,
+    which excludes the moved row from the sibling list before clamping.
+    An empty target column returns `{ status }` with no `position` —
+    status-only patch, the card keeps its global slot.
+  - Card drop (`isCardId`) = arrayMove semantics, **moved-inclusive**
+    (`globalOrdered.findIndex(overTask)`) — unchanged reasoning from
+    before, just against the global list instead of the per-column one.
+  - Return type is now `{ status: TaskStatus; position?: number } | null`
+    — `position` absent means "status-only, keep the slot."
+- `handleDragEnd`'s card-drop guard/patch (~:335-352) — optional-position
+  aware: the early-return no-op guard now short-circuits on `drop.position
+  === undefined` (status unchanged case) in addition to the old
+  `position` match; the mutation patch omits `position` entirely when
+  `drop.position` is `undefined` so a same-status card drag never fires,
+  and a cross-status drop onto an empty column sends `{ status }` only
+  (no repositioning PATCH).
+- Mobile move sheet's `onMove` (~:660-680) — no longer computes
+  `groupedAll[status].length` inline; now calls `computeCardDrop(task.id,
+  idOf("column", status))` and applies the same optional-position patch
+  shape, so the "append to end of column" rule has exactly one
+  implementation instead of two that could drift.
+- `groupedAll`'s doc comment updated: the invariant is now "drop-position
+  math MUST use the GLOBAL sorted order," not "the real per-status
+  sibling list" (that model no longer exists — see Task 1). `groupedAll`
+  itself stays: it's still needed to find each column's boundary card and
+  to render columns.
+- Subtask drag handlers (`handleSubtaskDrop`, `submitSubtaskPatch`,
+  ~:363-423) — untouched, out of scope for this task (per-parent
+  sibling lists, which Task 1 never changed).
+- `e2e/tests/kanban-dnd.spec.ts` — absolute-position assertions replaced
+  with relative-order ones now that `position` is a global index, not a
+  per-column one: added a `columnOrder(tasks, status)` helper (filters to
+  a status + top-level, sorts `(position, id)`, maps to titles). "reorder
+  within column" now asserts `Gamma` sorts before `Alpha` in the TODO
+  column instead of pinning `position === 0`. "cross-column drag" keeps
+  its status assertion and adds that `Beta` lands **last** in the
+  IN_PROGRESS column order, matching the column-body-drop = end-of-column
+  rule. Subtask-case and mobile-touch-case assertions are unchanged (not
+  in scope — their fixture layout keeps the pre-existing assertions valid
+  under the new global model; verified, not just assumed, via a full
+  local Playwright run).
+- Correction to the above (same task, caught by QA before commit): the
+  "subtask drag handlers untouched" bullet was wrong for one branch —
+  `handleSubtaskDrop`'s promote-to-top-level path (`isColumnId(overId)`,
+  previously ~:395-399) still patched `position: groupedAll[status].length`,
+  a correct *per-status-list* append index under the old model but a
+  *global* index under the new one: promoting a subtask into a column with
+  N existing cards landed it near the FRONT of the project's global order
+  (global slot N), not at the end of that column. The reparent
+  (`isCardId`) and reorder-within-parent (`isSubtaskId`) branches were
+  genuinely fine — per-parent subtask lists are unchanged by Task 1 — only
+  the promotion branch crosses into the top-level list. Fixed by extracting
+  `columnEndPosition(status, excludeId)` (~:256-283), shared by
+  `computeCardDrop`'s column-body branch (`excludeId` = the dragged card's
+  id, since it's already a row in `topLevelAll`) and the promote branch
+  (`excludeId = null`, since the subtask isn't a top-level row yet — the
+  moved-excluded and moved-inclusive views are identical there, so no
+  exclusion filter is needed or applied). Non-empty target column: global
+  append-after-last-card index, same math as the card-drop case. Empty
+  target column: `position` omitted entirely (`{ parentTaskId: null,
+  status }`) — backend `insertAt` then appends to the end of the whole
+  project's top-level order, which is well-defined for a column with no
+  card to anchor after. Traced the optimistic path
+  (`frontend/src/lib/queries.ts` `reorderTasksLocally`) for parity with
+  this backend behavior in both cases: a promotion's `oldListId`
+  (`sub:<parentId>`) always differs from `newListId` (`"top"`), so
+  `touchesOrdering` is always true regardless of `position`; on the "top"
+  list, `reorderTasksLocally`'s own clamp (`patch.position === undefined ?
+  newSiblings.length : ...`) mirrors `insertAt`'s identically, and because
+  the promoted subtask was never a member of the top-level sibling group to
+  begin with, `newSiblings` there is already the moved-excluded list — no
+  edit to `reorderTasksLocally` was needed. `e2e/tests/kanban-dnd.spec.ts`'s
+  "subtask promote" case extended: snapshots the other top-level tasks'
+  `(position, id)` order via the API immediately before the drag (the
+  worker-scoped `seededProject` carries mutations from earlier cases in the
+  same file, so the original seed order can't be assumed current), asserts
+  the promoted task lands last in `columnOrder(tasks, "DONE")`, and asserts
+  that snapshot is unchanged after the promotion — the assertion the stale
+  per-column-length math would have failed (it would have inserted near the
+  front, reshuffling the others). Re-ran frontend typecheck (exit 0) and
+  the full local `kanban-dnd.spec.ts` + `smoke.spec.ts` Playwright pass
+  (17 passed, 11 expected skips, 0 failed) after this fix.
+- Correction to the above (same task, caught by reviewer before commit):
+  overclaimed what the "subtask promote" e2e case's existing assertions
+  actually pin. With DONE empty at that point in the worker sequence, "last
+  in `columnOrder(tasks, "DONE")`" is trivially true for the only DONE card
+  under both the buggy and the fixed code, and the "other top-level tasks'
+  relative order unchanged" snapshot does NOT catch the defect either —
+  inserting one element via `splice` never permutes the relative order of
+  the pre-existing elements regardless of the insertion index, so both
+  `position: 0` (buggy) and "append at global end" (fixed) leave that
+  snapshot identical (traced concretely: buggy global order ends up
+  `[Sub two, Gamma, Alpha, Delta, Beta]`, fixed ends up `[Gamma, Alpha,
+  Delta, Beta, Sub two]` — same relative order for the other four either
+  way). Added the assertion that actually distinguishes them: the promoted
+  task must be last in the GLOBAL top-level order
+  (`tasks.filter(parentTaskId === null).sort(position, id)`), not merely
+  last within its own column. Both prior assertions are kept (harmless,
+  documentation value) but the test comment and this changelog block are
+  corrected to not overclaim what they cover. Re-ran the full local
+  `kanban-dnd.spec.ts` + `smoke.spec.ts` Playwright pass after adding the
+  global-order assertion: 17 passed, 11 expected skips, 0 failed — the
+  "subtask promote" case (now including the defect-pinning assertion)
+  still passes against the fixed code.
+
 ### Fixed — 2026-07-22 — List view drags no longer snap back (plan Task 3)
 
 - `frontend/src/pages/views/ProjectList.tsx` `handleDragEnd` — the two
