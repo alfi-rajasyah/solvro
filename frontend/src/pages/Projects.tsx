@@ -120,7 +120,7 @@ export function Projects() {
 }
 
 function ProjectCard({ project }: { project: ProjectSummary }) {
-  const saInit = project.sa.username.slice(0, 2).toUpperCase();
+  const saInit = project.sa ? project.sa.username.slice(0, 2).toUpperCase() : null;
   const tamInit = project.tam.username.slice(0, 2).toUpperCase();
   const idBadge = `P-${String(project.id).padStart(3, "0")}`;
 
@@ -151,13 +151,15 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
           {project.customer?.name ?? <em className="opacity-70">No customer</em>}
         </span>
         <div className="flex -space-x-1.5">
-          <span
-            title={`SA: ${project.sa.username}`}
-            className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface-container-lowest text-[10px] font-bold text-white"
-            style={{ background: avatarColor(project.sa.username) }}
-          >
-            {saInit}
-          </span>
+          {project.sa && (
+            <span
+              title={`SA: ${project.sa.username}`}
+              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface-container-lowest text-[10px] font-bold text-white"
+              style={{ background: avatarColor(project.sa.username) }}
+            >
+              {saInit}
+            </span>
+          )}
           <span
             title={`TAM: ${project.tam.username}`}
             className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface-container-lowest bg-primary text-[10px] font-bold text-on-primary"
