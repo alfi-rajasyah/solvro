@@ -1,5 +1,5 @@
 import { GanttBar } from "./GanttBar";
-import { GanttSectionBand } from "./GanttSectionBar";
+import { GanttSectionBand, GanttSectionSummaryBar } from "./GanttSectionBar";
 import { type Row, type ViewMode } from "@/lib/gantt/geometry";
 import { ROW_HEIGHT } from "@/lib/gantt/constants";
 import type { ColorByMode } from "@/lib/gantt/palette";
@@ -51,7 +51,15 @@ export function GanttRow({
       onMouseLeave={() => onHoverChange(null)}
     >
       {row.kind === "section" && (
-        <GanttSectionBand color={row.sectionColor} contentWidth={contentWidth} />
+        <>
+          <GanttSectionBand color={row.sectionColor} contentWidth={contentWidth} />
+          <GanttSectionSummaryBar
+            row={row}
+            chartStart={chartStart}
+            viewMode={viewMode}
+            columnWidth={columnWidth}
+          />
+        </>
       )}
       {(row.kind === "task" || row.kind === "subtask") && (
         <GanttBar

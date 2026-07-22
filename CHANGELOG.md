@@ -15,6 +15,84 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-22 — Section rollup summary bars on the Gantt (plan Task 5)
+
+- `frontend/src/components/gantt/GanttSectionBar.tsx` (+ `GanttRow.tsx` wiring):
+  new `GanttSectionSummaryBar` — a 6px rounded pill on section header rows
+  spanning the section's children date range (min one day-column) in the
+  section's resolved color at 0.85 opacity. Renders for collapsed sections
+  too; sections with no dated children render nothing. Existing 7% tint
+  `GanttSectionBand` unchanged. `pointer-events-none` — no interaction
+  changes.
+
+### Added — 2026-07-22 — Task name labels on Gantt bars (plan Task 4)
+
+- `frontend/src/components/gantt/GanttBar.tsx`: bars ≥ 90px wide render the
+  task name inside the bar (10px, luminance-aware white/dark text, truncated);
+  narrower bars float the name beside the bar's right edge in muted secondary
+  text (nowrap, ~240px cap). `pointer-events-none` throughout — drag, resize,
+  and connector interactions unaffected. Milestones unchanged (tooltip only).
+  Exports draw their own labels and are untouched.
+
+### Changed — 2026-07-22 — Solid Gantt bar fills with progress overlay (plan Task 3)
+
+- `frontend/src/components/gantt/GanttBar.tsx` + `frontend/src/lib/gantt/palette.ts`:
+  rendering model inverted. Bars now render solid in their Color-by color
+  (was: 28%-opacity track via `BAR_TRACK_OPACITY`, solid only as progress
+  filled — the root cause of the washed-out Gantt). Progress is now a darker
+  left-anchored overlay (`rgba(0,0,0, PROGRESS_OVERLAY_ALPHA)`, only when
+  0% < progress < 100%). `BAR_TRACK_OPACITY` removed (GanttBar was its sole
+  consumer); `PROGRESS_OVERLAY_ALPHA = 0.28` added. Bar radius 3px → 4px.
+  Screen/export color parity unchanged — exports were already solid-fill.
+
+### Changed — 2026-07-22 — Deterministic vivid fallback for uncustomized section colors (plan Task 2)
+
+- `frontend/src/lib/gantt/geometry.ts`: section color resolution now treats
+  `null` / legacy schema-default `#94a3b8` as "never customized" and assigns
+  a vivid preset (`SECTION_COLOR_PRESETS[index % length]`) by section
+  position instead of flat slate. Explicitly stored custom colors always
+  win; rows without a section keep `DEFAULT_SECTION_COLOR`. Single
+  resolution point within the Gantt — Gantt list dots, bars, section bands,
+  and Excel/PDF exports all inherit. Non-Gantt surfaces (ProjectList,
+  Executive, TaskPanel) resolve `section.color` directly and still show
+  slate for uncustomized sections — parity gap tracked in ISSUES.md.
+  Accepted trade-off
+  (per `docs/ideas/gantt-bar-reskin.md`): fallback hues can shift if
+  sections are reordered — cosmetic only.
+
+### Changed — 2026-07-22 — Gantt palette re-skin values (plan Task 1)
+
+- `frontend/src/lib/gantt/palette.ts`: `STATUS_FILL_HEX` pastels → solid-intent
+  hues (TODO `#94a3b8`, IN_PROGRESS `#3b82f6`, DONE `#10b981`);
+  `PRIORITY_BORDER_HEX.LOW` `#94a3b8` → `#64748b` so LOW-priority is
+  distinguishable from TODO-status; `SECTION_COLOR_PRESETS` replaced with a
+  vivid dark+light-safe set that deliberately omits slate `#94a3b8` (kept as
+  the never-customized sentinel for the Task 2 fallback). Hex-value changes
+  only — no renames; Excel/PDF exports inherit immediately via `barFillHex`;
+  on-screen bars stay 28%-opacity tracks until plan Task 3.
+
+### Added — 2026-07-22 — Gantt bar re-skin planning docs; shadcn adoption declined
+
+- `docs/ideas/gantt-bar-reskin.md` — refined idea for the stale-bar fix. Root
+  cause: `BAR_TRACK_OPACITY = 0.28` in `frontend/src/lib/gantt/palette.ts`
+  renders 0%-progress bars as 28%-opacity ghosts (exports already render
+  solid via the shared `barFillHex`). ReUI Gantt swap evaluated and rejected
+  (no dependency lines/baselines/milestones/export in its API; frontend has
+  no shadcn stack). Includes a 1:1 before/after mockup artifact as visual
+  spec.
+- `docs/plans/gantt-bar-reskin-plan.md` — six-task paint-only implementation
+  plan: new palette hues → vivid fallback for uncustomized section colors in
+  `geometry.ts` (schema default `#94a3b8` treated as "unset" sentinel) →
+  solid fills + progress overlay in `GanttBar.tsx` → task labels on bars →
+  section summary bars → QA sweep. No new dependencies; backend/DB untouched.
+- `CLAUDE.md` Facts: recorded the shadcn/ReUI decision (declined 2026-07-22;
+  per-component vendoring policy for future hard primitives) under
+  deferred/not-built items.
+- `docs/prompts/gantt-bar-reskin.md` — kickoff prompt for executing the plan
+  in a fresh session: solvro-* agent pipeline per task, strict task order,
+  `feat/gantt-bar-reskin` off `develop`, one commit per task after gates
+  (pre-approved in the prompt), hard stop before PR creation.
+
 ### Changed — 2026-07-21 — CI/CD hardening (Prisma CLI pinning, Node 22, gated publishing, typecheck gate)
 
 - `prisma` moved from `devDependencies` to `dependencies` in
