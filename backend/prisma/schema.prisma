@@ -252,7 +252,7 @@ model Task {
   @@index([priority])
   @@index([dueDate])
   @@index([parentTaskId])
-  @@index([projectId, status, position])
+  @@index([projectId, position])
   @@map("tasks")
 }
 
