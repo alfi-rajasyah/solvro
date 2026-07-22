@@ -1,33 +1,29 @@
-import type { Prisma, PrismaClient, TaskStatus } from "@prisma/client";
+import type { Prisma, PrismaClient } from "@prisma/client";
 import { HttpError } from "../http/errors.js";
 
 // A sibling list is the ordered set of tasks a `position` value is relative
-// to. For top-level tasks (parentTaskId null) that's every task in the same
-// project + status column. For subtasks it's simply "the parent's subtasks"
-// — status does NOT partition a subtask list, since a subtask board isn't
-// column-based the way the top-level Kanban is.
+// to. For top-level tasks (parentTaskId null) that's EVERY top-level task in
+// the project — one canonical manual order that List, Kanban, and Gantt all
+// render (each view groups/filters it, preserving relative order). Status
+// does NOT partition ordering anywhere; a status change keeps the row's
+// slot. Subtask lists are unchanged: "the parent's subtasks".
 export interface SiblingKey {
   projectId: number;
   parentTaskId: number | null;
-  // Only meaningful (and only used in the where-clause) when parentTaskId
-  // is null.
-  status: TaskStatus;
 }
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
 function siblingWhere(key: SiblingKey): Prisma.TaskWhereInput {
   if (key.parentTaskId === null) {
-    return { projectId: key.projectId, parentTaskId: null, status: key.status };
+    return { projectId: key.projectId, parentTaskId: null };
   }
   return { parentTaskId: key.parentTaskId };
 }
 
 export function siblingKeyEquals(a: SiblingKey, b: SiblingKey): boolean {
   if (a.parentTaskId !== b.parentTaskId) return false;
-  if (a.parentTaskId === null) {
-    return a.projectId === b.projectId && a.status === b.status;
-  }
+  if (a.parentTaskId === null) return a.projectId === b.projectId;
   return true;
 }
 

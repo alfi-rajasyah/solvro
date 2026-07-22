@@ -575,10 +575,12 @@ export function useLockBaseline(projectId: number) {
 // Mirrors the server's sibling-list semantics (backend/src/lib/taskOrdering.ts)
 // so the optimistic cache update produces the exact same ordering the PATCH
 // response will settle to — this is what keeps drag-and-drop flicker-free.
-// A sibling list is: (parentTaskId, status) for top-level tasks, or just
-// "the parent's subtasks" (status doesn't partition) for subtasks.
+// A sibling list is: every top-level task in the project (one canonical
+// order — List/Kanban/Gantt each render a filtered/grouped view of it), or
+// "the parent's subtasks" for subtasks. Status never partitions ordering
+// anywhere; a status-only change keeps the row's slot.
 function siblingListId(t: Pick<Task, "parentTaskId" | "status">): string {
-  return t.parentTaskId === null ? `top:${t.status}` : `sub:${t.parentTaskId}`;
+  return t.parentTaskId === null ? "top" : `sub:${t.parentTaskId}`;
 }
 
 /**
@@ -587,11 +589,17 @@ function siblingListId(t: Pick<Task, "parentTaskId" | "status">): string {
  * list (re-packing it), then insert into the new sibling list at the
  * clamped requested index (re-packing that too). Returns a new array;
  * doesn't mutate `tasks`.
+ *
+ * `sectionId` is carried into the merged task too (though it never affects
+ * sibling-list membership — see `siblingListId`): a List-view cross-section
+ * drop patches `{ sectionId, position }` together, and without this the
+ * optimistic row would sit under its old section until the server response
+ * settles.
  */
 export function reorderTasksLocally(
   tasks: Task[],
   id: number,
-  patch: Pick<UpdateTaskInput, "status" | "parentTaskId" | "position">,
+  patch: Pick<UpdateTaskInput, "status" | "parentTaskId" | "position" | "sectionId">,
 ): Task[] {
   const current = tasks.find((t) => t.id === id);
   if (!current) return tasks;
@@ -599,7 +607,14 @@ export function reorderTasksLocally(
   const nextStatus = patch.status ?? current.status;
   const nextParentTaskId =
     patch.parentTaskId !== undefined ? patch.parentTaskId : current.parentTaskId;
-  const updatedTask: Task = { ...current, status: nextStatus, parentTaskId: nextParentTaskId };
+  const nextSectionId =
+    patch.sectionId !== undefined ? patch.sectionId : current.sectionId;
+  const updatedTask: Task = {
+    ...current,
+    status: nextStatus,
+    parentTaskId: nextParentTaskId,
+    sectionId: nextSectionId,
+  };
 
   const oldListId = siblingListId(current);
   const newListId = siblingListId(updatedTask);
