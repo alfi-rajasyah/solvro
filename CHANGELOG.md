@@ -15,6 +15,15 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-22 — Task name labels on Gantt bars (plan Task 4)
+
+- `frontend/src/components/gantt/GanttBar.tsx`: bars ≥ 90px wide render the
+  task name inside the bar (10px, luminance-aware white/dark text, truncated);
+  narrower bars float the name beside the bar's right edge in muted secondary
+  text (nowrap, ~240px cap). `pointer-events-none` throughout — drag, resize,
+  and connector interactions unaffected. Milestones unchanged (tooltip only).
+  Exports draw their own labels and are untouched.
+
 ### Changed — 2026-07-22 — Solid Gantt bar fills with progress overlay (plan Task 3)
 
 - `frontend/src/components/gantt/GanttBar.tsx` + `frontend/src/lib/gantt/palette.ts`:
