@@ -15,6 +15,16 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-22 — Section rollup summary bars on the Gantt (plan Task 5)
+
+- `frontend/src/components/gantt/GanttSectionBar.tsx` (+ `GanttRow.tsx` wiring):
+  new `GanttSectionSummaryBar` — a 6px rounded pill on section header rows
+  spanning the section's children date range (min one day-column) in the
+  section's resolved color at 0.85 opacity. Renders for collapsed sections
+  too; sections with no dated children render nothing. Existing 7% tint
+  `GanttSectionBand` unchanged. `pointer-events-none` — no interaction
+  changes.
+
 ### Added — 2026-07-22 — Task name labels on Gantt bars (plan Task 4)
 
 - `frontend/src/components/gantt/GanttBar.tsx`: bars ≥ 90px wide render the
