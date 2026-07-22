@@ -15,6 +15,39 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-22 — Gantt palette re-skin values (plan Task 1)
+
+- `frontend/src/lib/gantt/palette.ts`: `STATUS_FILL_HEX` pastels → solid-intent
+  hues (TODO `#94a3b8`, IN_PROGRESS `#3b82f6`, DONE `#10b981`);
+  `PRIORITY_BORDER_HEX.LOW` `#94a3b8` → `#64748b` so LOW-priority is
+  distinguishable from TODO-status; `SECTION_COLOR_PRESETS` replaced with a
+  vivid dark+light-safe set that deliberately omits slate `#94a3b8` (kept as
+  the never-customized sentinel for the Task 2 fallback). Hex-value changes
+  only — no renames; Excel/PDF exports inherit immediately via `barFillHex`;
+  on-screen bars stay 28%-opacity tracks until plan Task 3.
+
+### Added — 2026-07-22 — Gantt bar re-skin planning docs; shadcn adoption declined
+
+- `docs/ideas/gantt-bar-reskin.md` — refined idea for the stale-bar fix. Root
+  cause: `BAR_TRACK_OPACITY = 0.28` in `frontend/src/lib/gantt/palette.ts`
+  renders 0%-progress bars as 28%-opacity ghosts (exports already render
+  solid via the shared `barFillHex`). ReUI Gantt swap evaluated and rejected
+  (no dependency lines/baselines/milestones/export in its API; frontend has
+  no shadcn stack). Includes a 1:1 before/after mockup artifact as visual
+  spec.
+- `docs/plans/gantt-bar-reskin-plan.md` — six-task paint-only implementation
+  plan: new palette hues → vivid fallback for uncustomized section colors in
+  `geometry.ts` (schema default `#94a3b8` treated as "unset" sentinel) →
+  solid fills + progress overlay in `GanttBar.tsx` → task labels on bars →
+  section summary bars → QA sweep. No new dependencies; backend/DB untouched.
+- `CLAUDE.md` Facts: recorded the shadcn/ReUI decision (declined 2026-07-22;
+  per-component vendoring policy for future hard primitives) under
+  deferred/not-built items.
+- `docs/prompts/gantt-bar-reskin.md` — kickoff prompt for executing the plan
+  in a fresh session: solvro-* agent pipeline per task, strict task order,
+  `feat/gantt-bar-reskin` off `develop`, one commit per task after gates
+  (pre-approved in the prompt), hard stop before PR creation.
+
 ### Changed — 2026-07-21 — CI/CD hardening (Prisma CLI pinning, Node 22, gated publishing, typecheck gate)
 
 - `prisma` moved from `devDependencies` to `dependencies` in
