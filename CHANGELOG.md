@@ -15,6 +15,21 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-22 — Deterministic vivid fallback for uncustomized section colors (plan Task 2)
+
+- `frontend/src/lib/gantt/geometry.ts`: section color resolution now treats
+  `null` / legacy schema-default `#94a3b8` as "never customized" and assigns
+  a vivid preset (`SECTION_COLOR_PRESETS[index % length]`) by section
+  position instead of flat slate. Explicitly stored custom colors always
+  win; rows without a section keep `DEFAULT_SECTION_COLOR`. Single
+  resolution point within the Gantt — Gantt list dots, bars, section bands,
+  and Excel/PDF exports all inherit. Non-Gantt surfaces (ProjectList,
+  Executive, TaskPanel) resolve `section.color` directly and still show
+  slate for uncustomized sections — parity gap tracked in ISSUES.md.
+  Accepted trade-off
+  (per `docs/ideas/gantt-bar-reskin.md`): fallback hues can shift if
+  sections are reordered — cosmetic only.
+
 ### Changed — 2026-07-22 — Gantt palette re-skin values (plan Task 1)
 
 - `frontend/src/lib/gantt/palette.ts`: `STATUS_FILL_HEX` pastels → solid-intent
