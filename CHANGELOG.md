@@ -15,6 +15,68 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-22 — List view drags no longer snap back (plan Task 3)
+
+- `frontend/src/pages/views/ProjectList.tsx` `handleDragEnd` — the two
+  top-level drop branches (section-header drop, row drop) previously
+  computed the drop index against a same-section/same-status subsequence,
+  a leftover from the old per-`(project, status)` sibling key. Since Task 1
+  re-scoped top-level `position` to one dense per-project list, that index
+  no longer matched what the backend's `insertAt` expected, so the row
+  would land in the wrong slot and the next refetch (or the very next
+  optimistic pass) would appear to snap it back — the original bug report
+  symptom. Fixed by computing drop position against `topLevelOrdered`
+  (the full project top-level list sorted by `(position, id)`), mirroring
+  the backend exactly: header/empty-group drop appends after the target
+  section's last task in that global order (or is a section-only move,
+  keeping slot, if the section is empty); row drop inserts at the over
+  row's pre-move global index, carrying `sectionId` along only on a
+  cross-section drop. The subtask branch (reorder within parent) and the
+  row-dropped-on-subtask resolve-to-parent step were untouched — both
+  already used the parent-scoped sibling list Task 1 didn't change.
+- Correction to the above (same task, caught before commit): the initial
+  header-drop append index was computed against the *moved-inclusive*
+  `topLevelOrdered` list, one index space off from what `insertAt` expects
+  (moved-excluded) — this overshot by one slot whenever the dragged task's
+  old position preceded the target section, landing it past the next
+  section's first task instead of at the target section's end. Fixed by
+  indexing a moved-excluded `others` list instead; verified with a
+  standalone repro script for both the drag-down (previously broken) and
+  drag-up (previously correct, still correct) directions.
+
+### Changed — 2026-07-22 — List view + optimistic layer speak the global sibling model (plan Task 3)
+
+- `frontend/src/lib/queries.ts` `siblingListId` (~:580-582) — top-level
+  tasks now map to a single sibling-list id (`"top"`) instead of
+  `` `top:${status}` ``, mirroring Task 1's backend `SiblingKey` (status
+  no longer partitions ordering). Doc comment above it rewritten to match.
+  Signature keeps the `status` field in its `Pick<Task, ...>` parameter
+  type so no call site needed to change. The `listChanged` check inside
+  `useUpdateTask`'s `onMutate` needed zero edits — it's generic over
+  `siblingListId`, so a status-only patch now computes
+  `listChanged === false` and falls through to the plain field merge,
+  which is exactly "keeps its slot" for the optimistic cache update,
+  matching the backend's non-ordering PATCH branch.
+- `frontend/src/lib/queries.ts` `reorderTasksLocally` — correction (same
+  task, caught before commit): this one *did* need an edit, contrary to
+  the plan's assumption. Its `Pick<UpdateTaskInput, ...>` patch type and
+  merged `updatedTask` now also carry `sectionId` (previously only
+  `status`/`parentTaskId` were applied on top of `current`). List view's
+  new cross-section row drop and non-empty header drop both patch
+  `{ sectionId, position }` together — a combination the pre-Task-3 code
+  never produced — and without this, the optimistic cache kept the moved
+  row under its *old* section (right position, wrong section) until
+  `onSettled` refetched. `sectionId` still isn't part of `siblingListId`
+  (unchanged — section never partitions ordering), so this only affects
+  which section the row renders under, not the position math.
+- `frontend/src/pages/views/ProjectList.tsx` — stale "per-section proxy
+  ordering" comments (on the `grouped` memo at ~:135-140, and its
+  cross-reference inside `groupBySection` at ~:1112) rewritten: `(position,
+  id)` sort within a rendered section group is not a stand-in for a
+  separate per-section order, it's the canonical global per-project order
+  projected onto that section (position is unique per-project, not merely
+  per-section).
+
 ### Changed — 2026-07-22 — Task index swapped to match the global sibling key (plan Task 2)
 
 - `backend/prisma/schema.prisma:255` — `Task` index

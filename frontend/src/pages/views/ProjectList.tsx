@@ -132,11 +132,12 @@ export function ProjectList() {
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
   );
 
-  // Canonical ordering: the backend orders siblings by (status, position)
-  // within (parentTaskId). The List view groups by *section* instead, purely
-  // for display — within a rendered section group we sort by (position, id)
-  // as a stable proxy, since `position` is only guaranteed unique within a
-  // task's real (parentTaskId, status) sibling list, not within a section.
+  // Canonical ordering: the backend orders top-level siblings by `position`
+  // alone within (parentTaskId) — ONE dense list per project, status does
+  // not partition it. The List view groups that list by *section* purely
+  // for display; within a rendered section group, sorting by (position, id)
+  // is not a stand-in for the real order, it *is* the canonical order
+  // projected onto that section (position is globally unique per project).
   const grouped = useMemo(() => groupBySection(tasks ?? [], sections ?? []), [tasks, sections]);
 
   function openTask(id: number) {
@@ -281,17 +282,41 @@ export function ProjectList() {
     const moved = (tasks ?? []).find((t) => t.id === movedId);
     if (!moved) return;
 
-    const movedGroupKey = groupKeyOf(moved.sectionId);
+    // One global top-level order per project — `position` indexes into it.
+    // Views group it by section for display; relative order is preserved.
+    const topLevelOrdered = (tasks ?? [])
+      .filter((t) => t.parentTaskId === null)
+      .sort((a, b) => a.position - b.position || a.id - b.id);
 
     if (isGroupId(overId)) {
-      // Dropped on a section header (or empty group area) -> append into
-      // that section, keeping status/position semantics: position appended
-      // at the end of that task's (parentTaskId=null, status) sibling list
-      // isn't tracked per-section, so we just append within the group.
+      // Dropped on a section header / empty group -> append at the end of
+      // that section's block in the global order (empty section: keep slot,
+      // section move only).
       const targetKey = keyFromGroupId(overId);
       const targetSectionId = targetKey === "none" ? null : targetKey;
       if (targetSectionId === moved.sectionId) return;
-      updateTask.mutate({ id: moved.id, patch: { sectionId: targetSectionId } });
+      // Backend insertAt indexes into the sibling list EXCLUDING the moved
+      // row (see taskOrdering.ts) — so `last`'s append-after index must be
+      // found in that same moved-excluded list, or it overshoots by one
+      // slot whenever moved's old position precedes the target section.
+      // (The row-drop branch below deliberately does NOT exclude moved from
+      // its index lookup — that's correct arrayMove "insert before/after"
+      // semantics for a same-list reorder. The two branches differ on
+      // purpose: this one computes an absolute append point into a
+      // *different* section's block, that one computes a relative
+      // over-row index within the *same* single global list.)
+      const others = topLevelOrdered.filter((t) => t.id !== moved.id);
+      const block = others.filter((t) => t.sectionId === targetSectionId);
+      const last = block[block.length - 1];
+      updateTask.mutate({
+        id: moved.id,
+        patch: last
+          ? {
+              sectionId: targetSectionId,
+              position: others.findIndex((t) => t.id === last.id) + 1,
+            }
+          : { sectionId: targetSectionId },
+      });
       return;
     }
 
@@ -299,27 +324,18 @@ export function ProjectList() {
     const overTaskId = numFromRowId(overId);
     const overTask = (tasks ?? []).find((t) => t.id === overTaskId);
     if (!overTask) return;
-    const overGroupKey = groupKeyOf(overTask.sectionId);
 
-    if (overGroupKey !== movedGroupKey) {
-      // Dropped onto another group's row area -> re-section, append at end.
-      updateTask.mutate({ id: moved.id, patch: { sectionId: overTask.sectionId } });
-      return;
-    }
-
-    // Reorder within the same group. Position is meaningful within the
-    // task's real (status, parentTaskId) sibling list on the backend, so we
-    // compute the new index among same-status siblings in this group only
-    // when statuses match; otherwise this is effectively a no-op position
-    // hint and we fall back to the over-task's position.
-    const groupTasks = (grouped.find((g) => groupKeyOf(g.section?.id ?? null) === movedGroupKey)
-      ?.tasks ?? []
-    ).map((n) => n.task);
-    const siblingsOfStatus = groupTasks.filter((t) => t.status === moved.status && t.id !== moved.id);
-    const idx = siblingsOfStatus.findIndex((t) => t.id === overTask.id);
-    const position = idx === -1 ? siblingsOfStatus.length : idx;
-    if (position === moved.position) return;
-    updateTask.mutate({ id: moved.id, patch: { position } });
+    // Insert relative to the over row — arrayMove semantics (the over row's
+    // pre-move global index: downward drags land after it, upward before
+    // it; backend insertAt excludes the moved row first).
+    const idx = topLevelOrdered.findIndex((t) => t.id === overTask.id);
+    const position = idx === -1 ? topLevelOrdered.length : idx;
+    const crossSection = overTask.sectionId !== moved.sectionId;
+    if (!crossSection && position === moved.position) return;
+    updateTask.mutate({
+      id: moved.id,
+      patch: crossSection ? { sectionId: overTask.sectionId, position } : { position },
+    });
   }
 
   if (tasksLoading || sectionsLoading) {
@@ -1103,7 +1119,8 @@ function groupBySection(
     }
   }
   // Within a section group, sort by (position, id) — see the comment on
-  // `grouped` above for why this is a display-only proxy ordering.
+  // `grouped` above: this projects the canonical global order onto the
+  // section, it isn't a separate per-section ordering.
   for (const arr of bySection.values()) {
     arr.sort((a, b) => a.task.position - b.task.position || a.task.id - b.task.id);
   }
