@@ -15,6 +15,20 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-23 — `Project.saId` is now optional (backend)
+
+- `Project.saId` is now nullable — projects can exist without a Solution
+  Architect (no SAs use Solvro yet). `POST /projects` no longer requires
+  `saId`; `PATCH /projects/:id` accepts `saId: null` to clear an assignment
+  (`backend/prisma/schema.prisma`, migration
+  `20260722182449_optional_project_sa`, `backend/src/routes/projects.ts`).
+  The SA foreign key is now `ON DELETE SET NULL` (was restrict) — deleting a
+  user un-assigns them as SA instead of blocking the delete.
+- Added `backend/test/projectSaOptional.test.ts` covering: create without
+  `saId` → `saId: null` + `sa: null` on GET; create still accepts `saId`;
+  PATCH `saId: null` clears an assigned SA; PATCH `saId` assigns one on a
+  project created without it.
+
 ### Added — 2026-07-22 — E2E regression coverage for List + Gantt reorder; unified-task-ordering closing sweep (plan Task 6)
 
 - `e2e/tests/list-dnd.spec.ts` (new) — desktop-project-only (mirrors
