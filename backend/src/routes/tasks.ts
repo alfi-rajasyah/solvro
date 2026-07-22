@@ -150,21 +150,20 @@ tasksRouter.patch(
     const oldKey: SiblingKey = {
       projectId: current.projectId,
       parentTaskId: current.parentTaskId,
-      status: current.status,
     };
     const newKey: SiblingKey = {
       projectId: current.projectId,
       parentTaskId: nextParentTaskId,
-      status: nextStatus,
     };
 
     // A patch only re-orders when it sets an explicit position OR moves the
-    // task to a different sibling list. A status-only change on a SUBTASK is
-    // NOT a reorder: a subtask's sibling list is keyed on parentTaskId alone
-    // (status doesn't partition it), so siblingKeyEquals reports the keys equal
-    // and the row keeps its slot. Previously any status change re-appended the
-    // row to the end of its list, so ticking a subtask's checkbox bounced it to
-    // the bottom of the checklist.
+    // task to a different sibling list (i.e. a re-parent). A status-only
+    // change is NOT a reorder for any task, top-level or subtask: sibling
+    // lists are keyed on parentTaskId alone (status doesn't partition them),
+    // so siblingKeyEquals reports the keys equal and the row keeps its slot.
+    // Previously a top-level task's key included status, so any status
+    // change re-appended the row to the end of its destination column —
+    // that's the exact behavior this task removes.
     const touchesOrdering =
       body.position !== undefined || !siblingKeyEquals(oldKey, newKey);
 
@@ -212,10 +211,12 @@ tasksRouter.patch(
       }
 
       if (touchesOrdering) {
-        // Status is part of the sibling key only for top-level tasks;
-        // promoting a subtask to top-level keeps its current status value
-        // (subtasks already carry a status field) unless the caller also
-        // passed a new one explicitly.
+        // Status is never part of the sibling key, so it can't be what makes
+        // touchesOrdering true here — this branch only runs for an explicit
+        // position or a re-parent. Still apply nextStatus: a caller can send
+        // status and position together (e.g. drag a card to a new column at
+        // a specific row), and that combined write must land in the same
+        // update as the position/parent change.
         data.status = nextStatus;
 
         // Apply the non-ordering fields (and the parent/status change) first,
