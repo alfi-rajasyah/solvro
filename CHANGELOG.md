@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-23 — SA optional end-to-end: frontend form, types, renderers, export (plan Task 2)
+
+- New-project form no longer requires a Solution Architect — "No SA" is a valid choice, and edit mode can clear an existing assignment (`frontend/src/components/ProjectFormModal.tsx`, `frontend/src/lib/queries.ts`).
+- Flipped `ProjectSummary.saId`/`sa`, `ProjectDetail.sa`, `OverviewProject.sa`, and `AdminProject.sa` to nullable, and `CreateProjectInput.saId`/`UpdateProjectInput.saId` to optional/nullable, matching Task 1's backend contract (`frontend/src/lib/queries.ts`).
+- SA renderers are null-safe: project detail header and right sidebar omit the SA row, project cards drop the SA avatar, customer/admin tables show "—" when unassigned (`ProjectDetail.tsx`, `RightSidebar.tsx`, `Projects.tsx`, `CustomerDetail.tsx`, `Admin.tsx`).
+- Report export packet omits the Solution Architect identity line when no SA is assigned — customer-facing output never prints a placeholder (`frontend/src/lib/export/projectExport.ts`).
+- Consumer enumeration via `tsc --noEmit` after the type flip surfaced exactly these seven files — no additional consumers, no backend/shared type reach, so no other files needed the same treatment.
+
 ### Changed — 2026-07-23 — `Project.saId` is now optional (backend)
 
 - `Project.saId` is now nullable — projects can exist without a Solution

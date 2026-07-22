@@ -189,7 +189,7 @@ export function buildProjectExportMarkdown(input: ProjectExportInput): string {
   L.push("## Identity");
   L.push(`- **Project:** ${project.name}`);
   L.push(`- **Customer:** ${project.customer?.name ?? "—"}`);
-  L.push(`- **Solution Architect:** ${project.sa.username}`);
+  if (project.sa) L.push(`- **Solution Architect:** ${project.sa.username}`);
   L.push(`- **Technical Account Manager:** ${project.tam.username}`);
   L.push(`- **Status:** ${STATUS_LABEL[project.status]}`);
   L.push(`- **Current phase:** ${currentPhase}`);

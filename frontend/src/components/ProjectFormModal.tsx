@@ -81,7 +81,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
     if (project) {
       setName(project.name);
       setDescription(project.description ?? "");
-      setSaId(project.saId);
+      setSaId(project.saId ?? "");
       setTamId(project.tamId);
       setCustomerId(project.customerId ?? "");
       setStatus(project.status);
@@ -113,10 +113,6 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
       setError("Name is required.");
       return;
     }
-    if (saId === "") {
-      setError("Solution Architect is required.");
-      return;
-    }
     if (customerId === "") {
       setError("Customer is required.");
       return;
@@ -127,7 +123,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
         await update.mutateAsync({
           name: name.trim(),
           description: description.trim() || null,
-          saId: Number(saId),
+          saId: saId === "" ? null : Number(saId),
           tamId: tamId === "" ? undefined : Number(tamId),
           customerId: Number(customerId),
           status,
@@ -139,7 +135,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
         const created = await create.mutateAsync({
           name: name.trim(),
           description: description.trim() || undefined,
-          saId: Number(saId),
+          saId: saId === "" ? undefined : Number(saId),
           tamId: tamId === "" ? undefined : Number(tamId),
           customerId: Number(customerId),
           status,
@@ -226,13 +222,13 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Solution Architect" required>
+          <Field label="Solution Architect">
             <select
               value={saId === "" ? "" : String(saId)}
               onChange={(e) => setSaId(e.target.value === "" ? "" : Number(e.target.value))}
               className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
             >
-              <option value="">Select SA…</option>
+              <option value="">No SA</option>
               {sas.map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.username}
