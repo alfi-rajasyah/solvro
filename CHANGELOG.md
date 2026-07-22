@@ -15,6 +15,83 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-22 — Gantt list pane: between-row drag reorder (plan Task 5)
+
+- `frontend/src/components/gantt/GanttListRow.tsx` — task and subtask rows
+  are now draggable AND droppable (previously only section headers were
+  drop targets; task rows could be dragged but had nowhere to land other
+  than a section header, and subtask rows couldn't be dragged at all).
+  Closes the "cannot drag at all" symptom from the original bug report.
+  Dropping on a row shows a top-edge insertion indicator (`bg-primary`
+  2px bar as the row's first child; the row root gained `relative` to
+  host it). The existing `isOver && isSection` ring affordance for
+  section-header drops is unchanged. The indicator is gated to row drags
+  only — `showRowInsertIndicator = isOver && !isSection &&
+  activeDragKind !== "section"`, reading the active drag's kind off
+  `droppable.active?.data.current` — so a section dragged over a task row
+  (a no-op drop, per `GanttFrame.handleDragEnd`) doesn't light a
+  misleading affordance.
+- `frontend/src/components/gantt/GanttFrame.tsx` — added
+  `useSensor(KeyboardSensor)` to the Gantt's `DndContext` sensors
+  (previously PointerSensor-only, so the row drag handles — which already
+  get `role`/`tabIndex` from `draggable.attributes`, per
+  `GanttListRow.tsx`'s `{...draggable.attributes}` spread — were
+  keyboard-dead). Uses dnd-kit's default `coordinateGetter`, not
+  `sortableKeyboardCoordinates`: that getter targets `SortableContext`,
+  which the Gantt deliberately doesn't use (raw `useDraggable`/
+  `useDroppable` throughout, per Task 5's design) — the default arrow-key
+  stepping works against plain droppables.
+- `RowDragData`/`RowDropData` (same file, `:24-33`) extended: `RowDragData`
+  gains `"subtask"` to its `kind` union plus a `parentTaskId: number |
+  null` field (populated from `row.task?.parentTaskId`, `null` for
+  section/top-level-task rows); `RowDropData` becomes a discriminated
+  union — the existing `{ kind: "section-target"; sectionId }` plus a new
+  `{ kind: "row-target"; taskId; parentTaskId; sectionId }`.
+- `frontend/src/components/gantt/GanttFrame.tsx` `handleDragEnd`
+  (`:409-535`) — new `row-target` branch, added before the existing
+  `section-target` early-return, mirroring `ProjectList.tsx`'s
+  `handleDragEnd` (plan Task 3) variable-for-variable so the two are
+  diffable by eye:
+  - Task row dropped on a task/subtask row: a subtask over-row resolves
+    to its parent (`overData.parentTaskId ?? overData.taskId`) so the
+    drop isn't a silent no-op; `topLevelOrdered` = every top-level task
+    sorted `(position, id)`; insert index = the over row's pre-move
+    index in that list (moved-INCLUSIVE — arrayMove/insert-before
+    semantics matching the top-edge indicator); patches `{ position }`
+    same-section or `{ sectionId, position }` cross-section; no-op guard
+    when neither the section nor the index actually changes.
+  - Subtask row dropped on a row: reorders WITHIN the parent only (List
+    parity — no re-parenting via Gantt row drags); requires
+    `overData.parentTaskId === moved.parentTaskId`, else returns;
+    siblings = the parent's other subtasks sorted `(position, id)`;
+    patches `{ position }`.
+  - Bars, dates, dependency arrows, baselines, and the section-reorder
+    branch are untouched.
+
+### Changed — 2026-07-22 — Gantt section-header drop now appends at section end (plan Task 5)
+
+- `GanttFrame.tsx`'s existing task-on-section-header branch (still gated
+  on `overData.kind === "section-target"`) no longer patches bare
+  `{ sectionId }`. It now adopts the corrected append-at-section-end rule
+  landed in `ProjectList.tsx` (plan Task 3's correction, not the plan's
+  original pre-correction block): `topLevelOrdered` filtered to `others`
+  (moved task excluded), `block` = that section's tasks within `others`,
+  and if non-empty, patch `{ sectionId, position: others.findIndex(last)
+  + 1 }` — indexing into the moved-EXCLUDED list because backend
+  `insertAt` excludes the moved row before clamping, so indexing the
+  moved-INCLUSIVE list would overshoot by one slot whenever the task's
+  old position precedes the target section. An empty target section still
+  patches `{ sectionId }` only (nothing to append after). Same-section
+  early return preserved.
+- No changes to `frontend/src/lib/gantt/geometry.ts` — verified by
+  reading `buildRows`: `parents = group.filter(t => t.parentTaskId ===
+  null)` and the subtask loop over `childrenById.get(p.id)` are plain
+  `Array.prototype.filter`/iteration over `tasks`, which preserves the
+  fetched `(position, id)` order end to end (the project tasks route
+  orders `[{ position: "asc" }, { id: "asc" }]` — `backend/src/routes/
+  projects.ts:331/418`), so section groups already render the canonical
+  order with zero changes needed here.
+
 ### Changed — 2026-07-22 — Kanban speaks the global sibling order; e2e assertions follow (plan Task 4)
 
 - `frontend/src/pages/views/ProjectKanban.tsx` `computeCardDrop` (~:256-322)
