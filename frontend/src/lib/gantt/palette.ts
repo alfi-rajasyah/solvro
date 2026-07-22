@@ -5,13 +5,13 @@ import type { Priority, TaskStatus } from "@/lib/queries";
 // values directly so output matches what the user sees on screen.
 
 export const STATUS_FILL_HEX: Record<TaskStatus, string> = {
-  TODO: "#bae6fd",        // sky-200
-  IN_PROGRESS: "#60a5fa", // blue-400
-  DONE: "#34d399",        // emerald-400
+  TODO: "#94a3b8",        // slate-400 — visibly "not started", solid
+  IN_PROGRESS: "#3b82f6", // blue-500
+  DONE: "#10b981",        // emerald-500
 };
 
 export const PRIORITY_BORDER_HEX: Record<Priority, string> = {
-  LOW: "#94a3b8",     // slate-400
+  LOW: "#64748b",     // slate-500 — distinct from TODO-status slate-400
   MEDIUM: "#3b82f6",  // blue-500
   HIGH: "#f59e0b",    // amber-500
   URGENT: "#ef4444",  // red-500
@@ -69,15 +69,20 @@ export function legendEntries(mode: ColorByMode): Array<[string, string]> {
   return [];
 }
 
-// Preset swatches for the section color picker (Task 6). First entry is the
-// schema default. Curated set that reads on both light and dark surfaces.
+// Preset swatches for the section color picker (Task 6). Vivid, dark+light-safe
+// set. Deliberately omits slate `#94a3b8`: that hex stays the Section.color
+// schema default (backend untouched) and is treated as the "never customized"
+// sentinel — geometry.ts's fallback resolution keys on it to assign one of
+// these presets deterministically. Excluding it from the picker means an
+// explicit user pick can never collide with the sentinel. Order matters: it
+// is also the fallback cycling order.
 export const SECTION_COLOR_PRESETS = [
-  "#94a3b8", // slate (default)
-  "#3b82f6", // blue
-  "#0ea5e9", // sky
-  "#14b8a6", // teal
-  "#10b981", // emerald
-  "#f59e0b", // amber
-  "#ef4444", // rose
   "#8b5cf6", // violet
+  "#14b8a6", // teal
+  "#3b82f6", // blue
+  "#f59e0b", // amber
+  "#f43f5e", // rose
+  "#0ea5e9", // sky
+  "#10b981", // emerald
+  "#d946ef", // fuchsia
 ] as const;
