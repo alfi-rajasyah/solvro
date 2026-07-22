@@ -15,12 +15,39 @@ import {
   ROW_HEIGHT,
 } from "@/lib/gantt/constants";
 import {
-  BAR_TRACK_OPACITY,
+  PROGRESS_OVERLAY_ALPHA,
   barFillHex,
   type ColorByMode,
 } from "@/lib/gantt/palette";
 
 type DragMode = "move" | "resize-start" | "resize-end";
+
+// Bar width (px) above which the task name is drawn inside the bar; below
+// it, the name floats to the right of the bar instead (mockup rule).
+const INSIDE_LABEL_MIN_WIDTH = 90;
+// Cap for the floated outside label so a very long name on a narrow chart
+// doesn't run away — it truncates with an ellipsis past this width.
+const OUTSIDE_LABEL_MAX_WIDTH = 240;
+
+// Standard relative-luminance approximation (0.299r + 0.587g + 0.114b, 0-1
+// scale) used only to pick label text color against a bar's resolved fill.
+// Above the threshold the fill reads "light" (e.g. amber, slate) and white
+// text loses contrast, so the label switches to a translucent dark tone.
+const LABEL_LUMINANCE_THRESHOLD = 0.6;
+
+function hexLuminance(hex: string): number {
+  const clean = hex.replace("#", "");
+  const r = Number.parseInt(clean.slice(0, 2), 16);
+  const g = Number.parseInt(clean.slice(2, 4), 16);
+  const b = Number.parseInt(clean.slice(4, 6), 16);
+  return (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+}
+
+function insideLabelTextColor(hex: string): string {
+  return hexLuminance(hex) > LABEL_LUMINANCE_THRESHOLD
+    ? "rgba(0, 0, 0, 0.75)"
+    : "#ffffff";
+}
 
 interface GanttBarProps {
   row: Row;
@@ -45,14 +72,6 @@ interface GanttBarProps {
     clientX: number,
     clientY: number,
   ) => void;
-}
-
-function hexToRgb(hex: string): string {
-  const h = hex.replace(/^#/, "");
-  const r = parseInt(h.slice(0, 2), 16);
-  const g = parseInt(h.slice(2, 4), 16);
-  const b = parseInt(h.slice(4, 6), 16);
-  return `${r}, ${g}, ${b}`;
 }
 
 export function GanttBar({
@@ -83,7 +102,7 @@ export function GanttBar({
     { status: row.status, priority: row.priority, sectionColor: row.sectionColor },
     colorBy,
   );
-  const rgb = hexToRgb(color);
+  const labelColor = insideLabelTextColor(color);
 
   // Milestones may only have a dueDate (no startDate) — anchor on whichever
   // is set. Regular bars require both.
@@ -98,6 +117,8 @@ export function GanttBar({
   const left = positionFor(start, chartStart, viewMode, columnWidth).x;
   const endPos = positionFor(addDays(end, 1), chartStart, viewMode, columnWidth).x;
   const width = isMilestone ? 0 : Math.max(columnWidth / 7, endPos - left);
+  const showLabelInside = !isMilestone && width >= INSIDE_LABEL_MIN_WIDTH;
+  const showLabelOutside = !isMilestone && !showLabelInside;
 
   const pxPerDay =
     positionFor(addDays(chartStart, 1), chartStart, viewMode, columnWidth).x;
@@ -331,7 +352,7 @@ export function GanttBar({
       <div
         data-task-id={row.taskId}
         className={[
-          "group/bar absolute select-none overflow-hidden rounded-[3px]",
+          "group/bar absolute select-none overflow-hidden rounded-[4px]",
           canEdit ? "cursor-grab active:cursor-grabbing" : "cursor-pointer",
           ghost ? "ring-2 ring-primary/60" : "",
         ].join(" ")}
@@ -341,7 +362,7 @@ export function GanttBar({
           top,
           height: barHeight,
           zIndex: 2,
-          backgroundColor: `rgba(${rgb}, ${BAR_TRACK_OPACITY})`,
+          backgroundColor: color,
           touchAction: canEdit ? "none" : undefined,
         }}
         onPointerDown={(e) => handlePointerDown(e, "move")}
@@ -350,12 +371,28 @@ export function GanttBar({
         onPointerCancel={handlePointerCancel}
         title={`${row.name} · ${status} · ${progress}%`}
       >
-        {progress > 0 && (
+        {progress > 0 && progress < 100 && (
           <div
-            className="absolute inset-y-0 left-0 rounded-[3px]"
-            style={{ width: `${progress}%`, backgroundColor: color }}
+            className="absolute inset-y-0 left-0 rounded-l-[4px]"
+            style={{
+              width: `${progress}%`,
+              backgroundColor: `rgba(0, 0, 0, ${PROGRESS_OVERLAY_ALPHA})`,
+            }}
             aria-hidden="true"
           />
+        )}
+        {showLabelInside && (
+          <div
+            className="pointer-events-none absolute inset-0 flex items-center overflow-hidden px-1"
+            aria-hidden="true"
+          >
+            <span
+              className="block truncate text-[10px] leading-none"
+              style={{ width: "100%", minWidth: 0, color: labelColor }}
+            >
+              {row.name}
+            </span>
+          </div>
         )}
         {canEdit && (
           <>
@@ -378,6 +415,22 @@ export function GanttBar({
           </>
         )}
       </div>
+      {showLabelOutside && (
+        <div
+          className="pointer-events-none absolute truncate text-[10px] text-on-surface-variant"
+          style={{
+            left: left + width + 6,
+            top,
+            height: barHeight,
+            lineHeight: `${barHeight}px`,
+            maxWidth: OUTSIDE_LABEL_MAX_WIDTH,
+            zIndex: 2,
+          }}
+          aria-hidden="true"
+        >
+          {row.name}
+        </div>
+      )}
       {canEdit && onConnectStart && (
         <>
           <div
