@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-23 — Comment text wraps inside its bubble (GH #57, plan Task 2)
+
+- Comment text now wraps inside its bubble instead of painting past it and outside the 380px panel — user-generated prose standard is `whitespace-pre-wrap break-words`; long usernames truncate instead of pushing the timestamp out (`frontend/src/components/TaskPanel.tsx`; GH #57). Same latent fix applied to the customer and project description paragraphs (`frontend/src/pages/CustomerDetail.tsx`, `frontend/src/pages/ProjectDetail.tsx`). New spec `e2e/tests/comments.spec.ts`.
+
+### Removed — 2026-07-23 — Dead `CommentThread` component (GH #57, plan Task 2)
+
+- Dead `frontend/src/components/CommentThread.tsx` — exported but never imported; it duplicated the comment UI (with the same overflow bug) and risked being wired up unfixed.
+
 ### Fixed — 2026-07-23 — Label creation no longer submits/wipes the task form (GH #56, plan Task 1)
 
 - Creating a label from inside the task drawer no longer submits the surrounding task form — `LabelPicker`'s creation UI was a `<form>` nested inside `#task-form`, and React's bubbling submit prematurely created the task, closed the drawer, and destroyed every in-progress field (`frontend/src/components/LabelPicker.tsx`; GH #56). The Add action is now a plain button + Enter handler.
