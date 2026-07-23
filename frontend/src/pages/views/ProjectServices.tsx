@@ -61,7 +61,7 @@ export function ProjectServices() {
             type="button"
             onClick={handleAddAllSubscribed}
             disabled={update.isPending}
-            className="inline-flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container disabled:opacity-60"
+            className="inline-flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container disabled:opacity-60"
           >
             <span className="material-symbols-outlined text-base">playlist_add</span>
             Add all subscribed
@@ -70,7 +70,7 @@ export function ProjectServices() {
       )}
 
       {addAllError && (
-        <div className="rounded border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">
+        <div className="rounded-sm border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">
           {addAllError}
         </div>
       )}

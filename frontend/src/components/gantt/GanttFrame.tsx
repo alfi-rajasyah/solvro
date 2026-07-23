@@ -746,7 +746,7 @@ export function GanttFrame({
   const legendOverflow = legend.slice(LEGEND_CAP);
 
   return (
-    <div className="flex min-w-0 flex-col overflow-hidden rounded border border-outline-variant bg-surface-container-lowest">
+    <div className="flex min-w-0 flex-col overflow-hidden rounded-sm border border-outline-variant bg-surface-container-lowest">
       <div className="flex items-center gap-2 border-b border-outline-variant bg-surface-container-lowest px-3 py-1.5">
         {/* Zoom pill group — Day / Week / Month / Quarter, active segment solid green */}
         <div className="inline-flex overflow-hidden rounded-md bg-surface-container-low p-0.5">
@@ -756,7 +756,7 @@ export function GanttFrame({
               type="button"
               onClick={() => setViewMode(v.mode)}
               className={[
-                "rounded px-2.5 py-1 font-display text-[11.5px] font-semibold tracking-wide transition-colors",
+                "rounded-sm px-2.5 py-1 font-display text-[11.5px] font-semibold tracking-wide transition-colors",
                 v.mode === viewMode
                   ? "bg-primary text-on-primary"
                   : "text-on-surface-variant hover:text-on-surface",
@@ -773,7 +773,7 @@ export function GanttFrame({
             <button
               type="button"
               onClick={() => onCreateTaskOpen(null)}
-              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary"
+              className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Task
@@ -781,7 +781,7 @@ export function GanttFrame({
             <button
               type="button"
               onClick={() => setAddingSection(true)}
-              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+              className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
             >
               <span className="material-symbols-outlined text-base">add</span>
               Section
@@ -800,7 +800,7 @@ export function GanttFrame({
             type="button"
             onClick={scrollToToday}
             disabled={!chartStart}
-            className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+            className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-[15px]">today</span>
             Today
@@ -814,7 +814,7 @@ export function GanttFrame({
                 : "No baseline locked yet — lock one from the project menu"
             }
             className={[
-              "inline-flex items-center gap-1 rounded border px-2.5 py-1 font-display text-[11.5px] font-medium",
+              "inline-flex items-center gap-1 rounded-sm border px-2.5 py-1 font-display text-[11.5px] font-medium",
               showBaseline
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary",
@@ -831,7 +831,7 @@ export function GanttFrame({
               <select
                 value={colorBy}
                 onChange={(e) => setColorBy(e.target.value as ColorByMode)}
-                className="rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[11.5px] font-medium text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[11.5px] font-medium text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
               >
                 <option value="status">Status</option>
                 <option value="section">Section</option>
@@ -871,7 +871,7 @@ export function GanttFrame({
             <button
               type="button"
               onClick={() => setConfirmingBaseline(true)}
-              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary"
+              className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary"
             >
               <span className="material-symbols-outlined text-[15px]">
                 {baselineLockedAt ? "bookmark" : "bookmark_add"}
@@ -884,13 +884,13 @@ export function GanttFrame({
               type="button"
               onClick={() => setExportMenuOpen((v) => !v)}
               disabled={!exportHandlers || exporting !== null}
-              className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+              className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-[15px]">download</span>
               {exporting ? "Exporting…" : "Export"}
             </button>
             {exportMenuOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 w-32 rounded border border-outline-variant bg-surface-container-lowest py-1 shadow-lg">
+              <div className="absolute right-0 top-full z-50 mt-1 w-32 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-lg">
                 <button
                   type="button"
                   onClick={() => runExport("excel")}
@@ -923,12 +923,12 @@ export function GanttFrame({
             onChange={(e) => setNewSectionName(e.target.value)}
             placeholder="Section name"
             maxLength={100}
-            className="w-64 rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
+            className="w-64 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
           />
           <button
             type="submit"
             disabled={createSection.isPending || !newSectionName.trim()}
-            className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className="rounded-sm bg-primary px-2 py-1 font-display text-label-caps uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
           >
             Add
           </button>
@@ -938,7 +938,7 @@ export function GanttFrame({
               setAddingSection(false);
               setNewSectionName("");
             }}
-            className="rounded px-2 py-1 text-[11px] text-on-surface-variant hover:bg-surface-container"
+            className="rounded-sm px-2 py-1 text-[11px] text-on-surface-variant hover:bg-surface-container"
           >
             Cancel
           </button>
@@ -952,15 +952,15 @@ export function GanttFrame({
       )}
 
       {isLoading && (
-        <div className="m-3 h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+        <div className="m-3 h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
       )}
       {isError && (
-        <div className="m-3 rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+        <div className="m-3 rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
           Could not load tasks: {(error as Error).message}
         </div>
       )}
       {!isLoading && !isError && rows.length === 0 && (
-        <div className="m-3 rounded border border-dashed border-outline-variant p-12 text-center text-on-surface-variant">
+        <div className="m-3 rounded-sm border border-dashed border-outline-variant p-12 text-center text-on-surface-variant">
           <p className="text-sm">
             No tasks or sections yet. Use + Task or + Section above to start
             building the plan.
@@ -1083,7 +1083,7 @@ export function GanttFrame({
                 type="date"
                 value={baselineAsOf}
                 onChange={(e) => setBaselineAsOf(e.target.value)}
-                className="w-full rounded border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-xs focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-xs focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
               />
               <span className="mt-1 block text-[11px] text-on-surface-variant">
                 Defaults to today. Use a different date to backdate the snapshot — e.g.

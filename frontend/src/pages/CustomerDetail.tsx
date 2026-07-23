@@ -62,12 +62,12 @@ export function CustomerDetail() {
 
   if (isLoading) {
     return (
-      <div className="m-6 h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+      <div className="m-6 h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
     );
   }
   if (isError || !customer) {
     return (
-      <div className="m-6 rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+      <div className="m-6 rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
         Could not load customer{error ? `: ${(error as Error).message}` : "."}
       </div>
     );
@@ -103,10 +103,10 @@ export function CustomerDetail() {
         </Link>
         <div className="mt-2 grid gap-4 md:grid-cols-3">
           {/* Identity card */}
-          <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 md:col-span-1">
+          <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4 md:col-span-1">
             <div className="mb-3 flex items-center gap-3">
               <div
-                className="grid h-12 w-12 shrink-0 place-items-center rounded font-display text-lg font-bold text-white"
+                className="grid h-12 w-12 shrink-0 place-items-center rounded-sm font-display text-lg font-bold text-white"
                 style={{ background: avatarBg }}
               >
                 {customer.name.slice(0, 2).toUpperCase()}
@@ -139,7 +139,7 @@ export function CustomerDetail() {
                 <button
                   type="button"
                   onClick={() => setEditOpen(true)}
-                  className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary"
+                  className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary"
                 >
                   <span className="material-symbols-outlined text-base">edit</span>
                   Edit
@@ -148,7 +148,7 @@ export function CustomerDetail() {
                   type="button"
                   onClick={handleDelete}
                   disabled={deleteCustomer.isPending}
-                  className="inline-flex items-center gap-1 rounded border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-error hover:text-error disabled:opacity-50"
+                  className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-error hover:text-error disabled:opacity-50"
                 >
                   <span className="material-symbols-outlined text-base">delete</span>
                   Delete
@@ -186,7 +186,7 @@ export function CustomerDetail() {
       </div>
 
       {actionError && (
-        <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+        <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
           {actionError}
         </div>
       )}
@@ -320,7 +320,7 @@ function OverviewTab({
             message="When projects are linked to this customer, they'll appear here."
           />
         ) : (
-          <div className="overflow-x-auto rounded border border-outline-variant bg-surface">
+          <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface">
             <table className="w-full text-left text-sm">
               <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
                 <tr>
@@ -346,7 +346,7 @@ function OverviewTab({
                       </Link>
                     </td>
                     <td className="px-3 py-2">
-                      <span className="rounded bg-surface-container-low px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
+                      <span className="rounded-sm bg-surface-container-low px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
                         {p.status}
                       </span>
                     </td>
@@ -388,7 +388,7 @@ function CustomerKpi({
           ? "text-amber-600"
           : "text-on-surface-variant";
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
+    <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
         <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
@@ -420,7 +420,7 @@ function ResourceSection({
   children: React.ReactNode;
 }) {
   return (
-    <section className="rounded border border-outline-variant bg-surface-container-lowest p-4">
+    <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="mb-3 flex items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <span className="material-symbols-outlined text-[21px] text-primary">
@@ -431,7 +431,7 @@ function ResourceSection({
           </h3>
         </div>
         {soon && (
-          <span className="rounded bg-surface-container px-1.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="rounded-sm bg-surface-container px-1.5 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
             Soon
           </span>
         )}
@@ -495,7 +495,7 @@ function ProfileCompletionCard({
 
   if (doneCount === total) {
     return (
-      <div className="rounded border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+      <div className="rounded-sm border border-emerald-300 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
         <span className="material-symbols-outlined mr-1 align-middle text-[19px]">
           check_circle
         </span>
@@ -505,7 +505,7 @@ function ProfileCompletionCard({
   }
 
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
+    <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="mb-3 flex items-center justify-between gap-3">
         <div>
           <h2 className="font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
@@ -529,7 +529,7 @@ function ProfileCompletionCard({
         {items.map((item) => (
           <li
             key={item.label}
-            className="flex items-center justify-between gap-3 rounded px-2 py-1.5 hover:bg-surface-container-low"
+            className="flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 hover:bg-surface-container-low"
           >
             <div className="flex min-w-0 items-start gap-2">
               <span
@@ -558,7 +558,7 @@ function ProfileCompletionCard({
               <button
                 type="button"
                 onClick={item.onAction}
-                className="shrink-0 rounded border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+                className="shrink-0 rounded-sm border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
               >
                 {item.actionLabel}
               </button>

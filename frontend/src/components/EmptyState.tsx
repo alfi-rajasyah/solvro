@@ -14,7 +14,7 @@ export function EmptyState({
   action,
 }: EmptyStateProps) {
   return (
-    <div className="rounded border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center">
+    <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center">
       <span className="material-symbols-outlined mb-2 text-4xl text-on-surface-variant">
         {icon}
       </span>

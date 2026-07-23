@@ -137,13 +137,13 @@ export function ServiceMappingList({
       </div>
 
       {error && (
-        <div className="rounded border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">
+        <div className="rounded-sm border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">
           {error}
         </div>
       )}
 
       {isLoading ? (
-        <div className="h-24 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+        <div className="h-24 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
       ) : !catalogue || catalogue.length === 0 ? (
         <EmptyState
           icon="category"
@@ -159,7 +159,7 @@ export function ServiceMappingList({
               <div
                 key={s.id}
                 className={[
-                  "rounded border px-3 py-2 transition-colors",
+                  "rounded-sm border px-3 py-2 transition-colors",
                   assigned
                     ? "border-primary bg-primary/5"
                     : "border-outline-variant bg-surface-container-lowest",
@@ -226,7 +226,7 @@ export function ServiceMappingList({
       {canMutate && (
         <form
           onSubmit={handleAdd}
-          className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
+          className="flex flex-wrap items-end gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest p-3"
         >
           <label className="w-full md:flex-1 md:min-w-[160px]">
             <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
@@ -238,7 +238,7 @@ export function ServiceMappingList({
               onChange={(e) => setNewName(e.target.value)}
               maxLength={100}
               placeholder="e.g. Penetration Testing"
-              className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
             />
           </label>
           <label className="w-full md:flex-2 md:min-w-[240px]">
@@ -251,13 +251,13 @@ export function ServiceMappingList({
               onChange={(e) => setNewDesc(e.target.value)}
               maxLength={1000}
               placeholder="Short blurb shown in the catalogue"
-              className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
             />
           </label>
           <button
             type="submit"
             disabled={create.isPending || !newName.trim()}
-            className="w-full rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
+            className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
           >
             {create.isPending ? "Adding…" : "Add service"}
           </button>
@@ -338,7 +338,7 @@ function ToolsEditor({
             onBlur={() => commit(draft)}
             disabled={saving}
             placeholder={tools.length === 0 ? "e.g. Acronis, Crowdstrike" : "Add tool…"}
-            className="min-w-[140px] flex-1 rounded border border-outline-variant bg-surface px-2 py-0.5 text-[12px] focus:border-primary focus:outline-none disabled:opacity-50"
+            className="min-w-[140px] flex-1 rounded-sm border border-outline-variant bg-surface px-2 py-0.5 text-[12px] focus:border-primary focus:outline-hidden disabled:opacity-50"
           />
         )}
         {!canMutate && tools.length === 0 && (
