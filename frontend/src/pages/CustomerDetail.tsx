@@ -351,7 +351,7 @@ function OverviewTab({
                       </span>
                     </td>
                     <td className="px-3 py-2 text-on-surface-variant">{p.tam.username}</td>
-                    <td className="px-3 py-2 text-on-surface-variant">{p.sa.username}</td>
+                    <td className="px-3 py-2 text-on-surface-variant">{p.sa?.username ?? "—"}</td>
                     <td className="px-3 py-2 text-right font-mono text-[13px] text-on-surface-variant">
                       {p._count.tasks}
                     </td>

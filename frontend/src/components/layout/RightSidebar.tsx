@@ -131,10 +131,12 @@ export function RightSidebar({
               <dt className="text-on-surface-variant">TAM</dt>
               <dd className="font-medium text-on-surface">{project.tam.username}</dd>
             </div>
-            <div className="flex justify-between">
-              <dt className="text-on-surface-variant">SA</dt>
-              <dd className="font-medium text-on-surface">{project.sa.username}</dd>
-            </div>
+            {project.sa && (
+              <div className="flex justify-between">
+                <dt className="text-on-surface-variant">SA</dt>
+                <dd className="font-medium text-on-surface">{project.sa.username}</dd>
+              </div>
+            )}
             {project.customer && (
               <div className="flex justify-between">
                 <dt className="text-on-surface-variant">Customer</dt>

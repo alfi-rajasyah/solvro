@@ -15,6 +15,38 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-23 — Gantt "Color by" dropdown + sustained legend (plan Task 3)
+
+- Gantt toolbar color control is now a labeled "Color by" dropdown (native select, theme tokens) replacing the unlabeled segmented buttons (`frontend/src/components/gantt/GanttFrame.tsx`).
+- Gantt color legend is sustained in all three modes: Section mode now lists each section's name + resolved color (capped at 6 with "+N more"), and the legend is no longer hidden below 1024px (`GanttFrame.tsx`, `frontend/src/lib/gantt/palette.ts`).
+- Section-color fallback resolution extracted to `resolveSectionColors()` in `palette.ts`, shared by `geometry.ts`'s buildRows and the new legend so bars and legend can never disagree (`frontend/src/lib/gantt/geometry.ts`).
+
+### Added — 2026-07-23 — E2E regression coverage for the Gantt color-by legend (plan Task 3)
+
+- `e2e/tests/gantt-legend.spec.ts` (new) — asserts the legend persists across Status/Section/Priority modes. Default `colorBy` is `"section"` (a pre-existing, unrelated 2026-07-20 decision), so the spec's initial assertion checks the select's value is `"section"` and the Section legend shows first — this is also the mode that previously rendered no legend at all.
+
+### Changed — 2026-07-23 — SA optional end-to-end: frontend form, types, renderers, export (plan Task 2)
+
+- New-project form no longer requires a Solution Architect — "No SA" is a valid choice, and edit mode can clear an existing assignment (`frontend/src/components/ProjectFormModal.tsx`, `frontend/src/lib/queries.ts`).
+- Flipped `ProjectSummary.saId`/`sa`, `ProjectDetail.sa`, `OverviewProject.sa`, and `AdminProject.sa` to nullable, and `CreateProjectInput.saId`/`UpdateProjectInput.saId` to optional/nullable, matching Task 1's backend contract (`frontend/src/lib/queries.ts`).
+- SA renderers are null-safe: project detail header and right sidebar omit the SA row, project cards drop the SA avatar, customer/admin tables show "—" when unassigned (`ProjectDetail.tsx`, `RightSidebar.tsx`, `Projects.tsx`, `CustomerDetail.tsx`, `Admin.tsx`).
+- Report export packet omits the Solution Architect identity line when no SA is assigned — customer-facing output never prints a placeholder (`frontend/src/lib/export/projectExport.ts`).
+- Consumer enumeration via `tsc --noEmit` after the type flip surfaced exactly these seven files — no additional consumers, no backend/shared type reach, so no other files needed the same treatment.
+
+### Changed — 2026-07-23 — `Project.saId` is now optional (backend)
+
+- `Project.saId` is now nullable — projects can exist without a Solution
+  Architect (no SAs use Solvro yet). `POST /projects` no longer requires
+  `saId`; `PATCH /projects/:id` accepts `saId: null` to clear an assignment
+  (`backend/prisma/schema.prisma`, migration
+  `20260722182449_optional_project_sa`, `backend/src/routes/projects.ts`).
+  The SA foreign key is now `ON DELETE SET NULL` (was restrict) — deleting a
+  user un-assigns them as SA instead of blocking the delete.
+- Added `backend/test/projectSaOptional.test.ts` covering: create without
+  `saId` → `saId: null` + `sa: null` on GET; create still accepts `saId`;
+  PATCH `saId: null` clears an assigned SA; PATCH `saId` assigns one on a
+  project created without it.
+
 ### Added — 2026-07-22 — E2E regression coverage for List + Gantt reorder; unified-task-ordering closing sweep (plan Task 6)
 
 - `e2e/tests/list-dnd.spec.ts` (new) — desktop-project-only (mirrors
