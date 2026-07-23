@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-24 — Gantt bar labels placed by measured text fit (GH #58, plan Task 4)
+
+- Gantt bar labels are now placed by measured text fit — a name renders inside its bar only when it fully fits (cached canvas measurement against the theme font), otherwise it floats outside with a fill-colored dot tying it to its bar and stronger `on-surface` text (was: arbitrary-looking 90px bar-width threshold, muted gray float) (`frontend/src/components/gantt/GanttBar.tsx`; GH #58). New spec `e2e/tests/gantt-bar-labels.spec.ts`. Excel/PDF export label rules intentionally untouched.
+
 ### Changed — 2026-07-24 — Start Date before Due Date in the task form (GH #59, plan Task 3)
 
 - Task form now asks for Start Date before Due Date, matching every other date-pair surface in the app (TaskPanel, inline Gantt editor, Timeline, exports) (`frontend/src/components/TaskFormModal.tsx`; GH #59).
