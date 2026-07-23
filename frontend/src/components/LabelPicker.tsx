@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import { LabelChip } from "./LabelChip";
 import { useCreateLabel, useProjectLabels, type Label } from "@/lib/queries";
 
@@ -36,8 +36,8 @@ export function LabelPicker({
     }
   }
 
-  async function handleCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function handleCreate() {
+    if (createLabel.isPending) return;
     const trimmed = newName.trim();
     if (!trimmed) return;
     try {
@@ -73,7 +73,10 @@ export function LabelPicker({
         {!creating && (
           <button
             type="button"
-            onClick={() => setCreating(true)}
+            onClick={() => {
+              createLabel.reset();
+              setCreating(true);
+            }}
             className="rounded border border-dashed border-outline-variant px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
           >
             + Label
@@ -82,22 +85,27 @@ export function LabelPicker({
       </div>
 
       {creating && (
-        <form
-          onSubmit={handleCreate}
-          className="rounded border border-outline-variant bg-surface-container-low p-2"
-        >
+        <div className="rounded border border-outline-variant bg-surface-container-low p-2">
           <div className="flex items-center gap-2">
             <input
               autoFocus
               type="text"
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.nativeEvent.isComposing) return;
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  void handleCreate();
+                }
+              }}
               placeholder="Label name"
               maxLength={50}
               className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
             />
             <button
-              type="submit"
+              type="button"
+              onClick={() => void handleCreate()}
               disabled={createLabel.isPending || !newName.trim()}
               className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
             >
@@ -106,6 +114,7 @@ export function LabelPicker({
             <button
               type="button"
               onClick={() => {
+                createLabel.reset();
                 setCreating(false);
                 setNewName("");
               }}
@@ -137,7 +146,7 @@ export function LabelPicker({
               {(createLabel.error as Error).message}
             </p>
           )}
-        </form>
+        </div>
       )}
     </div>
   );
