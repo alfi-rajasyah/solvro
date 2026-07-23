@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-24 — Start Date before Due Date in the task form (GH #59, plan Task 3)
+
+- Task form now asks for Start Date before Due Date, matching every other date-pair surface in the app (TaskPanel, inline Gantt editor, Timeline, exports) (`frontend/src/components/TaskFormModal.tsx`; GH #59).
+
 ### Fixed — 2026-07-23 — Comment text wraps inside its bubble (GH #57, plan Task 2)
 
 - Comment text now wraps inside its bubble instead of painting past it and outside the 380px panel — user-generated prose standard is `whitespace-pre-wrap break-words`; long usernames truncate instead of pushing the timestamp out (`frontend/src/components/TaskPanel.tsx`; GH #57). Same latent fix applied to the customer and project description paragraphs (`frontend/src/pages/CustomerDetail.tsx`, `frontend/src/pages/ProjectDetail.tsx`). New spec `e2e/tests/comments.spec.ts`.

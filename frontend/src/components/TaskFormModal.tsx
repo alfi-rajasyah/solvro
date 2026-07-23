@@ -331,23 +331,23 @@ export function TaskFormModal(props: TaskFormModalProps) {
             </select>
           </FieldRow>
 
-          {/* Due Date */}
-          <FieldRow icon="calendar_today" label="Due Date">
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              disabled={!canEdit}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
-            />
-          </FieldRow>
-
           {/* Start Date */}
           <FieldRow icon="calendar_month" label="Start Date">
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
+              disabled={!canEdit}
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+            />
+          </FieldRow>
+
+          {/* Due Date */}
+          <FieldRow icon="calendar_today" label="Due Date">
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
               disabled={!canEdit}
               className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
             />
