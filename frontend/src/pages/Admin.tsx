@@ -1259,7 +1259,7 @@ function ProjectsTab() {
                 <td className="px-3 py-2 text-on-surface-variant">
                   {p.customer?.name ?? "—"}
                 </td>
-                <td className="px-3 py-2 text-on-surface-variant">{p.sa.username}</td>
+                <td className="px-3 py-2 text-on-surface-variant">{p.sa?.username ?? "—"}</td>
                 <td className="px-3 py-2">
                   <span className="rounded bg-surface-container-low px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
                     {p.status}

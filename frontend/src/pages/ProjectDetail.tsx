@@ -97,8 +97,12 @@ export function ProjectDetail() {
             </p>
           )}
           <p className="mt-1 text-[12px] text-on-surface-variant">
-            SA <span className="font-medium text-on-surface">{project.sa.username}</span>
-            {" → "}
+            {project.sa && (
+              <>
+                SA <span className="font-medium text-on-surface">{project.sa.username}</span>
+                {" → "}
+              </>
+            )}
             TAM <span className="font-medium text-on-surface">{project.tam.username}</span>{" "}
             · {project._count.tasks} tasks
           </p>

@@ -1,4 +1,4 @@
-import type { Priority, TaskStatus } from "@/lib/queries";
+import type { Priority, Section, TaskStatus } from "@/lib/queries";
 
 // Single source of truth for Gantt bar colors. The UI applies these via
 // inline styles (see GanttBar.tsx); the Excel/PDF exports read the hex
@@ -50,26 +50,6 @@ export function barFillHex(
   return opts.sectionColor ?? DEFAULT_SECTION_COLOR;
 }
 
-export function legendEntries(mode: ColorByMode): Array<[string, string]> {
-  if (mode === "status") {
-    return [
-      ["To Do", STATUS_FILL_HEX.TODO],
-      ["In Progress", STATUS_FILL_HEX.IN_PROGRESS],
-      ["Done", STATUS_FILL_HEX.DONE],
-    ];
-  }
-  if (mode === "priority") {
-    return [
-      ["Low", PRIORITY_BORDER_HEX.LOW],
-      ["Medium", PRIORITY_BORDER_HEX.MEDIUM],
-      ["High", PRIORITY_BORDER_HEX.HIGH],
-      ["Urgent", PRIORITY_BORDER_HEX.URGENT],
-    ];
-  }
-  // Section mode: the colored dots on section rows are the legend.
-  return [];
-}
-
 // Preset swatches for the section color picker (Task 6). Vivid, dark+light-safe
 // set. Deliberately omits slate `#94a3b8`: that hex stays the Section.color
 // schema default (backend untouched) and is treated as the "never customized"
@@ -87,3 +67,53 @@ export const SECTION_COLOR_PRESETS = [
   "#10b981", // emerald
   "#d946ef", // fuchsia
 ] as const;
+
+// Single resolution point for section colors, shared by geometry.ts's
+// buildRows and the toolbar legend so the two can never disagree. Sections
+// whose stored color is missing or still the schema-default slate sentinel
+// (#94a3b8) have never been through the color picker and get a vivid preset
+// assigned deterministically by (position, id) order; explicit picks always
+// win — the sentinel is excluded from SECTION_COLOR_PRESETS so a user pick
+// can never collide with it.
+export function resolveSectionColors(
+  sections: ReadonlyArray<Pick<Section, "id" | "position" | "color">>,
+): Map<number, string> {
+  const sorted = [...sections].sort((a, b) => a.position - b.position || a.id - b.id);
+  const map = new Map<number, string>();
+  sorted.forEach((s, index) => {
+    const stored = s.color?.trim();
+    const isUnset = !stored || stored.toLowerCase() === DEFAULT_SECTION_COLOR.toLowerCase();
+    map.set(
+      s.id,
+      isUnset ? SECTION_COLOR_PRESETS[index % SECTION_COLOR_PRESETS.length] : stored,
+    );
+  });
+  return map;
+}
+
+export function legendEntries(
+  mode: ColorByMode,
+  sections: ReadonlyArray<Pick<Section, "id" | "name" | "position" | "color">> = [],
+): Array<[string, string]> {
+  if (mode === "status") {
+    return [
+      ["To Do", STATUS_FILL_HEX.TODO],
+      ["In Progress", STATUS_FILL_HEX.IN_PROGRESS],
+      ["Done", STATUS_FILL_HEX.DONE],
+    ];
+  }
+  if (mode === "priority") {
+    return [
+      ["Low", PRIORITY_BORDER_HEX.LOW],
+      ["Medium", PRIORITY_BORDER_HEX.MEDIUM],
+      ["High", PRIORITY_BORDER_HEX.HIGH],
+      ["Urgent", PRIORITY_BORDER_HEX.URGENT],
+    ];
+  }
+  // Section mode: one entry per section in board order, resolved through the
+  // same fallback cycling the bars use.
+  const colors = resolveSectionColors(sections);
+  return [...sections]
+    .sort((a, b) => a.position - b.position || a.id - b.id)
+    .map((s): [string, string] => [s.name, colors.get(s.id) ?? DEFAULT_SECTION_COLOR]);
+}
