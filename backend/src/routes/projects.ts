@@ -39,7 +39,7 @@ const wipLimitsSchema = z
 const createProjectSchema = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).optional(),
-  saId: z.number().int().positive(),
+  saId: z.number().int().positive().optional(),
   tamId: z.number().int().positive().optional(),
   customerId: z.number().int().positive(),
   status: z.nativeEnum(ProjectStatus).optional(),
@@ -51,7 +51,7 @@ const updateProjectSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).nullable().optional(),
   status: z.nativeEnum(ProjectStatus).optional(),
-  saId: z.number().int().positive().optional(),
+  saId: z.number().int().positive().nullable().optional(),
   tamId: z.number().int().positive().optional(),
   customerId: z.number().int().positive().optional(),
   wipLimits: wipLimitsSchema.optional(),
@@ -295,7 +295,9 @@ projectsRouter.patch(
     if (body.name !== undefined) data.name = body.name;
     if (body.description !== undefined) data.description = body.description;
     if (body.status !== undefined) data.status = body.status;
-    if (body.saId !== undefined) data.sa = { connect: { id: body.saId } };
+    if (body.saId !== undefined) {
+      data.sa = body.saId === null ? { disconnect: true } : { connect: { id: body.saId } };
+    }
     if (body.tamId !== undefined) data.tam = { connect: { id: body.tamId } };
     if (body.customerId !== undefined) {
       data.customer = { connect: { id: body.customerId } };
