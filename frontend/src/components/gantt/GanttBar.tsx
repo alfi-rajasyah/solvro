@@ -22,12 +22,36 @@ import {
 
 type DragMode = "move" | "resize-start" | "resize-end";
 
-// Bar width (px) above which the task name is drawn inside the bar; below
-// it, the name floats to the right of the bar instead (mockup rule).
-const INSIDE_LABEL_MIN_WIDTH = 90;
+// GH #58: a label renders INSIDE its bar only when the full name actually
+// fits — measured, not guessed by bar width (the old mockup-derived 90px
+// threshold straddled typical 3–6 day tasks at Week zoom, so charts split
+// arbitrarily between inside and outside labels).
+// Slack covers the px-1 padding both sides plus sub-pixel/font-fallback
+// drift while "Source Sans 3" loads.
+const INSIDE_LABEL_PADDING_PX = 12;
 // Cap for the floated outside label so a very long name on a narrow chart
 // doesn't run away — it truncates with an ellipsis past this width.
 const OUTSIDE_LABEL_MAX_WIDTH = 240;
+// Must match the rendered label span: text-[10px] + the theme body stack
+// (tailwind.config.ts fontFamily.body).
+const LABEL_FONT = '450 10px "Source Sans 3", system-ui, sans-serif';
+
+let measureCtx: CanvasRenderingContext2D | null = null;
+const labelWidthCache = new Map<string, number>();
+
+function labelTextWidth(text: string): number {
+  const cached = labelWidthCache.get(text);
+  if (cached !== undefined) return cached;
+  if (!measureCtx) {
+    measureCtx = document.createElement("canvas").getContext("2d");
+    if (measureCtx) measureCtx.font = LABEL_FONT;
+  }
+  // ~6px/char fallback if canvas is unavailable (test envs).
+  const width = measureCtx ? measureCtx.measureText(text).width : text.length * 6;
+  if (labelWidthCache.size > 1000) labelWidthCache.clear();
+  labelWidthCache.set(text, width);
+  return width;
+}
 
 // Standard relative-luminance approximation (0.299r + 0.587g + 0.114b, 0-1
 // scale) used only to pick label text color against a bar's resolved fill.
@@ -117,7 +141,8 @@ export function GanttBar({
   const left = positionFor(start, chartStart, viewMode, columnWidth).x;
   const endPos = positionFor(addDays(end, 1), chartStart, viewMode, columnWidth).x;
   const width = isMilestone ? 0 : Math.max(columnWidth / 7, endPos - left);
-  const showLabelInside = !isMilestone && width >= INSIDE_LABEL_MIN_WIDTH;
+  const showLabelInside =
+    !isMilestone && labelTextWidth(row.name) + INSIDE_LABEL_PADDING_PX <= width;
   const showLabelOutside = !isMilestone && !showLabelInside;
 
   const pxPerDay =
@@ -417,18 +442,22 @@ export function GanttBar({
       </div>
       {showLabelOutside && (
         <div
-          className="pointer-events-none absolute truncate text-[10px] text-on-surface-variant"
+          data-label-for={row.taskId}
+          className="pointer-events-none absolute flex items-center gap-1 text-[10px] text-on-surface"
           style={{
             left: left + width + 6,
             top,
             height: barHeight,
-            lineHeight: `${barHeight}px`,
             maxWidth: OUTSIDE_LABEL_MAX_WIDTH,
             zIndex: 2,
           }}
           aria-hidden="true"
         >
-          {row.name}
+          <span
+            className="h-[3px] w-[3px] shrink-0 rounded-full"
+            style={{ backgroundColor: color }}
+          />
+          <span className="min-w-0 truncate">{row.name}</span>
         </div>
       )}
       {canEdit && onConnectStart && (
