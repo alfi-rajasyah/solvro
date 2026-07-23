@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-24 — Decision reversal: ReUI Gantt swap approved (docs only, no code change)
+
+- The 2026-07-22 "skip shadcn / ReUI" decision is reversed: a full swap of the hand-rolled Gantt to ReUI's vendored Gantt is approved at full parity (dependency arrows, baselines, milestones, Excel/PDF export), with a full shadcn bootstrap and a Tailwind v3→v4 frontend migration as prerequisite. Grounded in a source-level audit of the ReUI component (shadcn registry pull, 9 files) that confirmed the original four feature gaps and surfaced the Tailwind v4 requirement. Spec and implementation plans live in `docs/superpowers/` (local-only; the directory is now gitignored with the rest of the planning layer — `.gitignore`). Local CLAUDE.md Facts and `docs/ideas/gantt-bar-reskin.md` amended accordingly.
+
 ### Changed — 2026-07-24 — Gantt bar labels placed by measured text fit (GH #58, plan Task 4)
 
 - Gantt bar labels are now placed by measured text fit — a name renders inside its bar only when it fully fits (cached canvas measurement against the theme font), otherwise it floats outside with a fill-colored dot tying it to its bar and stronger `on-surface` text (was: arbitrary-looking 90px bar-width threshold, muted gray float) (`frontend/src/components/gantt/GanttBar.tsx`; GH #58). New spec `e2e/tests/gantt-bar-labels.spec.ts`. Excel/PDF export label rules intentionally untouched.
