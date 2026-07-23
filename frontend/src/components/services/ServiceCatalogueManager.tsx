@@ -126,7 +126,7 @@ export function ServiceCatalogueManager() {
             className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
           />
         </label>
-        <label className="w-full md:flex-[2] md:min-w-[240px]">
+        <label className="w-full md:flex-2 md:min-w-[240px]">
           <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
             Description
           </span>

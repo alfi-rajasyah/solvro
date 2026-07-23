@@ -324,7 +324,7 @@ export function GanttBar({
           <>
             <div
               title="Drag from another task to make this milestone depend on it"
-              className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+              className="pointer-events-none absolute z-3 h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
               style={{
                 left: cx - half - 4,
                 top: cy,
@@ -338,7 +338,7 @@ export function GanttBar({
             />
             <div
               title="Drag to a task to create a dependency"
-              className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+              className="pointer-events-none absolute z-3 h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
               style={{
                 left: cx + half + 4,
                 top: cy,
@@ -464,7 +464,7 @@ export function GanttBar({
         <>
           <div
             title="Drag from another task to make this task depend on it"
-            className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+            className="pointer-events-none absolute z-3 h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
             style={{
               left,
               top: top + barHeight / 2,
@@ -478,7 +478,7 @@ export function GanttBar({
           />
           <div
             title="Drag to a task to create a dependency"
-            className="pointer-events-none absolute z-[3] h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
+            className="pointer-events-none absolute z-3 h-3 w-3 cursor-crosshair rounded-full border-2 border-white bg-primary opacity-0 shadow transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 focus-visible:opacity-100"
             style={{
               left: left + width,
               top: top + barHeight / 2,

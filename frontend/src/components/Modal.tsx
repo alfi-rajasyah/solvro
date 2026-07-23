@@ -37,7 +37,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-stretch justify-center bg-inverse-surface/40 p-0 backdrop-blur-sm md:items-center md:p-4"
+      className="fixed inset-0 z-100 flex items-stretch justify-center bg-inverse-surface/40 p-0 backdrop-blur-sm md:items-center md:p-4"
       onMouseDown={onClose}
     >
       <div

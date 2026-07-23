@@ -1000,10 +1000,10 @@ export function GanttFrame({
                 onPointerDown={handleDividerPointerDown}
                 onPointerMove={handleDividerPointerMove}
                 onPointerUp={handleDividerPointerUp}
-                className="sticky z-30 flex-shrink-0 cursor-col-resize bg-outline-variant/40 hover:bg-primary/60 active:bg-primary"
+                className="sticky z-30 shrink-0 cursor-col-resize bg-outline-variant/40 hover:bg-primary/60 active:bg-primary"
                 style={{ left: listPaneWidth, width: DIVIDER_WIDTH, touchAction: "none" }}
               />
-              <div className="relative flex-shrink-0" style={{ width: contentWidth }}>
+              <div className="relative shrink-0" style={{ width: contentWidth }}>
                 <GanttChartPane
                   rows={rows}
                   chartStart={chartStart}
@@ -1125,7 +1125,7 @@ export function GanttFrame({
       {baselineToast && (
         <div
           role="status"
-          className="pointer-events-auto fixed bottom-6 left-1/2 z-[110] -translate-x-1/2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 font-display text-[12px] font-bold uppercase tracking-wider text-emerald-700 shadow-md"
+          className="pointer-events-auto fixed bottom-6 left-1/2 z-110 -translate-x-1/2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 font-display text-[12px] font-bold uppercase tracking-wider text-emerald-700 shadow-md"
         >
           <span className="material-symbols-outlined mr-1 align-middle text-[15px]">
             check_circle

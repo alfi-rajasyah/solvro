@@ -668,7 +668,7 @@ function PanelComments({ taskId }: { taskId: number }) {
                   <span className="min-w-0 truncate font-medium text-on-surface">{c.author.username}</span>
                   <span className="shrink-0 text-on-surface-variant">{relativeTime(c.createdAt)}</span>
                 </div>
-                <p className="whitespace-pre-wrap break-words text-xs text-on-surface">{c.body}</p>
+                <p className="whitespace-pre-wrap wrap-break-word text-xs text-on-surface">{c.body}</p>
               </div>
             </li>
           ))}

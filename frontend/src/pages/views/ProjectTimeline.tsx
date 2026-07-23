@@ -119,7 +119,7 @@ function TimelineItem({
     <li className="relative mb-4 ml-6">
       <span
         className={[
-          "absolute -left-[34px] flex h-4 w-4 items-center justify-center rounded-full border-2 border-surface-container-lowest",
+          "absolute left-[-34px] flex h-4 w-4 items-center justify-center rounded-full border-2 border-surface-container-lowest",
           task.status === "DONE"
             ? "bg-emerald-500"
             : task.status === "IN_PROGRESS"

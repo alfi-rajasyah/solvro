@@ -89,7 +89,7 @@ export function GanttColumnGrid({
           title={m.title}
           className={
             m.kind === "weekend"
-              ? "absolute top-0 bg-slate-900/[0.04] dark:bg-white/[0.05]"
+              ? "absolute top-0 bg-slate-900/4 dark:bg-white/5"
               : "absolute top-0 bg-rose-500/10 dark:bg-rose-400/15"
           }
           style={{
