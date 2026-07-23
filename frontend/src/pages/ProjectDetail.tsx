@@ -92,7 +92,7 @@ export function ProjectDetail() {
       <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-4">
         <div className="min-w-0">
           {project.description && (
-            <p className="max-w-2xl text-sm text-on-surface-variant">
+            <p className="max-w-2xl break-words text-sm text-on-surface-variant">
               {project.description}
             </p>
           )}

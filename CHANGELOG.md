@@ -15,6 +15,28 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-24 — Gantt bar labels placed by measured text fit (GH #58, plan Task 4)
+
+- Gantt bar labels are now placed by measured text fit — a name renders inside its bar only when it fully fits (cached canvas measurement against the theme font), otherwise it floats outside with a fill-colored dot tying it to its bar and stronger `on-surface` text (was: arbitrary-looking 90px bar-width threshold, muted gray float) (`frontend/src/components/gantt/GanttBar.tsx`; GH #58). New spec `e2e/tests/gantt-bar-labels.spec.ts`. Excel/PDF export label rules intentionally untouched.
+
+### Changed — 2026-07-24 — Start Date before Due Date in the task form (GH #59, plan Task 3)
+
+- Task form now asks for Start Date before Due Date, matching every other date-pair surface in the app (TaskPanel, inline Gantt editor, Timeline, exports) (`frontend/src/components/TaskFormModal.tsx`; GH #59).
+
+### Fixed — 2026-07-23 — Comment text wraps inside its bubble (GH #57, plan Task 2)
+
+- Comment text now wraps inside its bubble instead of painting past it and outside the 380px panel — user-generated prose standard is `whitespace-pre-wrap break-words`; long usernames truncate instead of pushing the timestamp out (`frontend/src/components/TaskPanel.tsx`; GH #57). Same latent fix applied to the customer and project description paragraphs (`frontend/src/pages/CustomerDetail.tsx`, `frontend/src/pages/ProjectDetail.tsx`). New spec `e2e/tests/comments.spec.ts`.
+
+### Removed — 2026-07-23 — Dead `CommentThread` component (GH #57, plan Task 2)
+
+- Dead `frontend/src/components/CommentThread.tsx` — exported but never imported; it duplicated the comment UI (with the same overflow bug) and risked being wired up unfixed.
+
+### Fixed — 2026-07-23 — Label creation no longer submits/wipes the task form (GH #56, plan Task 1)
+
+- Creating a label from inside the task drawer no longer submits the surrounding task form — `LabelPicker`'s creation UI was a `<form>` nested inside `#task-form`, and React's bubbling submit prematurely created the task, closed the drawer, and destroyed every in-progress field (`frontend/src/components/LabelPicker.tsx`; GH #56). The Add action is now a plain button + Enter handler.
+- Task drawer no longer wipes in-progress input when its parent re-renders — the form-reset effect depended on the whole `props` object (fresh identity every render); it now depends on stable primitives only (`frontend/src/components/TaskFormModal.tsx`; GH #56).
+- New regression spec `e2e/tests/task-form-labels.spec.ts` covering both paths (Add click + Enter) and, end to end, that a real "Create task" submit still creates exactly one task carrying both labels created during the draft.
+
 ### Changed — 2026-07-23 — Gantt "Color by" dropdown + sustained legend (plan Task 3)
 
 - Gantt toolbar color control is now a labeled "Color by" dropdown (native select, theme tokens) replacing the unlabeled segmented buttons (`frontend/src/components/gantt/GanttFrame.tsx`).
