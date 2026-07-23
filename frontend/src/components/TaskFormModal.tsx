@@ -81,37 +81,48 @@ export function TaskFormModal(props: TaskFormModalProps) {
   const [closing, setClosing] = useState(false);
   const requestClose = useCallback(() => setClosing(true), []);
 
+  const editingTask = isEdit ? (props as EditProps).task : null;
+  const createProps = isEdit ? null : (props as CreateProps);
+
   useEffect(() => {
     if (!open) return;
     setError(null);
-    if (isEdit) {
-      const t = (props as EditProps).task;
-      setTitle(t.title);
-      setDescription(t.description ?? "");
-      setStatus(t.status);
-      setPriority(t.priority);
-      setStartDate(t.startDate ? t.startDate.slice(0, 10) : "");
-      setDueDate(t.dueDate ? t.dueDate.slice(0, 10) : "");
-      setAssignedToId(t.assignedToId ?? "");
-      setParentTaskId(t.parentTaskId ?? "");
-      setSectionId(t.sectionId ?? "");
-      setLabelIds(t.labels.map((l) => l.id));
+    if (editingTask) {
+      setTitle(editingTask.title);
+      setDescription(editingTask.description ?? "");
+      setStatus(editingTask.status);
+      setPriority(editingTask.priority);
+      setStartDate(editingTask.startDate ? editingTask.startDate.slice(0, 10) : "");
+      setDueDate(editingTask.dueDate ? editingTask.dueDate.slice(0, 10) : "");
+      setAssignedToId(editingTask.assignedToId ?? "");
+      setParentTaskId(editingTask.parentTaskId ?? "");
+      setSectionId(editingTask.sectionId ?? "");
+      setLabelIds(editingTask.labels.map((l) => l.id));
     } else {
-      const cp = props as CreateProps;
       setTitle("");
       setDescription("");
-      setStatus(cp.initialStatus ?? "TODO");
+      setStatus(createProps?.initialStatus ?? "TODO");
       setPriority("MEDIUM");
       setStartDate("");
       setDueDate("");
       setAssignedToId("");
-      setParentTaskId(cp.initialParentTaskId ?? "");
-      setSectionId(cp.initialSectionId ?? "");
+      setParentTaskId(createProps?.initialParentTaskId ?? "");
+      setSectionId(createProps?.initialSectionId ?? "");
       setLabelIds([]);
     }
-  }, [open, isEdit, props]);
+    // Primitives only — the props OBJECT gets fresh identity on every parent
+    // render (query refetches, sibling mutations invalidating), and re-running
+    // this reset wipes in-progress user input (GH #56, second root cause).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    open,
+    isEdit,
+    editingTask?.id,
+    createProps?.initialStatus,
+    createProps?.initialParentTaskId,
+    createProps?.initialSectionId,
+  ]);
 
-  const editingTask = isEdit ? (props as EditProps).task : null;
   const possibleParents = (projectTasks ?? []).filter(
     (t) => !editingTask || (t.id !== editingTask.id && t.parentTaskId === null),
   );
@@ -320,23 +331,23 @@ export function TaskFormModal(props: TaskFormModalProps) {
             </select>
           </FieldRow>
 
-          {/* Due Date */}
-          <FieldRow icon="calendar_today" label="Due Date">
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
-              disabled={!canEdit}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
-            />
-          </FieldRow>
-
           {/* Start Date */}
           <FieldRow icon="calendar_month" label="Start Date">
             <input
               type="date"
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
+              disabled={!canEdit}
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+            />
+          </FieldRow>
+
+          {/* Due Date */}
+          <FieldRow icon="calendar_today" label="Due Date">
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
               disabled={!canEdit}
               className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
             />
