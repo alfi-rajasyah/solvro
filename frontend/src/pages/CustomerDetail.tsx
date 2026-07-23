@@ -179,7 +179,7 @@ export function CustomerDetail() {
         </div>
 
         {customer.description && (
-          <p className="mt-3 max-w-3xl whitespace-pre-line text-sm text-on-surface-variant">
+          <p className="mt-3 max-w-3xl whitespace-pre-line break-words text-sm text-on-surface-variant">
             {customer.description}
           </p>
         )}

@@ -617,10 +617,9 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
 
 /**
  * Comment thread + single-line composer per the mockup ("Write a comment…"
- * placeholder + green send icon). Uses the same data hooks as CommentThread
- * (useComments / useAddComment) — CommentThread itself bundles a
- * textarea-and-button composer that doesn't match the panel mockup, so the
- * panel renders its own thin thread + composer instead of modifying it.
+ * placeholder + green send icon), backed by useComments / useAddComment.
+ * This is the app's only comment UI (the former standalone CommentThread
+ * component was never mounted and has been removed).
  */
 function PanelComments({ taskId }: { taskId: number }) {
   const { data: comments, isLoading, isError, error } = useComments(taskId);
@@ -666,10 +665,10 @@ function PanelComments({ taskId }: { taskId: number }) {
               <AssigneeAvatar user={c.author} size="xs" />
               <div className="min-w-0 flex-1 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2">
                 <div className="mb-0.5 flex items-center justify-between gap-2 text-[12px]">
-                  <span className="font-medium text-on-surface">{c.author.username}</span>
-                  <span className="text-on-surface-variant">{relativeTime(c.createdAt)}</span>
+                  <span className="min-w-0 truncate font-medium text-on-surface">{c.author.username}</span>
+                  <span className="shrink-0 text-on-surface-variant">{relativeTime(c.createdAt)}</span>
                 </div>
-                <p className="whitespace-pre-wrap text-xs text-on-surface">{c.body}</p>
+                <p className="whitespace-pre-wrap break-words text-xs text-on-surface">{c.body}</p>
               </div>
             </li>
           ))}
