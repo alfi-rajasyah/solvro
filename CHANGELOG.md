@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-24 — Theme ported to CSS-first `@theme` (Plan A Task 2)
+
+- `frontend/tailwind.config.ts` deleted; all Technical Precision tokens (colors, +1px text scale, named type roles, `shadow-overlay`, sidebar/context-panel spacing, radius prohibitions) now live in a `@theme` block at the head of `frontend/src/index.css`, still routed through the existing `:root`/`.dark` RGB triplets. Dark mode is the `@custom-variant dark` class variant — `theme.tsx` unchanged. The Task 1 `@config "../tailwind.config.ts";` shim is removed in the same change (deleting either the shim or the config alone would break the build).
+- Applied the deferred bare-class renames across `frontend/src/**/*.tsx` now that the v3-semantics shim is gone: `rounded` → `rounded-sm` (284 occurrences / 34 files), `shadow` → `shadow-sm` (7 occurrences / 4 files, e.g. `GanttBar.tsx`), `outline-none` → `outline-hidden` (77 occurrences / 20 files). Variant-prefixed forms (`md:rounded`, `focus:outline-none`, `hover:shadow`, …) renamed correctly; `rounded-full`, `rounded-sm` (pre-existing), `shadow-overlay`, and `flex-shrink` were left untouched (verified via before/after grep counts).
+
 ### Changed — 2026-07-24 — Tailwind v4 toolchain swap (Plan A Task 1)
 
 - Frontend build moved to Tailwind CSS 4 via `@tailwindcss/vite` (`frontend/vite.config.ts`); `postcss.config.js`, `postcss`, `autoprefixer` removed (v4 handles both). Official upgrade codemod applied v4 canonicalizations across `frontend/src/` (`flex-shrink-0`→`shrink-0`, `break-words`→`wrap-break-word`, arbitrary-value cleanups like `z-[100]`→`z-100`, opacity fractions `/[0.04]`→`/4`). Bare `rounded`/`shadow`/`outline-none` were intentionally NOT renamed: the temporary `@config` shim keeps their v3 semantics for now — the renames land in the Task 2 theme port where the shim is removed.

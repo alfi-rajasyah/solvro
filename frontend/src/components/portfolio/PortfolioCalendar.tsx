@@ -108,7 +108,7 @@ export function PortfolioCalendar({
             type="button"
             onClick={() => setYear((y) => y - 1)}
             aria-label="Previous year"
-            className="flex h-6 w-6 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+            className="flex h-6 w-6 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
           >
             <span className="material-symbols-outlined text-[17px]">
               chevron_left
@@ -121,7 +121,7 @@ export function PortfolioCalendar({
             type="button"
             onClick={() => setYear((y) => y + 1)}
             aria-label="Next year"
-            className="flex h-6 w-6 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+            className="flex h-6 w-6 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
           >
             <span className="material-symbols-outlined text-[17px]">
               chevron_right
@@ -142,7 +142,7 @@ export function PortfolioCalendar({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest">
+      <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest">
         <div className="min-w-[720px]">
           <div className="flex items-center gap-3 border-b border-outline-variant bg-surface-container-low px-3">
             <div className="w-48 shrink-0" />

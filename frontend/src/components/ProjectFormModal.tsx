@@ -186,7 +186,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             onChange={(e) => setName(e.target.value)}
             maxLength={200}
             autoFocus
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
           />
         </Field>
 
@@ -196,7 +196,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             maxLength={2000}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
           />
         </Field>
 
@@ -206,7 +206,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             onChange={(e) =>
               setCustomerId(e.target.value === "" ? "" : Number(e.target.value))
             }
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
           >
             <option value="">
               {customers && customers.length === 0
@@ -226,7 +226,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             <select
               value={saId === "" ? "" : String(saId)}
               onChange={(e) => setSaId(e.target.value === "" ? "" : Number(e.target.value))}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
             >
               <option value="">No SA</option>
               {sas.map((u) => (
@@ -241,7 +241,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
             >
               {PROJECT_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -257,7 +257,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             <select
               value={tamId === "" ? "" : String(tamId)}
               onChange={(e) => setTamId(e.target.value === "" ? "" : Number(e.target.value))}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
             >
               <option value="">Defaults to current user</option>
               {tams.map((u) => (
@@ -286,7 +286,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
                     setWipLimits((prev) => ({ ...prev, [col.id]: e.target.value }))
                   }
                   placeholder="—"
-                  className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                  className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
                 />
               </label>
             ))}

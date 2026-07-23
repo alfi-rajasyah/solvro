@@ -27,7 +27,7 @@ interface Connector {
    * Same route as `d` but trimmed back from both bar edges, used for the
    * transparent pointer hit path. Keeps the fat (14px) hit strip clear of
    * the bars' resize handles + connector dots at each end so it doesn't
-   * shadow those interactions. `null` when the connector is too short to
+   * shadow-sm those interactions. `null` when the connector is too short to
    * trim — then the hit path falls back to the full route.
    */
   dHit: string | null;

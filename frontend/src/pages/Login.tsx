@@ -220,7 +220,7 @@ export function Login() {
           </p>
 
           {googleConfigLoading ? (
-            <div className="h-10 animate-pulse rounded bg-surface-container" />
+            <div className="h-10 animate-pulse rounded-sm bg-surface-container" />
           ) : googleAvailable ? (
             <GoogleOAuthProvider clientId={googleConfig!.clientId!}>
               <div className="flex justify-center">
@@ -241,7 +241,7 @@ export function Login() {
           {error && (
             <div
               role="alert"
-              className="mt-4 rounded border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
+              className="mt-4 rounded-sm border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
             >
               {error}
             </div>
@@ -266,7 +266,7 @@ export function Login() {
                   only the seeded admin and any explicitly password-provisioned
                   account can use this; every other user has passwordHash NULL
                   server-side. */}
-              <details className="group rounded border border-outline-variant bg-surface-container-lowest open:bg-surface-container">
+              <details className="group rounded-sm border border-outline-variant bg-surface-container-lowest open:bg-surface-container">
                 <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-on-surface marker:hidden">
                   <span className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-base text-on-surface-variant">
@@ -348,7 +348,7 @@ function PasswordForm({
         <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">
           Email
         </span>
-        <div className="mt-1 flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
+        <div className="mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
           <span className="material-symbols-outlined text-base text-on-surface-variant">
             mail
           </span>
@@ -359,7 +359,7 @@ function PasswordForm({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-hidden"
           />
         </div>
       </label>
@@ -368,7 +368,7 @@ function PasswordForm({
         <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">
           Password
         </span>
-        <div className="mt-1 flex items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
+        <div className="mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
           <span className="material-symbols-outlined text-base text-on-surface-variant">
             lock
           </span>
@@ -379,7 +379,7 @@ function PasswordForm({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
-            className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-none"
+            className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-hidden"
           />
           <button
             type="button"
@@ -397,7 +397,7 @@ function PasswordForm({
       <button
         type="submit"
         disabled={submitting}
-        className="mt-1 w-full rounded bg-ink py-2 font-display text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-ink-hover disabled:opacity-60"
+        className="mt-1 w-full rounded-sm bg-ink py-2 font-display text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-ink-hover disabled:opacity-60"
       >
         {submitting ? "Signing in…" : "Sign in"}
       </button>

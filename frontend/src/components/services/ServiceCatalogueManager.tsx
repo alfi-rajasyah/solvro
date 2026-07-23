@@ -104,14 +104,14 @@ export function ServiceCatalogueManager() {
       </p>
 
       {error && (
-        <div className="rounded border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
+        <div className="rounded-sm border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
           {error}
         </div>
       )}
 
       <form
         onSubmit={handleAdd}
-        className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
+        className="flex flex-wrap items-end gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest p-3"
       >
         <label className="w-full md:flex-1 md:min-w-[160px]">
           <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
@@ -123,7 +123,7 @@ export function ServiceCatalogueManager() {
             onChange={(e) => setNewName(e.target.value)}
             maxLength={100}
             placeholder="e.g. Penetration Testing"
-            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
           />
         </label>
         <label className="w-full md:flex-2 md:min-w-[240px]">
@@ -136,19 +136,19 @@ export function ServiceCatalogueManager() {
             onChange={(e) => setNewDesc(e.target.value)}
             maxLength={1000}
             placeholder="Short blurb shown in the catalogue"
-            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
           />
         </label>
         <button
           type="submit"
           disabled={create.isPending || !newName.trim()}
-          className="w-full rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
+          className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
         >
           {create.isPending ? "Adding…" : "Add service"}
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded border border-outline-variant bg-surface">
+      <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
             <tr>
@@ -183,7 +183,7 @@ export function ServiceCatalogueManager() {
                         value={editName}
                         onChange={(e) => setEditName(e.target.value)}
                         maxLength={100}
-                        className="w-full rounded border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                        className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-hidden"
                       />
                     ) : (
                       <span className="font-medium text-on-surface">{s.name}</span>
@@ -196,7 +196,7 @@ export function ServiceCatalogueManager() {
                         value={editDesc}
                         onChange={(e) => setEditDesc(e.target.value)}
                         maxLength={1000}
-                        className="w-full rounded border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-none"
+                        className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-hidden"
                       />
                     ) : (
                       s.description || "—"
@@ -225,7 +225,7 @@ export function ServiceCatalogueManager() {
                             type="button"
                             onClick={saveEdit}
                             disabled={update.isPending || !editName.trim()}
-                            className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
+                            className="rounded-sm bg-primary px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
                           >
                             Save
                           </button>
@@ -233,7 +233,7 @@ export function ServiceCatalogueManager() {
                             type="button"
                             onClick={() => setEditingId(null)}
                             disabled={update.isPending}
-                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+                            className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
                           >
                             Cancel
                           </button>
@@ -243,14 +243,14 @@ export function ServiceCatalogueManager() {
                           <button
                             type="button"
                             onClick={() => startEdit(s)}
-                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                            className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                           >
                             Edit
                           </button>
                           <button
                             type="button"
                             onClick={() => handleDelete(s)}
-                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
+                            className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
                           >
                             Delete
                           </button>

@@ -137,7 +137,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high"
+            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
             aria-label="Close"
           >
             <span className="material-symbols-outlined text-base">close</span>
@@ -265,7 +265,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="material-symbols-outlined rounded p-1 text-base text-on-surface-variant hover:bg-surface-container-high"
+              className="material-symbols-outlined rounded-sm p-1 text-base text-on-surface-variant hover:bg-surface-container-high"
               aria-label="Task options"
             >
               more_horiz
@@ -293,7 +293,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded p-1 text-on-surface-variant hover:bg-surface-container-high"
+            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
             aria-label="Close"
           >
             <span className="material-symbols-outlined text-base">close</span>
@@ -311,7 +311,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                 onChange={(e) => setTitleDraft(e.target.value)}
                 onBlur={handleTitleSubmit}
                 maxLength={200}
-                className="w-full border-none bg-transparent text-lg font-bold text-on-surface outline-none focus:outline-none"
+                className="w-full border-none bg-transparent text-lg font-bold text-on-surface outline-hidden focus:outline-hidden"
               />
             </form>
           ) : (
@@ -322,7 +322,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                 setTitleDraft(task.title);
                 setEditingTitle(true);
               }}
-              className="block w-full rounded text-left text-lg font-bold text-on-surface hover:bg-surface-container-high disabled:cursor-default"
+              className="block w-full rounded-sm text-left text-lg font-bold text-on-surface hover:bg-surface-container-high disabled:cursor-default"
             >
               {task.title}
             </button>
@@ -346,7 +346,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                     setEditingAssignee(false);
                   }}
                   onBlur={() => setEditingAssignee(false)}
-                  className="w-full rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-none"
+                  className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-hidden"
                 >
                   <option value="">Unassigned</option>
                   {(users ?? []).map((u) => (
@@ -360,7 +360,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                   type="button"
                   disabled={!canEdit}
                   onClick={() => setEditingAssignee(true)}
-                  className="flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
+                  className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
                 >
                   <AssigneeAvatar user={task.assignedTo} size="xs" />
                   <span className="text-on-surface">
@@ -377,7 +377,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
               {editingDates && canEdit ? (
                 <form
                   onSubmit={handleDatesSubmit}
-                  className="flex flex-col gap-1 rounded border border-outline-variant bg-surface-container-lowest p-2"
+                  className="flex flex-col gap-1 rounded-sm border border-outline-variant bg-surface-container-lowest p-2"
                 >
                   <label className="flex items-center gap-2 text-[11px]">
                     <span className="w-8 uppercase text-on-surface-variant">Start</span>
@@ -385,7 +385,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                       type="date"
                       value={startDraft}
                       onChange={(e) => setStartDraft(e.target.value)}
-                      className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-xs focus:border-primary focus:outline-none"
+                      className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-xs focus:border-primary focus:outline-hidden"
                     />
                   </label>
                   <label className="flex items-center gap-2 text-[11px]">
@@ -394,20 +394,20 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                       type="date"
                       value={dueDraft}
                       onChange={(e) => setDueDraft(e.target.value)}
-                      className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-xs focus:border-primary focus:outline-none"
+                      className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-xs focus:border-primary focus:outline-hidden"
                     />
                   </label>
                   <div className="flex justify-end gap-1 pt-0.5">
                     <button
                       type="button"
                       onClick={() => setEditingDates(false)}
-                      className="rounded px-2 py-0.5 text-[11px] text-on-surface-variant hover:bg-surface-container-high"
+                      className="rounded-sm px-2 py-0.5 text-[11px] text-on-surface-variant hover:bg-surface-container-high"
                     >
                       Cancel
                     </button>
                     <button
                       type="submit"
-                      className="rounded bg-primary px-2 py-0.5 text-[11px] font-bold text-on-primary hover:bg-primary/90"
+                      className="rounded-sm bg-primary px-2 py-0.5 text-[11px] font-bold text-on-primary hover:bg-primary/90"
                     >
                       Save
                     </button>
@@ -422,7 +422,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                     setDueDraft(toDateInput(task.dueDate));
                     setEditingDates(true);
                   }}
-                  className="rounded px-1 py-0.5 text-left text-on-surface hover:bg-surface-container-high disabled:cursor-default"
+                  className="rounded-sm px-1 py-0.5 text-left text-on-surface hover:bg-surface-container-high disabled:cursor-default"
                 >
                   {fmtShort(task.startDate)} – {fmtShort(task.dueDate)}
                 </button>
@@ -436,7 +436,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
               type="button"
               disabled={!canEdit}
               onClick={() => patch({ priority: nextPriority(task.priority) })}
-              className="flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
+              className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
               title={canEdit ? "Click to cycle priority" : undefined}
             >
               <span
@@ -454,7 +454,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
               type="button"
               disabled={!canEdit}
               onClick={() => patch({ isMilestone: !task.isMilestone })}
-              className="flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
+              className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
               title={canEdit ? "Toggle between task bar and milestone diamond" : undefined}
             >
               <span
@@ -480,7 +480,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                     setEditingSection(false);
                   }}
                   onBlur={() => setEditingSection(false)}
-                  className="w-full rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-none"
+                  className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-hidden"
                 >
                   <option value="">No section</option>
                   {(sections ?? []).map((s) => (
@@ -494,7 +494,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                   type="button"
                   disabled={!canEdit}
                   onClick={() => setEditingSection(true)}
-                  className="flex items-center gap-1.5 rounded px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
+                  className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
                 >
                   {task.section && (
                     <span
@@ -527,7 +527,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
             </p>
             <ul className="space-y-0.5">
               {subtasks.map((s) => (
-                <li key={s.id} className="flex items-center gap-2 rounded px-1 py-1 text-[13px]">
+                <li key={s.id} className="flex items-center gap-2 rounded-sm px-1 py-1 text-[13px]">
                   <button
                     type="button"
                     disabled={!canEdit}
@@ -568,7 +568,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                   onChange={(e) => setNewSubtask(e.target.value)}
                   placeholder="Add subtask"
                   maxLength={200}
-                  className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:outline-none"
+                  className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden"
                 />
               </form>
             )}
@@ -577,7 +577,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
           {error && (
             <div
               role="alert"
-              className="mt-4 rounded border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
+              className="mt-4 rounded-sm border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
             >
               {error}
             </div>
@@ -645,11 +645,11 @@ function PanelComments({ taskId }: { taskId: number }) {
       </h3>
 
       {isLoading && (
-        <div className="h-12 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+        <div className="h-12 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
       )}
 
       {isError && (
-        <div className="rounded border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container">
+        <div className="rounded-sm border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container">
           Could not load comments: {(error as Error).message}
         </div>
       )}
@@ -663,7 +663,7 @@ function PanelComments({ taskId }: { taskId: number }) {
           {comments.map((c) => (
             <li key={c.id} className="flex gap-2.5">
               <AssigneeAvatar user={c.author} size="xs" />
-              <div className="min-w-0 flex-1 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2">
+              <div className="min-w-0 flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2">
                 <div className="mb-0.5 flex items-center justify-between gap-2 text-[12px]">
                   <span className="min-w-0 truncate font-medium text-on-surface">{c.author.username}</span>
                   <span className="shrink-0 text-on-surface-variant">{relativeTime(c.createdAt)}</span>
@@ -685,7 +685,7 @@ function PanelComments({ taskId }: { taskId: number }) {
           onChange={(e) => setBody(e.target.value)}
           maxLength={5000}
           placeholder="Write a comment…"
-          className="min-w-0 flex-1 border-none bg-transparent text-xs text-on-surface outline-none placeholder:text-on-surface-variant/60 focus:outline-none"
+          className="min-w-0 flex-1 border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden"
         />
         <button
           type="submit"

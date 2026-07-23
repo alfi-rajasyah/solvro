@@ -459,7 +459,7 @@ export function ProjectKanban() {
         {COLUMNS.map((c) => (
           <div
             key={c.id}
-            className="h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low"
+            className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low"
           />
         ))}
       </div>
@@ -510,7 +510,7 @@ export function ProjectKanban() {
                     onChange={(e) =>
                       setFilterAssigneeId(e.target.value === "" ? "" : Number(e.target.value))
                     }
-                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-none"
+                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
                   >
                     <option value="">Everyone</option>
                     {(users ?? []).map((u) => (
@@ -527,7 +527,7 @@ export function ProjectKanban() {
                   <select
                     value={filterPriority}
                     onChange={(e) => setFilterPriority(e.target.value as Priority | "")}
-                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-none"
+                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
                   >
                     <option value="">Any priority</option>
                     <option value="LOW">Low</option>
@@ -907,7 +907,7 @@ function TaskCard({
     <div
       onClick={handleClick}
       className={[
-        "touch-manipulation rounded border bg-surface-container-lowest p-3 transition-colors",
+        "touch-manipulation rounded-sm border bg-surface-container-lowest p-3 transition-colors",
         isDragging ? "opacity-40" : "",
         dragging
           ? "rotate-[-1.2deg] border-[1.5px] border-primary shadow-overlay ring-2 ring-primary"
@@ -1069,7 +1069,7 @@ function SubtaskRow({
   return (
     <div
       className={[
-        "flex touch-manipulation items-center gap-1.5 rounded px-0.5 py-0.5 text-[12px]",
+        "flex touch-manipulation items-center gap-1.5 rounded-sm px-0.5 py-0.5 text-[12px]",
         dragging ? "opacity-40" : "",
       ].join(" ")}
     >

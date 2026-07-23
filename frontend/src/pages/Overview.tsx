@@ -32,7 +32,7 @@ export function Overview() {
       {isLoading && <SkeletonGrid />}
 
       {isError && (
-        <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+        <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
           Could not load overview: {(error as Error).message}
         </div>
       )}
@@ -104,7 +104,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
 
       {/* Two-up: attention + recent activity */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded border border-outline-variant bg-surface-container-lowest p-5 lg:col-span-2">
+        <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5 lg:col-span-2">
           <header className="mb-3 flex items-center justify-between">
             <h3 className="font-display text-sm font-bold text-on-surface">Projects needing attention</h3>
             <Link to="/projects" className="text-[11px] font-semibold text-primary hover:underline">
@@ -136,7 +136,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
                         borderLeftStyle: "solid",
                         borderLeftColor: healthColor(p),
                       }}
-                      className="flex items-center gap-3 rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 transition-colors hover:border-primary"
+                      className="flex items-center gap-3 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 transition-colors hover:border-primary"
                     >
                       <span className="font-mono text-[11px] text-on-surface-variant">P-{String(p.id).padStart(3, "0")}</span>
                       <span className="min-w-0 flex-1 truncate text-sm font-semibold text-on-surface">{p.name}</span>
@@ -154,7 +154,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
           )}
         </div>
 
-        <div className="rounded border border-outline-variant bg-surface-container-lowest p-5">
+        <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
           <header className="mb-3 flex items-center justify-between">
             <h3 className="font-display text-sm font-bold text-on-surface">Recent activity</h3>
             <Link to="/projects" className="text-[11px] font-semibold text-primary hover:underline">
@@ -186,7 +186,7 @@ function Kpi({ label, value, hint, icon, tone }: KpiProps) {
           ? "text-amber-600"
           : "text-on-surface-variant";
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
+    <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
         <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
@@ -232,7 +232,7 @@ function ActivityFeed({ projects, tasks }: { projects: OverviewProject[]; tasks:
 
 function EmptyHint({ label }: { label: string }) {
   return (
-    <p className="rounded border border-dashed border-outline-variant px-4 py-6 text-center text-xs text-on-surface-variant">
+    <p className="rounded-sm border border-dashed border-outline-variant px-4 py-6 text-center text-xs text-on-surface-variant">
       {label}
     </p>
   );
@@ -243,13 +243,13 @@ function SkeletonGrid() {
     <>
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-24 animate-pulse rounded bg-surface-container-low" />
+          <div key={i} className="h-24 animate-pulse rounded-sm bg-surface-container-low" />
         ))}
       </div>
-      <div className="h-64 animate-pulse rounded bg-surface-container-low" />
+      <div className="h-64 animate-pulse rounded-sm bg-surface-container-low" />
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="h-64 animate-pulse rounded bg-surface-container-low lg:col-span-2" />
-        <div className="h-64 animate-pulse rounded bg-surface-container-low" />
+        <div className="h-64 animate-pulse rounded-sm bg-surface-container-low lg:col-span-2" />
+        <div className="h-64 animate-pulse rounded-sm bg-surface-container-low" />
       </div>
     </>
   );

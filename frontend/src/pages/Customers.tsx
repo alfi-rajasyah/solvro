@@ -44,7 +44,7 @@ export function Customers() {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-primary transition-colors hover:bg-primary-container"
+            className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-primary transition-colors hover:bg-primary-container"
           >
             <span className="material-symbols-outlined text-base">add</span>
             New customer
@@ -53,7 +53,7 @@ export function Customers() {
       </div>
 
       {deleteError && (
-        <div className="mb-4 rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+        <div className="mb-4 rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
           {deleteError}
         </div>
       )}
@@ -61,7 +61,7 @@ export function Customers() {
       {isLoading && <SkeletonGrid />}
 
       {isError && (
-        <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+        <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
           Could not load customers: {(error as Error).message}
         </div>
       )}
@@ -75,7 +75,7 @@ export function Customers() {
               <button
                 type="button"
                 onClick={() => setCreateOpen(true)}
-                className="inline-flex items-center gap-2 rounded bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
+                className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
               >
                 <span className="material-symbols-outlined text-base">add</span>
                 Add your first customer
@@ -124,11 +124,11 @@ function CustomerCard({
   return (
     <Link
       to={`/customers/${customer.id}`}
-      className="group flex flex-col rounded border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary"
+      className="group flex flex-col rounded-sm border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary"
     >
       <div className="mb-3 flex items-center gap-3">
         <div
-          className="grid h-10 w-10 shrink-0 place-items-center rounded font-display text-base font-bold text-white"
+          className="grid h-10 w-10 shrink-0 place-items-center rounded-sm font-display text-base font-bold text-white"
           style={{ background: avatarColor(customer.name) }}
         >
           {init}
@@ -185,7 +185,7 @@ function CustomerCard({
                 e.preventDefault();
                 onEdit();
               }}
-              className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-primary"
+              className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-primary"
             >
               Edit
             </button>
@@ -195,7 +195,7 @@ function CustomerCard({
                 e.preventDefault();
                 onDelete();
               }}
-              className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
+              className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
             >
               Delete
             </button>
@@ -219,7 +219,7 @@ function SkeletonGrid() {
       {Array.from({ length: 3 }).map((_, i) => (
         <div
           key={i}
-          className="h-40 animate-pulse rounded border border-outline-variant bg-surface-container-low"
+          className="h-40 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low"
         />
       ))}
     </div>

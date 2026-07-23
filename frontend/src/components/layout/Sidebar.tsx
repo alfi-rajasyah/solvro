@@ -79,7 +79,7 @@ export function Sidebar() {
             type="button"
             onClick={toggle}
             aria-label={open ? "Collapse sidebar" : "Expand sidebar"}
-            className="flex h-8 w-8 items-center justify-center rounded text-slate-400 hover:bg-white/5 hover:text-slate-100"
+            className="flex h-8 w-8 items-center justify-center rounded-sm text-slate-400 hover:bg-white/5 hover:text-slate-100"
           >
             <span className="material-symbols-outlined text-lg">
               {open ? "menu_open" : "menu"}
@@ -98,7 +98,7 @@ export function Sidebar() {
               title={open ? undefined : item.label}
               className={({ isActive }) =>
                 [
-                  "group flex items-center rounded transition-colors duration-150",
+                  "group flex items-center rounded-sm transition-colors duration-150",
                   open ? "gap-2.5 px-3 py-2 text-[13px]" : "h-10 w-10 justify-center",
                   isActive
                     ? "bg-primary/20 text-white"

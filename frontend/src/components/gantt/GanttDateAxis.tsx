@@ -115,7 +115,7 @@ export function GanttDateAxis({
         ))}
         {todayPos && (
           <div
-            className="pointer-events-none absolute -bottom-2 flex h-4 items-center rounded-full bg-primary px-2 text-[11px] font-bold text-on-primary shadow"
+            className="pointer-events-none absolute -bottom-2 flex h-4 items-center rounded-full bg-primary px-2 text-[11px] font-bold text-on-primary shadow-sm"
             style={{ left: todayCenterX, transform: "translateX(-50%)", zIndex: 21 }}
             aria-hidden="true"
           >

@@ -51,13 +51,13 @@ export function ProjectTimeline() {
 
   if (isLoading) {
     return (
-      <div className="h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+      <div className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
     );
   }
 
   if (isError) {
     return (
-      <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+      <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
         Could not load tasks: {(error as Error).message}
       </div>
     );
@@ -65,7 +65,7 @@ export function ProjectTimeline() {
 
   if (ordered.length === 0) {
     return (
-      <div className="rounded border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center text-on-surface-variant">
+      <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center text-on-surface-variant">
         <p className="text-sm">No tasks yet. Add tasks from the Kanban board.</p>
       </div>
     );
@@ -127,7 +127,7 @@ function TimelineItem({
               : "bg-surface-container-highest",
         ].join(" ")}
       />
-      <div className="rounded border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary/40">
+      <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary/40">
         <div className="mb-1 flex items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
             <TaskStatusChip status={task.status} />
@@ -177,7 +177,7 @@ function TimelineItem({
                 onClick={() => onChangeStatus(s)}
                 disabled={task.status === s}
                 className={[
-                  "rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider transition-colors",
+                  "rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider transition-colors",
                   task.status === s
                     ? "cursor-default bg-primary text-on-primary"
                     : "border border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary",

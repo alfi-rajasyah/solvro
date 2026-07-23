@@ -340,7 +340,7 @@ export function ProjectList() {
 
   if (tasksLoading || sectionsLoading) {
     return (
-      <div className="h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+      <div className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
     );
   }
 
@@ -383,7 +383,7 @@ export function ProjectList() {
         </div>
       )}
 
-      <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest">
+      <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest">
         {/* Column headers */}
         <div className="hidden grid-cols-[28px_minmax(200px,1fr)_60px_70px_50px_100px] items-center gap-2 border-b border-outline-variant px-3 py-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant md:grid">
           <span></span>
@@ -442,12 +442,12 @@ export function ProjectList() {
               onChange={(e) => setNewSectionName(e.target.value)}
               placeholder="Section name"
               maxLength={100}
-              className="w-64 rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
+              className="w-64 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
             />
             <button
               type="submit"
               disabled={createSection.isPending || !newSectionName.trim()}
-              className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className="rounded-sm bg-primary px-2 py-1 font-display text-label-caps uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
             >
               Add
             </button>
@@ -457,7 +457,7 @@ export function ProjectList() {
                 setAddingSection(false);
                 setNewSectionName("");
               }}
-              className="rounded px-2 py-1 text-[11px] text-on-surface-variant hover:bg-surface-container"
+              className="rounded-sm px-2 py-1 text-[11px] text-on-surface-variant hover:bg-surface-container"
             >
               Cancel
             </button>
@@ -560,11 +560,11 @@ function SectionGroup({
               onChange={(e) => onRenameChange(e.target.value)}
               maxLength={100}
               placeholder={section ? section.name : "Name this section to promote it"}
-              className="w-64 rounded border border-outline-variant bg-surface-container-lowest px-2 py-0.5 text-sm font-semibold focus:border-primary focus:outline-none"
+              className="w-64 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-0.5 text-sm font-semibold focus:border-primary focus:outline-hidden"
             />
             <button
               type="submit"
-              className="rounded bg-primary px-2 py-0.5 font-display text-label-caps uppercase text-on-primary"
+              className="rounded-sm bg-primary px-2 py-0.5 font-display text-label-caps uppercase text-on-primary"
             >
               {section ? "Save" : "Create"}
             </button>
@@ -590,7 +590,7 @@ function SectionGroup({
             <button
               type="button"
               onClick={() => onRename(section)}
-              className="rounded p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+              className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
               title={section ? "Rename section" : "Promote into a real section"}
             >
               <span className="material-symbols-outlined text-[17px]">edit</span>
@@ -599,7 +599,7 @@ function SectionGroup({
               <button
                 type="button"
                 onClick={() => onDelete(section)}
-                className="rounded p-1 text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
+                className="rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
                 title="Delete section"
               >
                 <span className="material-symbols-outlined text-[17px]">delete</span>
@@ -1003,13 +1003,13 @@ function DueDateEditor({
               type="date"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              className="rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs focus:border-primary focus:outline-none"
+              className="rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs focus:border-primary focus:outline-hidden"
             />
             <div className="mt-1.5 flex justify-end gap-1">
               <button
                 type="button"
                 onClick={() => setOpen(false)}
-                className="rounded px-2 py-0.5 text-[11px] text-on-surface-variant hover:bg-surface-container"
+                className="rounded-sm px-2 py-0.5 text-[11px] text-on-surface-variant hover:bg-surface-container"
               >
                 Cancel
               </button>
@@ -1020,7 +1020,7 @@ function DueDateEditor({
                   onSave(startISO, iso);
                   setOpen(false);
                 }}
-                className="rounded bg-primary px-2 py-0.5 text-[11px] font-bold text-on-primary hover:bg-primary/90"
+                className="rounded-sm bg-primary px-2 py-0.5 text-[11px] font-bold text-on-primary hover:bg-primary/90"
               >
                 Save
               </button>

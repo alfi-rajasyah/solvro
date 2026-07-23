@@ -61,7 +61,7 @@ export function Tasks() {
         </p>
       </div>
 
-      <div className="mb-4 flex flex-wrap items-end gap-3 rounded border border-outline-variant bg-surface-container-lowest p-3">
+      <div className="mb-4 flex flex-wrap items-end gap-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-3">
         <FilterSelect
           label="Status"
           value={filter.status ?? ""}
@@ -123,7 +123,7 @@ export function Tasks() {
         <button
           type="button"
           onClick={() => setFilter({ topLevel: true })}
-          className="ml-auto rounded border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+          className="ml-auto rounded-sm border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
         >
           Reset
         </button>
@@ -140,7 +140,7 @@ export function Tasks() {
       )}
 
       {sorted.length > 0 && (
-        <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest">
+        <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest">
           <table className="w-full text-xs">
             <thead className="border-b border-outline-variant bg-surface-container-low text-on-surface-variant">
               <tr className="text-left">
@@ -172,7 +172,7 @@ export function Tasks() {
       )}
 
       {!isLoading && sorted.length === 0 && (
-        <div className="rounded border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center text-on-surface-variant">
+        <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center text-on-surface-variant">
           <p className="text-sm">No tasks match the current filters.</p>
         </div>
       )}
@@ -294,7 +294,7 @@ function FilterSelect({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
+        className="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
       >
         <option value="">Any</option>
         {options.map(([v, lbl]) => (
