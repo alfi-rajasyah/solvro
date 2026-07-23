@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-23 — Label creation no longer submits/wipes the task form (GH #56, plan Task 1)
+
+- Creating a label from inside the task drawer no longer submits the surrounding task form — `LabelPicker`'s creation UI was a `<form>` nested inside `#task-form`, and React's bubbling submit prematurely created the task, closed the drawer, and destroyed every in-progress field (`frontend/src/components/LabelPicker.tsx`; GH #56). The Add action is now a plain button + Enter handler.
+- Task drawer no longer wipes in-progress input when its parent re-renders — the form-reset effect depended on the whole `props` object (fresh identity every render); it now depends on stable primitives only (`frontend/src/components/TaskFormModal.tsx`; GH #56).
+- New regression spec `e2e/tests/task-form-labels.spec.ts` covering both paths (Add click + Enter) and, end to end, that a real "Create task" submit still creates exactly one task carrying both labels created during the draft.
+
 ### Changed — 2026-07-23 — Gantt "Color by" dropdown + sustained legend (plan Task 3)
 
 - Gantt toolbar color control is now a labeled "Color by" dropdown (native select, theme tokens) replacing the unlabeled segmented buttons (`frontend/src/components/gantt/GanttFrame.tsx`).
