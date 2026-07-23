@@ -92,7 +92,7 @@ export interface ProjectSummary {
   name: string;
   description: string | null;
   status: ProjectStatus;
-  saId: number;
+  saId: number | null;
   tamId: number;
   customerId: number | null;
   wipLimits: WipLimits | null;
@@ -102,14 +102,14 @@ export interface ProjectSummary {
   baselineLockedById: number | null;
   createdAt: string;
   updatedAt: string;
-  sa: { id: number; username: string };
+  sa: { id: number; username: string } | null;
   tam: { id: number; username: string };
   customer: { id: number; name: string } | null;
   _count: { tasks: number };
 }
 
 export interface ProjectDetail extends ProjectSummary {
-  sa: { id: number; username: string; email: string };
+  sa: { id: number; username: string; email: string } | null;
   tam: { id: number; username: string; email: string };
   customer: { id: number; name: string } | null;
   baselineLockedBy: { id: number; username: string } | null;
@@ -163,7 +163,7 @@ export interface OverviewProject {
   status: ProjectStatus;
   updatedAt: string;
   tam: { id: number; username: string };
-  sa: { id: number; username: string };
+  sa: { id: number; username: string } | null;
   _count: { tasks: number };
 }
 
@@ -362,7 +362,7 @@ export function useTasks(filter: TasksFilter = {}) {
 export interface CreateProjectInput {
   name: string;
   description?: string;
-  saId: number;
+  saId?: number;
   tamId?: number;
   customerId: number;
   status?: ProjectStatus;
@@ -387,7 +387,7 @@ export interface UpdateProjectInput {
   name?: string;
   description?: string | null;
   status?: ProjectStatus;
-  saId?: number;
+  saId?: number | null;
   tamId?: number;
   customerId?: number;
   wipLimits?: WipLimits | null;
@@ -1010,12 +1010,12 @@ export interface AdminProject {
   name: string;
   description: string | null;
   status: ProjectStatus;
-  saId: number;
+  saId: number | null;
   tamId: number;
   customerId: number | null;
   createdAt: string;
   updatedAt: string;
-  sa: { id: number; username: string };
+  sa: { id: number; username: string } | null;
   tam: { id: number; username: string };
   customer: { id: number; name: string } | null;
   _count: { tasks: number };

@@ -116,10 +116,10 @@ model Project {
   id                 Int           @id @default(autoincrement())
   name               String
   description        String?
-  saId               Int           @map("sa_id")
+  saId               Int?          @map("sa_id")
   tamId              Int           @map("tam_id")
   customerId         Int?          @map("customer_id")
-  sa                 User          @relation("ProjectSA", fields: [saId], references: [id])
+  sa                 User?         @relation("ProjectSA", fields: [saId], references: [id])
   tam                User          @relation("ProjectTAM", fields: [tamId], references: [id])
   customer           Customer?     @relation(fields: [customerId], references: [id], onDelete: SetNull)
   status             ProjectStatus @default(PLANNING)
