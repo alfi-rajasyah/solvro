@@ -105,7 +105,7 @@ export function Reports() {
           {selected ? (
             <ExportPanel key={selected.id} project={selected} />
           ) : (
-            <div className="flex h-full min-h-[16rem] items-center justify-center rounded border border-dashed border-outline-variant px-6 text-center text-sm text-on-surface-variant">
+            <div className="flex h-full min-h-64 items-center justify-center rounded border border-dashed border-outline-variant px-6 text-center text-sm text-on-surface-variant">
               Select a project to generate its export packet.
             </div>
           )}

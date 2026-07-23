@@ -103,17 +103,17 @@ export function Login() {
         {/* Decorative rings */}
         <div
           aria-hidden
-          className="pointer-events-none absolute rounded-full border border-primary/[0.12]"
+          className="pointer-events-none absolute rounded-full border border-primary/12"
           style={{ width: 280, height: 280, top: -80, right: -80 }}
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute rounded-full border border-primary/[0.12]"
+          className="pointer-events-none absolute rounded-full border border-primary/12"
           style={{ width: 200, height: 200, bottom: -60, left: -60 }}
         />
         <div
           aria-hidden
-          className="pointer-events-none absolute rounded-full border border-primary/[0.06]"
+          className="pointer-events-none absolute rounded-full border border-primary/6"
           style={{ width: 120, height: 120, bottom: 80, right: 20 }}
         />
 

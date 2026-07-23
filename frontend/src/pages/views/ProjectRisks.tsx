@@ -290,7 +290,7 @@ function RiskRow({
   const score = risk.probability * risk.impact;
   return (
     <tr className="hover:bg-surface-container-low">
-      <td className="max-w-[28rem] px-3 py-2 align-top">
+      <td className="max-w-md px-3 py-2 align-top">
         <button
           type="button"
           onClick={onEdit}

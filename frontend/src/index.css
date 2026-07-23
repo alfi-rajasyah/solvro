@@ -1,6 +1,8 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
+/* TEMPORARY Task 1 shim — lets @apply resolve config-defined utilities
+   (bg-background, font-display) until Task 2's @theme port. Task 2 deletes
+   this line together with tailwind.config.ts. */
+@config "../tailwind.config.ts";
 
 @layer base {
   /* Light theme — off-white surfaces, Elitery Green primary darkened to

@@ -1036,7 +1036,7 @@ function SortableSubtaskRow({
   return (
     <li ref={setNodeRef} style={style} className="relative">
       {isOver && !isDragging && (
-        <div className="pointer-events-none absolute -top-[3px] left-0 right-0 z-10 h-0.5 rounded-full bg-primary" />
+        <div className="pointer-events-none absolute top-[-3px] left-0 right-0 z-10 h-0.5 rounded-full bg-primary" />
       )}
       <SubtaskRow
         task={task}
@@ -1126,7 +1126,7 @@ function MobileMoveSheet({
   onMove: (status: TaskStatus) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-end md:hidden" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-100 flex items-end md:hidden" onMouseDown={onClose}>
       <div className="absolute inset-0 bg-inverse-surface/40 backdrop-blur-sm" />
       <div
         className="relative w-full rounded-t-2xl border-t border-outline-variant bg-surface-container p-4"

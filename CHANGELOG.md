@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-24 — Tailwind v4 toolchain swap (Plan A Task 1)
+
+- Frontend build moved to Tailwind CSS 4 via `@tailwindcss/vite` (`frontend/vite.config.ts`); `postcss.config.js`, `postcss`, `autoprefixer` removed (v4 handles both). Official upgrade codemod applied v4 canonicalizations across `frontend/src/` (`flex-shrink-0`→`shrink-0`, `break-words`→`wrap-break-word`, arbitrary-value cleanups like `z-[100]`→`z-100`, opacity fractions `/[0.04]`→`/4`). Bare `rounded`/`shadow`/`outline-none` were intentionally NOT renamed: the temporary `@config` shim keeps their v3 semantics for now — the renames land in the Task 2 theme port where the shim is removed.
+- `frontend/src/index.css` carries a **temporary** `@config "../tailwind.config.ts";` compatibility shim alongside the new `@import "tailwindcss";` — needed because `@apply bg-background`/`@apply font-display` reference config-only custom utilities that v4 can't resolve without either this shim or the `@theme` port; the upgrade codemod crashes without it (`Cannot apply unknown utility class 'bg-background'`). Task 2 removes this shim together with `tailwind.config.ts` once the CSS-first `@theme` port lands — do not treat it as permanent.
+
 ### Changed — 2026-07-24 — Decision reversal: ReUI Gantt swap approved (docs only, no code change)
 
 - The 2026-07-22 "skip shadcn / ReUI" decision is reversed: a full swap of the hand-rolled Gantt to ReUI's vendored Gantt is approved at full parity (dependency arrows, baselines, milestones, Excel/PDF export), with a full shadcn bootstrap and a Tailwind v3→v4 frontend migration as prerequisite. Grounded in a source-level audit of the ReUI component (shadcn registry pull, 9 files) that confirmed the original four feature gaps and surfaced the Tailwind v4 requirement. Spec and implementation plans live in `docs/superpowers/` (local-only; the directory is now gitignored with the rest of the planning layer — `.gitignore`). Local CLAUDE.md Facts and `docs/ideas/gantt-bar-reskin.md` amended accordingly.
