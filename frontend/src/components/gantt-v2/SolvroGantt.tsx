@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseISO } from "date-fns";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { useGanttExport } from "@/lib/gantt/exportContext";
+import { addDays, buildRows, rowsDateRange, startOfDay, type Row } from "@/lib/gantt/geometry";
 import {
   DEFAULT_SECTION_COLOR,
   legendEntries,
@@ -81,6 +83,29 @@ const COLOR_BY_STORAGE_KEY = "solvro.gantt.colorBy";
 // Ported verbatim from GanttFrame.tsx:76.
 const LEGEND_CAP = 6;
 
+// Plan B Task 7 (fix pass) — geometry's buildRows() takes a collapsed-row Set
+// keyed by the OLD engine's row-id shape (geometry.ts:458-467: section groups
+// are `sec-<id>` / `sec-none`; task-with-subtask groups are `task-<id>`,
+// geometry.ts:413). ReUI's own controlled collapse API (`collapsedGroups`/
+// `onCollapsedGroupsChange`, gantt.tsx:1344-1348) reports ids in the
+// RESOURCE-NODE id shape instead (adapter.ts's `sectionNodeId`/`taskNodeId`:
+// `section-<id>` / `section-none` for sections, `task-<id>` for tasks) — the
+// task-id shape happens to already match geometry.ts's, but the section
+// prefix differs ("section-" vs "sec-"), so a straight pass-through would
+// silently fail to collapse any section row in the export. This maps ReUI's
+// ids onto geometry's shape; task ids pass through unchanged.
+function toGeometryCollapsedIds(resourceIds: string[]): Set<string> {
+  return new Set(
+    resourceIds.map((id) =>
+      id === "section-none"
+        ? "sec-none"
+        : id.startsWith("section-")
+          ? `sec-${id.slice("section-".length)}`
+          : id,
+    ),
+  );
+}
+
 /**
  * Port of GanttFrame.tsx:356-364's `yearsCovered` memo, re-derived from the
  * adapter's Date-valued events instead of the old geometry module's padded
@@ -128,6 +153,13 @@ export function SolvroGantt(props: SolvroGanttProps) {
 
   const [scale, setScale] = useState<GanttScale>("week");
   const [showBaseline, setShowBaseline] = useState(false);
+  // Plan B Task 7 (fix pass) — controlled collapse state, wired into
+  // <Gantt>'s `collapsedGroups`/`onCollapsedGroupsChange` (gantt.tsx:1344-
+  // 1348) below. Default `[]` (fully expanded) matches the old engine's
+  // initial `collapsed` Set (GanttFrame.tsx:158). Fed into the export effect
+  // (via `toGeometryCollapsedIds`, above) so exports match on-screen collapse
+  // exactly like the old engine did — see CHANGELOG.md's Task 7 entry.
+  const [collapsedGroups, setCollapsedGroups] = useState<string[]>([]);
   // Ported verbatim from GanttFrame.tsx:151-157, including its actual default
   // ("section", not "status" — the skeleton's stated default of "status"
   // disagrees with the shipped GanttFrame.tsx behavior this task is porting
@@ -144,6 +176,21 @@ export function SolvroGantt(props: SolvroGanttProps) {
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Export menu — ported verbatim from GanttFrame.tsx:104-107,123-132.
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+  const [exporting, setExporting] = useState<"excel" | "pdf" | null>(null);
+  const exportMenuRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!exportMenuOpen) return;
+    function onDocPointer(e: PointerEvent) {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setExportMenuOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", onDocPointer);
+    return () => document.removeEventListener("pointerdown", onDocPointer);
+  }, [exportMenuOpen]);
 
   // Baseline lock flow — ported verbatim from GanttFrame.tsx:97-121, 1033-1123.
   const [confirmingBaseline, setConfirmingBaseline] = useState(false);
@@ -170,6 +217,28 @@ export function SolvroGantt(props: SolvroGanttProps) {
   const { data: holidays = [] } = useHolidays(years);
 
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+
+  // Plan B Task 7 (fix pass) — export input, built the same way the old
+  // engine built its export `rows` (GanttFrame.tsx:324-329): geometry's row
+  // builder over the SAME tasks/sections this container already queried,
+  // fed the SAME collapse state driving the on-screen tree (mapped into
+  // geometry's row-id shape via `toGeometryCollapsedIds`, above) — full
+  // parity with the old engine, where `collapsed` drove both the live tree
+  // AND the export input. `Row.task` carries the full `Task` object
+  // unfiltered, so baseline fields (baselineStartDate/baselineDueDate)
+  // already ride along for whenever the export layer wants them — it
+  // doesn't reference them today (verified: neither exportExcel.ts nor
+  // exportPdf.ts read baseline* fields at all, locked or not), so there's
+  // nothing to wire up here beyond not filtering the Task object down.
+  const exportCollapsed = useMemo(
+    () => toGeometryCollapsedIds(collapsedGroups),
+    [collapsedGroups],
+  );
+  const exportRows = useMemo<Row[]>(
+    () => buildRows({ tasks, sections, collapsed: exportCollapsed }),
+    [tasks, sections, exportCollapsed],
+  );
+  const exportDateRange = useMemo(() => rowsDateRange(exportRows), [exportRows]);
 
   // Plan B Task 5 — drag/resize commit. `events` is a controlled prop (see
   // the removed comment this replaces), so nothing here needs to touch local
@@ -438,6 +507,110 @@ export function SolvroGantt(props: SolvroGanttProps) {
     ];
   }, [sections, taskById, canEdit, handleUpdateDates, handleSetSectionColor]);
 
+  // Plan B Task 7 — register Excel/PDF export handlers in the shared context
+  // (`GanttExportProvider`, mounted by ProjectDetail.tsx around the whole
+  // route Outlet) so both this toolbar's own Export button AND the
+  // RightSidebar's "Export schedule" section (mounted as a sibling, not a
+  // child, of this component) can trigger the same handlers. Ported from
+  // GanttFrame.tsx:597-684 — `exportGanttToExcel`/`exportGanttToPdf` and the
+  // heavy libs they dynamically import (exceljs, jspdf, jspdf-autotable)
+  // stay out of the main bundle via a dynamic import() of the wrapper
+  // modules themselves, one level more aggressive than the old engine's
+  // static top-level import (which relied solely on exceljs/jspdf being
+  // dynamically imported *inside* those modules — still true, this just adds
+  // a second layer of chunk separation for the wrapper modules too).
+  const { handlers: exportHandlers, register } = useGanttExport();
+  useEffect(() => {
+    if (exportRows.length === 0) {
+      register(null);
+      return;
+    }
+    // Excel/PDF export uses a tight ±7-day window around the actual task
+    // range, not some padded chart window — otherwise the date grid is
+    // dominated by empty columns. With no dated tasks (exportDateRange null)
+    // the same tight window is anchored on today, resolved at export time so
+    // a tab left open across day boundaries doesn't pin a stale anchor.
+    const exportWindow = () => {
+      const anchor = startOfDay(new Date());
+      return {
+        start: startOfDay(addDays(exportDateRange ? exportDateRange.min : anchor, -7)),
+        end: startOfDay(addDays(exportDateRange ? exportDateRange.max : anchor, 7)),
+      };
+    };
+    register({
+      excel: async () => {
+        try {
+          const { start, end } = exportWindow();
+          const { exportGanttToExcel } = await import("@/lib/gantt/exportExcel");
+          await exportGanttToExcel({
+            projectName,
+            rows: exportRows,
+            chartStart: start,
+            chartEnd: end,
+            holidays,
+            colorBy,
+          });
+        } catch (err) {
+          setActionError(err instanceof Error ? err.message : "Excel export failed.");
+          throw err;
+        }
+      },
+      pdf: async () => {
+        try {
+          const { start, end } = exportWindow();
+          const { exportGanttToPdf } = await import("@/lib/gantt/exportPdf");
+          await exportGanttToPdf({
+            projectName,
+            rows: exportRows,
+            exportStart: start,
+            exportEnd: end,
+            holidays,
+            colorBy,
+          });
+        } catch (err) {
+          setActionError(err instanceof Error ? err.message : "PDF export failed.");
+          throw err;
+        }
+      },
+      pdfTab: async (win) => {
+        try {
+          const { start, end } = exportWindow();
+          const { exportGanttToPdf } = await import("@/lib/gantt/exportPdf");
+          await exportGanttToPdf({
+            projectName,
+            rows: exportRows,
+            exportStart: start,
+            exportEnd: end,
+            holidays,
+            colorBy,
+            tabWindow: win,
+          });
+        } catch (err) {
+          setActionError(err instanceof Error ? err.message : "PDF view failed.");
+          throw err;
+        }
+      },
+    });
+    return () => register(null);
+  }, [register, projectName, exportRows, exportDateRange, holidays, colorBy]);
+
+  const runExport = useCallback(
+    async (kind: "excel" | "pdf") => {
+      if (!exportHandlers || exporting) return;
+      setActionError(null);
+      setExporting(kind);
+      setExportMenuOpen(false);
+      try {
+        await exportHandlers[kind]();
+      } catch (err) {
+        setActionError(err instanceof Error ? err.message : "Export failed.");
+      } finally {
+        setExporting(null);
+      }
+    },
+    [exportHandlers, exporting],
+  );
+
   const apiRef = useRef<GanttApi<Task> | null>(null);
 
   const legend = useMemo(() => legendEntries(colorBy, sections), [colorBy, sections]);
@@ -594,18 +767,36 @@ export function SolvroGantt(props: SolvroGanttProps) {
               {baselineLockedAt ? "Reset baseline" : "Lock baseline"}
             </button>
           )}
-          {/* Export (Excel/PDF) wiring is Task B7 — stubbed disabled rather
-              than omitted so the toolbar doesn't visually regress ahead of
-              that task landing. */}
-          <button
-            type="button"
-            disabled
-            title="Export — wired in Plan B Task 7"
-            className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant opacity-50"
-          >
-            <span className="material-symbols-outlined text-[15px]">download</span>
-            Export
-          </button>
+          {/* Export (Excel/PDF) — ported from GanttFrame.tsx:882-910. */}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              type="button"
+              onClick={() => setExportMenuOpen((v) => !v)}
+              disabled={!exportHandlers || exporting !== null}
+              className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-[15px]">download</span>
+              {exporting ? "Exporting…" : "Export"}
+            </button>
+            {exportMenuOpen && (
+              <div className="absolute right-0 top-full z-50 mt-1 w-32 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-lg">
+                <button
+                  type="button"
+                  onClick={() => runExport("excel")}
+                  className="block w-full px-3 py-1.5 text-left text-[12px] text-on-surface hover:bg-surface-container-low"
+                >
+                  Excel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => runExport("pdf")}
+                  className="block w-full px-3 py-1.5 text-left text-[12px] text-on-surface hover:bg-surface-container-low"
+                >
+                  PDF
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
@@ -685,6 +876,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
             columns={columns}
             rowCheckboxes={false}
             zoomControl={false}
+            // Plan B Task 7 (fix pass) — controlled collapse (gantt.tsx:1344-
+            // 1348), fed straight through to the export effect above so
+            // exports match on-screen collapse exactly like the old engine
+            // did. Ids are resource-node ids (adapter.ts's sectionNodeId/
+            // taskNodeId), mapped to geometry.ts's row-id shape via
+            // toGeometryCollapsedIds before reaching buildRows().
+            collapsedGroups={collapsedGroups}
+            onCollapsedGroupsChange={setCollapsedGroups}
             // Plan B Task 4: renderEvent hands every bar's inner content to
             // SolvroBar; barLabel="inside" (already the engine default, made
             // explicit) disables ReUI's own width-threshold outside-label
