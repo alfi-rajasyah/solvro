@@ -110,8 +110,75 @@ function useLabelFits(title: string) {
 
 const LABEL_TEXT_CLASSNAME = "truncate text-[11px] font-medium leading-none";
 
+// Plan B Task 6 — connect dots. Visual spec adapted from the old engine
+// (frontend/src/components/gantt/GanttBar.tsx:424-441,463-494): a 12px
+// white-bordered primary circle, hidden until the bar is hovered,
+// `cursor-crosshair`. `group-hover/gantt-bar-group` is the SAME hover group
+// gantt-bar.tsx's own resize handles react to (gantt-bar.tsx:226,242), so
+// dots and resize handles fade in together.
+//
+// Positioning — deliberately NOT centered on the edge (fix pass, post-
+// review): gantt-bar.tsx's resize handle occupies `start-0.5 w-2` /
+// `end-0.5 w-2` — i.e. [2px, 10px] measured INWARD from each edge
+// (gantt-bar.tsx:226,242). A dot centered on the edge line (old engine's own
+// `transform: translate(-50%, -50%)` convention) would span [-6px, +6px]
+// from that same edge — a [2px, 6px] overlap with the handle where, being
+// later in paint order, the dot wins every pointerdown and the resize
+// handle becomes ungrabbable in that band (worse on touch, no hover cue).
+// Fixed by pushing each dot fully OUTSIDE the bar instead, with a 4px gap
+// (same gap constant the old engine's MILESTONE dots used, GanttBar.tsx:329:
+// `cx - half - 4`): left dot spans [-16px, -4px] from the bar's left edge
+// (`start-0` + `-translate-x-[16px]`, i.e. the dot's own 12px box shifted
+// 16px outward), right dot spans [+4px, +16px] from the right edge
+// (mirrored). Both spans are entirely negative/positive relative to the
+// handle's [2px, 10px] INWARD span — zero overlap, verified by inspection:
+// dot ranges never intersect [2, 10] because they don't cross 0 at all.
+//
+// The dot itself carries NO drag logic — `GanttOverlay.tsx` owns the entire
+// drag-create lifecycle via a document-level CAPTURE-phase pointerdown
+// listener keyed on `[data-connect-dot]` (capture fires before this bubble
+// handler, so it always sees the press even though this handler goes on to
+// stopPropagation()). The dot's only job here is that stopPropagation — it
+// stops the press from *also* reaching gantt-bar.tsx's own onPointerDown
+// (`gestures.beginMove`), which would otherwise start a bar-move drag on the
+// same gesture. Sitting outside the bar doesn't change that — the dot is
+// still a descendant of the button, so the press still bubbles into it.
+function ConnectDots() {
+  return (
+    <>
+      <span
+        data-connect-dot
+        data-connect-side="left"
+        aria-hidden
+        title="Drag from another task to make this task depend on it"
+        className="border-white bg-primary absolute top-1/2 start-0 z-10 size-3 -translate-x-[16px] -translate-y-1/2 cursor-crosshair rounded-full border-2 opacity-0 shadow-xs transition-opacity group-hover/gantt-bar-group:opacity-100 pointer-coarse:opacity-100"
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+      />
+      <span
+        data-connect-dot
+        data-connect-side="right"
+        aria-hidden
+        title="Drag to a task to create a dependency"
+        className="border-white bg-primary absolute top-1/2 end-0 z-10 size-3 translate-x-[16px] -translate-y-1/2 cursor-crosshair rounded-full border-2 opacity-0 shadow-xs transition-opacity group-hover/gantt-bar-group:opacity-100 pointer-coarse:opacity-100"
+        onPointerDown={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+        }}
+      />
+    </>
+  );
+}
+
+export interface SolvroBarProps extends GanttRenderEventProps<Task> {
+  /** Gates connect-dot rendering — read-only users get no drag-create affordance. */
+  canEdit: boolean;
+}
+
 /** Solvro's bar content — see the file-level comment for the full picture. */
-export function SolvroBar({ occurrence, segment, isSelected }: GanttRenderEventProps<Task>) {
+export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBarProps) {
   const event = occurrence.event;
   const title = event.title;
   // Hook called unconditionally, before any branch/early-return, so every
@@ -133,6 +200,12 @@ export function SolvroBar({ occurrence, segment, isSelected }: GanttRenderEventP
 
   const task = event.data;
   if (!task) return null;
+
+  // Rollups are excluded above; every remaining event here is `readOnly:
+  // !canEdit` (adapter.ts's taskToEvent), so this is currently equivalent to
+  // just `canEdit` — checked explicitly anyway in case a future per-task
+  // readOnly override diverges from the global flag.
+  const showConnectDots = canEdit && !event.readOnly;
 
   const color = event.color ?? DEFAULT_SECTION_COLOR;
   const textColor = insideLabelTextColor(color);
@@ -182,6 +255,10 @@ export function SolvroBar({ occurrence, segment, isSelected }: GanttRenderEventP
         <span aria-hidden className={LABEL_TEXT_CLASSNAME} style={{ color: textColor }}>
           {title}
         </span>
+        {/* Milestones have connector dots too — parity with the old engine's
+            GanttBar.tsx milestone branch (:323-354), which rendered its own
+            pair alongside the diamond. */}
+        {showConnectDots && <ConnectDots />}
       </span>
     );
   }
@@ -266,6 +343,7 @@ export function SolvroBar({ occurrence, segment, isSelected }: GanttRenderEventP
           <span className={LABEL_TEXT_CLASSNAME}>{title}</span>
         </span>
       )}
+      {showConnectDots && <ConnectDots />}
     </span>
   );
 }

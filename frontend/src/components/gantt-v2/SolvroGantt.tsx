@@ -9,8 +9,11 @@ import {
   type ColorByMode,
 } from "@/lib/gantt/palette";
 import {
+  type CreateDependencyInput,
   type Task,
+  useCreateDependency,
   useCreateSection,
+  useDeleteDependency,
   useHolidays,
   useLockBaseline,
   useProjectDependencies,
@@ -39,6 +42,7 @@ import {
   sectionNodeId,
   taskNodeId,
 } from "./adapter";
+import { GanttOverlay } from "./GanttOverlay";
 import { SolvroBar } from "./SolvroBar";
 import { SectionColorCell, TaskDatesCell } from "./TreeCells";
 
@@ -108,15 +112,19 @@ export function SolvroGantt(props: SolvroGanttProps) {
 
   const { data: tasks = [], isLoading, isError, error } = useProjectTasks(projectId);
   const { data: sections = [] } = useProjectSections(projectId);
-  // Connector arrows are Task B6 (overlay). The query is wired here now —
-  // matching this task's stated interface — purely to warm the cache ahead
-  // of that task; its result is intentionally not consumed yet.
-  useProjectDependencies(projectId);
+  // Plan B Task 6 — the overlay (connectors, drag-create, baselines) is the
+  // consumer this query was wired ahead of in Task 4/5; now actually used.
+  const { data: dependencies = [] } = useProjectDependencies(projectId);
 
   const updateTask = useUpdateTask(projectId);
   const updateSection = useUpdateSection(projectId);
   const createSection = useCreateSection(projectId);
   const lockBaseline = useLockBaseline(projectId);
+  // Invalidate-only (queries.ts:1308,1336) — no optimistic connector add/
+  // remove, matching the old engine's dependency mutations exactly.
+  const createDependency = useCreateDependency(projectId);
+  const deleteDependency = useDeleteDependency(projectId);
+  const ganttContainerRef = useRef<HTMLDivElement | null>(null);
 
   const [scale, setScale] = useState<GanttScale>("week");
   const [showBaseline, setShowBaseline] = useState(false);
@@ -331,6 +339,35 @@ export function SolvroGantt(props: SolvroGanttProps) {
       return;
     },
     [canEdit, resources, sections, tasks, taskById, updateTask, updateSection],
+  );
+
+  // Plan B Task 6 — connector create/delete, wired into GanttOverlay as
+  // plain callback props (it holds no React Query hooks of its own). Mirrors
+  // GanttFrame.tsx:308-322's handleDeleteDependency and the createDep.mutate
+  // call inside its handleConnectStart (:268-288) — same error surfacing via
+  // the shared `actionError` banner.
+  const handleCreateDependency = useCallback(
+    (input: CreateDependencyInput) => {
+      setActionError(null);
+      createDependency.mutate(input, {
+        onError: (err) => {
+          setActionError(err instanceof ApiError ? err.message : "Could not create dependency.");
+        },
+      });
+    },
+    [createDependency],
+  );
+
+  const handleDeleteDependency = useCallback(
+    (id: number) => {
+      setActionError(null);
+      deleteDependency.mutate(id, {
+        onError: (err) => {
+          setActionError(err instanceof ApiError ? err.message : "Could not delete dependency.");
+        },
+      });
+    },
+    [deleteDependency],
   );
 
   const handleUpdateDates = useCallback(
@@ -629,7 +666,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
       )}
 
       {!isLoading && !isError && resources.length > 0 && (
-        <div className="min-h-0 flex-1">
+        <div ref={ganttContainerRef} className="min-h-0 flex-1">
           <Gantt<Task>
             apiRef={apiRef}
             events={events}
@@ -653,7 +690,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
             // explicit) disables ReUI's own width-threshold outside-label
             // flip so SolvroBar's measured-fit check is the only placement
             // decision in play — see SolvroBar.tsx's file header.
-            renderEvent={(renderProps) => <SolvroBar {...renderProps} />}
+            renderEvent={(renderProps) => <SolvroBar {...renderProps} canEdit={canEdit} />}
             classNames={{ event: SOLVRO_EVENT_CLASSNAMES }}
             barLabel="inside"
             renderResourceLabel={({ resource }) => (
@@ -688,6 +725,19 @@ export function SolvroGantt(props: SolvroGanttProps) {
           >
             <GanttView />
           </Gantt>
+          {/* Plan B Task 6 — chart-space overlay (dependency connectors,
+              drag-create, baselines). A sibling of <Gantt>, not a child of
+              it: it needs no gantt-context hooks, only the DOM the vendored
+              tree already committed, reached via containerRef + a portal. */}
+          <GanttOverlay
+            containerRef={ganttContainerRef}
+            dependencies={dependencies}
+            events={events}
+            showBaseline={showBaseline}
+            canEdit={canEdit}
+            onCreate={handleCreateDependency}
+            onDelete={handleDeleteDependency}
+          />
         </div>
       )}
 
