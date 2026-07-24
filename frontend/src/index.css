@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "tw-animate-css";
 
 /* Class-driven dark mode — theme.tsx toggles `.dark` on <html>; this variant
    replaces the v3 `darkMode: "class"` config. */
@@ -111,6 +112,31 @@
   --spacing-sidebar: 260px;
   --spacing-sidebar-collapsed: 4rem;
   --spacing-context-panel: 320px;
+}
+
+/* shadcn semantic names → Technical Precision. Vendored shadcn/ReUI
+   components use bg-background / text-muted-foreground / border-border etc.;
+   this bridge is the single enforcement point that keeps them on DESIGN.md
+   values in both themes. NOTE: shadcn's --color-background / --color-primary
+   definitions coincide with the Solvro tokens already defined above — the
+   entries here only add the names Solvro doesn't have yet. */
+@theme inline {
+  --color-foreground: rgb(var(--on-surface));
+  --color-card: rgb(var(--surface-container-low));
+  --color-card-foreground: rgb(var(--on-surface));
+  --color-popover: rgb(var(--surface-container));
+  --color-popover-foreground: rgb(var(--on-surface));
+  --color-primary-foreground: rgb(var(--on-primary));
+  --color-secondary-foreground: rgb(var(--on-secondary));
+  --color-muted: rgb(var(--surface-container));
+  --color-muted-foreground: rgb(var(--on-surface-variant));
+  --color-accent: rgb(var(--surface-container-high));
+  --color-accent-foreground: rgb(var(--on-surface));
+  --color-destructive: rgb(var(--error));
+  --color-destructive-foreground: rgb(var(--on-error));
+  --color-border: rgb(var(--outline-variant));
+  --color-input: rgb(var(--outline-variant));
+  --color-ring: rgb(var(--primary));
 }
 
 @layer base {
