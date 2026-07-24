@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-24 — shadcn ui primitives for the Gantt swap (Plan A Task 4)
+
+- Vendored via shadcn CLI into `frontend/src/components/ui/`: button, calendar, checkbox, context-menu, dropdown-menu, popover, scroll-area, tooltip (+ their npm peer deps: `radix-ui` ^1.6.5, `date-fns` ^4.4.0, `react-day-picker` ^10.0.1, `class-variance-authority` ^0.7.1, `lucide-react` ^1.26.0). Required imports of the ReUI Gantt (Plan B). Themed via the Task 3 semantic bridge, not per-file edits. `class-variance-authority` and `lucide-react` are imported by the generated components (`checkbox.tsx`, `context-menu.tsx`, `dropdown-menu.tsx`, `calendar.tsx`, `button.tsx`) but the shadcn CLI (v4.14.1) omitted them from `package.json`/`package-lock.json` — added by hand via `npm install` in the same change; `typecheck` and `build` fail without them. `components.json` and `frontend/src/index.css` were untouched by the CLI (Task 3's bridge already covered every semantic token the components needed) — verified via `git diff`.
+
 ### Added — 2026-07-24 — shadcn bootstrap (Plan A Task 3)
 
 - `frontend/components.json`, `cn()` at `frontend/src/lib/utils.ts` (`clsx` + `tailwind-merge`), `tw-animate-css`, and a `@theme inline` bridge in `frontend/src/index.css` mapping shadcn semantic color names onto Technical Precision tokens (both themes). Reverses the 2026-07-22 "no shadcn stack" stance per the 2026-07-24 spec.
