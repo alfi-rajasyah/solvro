@@ -1,0 +1,705 @@
+import { test, expect, loginViaUi, apiBase, mouseDrag, gripFor, center } from "../fixtures/test";
+import { getTasks, isoDateOffset, type SeededTask } from "../fixtures/seed";
+import type { Locator, Page } from "@playwright/test";
+
+// Plan B Task 8 — new-engine parity coverage for the ReUI-engined Gantt
+// (SolvroGantt.tsx / GanttOverlay.tsx / SolvroBar.tsx). Every behavior here
+// was hand-rolled DOM/geometry in the old engine (frontend/src/components/
+// gantt/) and is now a mix of the vendored ReUI engine's own DOM contract
+// (`[data-slot="gantt-bar"]`, `[data-slot="gantt-resize-handle"]`,
+// `[data-slot="gantt-row-grip"]`) and Solvro's own additions on top
+// (`[data-task-id]`, `[data-milestone]`, `[data-rollup]`,
+// `[data-connector-id]`, `[data-connect-dot]`, `[data-baseline-rect]`).
+//
+// Every task created in these tests is dated relative to "today"
+// (isoDateOffset — fixtures/seed.ts) rather than a fixed calendar date: the
+// engine anchors its initial rendered window on `new Date()` and does not
+// expand it to fit a project's actual data on mount (see the finding
+// recorded in task-b8-report.md and the doc comment on isoDateOffset) — a
+// hardcoded date drifts out of that window as wall-clock time passes.
+//
+// Each test seeds its own dedicated task(s)/section via the API (same
+// convention as gantt-legend.spec.ts/gantt-bar-labels.spec.ts) rather than
+// mutating the shared seededProject's alpha/beta/gamma/delta — the worker
+// fixture is shared across every test in this FILE (one seeded project per
+// file, per test.ts's own comment), so self-contained fixtures keep tests
+// order-independent.
+
+function stamp(): string {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+// SeededTask's `startDate`/`dueDate` fall under its `[key: string]: unknown`
+// index signature (the interface only declares id/title/status/position/
+// parentTaskId explicitly) — a non-null assertion on `unknown` narrows to
+// `{}` in TS, which has no `.slice`. These tests read real date strings back
+// from the API, so a small local cast keeps that at the read site instead
+// of sprinkling `as string` everywhere.
+function dateOf(task: SeededTask, field: "startDate" | "dueDate"): string {
+  return task[field] as string;
+}
+
+interface CreateTaskInput {
+  title: string;
+  status?: string;
+  startDate?: string | null;
+  dueDate?: string | null;
+  isMilestone?: boolean;
+  sectionId?: number;
+}
+
+async function createTask(
+  base: string,
+  token: string,
+  projectId: number,
+  input: CreateTaskInput,
+): Promise<SeededTask> {
+  const res = await fetch(`${base}/api/projects/${projectId}/tasks`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  const body = await res.text();
+  expect(res.ok, `createTask(${input.title}) failed: ${res.status} ${body}`).toBe(true);
+  return JSON.parse(body) as SeededTask;
+}
+
+/**
+ * A dedicated fresh project (own customer lookup, same convention as
+ * fixtures/seed.ts's seedFixture) rather than reusing the shared
+ * seededProject — used ONLY by the visual checklist test, so its
+ * screenshots show a small, clean row set instead of every task the
+ * file's earlier tests have accumulated in the shared project by that
+ * point in the run.
+ */
+async function createIsolatedProject(
+  base: string,
+  token: string,
+  userId: number,
+  name: string,
+): Promise<number> {
+  const H = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const customers = (await fetch(`${base}/api/customers`, { headers: H }).then((r) =>
+    r.json(),
+  )) as Array<{ id: number }>;
+  const customerId = customers[0]?.id;
+  expect(customerId, "no customer available to attach an isolated project to").toBeTruthy();
+  const res = await fetch(`${base}/api/projects`, {
+    method: "POST",
+    headers: H,
+    body: JSON.stringify({ name, customerId, saId: userId }),
+  });
+  const body = await res.text();
+  expect(res.ok, `createIsolatedProject failed: ${res.status} ${body}`).toBe(true);
+  return (JSON.parse(body) as { id: number }).id;
+}
+
+async function createSection(
+  base: string,
+  token: string,
+  projectId: number,
+  name: string,
+): Promise<{ id: number; name: string }> {
+  const res = await fetch(`${base}/api/projects/${projectId}/sections`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  });
+  expect(res.ok, `createSection(${name}) failed`).toBe(true);
+  return (await res.json()) as { id: number; name: string };
+}
+
+async function gotoSeededGantt(page: Page, projectId: number): Promise<void> {
+  await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
+  await page.waitForTimeout(800);
+}
+
+/** The bar's WRAPPER button (`[data-slot="gantt-bar"]`, vendored), located
+ * from Solvro's own content span (`[data-task-id]`) inside it. */
+function barButton(page: Page, taskId: number): Locator {
+  return page
+    .locator(`[data-task-id="${taskId}"]`)
+    .locator('xpath=ancestor::*[@data-slot="gantt-bar"]');
+}
+
+async function dotCenter(
+  page: Page,
+  taskId: number,
+  side: "left" | "right",
+): Promise<{ x: number; y: number }> {
+  const dot = page.locator(`[data-task-id="${taskId}"] [data-connect-dot][data-connect-side="${side}"]`);
+  const box = await dot.boundingBox();
+  expect(box, `connect dot (${side}) for task ${taskId} not found`).toBeTruthy();
+  return center(box!);
+}
+
+/** Right dot of the predecessor's bar → left dot of the successor's bar. */
+async function dragBetweenDots(page: Page, predTaskId: number, succTaskId: number): Promise<void> {
+  const from = await dotCenter(page, predTaskId, "right");
+  const to = await dotCenter(page, succTaskId, "left");
+  await mouseDrag(page, from, to);
+}
+
+/**
+ * A hoverable point ON a connector's rendered path, in page coordinates.
+ * `.hover()`'s default (bounding-box center) can miss entirely: the route is
+ * a stepped/axis-aligned polyline (GanttOverlay.tsx + connector-paths.ts),
+ * and an "L" or "Z" shaped route's bbox center usually sits in the empty
+ * middle of the box, not on the line itself. Instead this parses the
+ * connector's own rendered `d` attribute and returns the midpoint of the
+ * first vertical run (the segment `connector-paths.ts`'s "ax,ay" delete-×
+ * anchor also sits on) — mapped to page coordinates via the ancestor
+ * `<svg>`'s own bounding box, which already bakes in the overlay's
+ * `translate(-scrollLeft, -scrollTop)` CSS transform (getBoundingClientRect
+ * reflects transforms, so contentPoint + svgBox.topLeft = the real page
+ * point regardless of scroll position).
+ *
+ * Finds the overlay's own `<svg>` via `page` rather than an
+ * `ancestor::svg` XPath off the connector locator — SVG elements live in
+ * the SVG XML namespace, and Chromium's XPath evaluator does not reliably
+ * match a bare (unprefixed) `svg` step against namespaced elements, which
+ * hung waiting for a match that was never going to resolve.
+ */
+async function connectorHoverPoint(page: Page, connector: Locator): Promise<{ x: number; y: number }> {
+  const svg = page.locator('[data-slot="gantt-overlay"] svg').first();
+  const svgBox = await svg.boundingBox();
+  expect(svgBox, "connector overlay <svg> not found").toBeTruthy();
+  // The visible path is the first <path> child; the (optional) transparent
+  // hit-path is a sibling with a trimmed variant of the same route — the
+  // full untrimmed `d` is simpler to reason about here.
+  const d = await connector.locator("path").first().getAttribute("d");
+  expect(d, "connector <path d> not found").toBeTruthy();
+  const nums = (d!.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+  const pts: Array<[number, number]> = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) pts.push([nums[i], nums[i + 1]]);
+  let mid: [number, number] | null = null;
+  for (let i = 1; i < pts.length; i++) {
+    if (Math.abs(pts[i][0] - pts[i - 1][0]) < 0.5) {
+      mid = [pts[i][0], (pts[i][1] + pts[i - 1][1]) / 2];
+      break;
+    }
+  }
+  if (!mid) {
+    const xs = pts.map((p) => p[0]);
+    const ys = pts.map((p) => p[1]);
+    mid = [(Math.min(...xs) + Math.max(...xs)) / 2, (Math.min(...ys) + Math.max(...ys)) / 2];
+  }
+  return { x: svgBox!.x + mid[0], y: svgBox!.y + mid[1] };
+}
+
+test.describe("gantt parity — ReUI engine (desktop)", () => {
+  test.beforeEach(async ({ page }) => {
+    test.skip(
+      test.info().project.name !== "desktop",
+      "Gantt is desktop-only (hidden md:block)",
+    );
+    await loginViaUi(page);
+  });
+
+  // App-bug finding (task-b8-report.md, "app-bug findings"): SolvroGantt.tsx
+  // never passes `defaultDate` to <Gantt>, so the engine's initial visible
+  // window anchors on `new Date()` ("today") — a fixed ~1-week span at the
+  // default Week scale — and nothing widens it to fit the project's actual
+  // task dates on mount. A task dated even a few weeks from today is
+  // simply not in the DOM until the user manually scrolls (confirmed:
+  // reaching a task 24 days in the past took 40 wheel-scroll steps with no
+  // on-screen affordance telling the user data exists off-screen). The old
+  // hand-rolled engine derived its chart window from the tasks' own min/max
+  // dates, so every project's data was visible immediately regardless of
+  // "today" — this is a real regression, not a hand-rolled-engine parity
+  // gap. Every other test in this file works around it by dating its own
+  // fixtures relative to today (isoDateOffset); this one instead asserts
+  // the behavior a TAM actually needs and is marked fixme until the app
+  // computes/passes a data-fitted `defaultDate` (or otherwise widens the
+  // initial range) instead of hardcoding "today".
+  test.fixme(
+    "opening the Gantt shows an existing task's bar without manual scrolling, regardless of its dates",
+    async ({ page, seededProject }) => {
+      const { token, projectId } = seededProject;
+      const base = apiBase(test.info());
+      const s = stamp();
+      const farPast = await createTask(base, token, projectId, {
+        title: `FarPast ${s}`,
+        status: "TODO",
+        startDate: isoDateOffset(-40),
+        dueDate: isoDateOffset(-36),
+      });
+
+      await gotoSeededGantt(page, projectId);
+
+      await expect(barButton(page, farPast.id)).toBeVisible();
+    },
+  );
+
+  test("(a) drag-move commits new dates and survives reload", async ({ page, seededProject }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    const startIso = isoDateOffset(0);
+    const dueIso = isoDateOffset(4);
+    const task = await createTask(base, token, projectId, {
+      title: `DragMove ${s}`,
+      status: "TODO",
+      startDate: startIso,
+      dueDate: dueIso,
+    });
+
+    await gotoSeededGantt(page, projectId);
+
+    const bar = barButton(page, task.id);
+    await bar.scrollIntoViewIfNeeded();
+    const before = await bar.boundingBox();
+    expect(before, "bar not found before drag").toBeTruthy();
+
+    const from = { x: before!.x + before!.width / 2, y: before!.y + before!.height / 2 };
+    const to = { x: from.x + Math.max(80, before!.width), y: from.y };
+
+    const [patchRes] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().includes(`/api/tasks/${task.id}`) && r.request().method() === "PATCH",
+      ),
+      mouseDrag(page, from, to),
+    ]);
+    expect(patchRes.ok()).toBe(true);
+
+    const afterMutation = (await getTasks(base, token, projectId)).find((t) => t.id === task.id)!;
+    const newStart = dateOf(afterMutation, "startDate");
+    expect(newStart.slice(0, 10)).not.toBe(startIso);
+    expect(new Date(newStart).getTime()).toBeGreaterThan(new Date(startIso).getTime());
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+    const afterReload = await barButton(page, task.id).boundingBox();
+    expect(afterReload, "bar not found after reload").toBeTruthy();
+    expect(afterReload!.x).toBeGreaterThan(before!.x + 40);
+  });
+
+  test("(b) resize-end changes dueDate, leaves startDate untouched", async ({ page, seededProject }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    const startIso = isoDateOffset(0);
+    const dueIso = isoDateOffset(3);
+    const task = await createTask(base, token, projectId, {
+      title: `Resize ${s}`,
+      status: "TODO",
+      startDate: startIso,
+      dueDate: dueIso,
+    });
+
+    await gotoSeededGantt(page, projectId);
+
+    const bar = barButton(page, task.id);
+    await bar.scrollIntoViewIfNeeded();
+    const handle = bar.locator('[data-slot="gantt-resize-handle"][data-edge="end"]');
+    const handleBox = await handle.boundingBox();
+    expect(handleBox, "end resize handle not found").toBeTruthy();
+
+    const from = { x: handleBox!.x + handleBox!.width / 2, y: handleBox!.y + handleBox!.height / 2 };
+    const to = { x: from.x + 60, y: from.y };
+
+    const [patchRes] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().includes(`/api/tasks/${task.id}`) && r.request().method() === "PATCH",
+      ),
+      mouseDrag(page, from, to),
+    ]);
+    expect(patchRes.ok()).toBe(true);
+
+    const after = (await getTasks(base, token, projectId)).find((t) => t.id === task.id)!;
+    const unchangedStart = dateOf(after, "startDate");
+    const newDue = dateOf(after, "dueDate");
+    expect(unchangedStart.slice(0, 10)).toBe(startIso);
+    expect(newDue.slice(0, 10)).not.toBe(dueIso);
+    expect(new Date(newDue).getTime()).toBeGreaterThan(new Date(dueIso).getTime());
+  });
+
+  test("(c) connector create via dot-drag + delete via hover ×; HARD type; persists across reload", async ({
+    page,
+    seededProject,
+  }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    // Non-overlapping dates so the route is the simple forward-nudge case
+    // (connector-paths.ts) — a single, unambiguous vertical run to hover.
+    const pred = await createTask(base, token, projectId, {
+      title: `ConnPred ${s}`,
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(1),
+    });
+    const succ = await createTask(base, token, projectId, {
+      title: `ConnSucc ${s}`,
+      status: "TODO",
+      startDate: isoDateOffset(4),
+      dueDate: isoDateOffset(5),
+    });
+
+    await gotoSeededGantt(page, projectId);
+    // Scroll BOTH rows into view — later runs in this file accumulate
+    // top-level tasks in the shared seeded project, so relying on pred's
+    // scroll alone to also happen to reveal succ (adjacent-ish today) is
+    // fragile; see the (g) test's comment for the concrete failure mode.
+    await barButton(page, pred.id).scrollIntoViewIfNeeded();
+    await barButton(page, succ.id).scrollIntoViewIfNeeded();
+
+    const [createRes] = await Promise.all([
+      page.waitForResponse(
+        (r) =>
+          r.url().includes(`/api/projects/${projectId}/dependencies`) &&
+          r.request().method() === "POST",
+      ),
+      dragBetweenDots(page, pred.id, succ.id),
+    ]);
+    expect(createRes.ok()).toBe(true);
+    const created = (await createRes.json()) as { id: number; type: string };
+
+    const connector = page.locator(`[data-connector-id="${created.id}"]`);
+    await expect(connector).toHaveAttribute("data-connector-type", "HARD");
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+    const reloadedConnector = page.locator(`[data-connector-id="${created.id}"]`);
+    await expect(reloadedConnector).toHaveAttribute("data-connector-type", "HARD");
+
+    const hoverPoint = await connectorHoverPoint(page, reloadedConnector);
+    await page.mouse.move(hoverPoint.x, hoverPoint.y);
+    const deleteBtn = page.getByRole("button", { name: /delete dependency/i });
+    await expect(deleteBtn).toBeVisible();
+
+    const [deleteRes] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().includes(`/api/dependencies/${created.id}`) && r.request().method() === "DELETE",
+      ),
+      deleteBtn.click(),
+    ]);
+    expect(deleteRes.ok()).toBe(true);
+    await expect(page.locator(`[data-connector-id="${created.id}"]`)).toHaveCount(0);
+
+    // Round-trip: gone server-side too, not just optimistically hidden.
+    const deps = await fetch(`${base}/api/projects/${projectId}/dependencies`, {
+      headers: { Authorization: `Bearer ${token}` },
+    }).then((r) => r.json() as Promise<Array<{ id: number }>>);
+    expect(deps.some((d) => d.id === created.id)).toBe(false);
+  });
+
+  test("(d) baseline toggle shows/hides ghosts", async ({ page, seededProject }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    const task = await createTask(base, token, projectId, {
+      title: `Baseline ${s}`,
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(4),
+    });
+
+    // Lock via API (admin has project:write) rather than the UI's confirm
+    // modal — this test is about the toggle/ghost rendering, not the lock
+    // flow itself.
+    const lockRes = await fetch(`${base}/api/projects/${projectId}/baseline`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    expect(lockRes.ok, "baseline lock failed").toBe(true);
+
+    await gotoSeededGantt(page, projectId);
+
+    // Not shown until the toggle is clicked.
+    await expect(page.locator("[data-baseline-rect]")).toHaveCount(0);
+
+    // The toggle's accessible name is "show_chart Baseline" (the Material
+    // Symbols ligature span has no aria-hidden, so its literal glyph text
+    // "show_chart" is part of the computed name) — match on the trailing
+    // capitalized "Baseline" word to avoid also matching the separate
+    // "Lock baseline"/"Reset baseline" button (lowercase "baseline").
+    const baselineToggle = page.getByRole("button", { name: /\bBaseline$/ });
+    await baselineToggle.click();
+
+    const ghost = page.locator(`[data-baseline-rect][data-baseline-task-id="${task.id}"]`);
+    await expect(ghost).toBeVisible();
+
+    await baselineToggle.click();
+    await expect(page.locator("[data-baseline-rect]")).toHaveCount(0);
+  });
+
+  test("(e) milestone renders as a diamond", async ({ page, seededProject }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    const milestone = await createTask(base, token, projectId, {
+      title: `Milestone ${s}`,
+      status: "TODO",
+      dueDate: isoDateOffset(2),
+      isMilestone: true,
+    });
+
+    await gotoSeededGantt(page, projectId);
+
+    const diamond = page.locator(`[data-task-id="${milestone.id}"][data-milestone]`);
+    await expect(diamond).toBeVisible();
+  });
+
+  test("(f) rollup pill present on a section row", async ({ page, seededProject }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    const section = await createSection(base, token, projectId, `Rollup Section ${s}`);
+    await createTask(base, token, projectId, {
+      title: `RollupTask ${s}`,
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(3),
+      sectionId: section.id,
+    });
+
+    await gotoSeededGantt(page, projectId);
+
+    const rollup = page.locator(`[data-gantt-row-id="section-${section.id}"] [data-rollup]`);
+    await expect(rollup).toBeVisible();
+  });
+
+  test("(g) row reorder via grip commits the canonical order (List view shares it)", async ({
+    page,
+    seededProject,
+  }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    const taskA = await createTask(base, token, projectId, {
+      title: `ReorderA ${s}`,
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(2),
+    });
+    const taskB = await createTask(base, token, projectId, {
+      title: `ReorderB ${s}`,
+      status: "TODO",
+      startDate: isoDateOffset(1),
+      dueDate: isoDateOffset(3),
+    });
+
+    await gotoSeededGantt(page, projectId);
+
+    // This file's earlier tests accumulate top-level tasks in the same
+    // shared seeded project (one seededProject per file — fixtures/test.ts),
+    // so by the time this test runs, taskA/taskB (created last) can be
+    // scrolled below the fold. gripFor/boundingBox() read real layout
+    // positions regardless of scroll — dragging to an off-screen point
+    // landed the reorder in the wrong slot the first time this ran. Scroll
+    // both rows into view before measuring.
+    await page.getByText(taskB.title, { exact: true }).first().scrollIntoViewIfNeeded();
+    await page.getByText(taskA.title, { exact: true }).first().scrollIntoViewIfNeeded();
+
+    const grip = await gripFor(page, taskB.title, "Reorder");
+    const overBox = await page.getByText(taskA.title, { exact: true }).first().boundingBox();
+    expect(grip, `grip for ${taskB.title} not found`).toBeTruthy();
+    expect(overBox, `row for ${taskA.title} not found`).toBeTruthy();
+
+    await mouseDrag(page, center(grip!), { x: overBox!.x + 60, y: overBox!.y + 8 });
+
+    const after = await getTasks(base, token, projectId);
+    const order = after
+      .filter((t) => t.parentTaskId === null)
+      .sort((x, y) => x.position - y.position || x.id - y.id);
+    const idxA = order.findIndex((t) => t.id === taskA.id);
+    const idxB = order.findIndex((t) => t.id === taskB.id);
+    expect(idxA, "taskA not found post-drag").toBeGreaterThanOrEqual(0);
+    expect(idxB, "taskB not found post-drag").toBeGreaterThanOrEqual(0);
+    // Insert-before semantics (SolvroGantt.tsx's handleResourceReorder,
+    // mirroring the old engine's row-drop branch): B lands immediately
+    // before A.
+    expect(idxB).toBe(idxA - 1);
+
+    // Same canonical order, read back from List view (one shared order —
+    // CLAUDE.md's "one canonical manual order shared by List/Kanban/Gantt").
+    await page.goto(`/projects/${projectId}/list`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+    const listBoxA = await page.getByText(taskA.title, { exact: true }).first().boundingBox();
+    const listBoxB = await page.getByText(taskB.title, { exact: true }).first().boundingBox();
+    expect(listBoxA, "List row for taskA not found").toBeTruthy();
+    expect(listBoxB, "List row for taskB not found").toBeTruthy();
+    expect(listBoxB!.y).toBeLessThan(listBoxA!.y);
+  });
+
+  test("(h) collapse a section: chevron + row visibility persist; export menu opens", async ({
+    page,
+    seededProject,
+  }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    const section = await createSection(base, token, projectId, `Collapse Section ${s}`);
+    const task = await createTask(base, token, projectId, {
+      title: `CollapseTask ${s}`,
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(2),
+      sectionId: section.id,
+    });
+
+    await gotoSeededGantt(page, projectId);
+
+    // The collapse toggle's aria-label is the section's own resource title
+    // (gantt-view.tsx's GanttTreeRow: `aria-label={row.resource.title}`,
+    // which for a real section is `s.name` verbatim — adapter.ts's
+    // buildResources).
+    const toggle = page.getByRole("button", { name: section.name, exact: true });
+    await expect(toggle).toBeVisible();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByText(task.title, { exact: true }).first()).toBeVisible();
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "false");
+    // Collapsed rows stay in the DOM (hidden, not unmounted — confirmed via
+    // screenshot: the section row itself renders a rollup pill in place of
+    // the child rows), so `toHaveCount(0)` never passes here; check
+    // visibility instead. `.first()` sidesteps strict-mode ambiguity since
+    // `not.toBeVisible()` only needs ONE matched instance to prove hidden.
+    await expect(page.getByText(task.title, { exact: true }).first()).not.toBeVisible();
+
+    await toggle.click();
+    await expect(toggle).toHaveAttribute("aria-expanded", "true");
+    await expect(page.getByText(task.title, { exact: true }).first()).toBeVisible();
+
+    // Export menu trigger works. Download automation is intentionally
+    // skipped (task brief: "skip export-download automation if flaky") —
+    // parsing a downloaded .xlsx/.pdf in headless Chromium is heavy
+    // machinery with its own flake surface, out of scope for this pass.
+    const exportBtn = page.getByRole("button", { name: /export/i });
+    await exportBtn.click();
+    await expect(page.getByRole("button", { name: "Excel", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "PDF", exact: true })).toBeVisible();
+    // Close the menu without triggering a download.
+    await page.keyboard.press("Escape");
+  });
+
+  // ---- Browser checklist (B6 Opus review follow-up) — observational only;
+  // screenshots for the report, plus light structural assertions so this
+  // isn't a pure no-op. Do NOT fix app issues found here — report them. ----
+  test("(checklist) visual review — connectors/milestones/resize/zoom/shading", async ({
+    page,
+    seededProject,
+  }) => {
+    const { token, userId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    // Own isolated project (not the shared seededProject) — by the time
+    // this test runs, the shared project has accumulated every task from
+    // tests (a)-(h) in this file, and scrolling far enough to reveal one
+    // specific row turned out to scroll the row list past several other
+    // unrelated tasks, making for a cluttered, unrepresentative screenshot.
+    // A handful of rows in a dedicated project keeps everything reachable
+    // without scrolling gymnastics.
+    const projectId = await createIsolatedProject(base, token, userId, `Checklist ${s}`);
+    const pred = await createTask(base, token, projectId, {
+      title: "ChecklistPred",
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(1),
+    });
+    const succ = await createTask(base, token, projectId, {
+      title: "ChecklistSucc",
+      status: "IN_PROGRESS",
+      startDate: isoDateOffset(3),
+      dueDate: isoDateOffset(5),
+    });
+    const milestone = await createTask(base, token, projectId, {
+      title: "ChecklistMilestone",
+      status: "TODO",
+      dueDate: isoDateOffset(4),
+      isMilestone: true,
+    });
+    // Enough filler rows to force real vertical scroll within a 900px
+    // viewport (a handful of rows all fit on screen with nothing to
+    // scroll to, which defeated the point of shot (i) on the first pass).
+    for (let i = 0; i < 18; i++) {
+      await createTask(base, token, projectId, {
+        title: `Filler ${i}`,
+        status: "TODO",
+        startDate: isoDateOffset(0),
+        dueDate: isoDateOffset(2),
+      });
+    }
+    // A HARD dependency, created directly via API (this test isn't
+    // exercising the dot-drag gesture — that's covered in (c)).
+    const depRes = await fetch(`${base}/api/projects/${projectId}/dependencies`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ predecessorTaskId: pred.id, successorTaskId: succ.id, type: "HARD" }),
+    });
+    expect(depRes.ok).toBe(true);
+    // Second dependency with the MILESTONE as successor — checklist item
+    // (ii) is specifically about where a connector anchors on a milestone
+    // (the day-column edge vs. the diamond itself), which the pred→succ
+    // dependency above (both regular bars) can't show.
+    const milestoneDepRes = await fetch(`${base}/api/projects/${projectId}/dependencies`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        predecessorTaskId: succ.id,
+        successorTaskId: milestone.id,
+        type: "HARD",
+      }),
+    });
+    expect(milestoneDepRes.ok).toBe(true);
+
+    await gotoSeededGantt(page, projectId);
+    // Neutral cursor position before every screenshot below — Chromium
+    // applies `:hover` based on the real (Xvfb) cursor position on paint,
+    // which a previous test's final mouse position can leak into a fresh
+    // page load and make an unrelated row look hovered in a screenshot.
+    await page.mouse.move(5, 5);
+
+    // (iv) general overview at default (Week) zoom: solid fills, diamond,
+    // labels, today line, weekend shading, tree pane.
+    await page.screenshot({
+      path: "test-results/checklist-01-overview-week.png",
+      fullPage: false,
+    });
+
+    // (ii) milestone connector endpoints at Week zoom — anchor at the
+    // day-box edge, not the diamond itself (per the B6 review finding).
+    // ChecklistSucc → ChecklistMilestone is the dependency that actually
+    // exercises this (the pred→succ one above connects two regular bars).
+    const milestoneEl = page.locator("[data-milestone]").first();
+    await expect(milestoneEl).toBeVisible();
+    await milestoneEl.scrollIntoViewIfNeeded();
+    await page.screenshot({ path: "test-results/checklist-02-milestone-week-zoom.png" });
+
+    // (iii) resize-handle ergonomics with the outside connect-dots.
+    const bar = barButton(page, pred.id);
+    await bar.hover();
+    await page.waitForTimeout(250);
+    await page.screenshot({ path: "test-results/checklist-03-resize-handles-and-dots-hover.png" });
+    await page.mouse.move(5, 5);
+
+    // (i) connector paths vs. the sticky date header when scrolled down.
+    // ChecklistPred/ChecklistSucc (with the connector between them) are the
+    // first two rows; 18 filler rows below force enough real vertical
+    // scroll to push them mostly behind the header. Real wheel input, not
+    // a direct `scrollTop` mutation — the pane's scrollbar is a custom
+    // Base UI ScrollArea, and the visible scroll position is not
+    // necessarily driven by the viewport DOM node's own native `scrollTop`
+    // (confirmed by a throwaway diagnostic: mutating it directly was a
+    // no-op here, while wheel input — the same technique that reliably
+    // drove the earlier historical-task investigation — moves the actual
+    // rendered position).
+    const timelinePane = page.locator('[data-slot="gantt-timeline-pane"]');
+    const paneBox = await timelinePane.boundingBox();
+    expect(paneBox, "gantt timeline pane not found").toBeTruthy();
+    await page.screenshot({ path: "test-results/checklist-04a-before-vertical-scroll.png" });
+    await page.mouse.move(paneBox!.x + paneBox!.width / 2, paneBox!.y + paneBox!.height / 2);
+    for (let i = 0; i < 10; i++) {
+      await page.mouse.wheel(0, 100);
+      await page.waitForTimeout(60);
+    }
+    await page.waitForTimeout(300);
+    await page.mouse.move(5, 5);
+    await page.screenshot({ path: "test-results/checklist-04b-connectors-vs-sticky-header.png" });
+
+    await expect(page.locator('[data-testid="solvro-gantt"]')).toBeVisible();
+  });
+});
