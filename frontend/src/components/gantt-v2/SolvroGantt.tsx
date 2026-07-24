@@ -23,13 +23,21 @@ import { cn } from "@/lib/utils";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Gantt, type GanttApi, type GanttColumn } from "@/components/reui/gantt/gantt";
 import { GanttView } from "@/components/reui/gantt/gantt-view";
-import type { GanttEvent, GanttScale } from "@/components/reui/gantt/gantt-types";
+import type {
+  GanttEvent,
+  GanttProposedUpdate,
+  GanttResourceReorder,
+  GanttScale,
+  GanttUpdateResult,
+} from "@/components/reui/gantt/gantt-types";
 import {
   buildEvents,
   buildResources,
   buildRollupEvents,
+  eventPatch,
   parseTaskId,
   sectionNodeId,
+  taskNodeId,
 } from "./adapter";
 import { SolvroBar } from "./SolvroBar";
 import { SectionColorCell, TaskDatesCell } from "./TreeCells";
@@ -154,6 +162,176 @@ export function SolvroGantt(props: SolvroGanttProps) {
   const { data: holidays = [] } = useHolidays(years);
 
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
+
+  // Plan B Task 5 — drag/resize commit. `events` is a controlled prop (see
+  // the removed comment this replaces), so nothing here needs to touch local
+  // state to "revert" a rejected gesture: on `false` the mutation never
+  // fires, the tasks-query cache never changes, and the next render's
+  // `events` memo (still derived from that unchanged cache) is what the
+  // engine paints — that IS the revert. `eventPatch` (adapter.ts) converts
+  // ReUI's exclusive `end` back to Solvro's inclusive `dueDate`.
+  const handleEventUpdate = useCallback(
+    (update: GanttProposedUpdate<Task>): GanttUpdateResult => {
+      // Rollup pills (`section-rollup-*`, buildRollupEvents) are `readOnly:
+      // true`, which gantt-types.tsx:97/gantt-bar already excludes from
+      // drag/resize gestures entirely; they also carry no `data`, so
+      // eventPatch's `!task` branch below would reject them a second time
+      // even if a gesture somehow reached here. This id check is a third,
+      // belt-and-suspenders layer — not what's actually doing the work.
+      if (!canEdit || update.event.id.startsWith("section-rollup-")) return false;
+      const patch = eventPatch(update);
+      if (!patch) return false;
+      setActionError(null);
+      updateTask.mutate(patch, {
+        onError: (err) => {
+          setActionError(err instanceof ApiError ? err.message : "Could not update task dates.");
+        },
+      });
+      return true;
+    },
+    [canEdit, updateTask],
+  );
+
+  // Plan B Task 5 — tree-row reorder commit. Mirrors GanttFrame.tsx:420-569's
+  // `handleDragEnd` drop semantics (the OLD engine's constraints ARE the
+  // spec) onto ReUI's single `{resourceId, parentId, index}` proposal shape.
+  // Returns `false` to reject; per gantt.tsx:127 the real contract is
+  // `void | false` (never `true` — unlike onEventUpdate's GanttUpdateResult,
+  // there is no accept-with-adjustment form here).
+  const handleResourceReorder = useCallback(
+    (proposal: GanttResourceReorder): void | false => {
+      if (!canEdit) return false;
+      const { resourceId, parentId, index } = proposal;
+
+      // ---- Section-group reorder (root level only) ----
+      if (resourceId.startsWith("section-")) {
+        // The "(No section)" pseudo-group has no backing Section row — old
+        // engine only starts a section drag when `sectionId !== null`
+        // (GanttFrame.tsx:539).
+        if (resourceId === sectionNodeId(null)) return false;
+        // Sections never nest under a task (GanttFrame.tsx:542: dropping a
+        // section onto the pseudo group is rejected; dropping it under a
+        // task isn't even representable in the old engine's flat section
+        // list at all).
+        if (parentId !== null) return false;
+
+        // Re-derive the desired root order from the CURRENT (pre-drag) root
+        // list — same shape `resources` already is (sections, then the
+        // pseudo group last if present) — splice the move in at `index`,
+        // then patch every REAL section whose position actually changed.
+        // Mirrors GanttFrame.tsx:544-559's ordered/filtered/splice + diffed
+        // Promise.all of useUpdateSection calls.
+        const currentRootIds = resources.map((r) => r.id);
+        const others = currentRootIds.filter((id) => id !== resourceId);
+        const clamped = Math.max(0, Math.min(index, others.length));
+        const nextRootOrder = [...others];
+        nextRootOrder.splice(clamped, 0, resourceId);
+
+        const patches = nextRootOrder
+          .filter((id) => id !== sectionNodeId(null))
+          .map((id, i) => ({ id: Number(id.slice("section-".length)), position: i }))
+          .filter(({ id, position }) => sections.find((s) => s.id === id)?.position !== position);
+
+        if (patches.length === 0) return false; // no-op — nothing actually moved
+        setActionError(null);
+        patches.forEach(({ id, position }) =>
+          updateSection.mutate(
+            { id, patch: { position } },
+            {
+              onError: (err) => {
+                setActionError(err instanceof ApiError ? err.message : "Could not reorder sections.");
+              },
+            },
+          ),
+        );
+        return;
+      }
+
+      // ---- Task-level reorder ----
+      const taskId = parseTaskId(resourceId);
+      if (taskId === null) return false;
+      const moved = taskById.get(taskId);
+      if (!moved) return false;
+
+      if (moved.parentTaskId !== null) {
+        // Subtask: reorder WITHIN its parent only — no re-parent via row
+        // drags (GanttFrame.tsx:474-495: "Ignore drops outside the sibling
+        // checklist"). ReUI's `index` already counts only OTHER same-parent
+        // rows above the drop point (gantt-view.tsx's `propose()`), which is
+        // exactly the backend's insertAt convention — no extra math needed,
+        // unlike the top-level case below.
+        if (parentId !== taskNodeId(moved.parentTaskId)) return false;
+        if (index === moved.position) return false; // no-op
+        setActionError(null);
+        updateTask.mutate(
+          { id: taskId, patch: { position: index } },
+          {
+            onError: (err) => {
+              setActionError(err instanceof ApiError ? err.message : "Could not reorder subtask.");
+            },
+          },
+        );
+        return;
+      }
+
+      // Top-level task: must land under a section group (real or the "(No
+      // section)" pseudo group), never under a task node — promoting a
+      // top-level task into a subtask (or vice versa) via drag isn't
+      // supported by the old engine's row-drag affordance.
+      if (parentId === null || parseTaskId(parentId) !== null) return false;
+      const targetSectionId =
+        parentId === sectionNodeId(null) ? null : Number(parentId.slice("section-".length));
+
+      // `position` is one GLOBAL dense index across every top-level task in
+      // the project (CLAUDE.md: "one canonical manual order"; backend's
+      // sibling key for parentTaskId===null is project-wide, not
+      // per-section — taskOrdering.ts:17-19). Unifies GanttFrame's two old
+      // drop paths — the row-target case (:431-471, arbitrary same/cross
+      // -section position via a specific target row) and the
+      // section-target case (:500-536, always append at the target
+      // section's block end) — into one index-based computation, since
+      // ReUI's `index` gives the precise slot in EITHER case.
+      const topLevelOrdered = tasks
+        .filter((t) => t.parentTaskId === null)
+        .sort((a, b) => a.position - b.position || a.id - b.id);
+      const others = topLevelOrdered.filter((t) => t.id !== taskId);
+      const targetSiblings = others.filter((t) => t.sectionId === targetSectionId);
+      const crossSection = targetSectionId !== moved.sectionId;
+
+      let position: number | undefined;
+      if (targetSiblings.length === 0) {
+        // No other task in the target section — GanttFrame.tsx:529's `last`
+        // undefined branch: omit position entirely (appends at the global
+        // end; harmless, since display groups by section anyway).
+        position = undefined;
+      } else if (index >= targetSiblings.length) {
+        const last = targetSiblings[targetSiblings.length - 1];
+        position = others.findIndex((t) => t.id === last.id) + 1;
+      } else {
+        const before = targetSiblings[index];
+        position = others.findIndex((t) => t.id === before.id);
+      }
+
+      if (!crossSection && (position === undefined || position === moved.position)) {
+        return false; // no-op — same section, same slot (or nothing to reorder against)
+      }
+
+      const patch: { sectionId?: number | null; position?: number } = {};
+      if (crossSection) patch.sectionId = targetSectionId;
+      if (position !== undefined) patch.position = position;
+      setActionError(null);
+      updateTask.mutate(
+        { id: taskId, patch },
+        {
+          onError: (err) => {
+            setActionError(err instanceof ApiError ? err.message : "Could not move task.");
+          },
+        },
+      );
+      return;
+    },
+    [canEdit, resources, sections, tasks, taskById, updateTask, updateSection],
+  );
 
   const handleUpdateDates = useCallback(
     (taskId: number, startISO: string | null, dueISO: string | null) => {
@@ -494,13 +672,19 @@ export function SolvroGantt(props: SolvroGanttProps) {
               if (task) onEditTask(task);
             }}
             className="h-full"
-            // onEventUpdate / onResourceReorder are Task B5 — deliberately
-            // left unwired. `events` is a controlled prop, so a drag/resize
-            // gesture still shows its live preview but reverts on release
-            // (nothing commits) rather than silently mutating uncontrolled
-            // internal state. Left ON (canEdit-gated) since it's a safe no-op
-            // today and lets Step 3's browser verification exercise the real
-            // gesture surface once B5 lands.
+            // Plan B Task 5: commit pipeline. onEventUpdate is additionally
+            // gated by `interactions.drag/resize` above (canEdit-driven), so
+            // the handler's own `!canEdit` check is redundant there —
+            // cheap insurance, not the primary gate. onResourceReorder has
+            // no separate interactions flag: passing it unconditionally
+            // would render the row-drag grip (gantt-view.tsx:1591 →
+            // `reorderEnabled = !!settings.onResourceReorder`, wired to
+            // `onGripPointerDown` at :1888, rendered at :2659-2670) for
+            // read-only users too, so `undefined` here is what actually
+            // hides it — the handler's internal check is the fallback,
+            // not this.
+            onEventUpdate={handleEventUpdate}
+            onResourceReorder={canEdit ? handleResourceReorder : undefined}
           >
             <GanttView />
           </Gantt>
