@@ -218,27 +218,37 @@ export function SolvroGantt(props: SolvroGanttProps) {
 
   const taskById = useMemo(() => new Map(tasks.map((t) => [t.id, t])), [tasks]);
 
-  // Plan B Task 7 (fix pass) — export input, built the same way the old
-  // engine built its export `rows` (GanttFrame.tsx:324-329): geometry's row
-  // builder over the SAME tasks/sections this container already queried,
-  // fed the SAME collapse state driving the on-screen tree (mapped into
-  // geometry's row-id shape via `toGeometryCollapsedIds`, above) — full
-  // parity with the old engine, where `collapsed` drove both the live tree
-  // AND the export input. `Row.task` carries the full `Task` object
-  // unfiltered, so baseline fields (baselineStartDate/baselineDueDate)
-  // already ride along for whenever the export layer wants them — it
-  // doesn't reference them today (verified: neither exportExcel.ts nor
-  // exportPdf.ts read baseline* fields at all, locked or not), so there's
-  // nothing to wire up here beyond not filtering the Task object down.
+  // Plan B Task 7 (fix pass) — built the same way the old engine built its
+  // export `rows` (GanttFrame.tsx:324-329): geometry's row builder over the
+  // SAME tasks/sections this container already queried, fed the SAME
+  // collapse state driving the on-screen tree (mapped into geometry's
+  // row-id shape via `toGeometryCollapsedIds`, above) — full parity with the
+  // old engine, where `collapsed` drove both the live tree AND the export
+  // input. `Row.task` carries the full `Task` object unfiltered, so baseline
+  // fields (baselineStartDate/baselineDueDate) already ride along for
+  // whenever the export layer wants them — it doesn't reference them today
+  // (verified: neither exportExcel.ts nor exportPdf.ts read baseline*
+  // fields at all, locked or not), so there's nothing to wire up here beyond
+  // not filtering the Task object down.
+  //
+  // `allRows`/`allDateRange` (renamed from `exportRows`/`exportDateRange` in
+  // Task 8's fix pass) now feed TWO consumers: the export registration
+  // effect below, AND the initial-view-fit effect (Finding #1,
+  // task-b8-report.md) — `rowsDateRange` scans every row including
+  // collapsed section headers (their start/end is computed via `rangeFor`
+  // BEFORE geometry.ts's collapse early-return, geometry.ts:374-392), so
+  // `allDateRange` is collapse-independent and correctly reflects the
+  // FULL project's task span regardless of `collapsedGroups` — exactly the
+  // semantics both consumers need.
   const exportCollapsed = useMemo(
     () => toGeometryCollapsedIds(collapsedGroups),
     [collapsedGroups],
   );
-  const exportRows = useMemo<Row[]>(
+  const allRows = useMemo<Row[]>(
     () => buildRows({ tasks, sections, collapsed: exportCollapsed }),
     [tasks, sections, exportCollapsed],
   );
-  const exportDateRange = useMemo(() => rowsDateRange(exportRows), [exportRows]);
+  const allDateRange = useMemo(() => rowsDateRange(allRows), [allRows]);
 
   // Plan B Task 5 — drag/resize commit. `events` is a controlled prop (see
   // the removed comment this replaces), so nothing here needs to touch local
@@ -521,20 +531,20 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // a second layer of chunk separation for the wrapper modules too).
   const { handlers: exportHandlers, register } = useGanttExport();
   useEffect(() => {
-    if (exportRows.length === 0) {
+    if (allRows.length === 0) {
       register(null);
       return;
     }
     // Excel/PDF export uses a tight ±7-day window around the actual task
     // range, not some padded chart window — otherwise the date grid is
-    // dominated by empty columns. With no dated tasks (exportDateRange null)
+    // dominated by empty columns. With no dated tasks (allDateRange null)
     // the same tight window is anchored on today, resolved at export time so
     // a tab left open across day boundaries doesn't pin a stale anchor.
     const exportWindow = () => {
       const anchor = startOfDay(new Date());
       return {
-        start: startOfDay(addDays(exportDateRange ? exportDateRange.min : anchor, -7)),
-        end: startOfDay(addDays(exportDateRange ? exportDateRange.max : anchor, 7)),
+        start: startOfDay(addDays(allDateRange ? allDateRange.min : anchor, -7)),
+        end: startOfDay(addDays(allDateRange ? allDateRange.max : anchor, 7)),
       };
     };
     register({
@@ -544,7 +554,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
           const { exportGanttToExcel } = await import("@/lib/gantt/exportExcel");
           await exportGanttToExcel({
             projectName,
-            rows: exportRows,
+            rows: allRows,
             chartStart: start,
             chartEnd: end,
             holidays,
@@ -561,7 +571,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
           const { exportGanttToPdf } = await import("@/lib/gantt/exportPdf");
           await exportGanttToPdf({
             projectName,
-            rows: exportRows,
+            rows: allRows,
             exportStart: start,
             exportEnd: end,
             holidays,
@@ -578,7 +588,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
           const { exportGanttToPdf } = await import("@/lib/gantt/exportPdf");
           await exportGanttToPdf({
             projectName,
-            rows: exportRows,
+            rows: allRows,
             exportStart: start,
             exportEnd: end,
             holidays,
@@ -592,7 +602,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
       },
     });
     return () => register(null);
-  }, [register, projectName, exportRows, exportDateRange, holidays, colorBy]);
+  }, [register, projectName, allRows, allDateRange, holidays, colorBy]);
 
   const runExport = useCallback(
     async (kind: "excel" | "pdf") => {
@@ -612,6 +622,63 @@ export function SolvroGantt(props: SolvroGanttProps) {
   );
 
   const apiRef = useRef<GanttApi<Task> | null>(null);
+
+  // Plan B Task 8 fix — Finding #1 (task-b8-report.md): the vendored engine
+  // anchors its initial visible window on `new Date()` (gantt.tsx:342:
+  // `date: initial.defaultDate ?? new Date()`), a single week at the
+  // default Week scale, and never widens it to fit a project's actual task
+  // dates — a project whose tasks fall outside that window opened to a
+  // completely empty timeline with no on-screen affordance. The old
+  // hand-rolled engine derived its chart window from the tasks' own min/max
+  // dates (geometry.ts's `computeChartStart`/`computeChartEnd`), so this was
+  // a real regression, not a hand-rolled-engine parity gap.
+  //
+  // Rejected approach: passing a computed `defaultDate` prop to `<Gantt>`.
+  // Verified by reading `createGanttStore` (gantt.tsx:331-343) that
+  // `defaultDate` is consumed ONCE, inside a lazy `useState(() =>
+  // createGanttStore(options))` initializer (gantt.tsx:844) — a later
+  // render's different `defaultDate` value is silently ignored. Since
+  // `tasks` loads asynchronously (React Query) and can ALSO change out from
+  // under an already-mounted `<Gantt>` on a warm-cache project switch
+  // (`SolvroGantt` itself doesn't remount per `projectId`), a mount-time-only
+  // prop can't reliably reflect the right window.
+  //
+  // Chosen approach: `apiRef.current?.goTo(date)` (gantt.tsx:569 — the SAME
+  // `setField("date", ...)` path `next`/`prev`/`today` use, already proven
+  // by this file's own "Today" button above) re-anchors the visible window
+  // live, no remount needed. Fires once per `projectId`, guarded by
+  // `fitProjectIdRef` — mirrors the old engine's own one-shot
+  // auto-scroll-to-today effect (GanttFrame.tsx:703-720, `didInitialScrollRef`)
+  // so it doesn't fight the user's own navigation on every unrelated
+  // re-render (a drag-reschedule invalidating the tasks query must NOT snap
+  // the view back). `apiRef.current` is populated by <Gantt>'s own mount
+  // effect (gantt.tsx:1646-1654), which — as a CHILD of this component —
+  // commits before this effect on the very same render <Gantt> first mounts
+  // (React's child-then-parent effect ordering), so the null-guard below is
+  // defensive, not expected to fire; if it somehow did, `fitProjectIdRef`
+  // is deliberately NOT marked done in that branch, so a later render
+  // retries instead of permanently skipping the fit.
+  //
+  // Fit target: today, if it falls within the project's task date range
+  // (old-engine parity — "today" is still the natural anchor for an
+  // in-progress project); otherwise the earliest task date, so a fully
+  // past- or future-dated project opens on its own data instead of an
+  // empty "today" window. `allDateRange` (above) is what the export effect
+  // also uses — collapse-independent, always the full project span.
+  const fitProjectIdRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (isLoading || resources.length === 0) return;
+    if (fitProjectIdRef.current === projectId) return;
+    const api = apiRef.current;
+    if (!api) return;
+    fitProjectIdRef.current = projectId;
+    const today = startOfDay(new Date());
+    const fitDate =
+      !allDateRange || (today >= allDateRange.min && today <= allDateRange.max)
+        ? today
+        : allDateRange.min;
+    api.goTo(fitDate);
+  }, [isLoading, resources.length, projectId, allDateRange]);
 
   const legend = useMemo(() => legendEntries(colorBy, sections), [colorBy, sections]);
   const legendShown = legend.slice(0, LEGEND_CAP);

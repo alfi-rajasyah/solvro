@@ -196,28 +196,41 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await loginViaUi(page);
   });
 
-  // App-bug finding (task-b8-report.md, "app-bug findings"): SolvroGantt.tsx
-  // never passes `defaultDate` to <Gantt>, so the engine's initial visible
-  // window anchors on `new Date()` ("today") — a fixed ~1-week span at the
-  // default Week scale — and nothing widens it to fit the project's actual
-  // task dates on mount. A task dated even a few weeks from today is
-  // simply not in the DOM until the user manually scrolls (confirmed:
-  // reaching a task 24 days in the past took 40 wheel-scroll steps with no
-  // on-screen affordance telling the user data exists off-screen). The old
-  // hand-rolled engine derived its chart window from the tasks' own min/max
-  // dates, so every project's data was visible immediately regardless of
-  // "today" — this is a real regression, not a hand-rolled-engine parity
-  // gap. Every other test in this file works around it by dating its own
-  // fixtures relative to today (isoDateOffset); this one instead asserts
-  // the behavior a TAM actually needs and is marked fixme until the app
-  // computes/passes a data-fitted `defaultDate` (or otherwise widens the
-  // initial range) instead of hardcoding "today".
-  test.fixme(
+  // App-bug finding, FIXED (task-b8-report.md's Finding #1; fix documented
+  // in task-b8fix-report.md and CHANGELOG.md's 2026-07-25 entry): the engine
+  // anchors its initial visible window on `new Date()` ("today") by default
+  // — a fixed ~1-week span at the default Week scale — and never widens it
+  // to fit the project's actual task dates on mount. A task dated even a
+  // few weeks from today used to be simply absent from the DOM until the
+  // user manually scrolled, with no on-screen affordance telling them data
+  // existed off-screen. `SolvroGantt.tsx` now fires `apiRef.current?.goTo()`
+  // once per project (see the `fitProjectIdRef` effect there) to re-anchor
+  // the initial view onto today (if the project's tasks span today) or the
+  // project's earliest task date otherwise — the old hand-rolled engine's
+  // own parity behavior (it always derived its chart window from the
+  // tasks' own min/max dates). Every other test in this file still dates
+  // its own fixtures relative to today (isoDateOffset) rather than fixed
+  // calendar dates — that's an independent, still-valid fixture hygiene
+  // choice (see the file-header comment), not a workaround for this fix.
+  //
+  // Isolated project (not the shared `seededProject`), unlike every other
+  // test in this file: `seededProject` is pre-seeded with alpha/beta/gamma/
+  // delta dated near today (fixtures/seed.ts's seedFixture), so today
+  // legitimately falls within the SHARED project's overall task range even
+  // once this test's own far-past task is added — the fit effect correctly
+  // (and, for this specific assertion, unhelpfully) chooses "today" as the
+  // anchor in that case, since most of the project's data genuinely IS
+  // current. A project containing ONLY the far-past task has no such
+  // contamination — today falls OUTSIDE its range, so the fit anchors on
+  // the task's own earliest date instead, which is the actual code path
+  // this test means to exercise.
+  test(
     "opening the Gantt shows an existing task's bar without manual scrolling, regardless of its dates",
     async ({ page, seededProject }) => {
-      const { token, projectId } = seededProject;
+      const { token, userId } = seededProject;
       const base = apiBase(test.info());
       const s = stamp();
+      const projectId = await createIsolatedProject(base, token, userId, `FarPast ${s}`);
       const farPast = await createTask(base, token, projectId, {
         title: `FarPast ${s}`,
         status: "TODO",
@@ -699,6 +712,25 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await page.waitForTimeout(300);
     await page.mouse.move(5, 5);
     await page.screenshot({ path: "test-results/checklist-04b-connectors-vs-sticky-header.png" });
+
+    // App-bug finding, FIXED (task-b8-report.md's Finding #2; fix documented
+    // in task-b8fix-report.md and CHANGELOG.md's 2026-07-25 entry): a
+    // missing `flex flex-col` on ProjectDetail.tsx's Outlet wrapper broke
+    // the h-full/flex-1 height chain SolvroGantt.tsx depends on — its own
+    // child (ProjectGantt.tsx's wrapper) sat under a `display: block`
+    // parent, where `flex-1`/`min-h-0` are inert, so the Gantt rendered at
+    // its natural (unbounded) content height instead of being clipped to
+    // the available viewport. With nothing to constrain it, the vendored
+    // engine's own internal scroll area never detected overflow, and
+    // `<main>` (Shell.tsx) — the first ACTUAL scrolling ancestor once the
+    // Gantt's own bounds no longer clipped anything — took over scrolling
+    // the whole page instead, dragging the toolbar and date-axis header out
+    // of view along with the rows. Now that the chain is fixed, the
+    // Gantt's own internal scroll area (not `<main>`) handles the row
+    // overflow, so the toolbar and both header rows stay put.
+    await expect(page.getByRole("button", { name: "Today" })).toBeVisible();
+    await expect(page.locator('[data-slot="gantt-tree-header"]')).toBeVisible();
+    await expect(page.locator('[data-slot="gantt-timeline-header"]')).toBeVisible();
 
     await expect(page.locator('[data-testid="solvro-gantt"]')).toBeVisible();
   });
