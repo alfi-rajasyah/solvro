@@ -314,7 +314,7 @@ interface BuildRowsOpts {
  * subtasks reports done/total across its direct children. A task with no
  * subtasks and not DONE reports 0%.
  */
-function progressForTask(task: Task, childrenById: Map<number, Task[]>): number {
+export function progressForTask(task: Task, childrenById: Map<number, Task[]>): number {
   if (task.status === "DONE") return 100;
   const children = childrenById.get(task.id) ?? [];
   if (children.length === 0) return 0;
