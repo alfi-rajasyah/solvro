@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { GanttFrame } from "@/components/gantt/GanttFrame";
+import { SolvroGantt } from "@/components/gantt-v2/SolvroGantt";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import type { Task } from "@/lib/queries";
 import { useProjectContext } from "../ProjectDetail";
@@ -16,7 +16,7 @@ export function ProjectGantt() {
   return (
     <>
       <div className="hidden min-h-0 min-w-0 flex-1 md:block">
-        <GanttFrame
+        <SolvroGantt
           projectId={project.id}
           projectName={project.name}
           baselineLockedAt={project.baselineLockedAt}
