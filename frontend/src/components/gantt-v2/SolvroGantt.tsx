@@ -31,7 +31,17 @@ import {
   parseTaskId,
   sectionNodeId,
 } from "./adapter";
+import { SolvroBar } from "./SolvroBar";
 import { SectionColorCell, TaskDatesCell } from "./TreeCells";
+
+// Plan B Task 4 — SolvroBar owns every bar's inner content (solid fills,
+// milestones, rollup pills, measured-fit labels, the dormant AI-glow hook).
+// `overflow-visible` is what lets its "outside" label escape the button's
+// box; the bg-transparent trio neutralizes the built-in 20%-opacity ghost
+// track across base/hover/selected states (three separate tailwind-merge
+// conflict groups — all three must be named or the ghost look flashes back
+// on hover/select). See SolvroBar.tsx's file header for the full rationale.
+const SOLVRO_EVENT_CLASSNAMES = "overflow-visible bg-transparent hover:bg-transparent data-selected:bg-transparent";
 
 export interface SolvroGanttProps {
   projectId: number;
@@ -460,6 +470,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
             columns={columns}
             rowCheckboxes={false}
             zoomControl={false}
+            // Plan B Task 4: renderEvent hands every bar's inner content to
+            // SolvroBar; barLabel="inside" (already the engine default, made
+            // explicit) disables ReUI's own width-threshold outside-label
+            // flip so SolvroBar's measured-fit check is the only placement
+            // decision in play — see SolvroBar.tsx's file header.
+            renderEvent={(renderProps) => <SolvroBar {...renderProps} />}
+            classNames={{ event: SOLVRO_EVENT_CLASSNAMES }}
+            barLabel="inside"
             renderResourceLabel={({ resource }) => (
               <span className="truncate">
                 {resource.id === sectionNodeId(null) ? "(No section)" : resource.title}
