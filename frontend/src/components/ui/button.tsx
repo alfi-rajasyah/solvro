@@ -1,6 +1,6 @@
 import * as React from "react"
+import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
-import { Slot } from "radix-ui"
 
 import { cn } from "@/lib/utils"
 
@@ -38,20 +38,20 @@ const buttonVariants = cva(
   }
 )
 
+// `asChild` (Radix Slot) is dropped in favor of Base UI's native `render`
+// prop — ButtonPrimitive already forwards it via useRenderElement internally,
+// so no local useRender wiring is needed here.
 function Button({
   className,
   variant = "default",
   size = "default",
-  asChild = false,
   ...props
-}: React.ComponentProps<"button"> &
+}: Omit<React.ComponentProps<typeof ButtonPrimitive>, "className"> &
   VariantProps<typeof buttonVariants> & {
-    asChild?: boolean
+    className?: string
   }) {
-  const Comp = asChild ? Slot.Root : "button"
-
   return (
-    <Comp
+    <ButtonPrimitive
       data-slot="button"
       data-variant={variant}
       data-size={size}
