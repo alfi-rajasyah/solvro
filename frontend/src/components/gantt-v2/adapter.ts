@@ -95,7 +95,13 @@ export function taskToEvent(
     start: parseISO(startIso.slice(0, 10)),
     end: addDays(parseISO(endIso.slice(0, 10)), 1),
     allDay: true,
-    progress: progressForTask(task, childrenById),
+    // A milestone is a point-in-time marker, not a duration bar — it has no
+    // progress to show. Suppressing this at the source (rather than in
+    // SolvroBar) kills ReUI's built-in progress-tint span at its own
+    // `progress !== null` gate (gantt-bar.tsx:310-322), which otherwise
+    // renders a translucent strip with no covering backdrop to hide it
+    // behind (Plan B Task 4 review finding).
+    progress: task.isMilestone ? undefined : progressForTask(task, childrenById),
     color: barFillHex(
       {
         status: task.status,
