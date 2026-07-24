@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-24 — shadcn bootstrap (Plan A Task 3)
+
+- `frontend/components.json`, `cn()` at `frontend/src/lib/utils.ts` (`clsx` + `tailwind-merge`), `tw-animate-css`, and a `@theme inline` bridge in `frontend/src/index.css` mapping shadcn semantic color names onto Technical Precision tokens (both themes). Reverses the 2026-07-22 "no shadcn stack" stance per the 2026-07-24 spec.
+
 ### Changed — 2026-07-24 — Theme ported to CSS-first `@theme` (Plan A Task 2)
 
 - `frontend/tailwind.config.ts` deleted; all Technical Precision tokens (colors, +1px text scale, named type roles, `shadow-overlay`, sidebar/context-panel spacing, radius prohibitions) now live in a `@theme` block at the head of `frontend/src/index.css`, still routed through the existing `:root`/`.dark` RGB triplets. Dark mode is the `@custom-variant dark` class variant — `theme.tsx` unchanged. The Task 1 `@config "../tailwind.config.ts";` shim is removed in the same change (deleting either the shim or the config alone would break the build).
