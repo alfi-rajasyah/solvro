@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-24 — Tailwind v4 exit gate passed (Plan A Task 5)
+
+- Frontend typecheck + build, backend tsc, and the Playwright suite are green on Tailwind v4 (33 passed; 4 failed = `pwa.spec.ts` against the dev server, the documented vite-plugin-pwa caveat — `sw.js` confirmed generated at build; 1 flaky passed on retry, a seed-data precondition unrelated to the migration). Full visual sweep (all sidebar screens, dark + light, desktop + 375px) completed by the user: no regressions; fix-ups found: none. Plan B (ReUI Gantt swap) is unblocked.
+
 ### Added — 2026-07-24 — shadcn ui primitives for the Gantt swap (Plan A Task 4)
 
 - Vendored via shadcn CLI into `frontend/src/components/ui/`: button, calendar, checkbox, context-menu, dropdown-menu, popover, scroll-area, tooltip (+ their npm peer deps: `radix-ui` ^1.6.5, `date-fns` ^4.4.0, `react-day-picker` ^10.0.1, `class-variance-authority` ^0.7.1, `lucide-react` ^1.26.0). Required imports of the ReUI Gantt (Plan B). Themed via the Task 3 semantic bridge, not per-file edits. `class-variance-authority` and `lucide-react` are imported by the generated components (`checkbox.tsx`, `context-menu.tsx`, `dropdown-menu.tsx`, `calendar.tsx`, `button.tsx`) but the shadcn CLI (v4.14.1) omitted them from `package.json`/`package-lock.json` — added by hand via `npm install` in the same change; `typecheck` and `build` fail without them. `components.json` and `frontend/src/index.css` were untouched by the CLI (Task 3's bridge already covered every semantic token the components needed) — verified via `git diff`.
