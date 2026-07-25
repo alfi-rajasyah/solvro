@@ -51,7 +51,7 @@ export function ProjectServices() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4 md:min-h-0 md:flex-1">
       {showAddAll && (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
@@ -75,15 +75,17 @@ export function ProjectServices() {
         </div>
       )}
 
-      <ServiceMappingList
-        assignments={project.services}
-        onSave={(assignments) => update.mutateAsync(assignments)}
-        canMutate={canMutate}
-        saving={update.isPending}
-        subscribedServiceIds={subscribedServiceIds}
-        title="Services in Scope"
-        description="Select the services in play for this engagement and the tools used for each. Services the customer subscribes to are badged."
-      />
+      <div className="md:min-h-0 md:flex-1 md:overflow-y-auto">
+        <ServiceMappingList
+          assignments={project.services}
+          onSave={(assignments) => update.mutateAsync(assignments)}
+          canMutate={canMutate}
+          saving={update.isPending}
+          subscribedServiceIds={subscribedServiceIds}
+          title="Services in Scope"
+          description="Select the services in play for this engagement and the tools used for each. Services the customer subscribes to are badged."
+        />
+      </div>
     </div>
   );
 }

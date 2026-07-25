@@ -623,7 +623,7 @@ export function ProjectKanban() {
       >
         <div
           ref={boardScrollRef}
-          className="flex h-full snap-x snap-mandatory gap-4 overflow-x-auto md:grid md:grid-cols-3 md:overflow-visible md:snap-none"
+          className="flex h-full snap-x snap-mandatory gap-4 overflow-x-auto md:grid md:min-h-0 md:flex-1 md:grid-cols-3 md:overflow-visible md:snap-none"
         >
           {COLUMNS.map((col, idx) => (
             <div
@@ -631,7 +631,7 @@ export function ProjectKanban() {
               ref={(el) => {
                 columnRefs.current[idx] = el;
               }}
-              className="w-full shrink-0 snap-center md:w-auto md:shrink md:snap-align-none"
+              className="w-full shrink-0 snap-center md:w-auto md:shrink md:min-h-0 md:snap-align-none"
             >
               <Column
                 id={col.id}
@@ -747,11 +747,11 @@ function Column({
     <div
       ref={setNodeRef}
       className={[
-        "flex flex-col gap-2.5 rounded-xl bg-surface-container p-2 transition-all",
+        "flex flex-col gap-2.5 rounded-xl bg-surface-container p-2 transition-all md:h-full md:min-h-0",
         isOver ? "ring-2 ring-inset ring-primary/40" : "",
       ].join(" ")}
     >
-      {/* Column header */}
+      {/* Column header — stays pinned; the card list below scrolls on its own (md:+) */}
       <div className="flex items-center gap-2 px-1 pb-1">
         <h3 className="text-sm font-bold text-on-surface">{label}</h3>
         <span
@@ -796,26 +796,30 @@ function Column({
         </div>
       </div>
 
-      <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-        {tasks.map((task) => (
-          <SortableCard
-            key={task.id}
-            task={task}
-            subtaskMap={subtaskMap}
-            canDrag={canDrag}
-            canToggleSubtasks={canToggleSubtasks}
-            onClick={() => onCardClick(task)}
-            onMenuClick={() => onCardMenuClick(task)}
-            onToggleSubtask={onToggleSubtask}
-          />
-        ))}
-      </SortableContext>
+      {/* Scrollable card region (md:+) — dnd-kit autoscroll picks up this
+          overflow-y-auto ancestor automatically when a drag nears its edge. */}
+      <div className="flex flex-col gap-2.5 md:min-h-0 md:flex-1 md:overflow-y-auto">
+        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+          {tasks.map((task) => (
+            <SortableCard
+              key={task.id}
+              task={task}
+              subtaskMap={subtaskMap}
+              canDrag={canDrag}
+              canToggleSubtasks={canToggleSubtasks}
+              onClick={() => onCardClick(task)}
+              onMenuClick={() => onCardMenuClick(task)}
+              onToggleSubtask={onToggleSubtask}
+            />
+          ))}
+        </SortableContext>
 
-      {tasks.length === 0 && (
-        <div className="rounded-lg border border-dashed border-outline-variant px-3 py-8 text-center text-[12px] text-on-surface-variant">
-          Drop tasks here
-        </div>
-      )}
+        {tasks.length === 0 && (
+          <div className="rounded-lg border border-dashed border-outline-variant px-3 py-8 text-center text-[12px] text-on-surface-variant">
+            Drop tasks here
+          </div>
+        )}
+      </div>
     </div>
   );
 }
