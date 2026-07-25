@@ -602,6 +602,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
             exportEnd: end,
             holidays,
             colorBy,
+            // F4 (2026-07-25) — dependency connectors now render in the PDF
+            // too, so the export needs the same dependency data the live
+            // overlay already fetches (GanttOverlay.tsx's props). Baseline
+            // ghosts were also added in that pass but removed per user
+            // direction the same day — PDF export never draws them,
+            // regardless of whether the project's baseline is locked; the
+            // on-screen `showBaseline` toggle and its ghosts are unaffected.
+            dependencies,
           });
         } catch (err) {
           setActionError(err instanceof Error ? err.message : "PDF export failed.");
@@ -619,6 +627,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
             exportEnd: end,
             holidays,
             colorBy,
+            dependencies,
             tabWindow: win,
           });
         } catch (err) {
@@ -628,7 +637,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
       },
     });
     return () => register(null);
-  }, [register, projectName, allRows, allDateRange, holidays, colorBy]);
+  }, [register, projectName, allRows, allDateRange, holidays, colorBy, dependencies]);
 
   const runExport = useCallback(
     async (kind: "excel" | "pdf") => {
