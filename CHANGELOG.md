@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-07-25 — Hand-rolled Gantt engine deleted (Plan B Task 9)
+
+- `frontend/src/components/gantt/` (all 11 files, ~2.9k LOC: GanttFrame, GanttBar, GanttConnectors, GanttListRow, GanttChartPane, GanttListPane, GanttColumnGrid, GanttDateAxis, GanttRow, GanttSectionBar, GanttTodayLine) — replaced by the ReUI-based engine in `frontend/src/components/reui/gantt/` + `frontend/src/components/gantt-v2/`, which reached full parity (Plan B Tasks 1–8 + walkthrough fix rounds F1–F5). `frontend/src/lib/gantt/` (geometry, palette, exports, exportContext, constants) is retained in full as the export/data layer. Verified: zero imports of the deleted directory remain anywhere in `frontend/src`.
+
+### Changed — 2026-07-25 — components.json iconLibrary corrected to lucide (Plan B Task 9 housekeeping)
+
+- `frontend/components.json` `iconLibrary`: `"radix"` → `"lucide"` — the CLI-written value pointed future `shadcn add` icon insertions at radix, but the project uses `lucide-react` and `radix-ui` was removed in Plan B Task 1 (B1 review Minor, deferred to closeout).
+
 ### Fixed — 2026-07-25 — Project tab views scroll internally on desktop (walkthrough findings F5 + F5b)
 
 - List, Kanban, Timeline, Risks, and Services project tabs scroll internally on desktop (`md:`+) instead of the whole page — `frontend/src/pages/views/ProjectList.tsx` (task-row container now `md:min-h-0 md:flex-1 md:overflow-y-auto`), `frontend/src/pages/views/ProjectKanban.tsx` (board row bounded via `md:min-h-0 md:flex-1`; each Kanban column now scrolls its card list independently — column header stays pinned), `frontend/src/pages/views/ProjectTimeline.tsx` (new wrapper div scrolls while the `<ol>`'s spine still runs the full list), `frontend/src/pages/views/ProjectRisks.tsx` (Stat badges + filter row stay pinned, table/mobile-card region scrolls), and `frontend/src/pages/views/ProjectServices.tsx` (bulk-actions row stays pinned, the service catalogue — `ServiceMappingList`, unmodified and still shared with `CustomerDetail` — scrolls in its own wrapper). All mirror the Gantt's B8 containment fix. `ProjectOverview` was intentionally left as content-flow (not named in scope). Mobile (`<md`) behavior is untouched everywhere — containment classes are all `md:`-gated, page scroll remains correct on phones. Known trade-off: any `position: absolute` popover opened very close to a new scroll container's bottom edge (List's row dropdowns, Kanban's column "⋯" menu) can now clip instead of overlaying past it, since the ancestor is `overflow-y-auto` instead of an unbounded page — same latent trade-off the Gantt's own B8 fix carries for its overlays; flagged, not fixed.
