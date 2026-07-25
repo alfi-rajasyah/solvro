@@ -66,14 +66,36 @@ export interface SolvroGanttProps {
   onCreateTaskOpen: (sectionId: number | null) => void;
 }
 
-// Ported verbatim from GanttFrame.tsx:65-70 — the four zoom-pill scales the
-// old engine offered (ReUI's GanttScale type adds a fifth, "year", which the
-// old Gantt never exposed and this toolbar deliberately doesn't either).
+// Plan B Task 9 walkthrough fix (Finding F3) — the four zoom-pill LABELS are
+// ported verbatim from GanttFrame.tsx:65-70 (Day/Week/Month/Quarter), but
+// each is now remapped one ReUI GanttScale step coarser than its own name.
+// ReUI's scale names are CALENDAR-period names (how much time is visible),
+// not column-GRAIN names (what each column represents) — the two only
+// happen to line up for "day" itself. Traced the actual column grain each
+// scale renders in gantt-view.tsx's unit-building useMemo (:393-553):
+//   "day"     → units = HOUR-ish intervals within a day, groups = days
+//   "week"    → units = DAYS (7 of them), groups = weeks      \_ identical
+//   "month"   → units = DAYS (a calendar month's worth), groups = weeks /  grain
+//   "quarter" → units = WEEKS (week-aligned), groups = months
+//   "year"    → units = MONTHS (calendar months), groups = quarters
+// A literal mode:"day"/"week"/"month"/"quarter" mapping therefore rendered
+// one level too fine for every pill's label (e.g. the "Day" pill showed
+// HOUR columns, not day columns). Remapped so each pill's underlying scale
+// renders the column grain its LABEL promises:
+//   Day pill     → ReUI "week"    (day columns, ~1-week initial window)
+//   Week pill    → ReUI "month"   (day columns, ~1-month initial window —
+//                                  closest to the old engine's Week mode:
+//                                  day-granular with weekend shading, just
+//                                  a wider initial window; stays the default)
+//   Month pill   → ReUI "quarter" (week columns under month bands)
+//   Quarter pill → ReUI "year"    (month columns under quarter bands)
+// ReUI's own "day" GanttScale (hour columns) has no pill in this toolbar —
+// same as the old engine, which never exposed an hour-granular mode either.
 const SCALES: Array<{ mode: GanttScale; label: string }> = [
-  { mode: "day", label: "Day" },
-  { mode: "week", label: "Week" },
-  { mode: "month", label: "Month" },
-  { mode: "quarter", label: "Quarter" },
+  { mode: "week", label: "Day" },
+  { mode: "month", label: "Week" },
+  { mode: "quarter", label: "Month" },
+  { mode: "year", label: "Quarter" },
 ];
 
 // Ported verbatim from GanttFrame.tsx:72 — same key, same values, so a user's
@@ -151,7 +173,11 @@ export function SolvroGantt(props: SolvroGanttProps) {
   const deleteDependency = useDeleteDependency(projectId);
   const ganttContainerRef = useRef<HTMLDivElement | null>(null);
 
-  const [scale, setScale] = useState<GanttScale>("week");
+  // Plan B Task 9 (F3 fix) — default is the "Week" pill, whose underlying
+  // ReUI scale is now "month" (see SCALES' comment above), not literally
+  // "week" — day-granular columns, closest to the old engine's Week-mode
+  // default look.
+  const [scale, setScale] = useState<GanttScale>("month");
   const [showBaseline, setShowBaseline] = useState(false);
   // Plan B Task 7 (fix pass) — controlled collapse state, wired into
   // <Gantt>'s `collapsedGroups`/`onCollapsedGroupsChange` (gantt.tsx:1344-
@@ -625,13 +651,17 @@ export function SolvroGantt(props: SolvroGanttProps) {
 
   // Plan B Task 8 fix — Finding #1 (task-b8-report.md): the vendored engine
   // anchors its initial visible window on `new Date()` (gantt.tsx:342:
-  // `date: initial.defaultDate ?? new Date()`), a single week at the
-  // default Week scale, and never widens it to fit a project's actual task
-  // dates — a project whose tasks fall outside that window opened to a
-  // completely empty timeline with no on-screen affordance. The old
-  // hand-rolled engine derived its chart window from the tasks' own min/max
-  // dates (geometry.ts's `computeChartStart`/`computeChartEnd`), so this was
-  // a real regression, not a hand-rolled-engine parity gap.
+  // `date: initial.defaultDate ?? new Date()`) and never widens it to fit a
+  // project's actual task dates — a project whose tasks fall outside that
+  // window opened to a completely empty timeline with no on-screen
+  // affordance. (The window's SIZE at the anchor date depends on `scale` —
+  // originally a single week at this component's then-default scale; after
+  // Task 9's F3 pill remap the default "Week" pill is ReUI scale "month",
+  // so the initial window is now ~1 month wide, only widening the margin
+  // for error here.) The old hand-rolled engine derived its chart window
+  // from the tasks' own min/max dates (geometry.ts's
+  // `computeChartStart`/`computeChartEnd`), so this was a real regression,
+  // not a hand-rolled-engine parity gap.
   //
   // Rejected approach: passing a computed `defaultDate` prop to `<Gantt>`.
   // Verified by reading `createGanttStore` (gantt.tsx:331-343) that

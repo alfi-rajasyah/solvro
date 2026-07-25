@@ -589,6 +589,57 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await page.keyboard.press("Escape");
   });
 
+  // Walkthrough finding F3 (task-b9f3-report.md): the zoom pills rendered
+  // one level too fine — ReUI's scale NAMES are calendar-period names, not
+  // column-GRAIN names (SolvroGantt.tsx's SCALES comment traces the actual
+  // grain each scale renders). Each pill's label is now backed by a ReUI
+  // scale one step coarser than its own name (Day→week, Week→month,
+  // Month→quarter, Quarter→year) so the rendered columns match what each
+  // label promises. Cheap regression net: every pill visually activates and
+  // a task dated exactly "today" stays visible with no extra scrolling
+  // across all four — the anchor DATE never moves on a scale change (only
+  // Task 8's one-shot fit effect touches it), and every scale's window is
+  // built from that same anchor, so it's guaranteed to be inside every
+  // window. Screenshots captured alongside for visual re-verification.
+  //
+  // Isolated project (not the shared `seededProject`): this test needs
+  // nothing the shared project already has, and a full-suite run observed
+  // `list-dnd.spec.ts`'s "gantt row drag" test (a DIFFERENT file, but one
+  // that — per playwright.config.ts's `workers: 1` — can share this exact
+  // worker's `seededProject` when run in the same invocation) flaking on
+  // an accumulated-row-count edge unrelated to this task's own change;
+  // keeping this test off the shared project is a free reduction of that
+  // contention, not a fix for it (see task-b9f3-report.md).
+  test("(i) zoom pills render each label's column grain; bar stays visible across all four", async ({
+    page,
+    seededProject,
+  }) => {
+    const { token, userId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    const projectId = await createIsolatedProject(base, token, userId, `ZoomPill ${s}`);
+    const task = await createTask(base, token, projectId, {
+      title: `ZoomPill ${s}`,
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(3),
+    });
+
+    await gotoSeededGantt(page, projectId);
+
+    for (const label of ["Day", "Week", "Month", "Quarter"] as const) {
+      const pill = page.getByRole("button", { name: label, exact: true });
+      await pill.click();
+      await page.waitForTimeout(300);
+      // Active-pill styling is the only signal available (no aria-pressed
+      // on this toolbar) — matches SolvroGantt.tsx's `cn(...)` active class.
+      await expect(pill).toHaveClass(/bg-primary/);
+      await expect(barButton(page, task.id)).toBeVisible();
+      await page.mouse.move(5, 5);
+      await page.screenshot({ path: `test-results/scale-${label.toLowerCase()}.png` });
+    }
+  });
+
   // ---- Browser checklist (B6 Opus review follow-up) — observational only;
   // screenshots for the report, plus light structural assertions so this
   // isn't a pure no-op. Do NOT fix app issues found here — report them. ----
