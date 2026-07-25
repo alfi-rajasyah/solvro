@@ -108,7 +108,7 @@ export function ProjectRisks() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4 md:min-h-0 md:flex-1">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           <Stat label="High" value={summary.high} tone="high" />
@@ -169,68 +169,70 @@ export function ProjectRisks() {
         )}
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center text-on-surface-variant">
-          <p className="text-sm">
-            {risks && risks.length > 0
-              ? "No risks match the current filters."
-              : "No risks logged yet."}
-          </p>
-          {canEdit && risks && risks.length === 0 && (
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="mt-3 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container"
-            >
-              Add the first risk
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="hidden overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest md:block">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-container-low text-left font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
-                <tr>
-                  <th className="px-3 py-2">Description</th>
-                  <th className="px-3 py-2">Category</th>
-                  <th className="w-24 px-3 py-2 text-center">Prob</th>
-                  <th className="w-24 px-3 py-2 text-center">Impact</th>
-                  <th className="w-28 px-3 py-2 text-center">Score</th>
-                  <th className="w-32 px-3 py-2">Status</th>
-                  {canEdit && <th className="w-20 px-3 py-2"></th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant">
-                {filtered.map((r) => (
-                  <RiskRow
-                    key={r.id}
-                    risk={r}
-                    canEdit={canEdit}
-                    onEdit={() => setEditing(r)}
-                    onDelete={() => setConfirmDelete(r)}
-                    onChange={(patch) =>
-                      updateRisk.mutate({ id: r.id, patch })
-                    }
-                  />
-                ))}
-              </tbody>
-            </table>
+      <div className="md:min-h-0 md:flex-1 md:overflow-y-auto">
+        {filtered.length === 0 ? (
+          <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center text-on-surface-variant">
+            <p className="text-sm">
+              {risks && risks.length > 0
+                ? "No risks match the current filters."
+                : "No risks logged yet."}
+            </p>
+            {canEdit && risks && risks.length === 0 && (
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="mt-3 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container"
+              >
+                Add the first risk
+              </button>
+            )}
           </div>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest md:block">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-container-low text-left font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
+                  <tr>
+                    <th className="px-3 py-2">Description</th>
+                    <th className="px-3 py-2">Category</th>
+                    <th className="w-24 px-3 py-2 text-center">Prob</th>
+                    <th className="w-24 px-3 py-2 text-center">Impact</th>
+                    <th className="w-28 px-3 py-2 text-center">Score</th>
+                    <th className="w-32 px-3 py-2">Status</th>
+                    {canEdit && <th className="w-20 px-3 py-2"></th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant">
+                  {filtered.map((r) => (
+                    <RiskRow
+                      key={r.id}
+                      risk={r}
+                      canEdit={canEdit}
+                      onEdit={() => setEditing(r)}
+                      onDelete={() => setConfirmDelete(r)}
+                      onChange={(patch) =>
+                        updateRisk.mutate({ id: r.id, patch })
+                      }
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          <div className="space-y-2 md:hidden">
-            {filtered.map((r) => (
-              <RiskCard
-                key={r.id}
-                risk={r}
-                canEdit={canEdit}
-                onEdit={() => setEditing(r)}
-                onDelete={() => setConfirmDelete(r)}
-              />
-            ))}
-          </div>
-        </>
-      )}
+            <div className="space-y-2 md:hidden">
+              {filtered.map((r) => (
+                <RiskCard
+                  key={r.id}
+                  risk={r}
+                  canEdit={canEdit}
+                  onEdit={() => setEditing(r)}
+                  onDelete={() => setConfirmDelete(r)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {(creating || editing) && (
         <RiskFormModal

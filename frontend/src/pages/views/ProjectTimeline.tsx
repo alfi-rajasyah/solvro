@@ -73,18 +73,20 @@ export function ProjectTimeline() {
 
   return (
     <>
-      <ol className="relative ml-3 border-l border-outline-variant">
-        {ordered.map((task) => (
-          <TimelineItem
-            key={task.id}
-            task={task}
-            subtasks={subtasksOf.get(task.id) ?? []}
-            canEdit={canEdit}
-            onChangeStatus={(status) => updateTask.mutate({ id: task.id, patch: { status } })}
-            onEdit={() => setEditTask(task)}
-          />
-        ))}
-      </ol>
+      <div className="md:min-h-0 md:flex-1 md:overflow-y-auto">
+        <ol className="relative ml-3 border-l border-outline-variant">
+          {ordered.map((task) => (
+            <TimelineItem
+              key={task.id}
+              task={task}
+              subtasks={subtasksOf.get(task.id) ?? []}
+              canEdit={canEdit}
+              onChangeStatus={(status) => updateTask.mutate({ id: task.id, patch: { status } })}
+              onEdit={() => setEditTask(task)}
+            />
+          ))}
+        </ol>
+      </div>
 
       {editTask && (
         <TaskFormModal
