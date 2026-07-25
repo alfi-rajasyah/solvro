@@ -79,7 +79,7 @@ export function Drawer({
 
   return createPortal(
     <div
-      className="fixed inset-x-0 bottom-0 top-14 z-[100] flex justify-end"
+      className="fixed inset-x-0 bottom-0 top-14 z-100 flex justify-end"
       onMouseDown={onClose}
     >
       <div
@@ -112,7 +112,7 @@ export function Drawer({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+              className="flex h-7 w-7 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
               aria-label="Close"
             >
               <span className="material-symbols-outlined text-base">close</span>

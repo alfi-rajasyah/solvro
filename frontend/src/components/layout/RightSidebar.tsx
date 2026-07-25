@@ -66,7 +66,7 @@ export function RightSidebar({
           type="button"
           onClick={onClose}
           aria-label="Close project context"
-          className="flex h-7 w-7 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+          className="flex h-7 w-7 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
         >
           <span className="material-symbols-outlined text-base">close</span>
         </button>
@@ -91,7 +91,7 @@ export function RightSidebar({
           <h3 className="mb-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
             Blueprint reference
           </h3>
-          <div className="rounded border border-outline-variant bg-surface-container-lowest p-3">
+          <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-3">
             <div className="flex items-start gap-3">
               <span
                 className="material-symbols-outlined text-primary"
@@ -167,7 +167,7 @@ export function RightSidebar({
                 type="button"
                 onClick={() => runExport("excel")}
                 disabled={exporting !== null}
-                className="inline-flex items-center justify-center gap-1.5 rounded border border-outline-variant bg-surface-container-lowest px-2.5 py-2 font-display text-[12px] font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-1.5 rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-2 font-display text-[12px] font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="material-symbols-outlined text-[17px]">
                   table_view
@@ -178,7 +178,7 @@ export function RightSidebar({
                 type="button"
                 onClick={() => runExport("pdf")}
                 disabled={exporting !== null}
-                className="inline-flex items-center justify-center gap-1.5 rounded border border-outline-variant bg-surface-container-lowest px-2.5 py-2 font-display text-[12px] font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-1.5 rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-2 font-display text-[12px] font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="material-symbols-outlined text-[17px]">
                   picture_as_pdf
@@ -189,7 +189,7 @@ export function RightSidebar({
                 type="button"
                 onClick={() => runExport("pdfTab")}
                 disabled={exporting !== null}
-                className="inline-flex items-center justify-center gap-1.5 rounded border border-outline-variant bg-surface-container-lowest px-2.5 py-2 font-display text-[12px] font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center gap-1.5 rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-2 font-display text-[12px] font-semibold text-on-surface transition-colors hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="material-symbols-outlined text-[17px]">
                   open_in_new
@@ -204,7 +204,7 @@ export function RightSidebar({
             {exportError && (
               <div
                 role="alert"
-                className="mt-2 rounded border border-error/30 bg-error-container px-2 py-1.5 text-[12px] text-on-error-container"
+                className="mt-2 rounded-sm border border-error/30 bg-error-container px-2 py-1.5 text-[12px] text-on-error-container"
               >
                 {exportError}
               </div>
@@ -219,7 +219,7 @@ export function RightSidebar({
             </h3>
             <Link
               to={`/customers/${project.customer.id}?tab=documents`}
-              className="flex items-start gap-3 rounded border border-outline-variant bg-surface-container-lowest p-3 transition-colors hover:border-primary/40"
+              className="flex items-start gap-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-3 transition-colors hover:border-primary/40"
             >
               <span
                 className="material-symbols-outlined text-primary"

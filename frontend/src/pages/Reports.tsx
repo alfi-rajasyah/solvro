@@ -56,15 +56,15 @@ export function Reports() {
           </h2>
 
           {isLoading && (
-            <div className="h-32 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+            <div className="h-32 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
           )}
           {isError && (
-            <p className="rounded border border-outline-variant bg-surface-container-low px-3 py-4 text-xs text-on-surface-variant">
+            <p className="rounded-sm border border-outline-variant bg-surface-container-low px-3 py-4 text-xs text-on-surface-variant">
               Could not load projects.
             </p>
           )}
           {!isLoading && !isError && myActive.length === 0 && (
-            <p className="rounded border border-dashed border-outline-variant px-3 py-6 text-center text-xs text-on-surface-variant">
+            <p className="rounded-sm border border-dashed border-outline-variant px-3 py-6 text-center text-xs text-on-surface-variant">
               No active projects to export.
             </p>
           )}
@@ -78,7 +78,7 @@ export function Reports() {
                     type="button"
                     onClick={() => setSelectedId(p.id)}
                     className={[
-                      "flex w-full flex-col gap-1 rounded border px-3 py-2 text-left transition-colors",
+                      "flex w-full flex-col gap-1 rounded-sm border px-3 py-2 text-left transition-colors",
                       active
                         ? "border-primary bg-primary/10"
                         : "border-outline-variant hover:bg-surface-container",
@@ -105,7 +105,7 @@ export function Reports() {
           {selected ? (
             <ExportPanel key={selected.id} project={selected} />
           ) : (
-            <div className="flex h-full min-h-[16rem] items-center justify-center rounded border border-dashed border-outline-variant px-6 text-center text-sm text-on-surface-variant">
+            <div className="flex h-full min-h-64 items-center justify-center rounded-sm border border-dashed border-outline-variant px-6 text-center text-sm text-on-surface-variant">
               Select a project to generate its export packet.
             </div>
           )}
@@ -232,7 +232,7 @@ function ExportPanel({ project }: { project: ProjectSummary }) {
             type="button"
             onClick={handleCopy}
             disabled={!markdown || busy !== null}
-            className="inline-flex items-center gap-1.5 rounded border border-outline-variant px-3 py-1.5 font-display text-[12px] font-bold text-on-surface hover:bg-surface-container disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-sm border border-outline-variant px-3 py-1.5 font-display text-[12px] font-bold text-on-surface hover:bg-surface-container disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-base">
               {copied ? "check" : "content_copy"}
@@ -243,7 +243,7 @@ function ExportPanel({ project }: { project: ProjectSummary }) {
             type="button"
             onClick={handleDownload}
             disabled={!markdown || busy !== null}
-            className="inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 font-display text-[12px] font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-[12px] font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
           >
             <span className="material-symbols-outlined text-base">
               download
@@ -254,21 +254,21 @@ function ExportPanel({ project }: { project: ProjectSummary }) {
       </div>
 
       {loading && (
-        <div className="h-72 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+        <div className="h-72 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
       )}
       {errored && (
-        <p className="rounded border border-outline-variant bg-surface-container-low px-4 py-6 text-sm text-on-surface-variant">
+        <p className="rounded-sm border border-outline-variant bg-surface-container-low px-4 py-6 text-sm text-on-surface-variant">
           Could not load this project's data. Try again.
         </p>
       )}
       {buildError && (
-        <p className="rounded border border-error/40 bg-error/5 px-4 py-2 text-xs text-error">
+        <p className="rounded-sm border border-error/40 bg-error/5 px-4 py-2 text-xs text-error">
           {buildError}
         </p>
       )}
 
       {markdown !== null && (
-        <pre className="max-h-[60vh] overflow-auto rounded border border-outline-variant bg-surface-container-lowest p-4 font-mono text-[12px] leading-relaxed text-on-surface">
+        <pre className="max-h-[60vh] overflow-auto rounded-sm border border-outline-variant bg-surface-container-lowest p-4 font-mono text-[12px] leading-relaxed text-on-surface">
           {markdown}
         </pre>
       )}

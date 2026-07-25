@@ -116,7 +116,7 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
             onChange={(e) => setName(e.target.value)}
             maxLength={200}
             autoFocus
-            className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
           />
         </Field>
 
@@ -128,14 +128,14 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
               onChange={(e) => setAccountManager(e.target.value)}
               maxLength={200}
               placeholder="Free text — anyone, internal or external"
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
             />
           </Field>
           <Field label="Solution Architect">
             <select
               value={solutionArchitect}
               onChange={(e) => setSolutionArchitect(e.target.value)}
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
             >
               <option value="">— None —</option>
               {solutionArchitectOptions.map((u) => (
@@ -157,14 +157,14 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
             onChange={(e) => setDescription(e.target.value)}
             rows={5}
             maxLength={5000}
-            className="w-full resize-y rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30"
+            className="w-full resize-y rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
           />
         </Field>
 
         {error && (
           <div
             role="alert"
-            className="rounded border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
+            className="rounded-sm border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
           >
             {error}
           </div>

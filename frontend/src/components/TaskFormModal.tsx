@@ -216,7 +216,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
       <button
         type="button"
         onClick={requestClose}
-        className="rounded p-1 text-on-surface-variant hover:bg-surface-container"
+        className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container"
         aria-label="Close"
       >
         <span className="material-symbols-outlined text-base">close</span>
@@ -274,7 +274,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             maxLength={200}
             autoFocus
             placeholder="Task title"
-            className="flex-1 border-none bg-transparent text-lg font-bold text-on-surface outline-none placeholder:text-on-surface-variant/40 focus:outline-none"
+            className="flex-1 border-none bg-transparent text-lg font-bold text-on-surface outline-hidden placeholder:text-on-surface-variant/40 focus:outline-hidden"
           />
         </div>
 
@@ -286,7 +286,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               value={priority}
               onChange={(e) => setPriority(e.target.value as Priority)}
               disabled={!canEdit}
-              className={`cursor-pointer border-none bg-transparent text-xs font-semibold focus:outline-none disabled:cursor-default ${PRIORITY_COLOR[priority]}`}
+              className={`cursor-pointer border-none bg-transparent text-xs font-semibold focus:outline-hidden disabled:cursor-default ${PRIORITY_COLOR[priority]}`}
             >
               {PRIORITIES.map((p) => (
                 <option key={p} value={p}>
@@ -302,7 +302,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               value={status}
               onChange={(e) => setStatus(e.target.value as TaskStatus)}
               disabled={!canEdit}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
             >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -320,7 +320,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
                 setAssignedToId(e.target.value === "" ? "" : Number(e.target.value))
               }
               disabled={!canEdit}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
             >
               <option value="">Unassigned</option>
               {(users ?? []).map((u) => (
@@ -338,7 +338,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               value={startDate}
               onChange={(e) => setStartDate(e.target.value)}
               disabled={!canEdit}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
             />
           </FieldRow>
 
@@ -349,7 +349,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               value={dueDate}
               onChange={(e) => setDueDate(e.target.value)}
               disabled={!canEdit}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
             />
           </FieldRow>
 
@@ -361,7 +361,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
                 setParentTaskId(e.target.value === "" ? "" : Number(e.target.value))
               }
               disabled={!canEdit}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
             >
               <option value="">— Top level —</option>
               {possibleParents.map((t) => (
@@ -380,7 +380,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
                 setSectionId(e.target.value === "" ? "" : Number(e.target.value))
               }
               disabled={!canEdit}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-none disabled:cursor-default"
+              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
             >
               <option value="">— No section —</option>
               {(sections ?? []).map((s) => (
@@ -414,7 +414,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             maxLength={2000}
             placeholder="Add a description…"
             disabled={!canEdit}
-            className="w-full resize-y rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/30 disabled:cursor-default"
+            className="w-full resize-y rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 disabled:cursor-default"
           />
         </div>
 

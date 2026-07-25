@@ -51,7 +51,7 @@ export function Projects() {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded bg-primary px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-primary transition-colors hover:bg-primary-container"
+            className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-primary transition-colors hover:bg-primary-container"
           >
             <span className="material-symbols-outlined text-base">add</span>
             New project
@@ -66,7 +66,7 @@ export function Projects() {
           onChange={(e) =>
             setCustomerFilter(e.target.value === "" ? "" : Number(e.target.value))
           }
-          className="rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
+          className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
         >
           <option value="">All customers</option>
           {(customers ?? []).map((c) => (
@@ -79,7 +79,7 @@ export function Projects() {
           <button
             type="button"
             onClick={() => setCustomerFilter("")}
-            className="rounded border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+            className="rounded-sm border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
           >
             Clear
           </button>
@@ -127,7 +127,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
   return (
     <Link
       to={`/projects/${project.id}`}
-      className="group flex flex-col rounded border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary"
+      className="group flex flex-col rounded-sm border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary"
     >
       {/* ID + status row */}
       <div className="mb-1.5 flex items-start justify-between gap-2">
