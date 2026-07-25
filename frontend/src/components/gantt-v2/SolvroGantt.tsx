@@ -105,6 +105,39 @@ const COLOR_BY_STORAGE_KEY = "solvro.gantt.colorBy";
 // Ported verbatim from GanttFrame.tsx:76.
 const LEGEND_CAP = 6;
 
+// Walkthrough F6 (2026-07-25) — tree-pane width persistence, same pattern as
+// COLOR_BY_STORAGE_KEY above. The vendored engine already ships a controlled
+// tree-panel width + a built-in draggable splitter (GanttTreePanelConfig,
+// reui/gantt/gantt.tsx:1218-1231, forwarded via VIEW_CONFIG_KEYS:1479 and
+// rendered at reui/gantt/gantt-view.tsx:2260-2308) — no vendored-file patch
+// needed, just wiring from here. These three constants mirror that file's
+// own DEFAULT_TREE_PANEL (gantt-view.tsx:203-209) exactly, so an unvisited
+// (no localStorage entry yet) gantt renders pixel-identical to today.
+const TREE_WIDTH_STORAGE_KEY = "solvro.gantt.treeWidth";
+const TREE_PANEL_DEFAULT_WIDTH = 288;
+const TREE_PANEL_MIN_WIDTH = 180;
+const TREE_PANEL_MAX_WIDTH = 640;
+// The engine's own nameColumnWidth default (DEFAULT_TREE_PANEL.nameColumnWidth,
+// gantt-view.tsx:208) — this is the FIXED-width "Resources" cell whose text
+// truncates when a task title outgrows it (the actual F6 symptom: the tree
+// PANE can be wider than the NAME COLUMN inside it, since the "Dates"/color
+// columns sit to the name column's right — gantt-view.tsx:1834-1863,1838).
+// Coupling the name column to the same drag delta as the pane (below) is
+// what makes dragging the splitter actually reveal more of a truncated
+// title, rather than just widening blank space or the Dates/color columns.
+const TREE_NAME_COLUMN_DEFAULT_WIDTH = 208;
+const TREE_NAME_COLUMN_MIN_WIDTH = 100;
+
+function clampTreeWidth(width: number): number {
+  return Math.min(Math.max(width, TREE_PANEL_MIN_WIDTH), TREE_PANEL_MAX_WIDTH);
+}
+
+function readStoredTreeWidth(): number {
+  const raw = localStorage.getItem(TREE_WIDTH_STORAGE_KEY);
+  const parsed = raw ? Number(raw) : NaN;
+  return Number.isFinite(parsed) ? clampTreeWidth(parsed) : TREE_PANEL_DEFAULT_WIDTH;
+}
+
 // Plan B Task 7 (fix pass) — geometry's buildRows() takes a collapsed-row Set
 // keyed by the OLD engine's row-id shape (geometry.ts:458-467: section groups
 // are `sec-<id>` / `sec-none`; task-with-subtask groups are `task-<id>`,
@@ -198,6 +231,46 @@ export function SolvroGantt(props: SolvroGanttProps) {
   useEffect(() => {
     localStorage.setItem(COLOR_BY_STORAGE_KEY, colorBy);
   }, [colorBy]);
+
+  // Walkthrough F6 (2026-07-25) — draggable tree-pane splitter. `treeWidth`
+  // is read once from localStorage as the engine's `treePanel.width` initial
+  // value (createGanttStore-style: consumed once by GanttView's own
+  // `useState(treeConfig.width)`, gantt-view.tsx:916 — later prop changes to
+  // `width` itself are NOT live-tracked by the engine). `onWidthChange`
+  // fires on drag release, keyboard step (Arrow keys), and the splitter's
+  // own double-click reset (gantt-view.tsx:1081-1083,2295), so persistence
+  // and the derived name-column width below stay in sync with every commit.
+  const [treeWidth, setTreeWidthState] = useState<number>(readStoredTreeWidth);
+  const handleTreeWidthChange = useCallback((width: number) => {
+    const clamped = clampTreeWidth(width);
+    setTreeWidthState(clamped);
+    localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(clamped));
+  }, []);
+  // 1:1 delta coupling: the name column grows/shrinks by exactly the same
+  // pixel amount the pane does, so dragging the splitter directly reveals
+  // more of a truncated task title instead of just adding blank space or
+  // uncovering the Dates/color columns. At the untouched default width this
+  // evaluates to exactly TREE_NAME_COLUMN_DEFAULT_WIDTH (208), so a gantt
+  // with no persisted width renders identically to before this change.
+  const nameColumnWidth = Math.max(
+    TREE_NAME_COLUMN_MIN_WIDTH,
+    TREE_NAME_COLUMN_DEFAULT_WIDTH + (treeWidth - TREE_PANEL_DEFAULT_WIDTH),
+  );
+  // Memoized: gantt.tsx:1623-1634 hands GanttViewConfigContext consumers the
+  // PREVIOUS config object across renders unless a value actually changed
+  // (shallowEqualRecord) — passing a fresh `treePanel` object literal every
+  // render would defeat that and force the whole tree pane to re-measure on
+  // every unrelated re-render (e.g. every task refetch).
+  const treePanel = useMemo(
+    () => ({
+      width: treeWidth,
+      minWidth: TREE_PANEL_MIN_WIDTH,
+      maxWidth: TREE_PANEL_MAX_WIDTH,
+      nameColumnWidth,
+      onWidthChange: handleTreeWidthChange,
+    }),
+    [treeWidth, nameColumnWidth, handleTreeWidthChange],
+  );
 
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
@@ -980,6 +1053,10 @@ export function SolvroGantt(props: SolvroGanttProps) {
             // every scale.
             offDays={{ dates: holidays.map((h) => parseISO(h.date)) }}
             columns={columns}
+            // Walkthrough F6 (2026-07-25) — draggable, persisted tree-pane
+            // width via the engine's own built-in splitter (see the
+            // TREE_WIDTH_STORAGE_KEY block above and `treePanel` memo).
+            treePanel={treePanel}
             rowCheckboxes={false}
             zoomControl={false}
             // Plan B Task 7 (fix pass) — controlled collapse (gantt.tsx:1344-
@@ -998,11 +1075,18 @@ export function SolvroGantt(props: SolvroGanttProps) {
             renderEvent={(renderProps) => <SolvroBar {...renderProps} canEdit={canEdit} />}
             classNames={{ event: SOLVRO_EVENT_CLASSNAMES }}
             barLabel="inside"
-            renderResourceLabel={({ resource }) => (
-              <span className="truncate">
-                {resource.id === sectionNodeId(null) ? "(No section)" : resource.title}
-              </span>
-            )}
+            renderResourceLabel={({ resource }) => {
+              const label = resource.id === sectionNodeId(null) ? "(No section)" : resource.title;
+              // Walkthrough F6 (2026-07-25) — cheap hover affordance: a
+              // native title tooltip surfaces the full name even before the
+              // user discovers the splitter, and stays useful for names that
+              // still overflow the widened column.
+              return (
+                <span className="truncate" title={label}>
+                  {label}
+                </span>
+              );
+            }}
             onEventClick={(occurrence) => {
               const task = occurrence.event.data;
               if (task) onEditTask(task);
