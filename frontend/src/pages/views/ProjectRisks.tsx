@@ -95,20 +95,20 @@ export function ProjectRisks() {
 
   if (isLoading) {
     return (
-      <div className="h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+      <div className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
     );
   }
 
   if (isError) {
     return (
-      <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+      <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
         Could not load risks: {(error as Error).message}
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4 md:min-h-0 md:flex-1">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           <Stat label="High" value={summary.high} tone="high" />
@@ -120,7 +120,7 @@ export function ProjectRisks() {
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-2 rounded bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
+            className="inline-flex items-center gap-2 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
           >
             <span className="material-symbols-outlined text-base">add</span>
             Add risk
@@ -128,13 +128,13 @@ export function ProjectRisks() {
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3">
+      <div className="flex flex-wrap items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest p-3">
         <input
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search description, mitigation, contingency…"
-          className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-none sm:w-72"
+          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden sm:w-72"
         />
         <Select
           label="Category"
@@ -162,75 +162,77 @@ export function ProjectRisks() {
               setStatusFilter("ALL");
               setSearch("");
             }}
-            className="ml-auto rounded px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary"
+            className="ml-auto rounded-sm px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary"
           >
             Reset
           </button>
         )}
       </div>
 
-      {filtered.length === 0 ? (
-        <div className="rounded border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center text-on-surface-variant">
-          <p className="text-sm">
-            {risks && risks.length > 0
-              ? "No risks match the current filters."
-              : "No risks logged yet."}
-          </p>
-          {canEdit && risks && risks.length === 0 && (
-            <button
-              type="button"
-              onClick={() => setCreating(true)}
-              className="mt-3 rounded border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container"
-            >
-              Add the first risk
-            </button>
-          )}
-        </div>
-      ) : (
-        <>
-          <div className="hidden overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest md:block">
-            <table className="w-full text-sm">
-              <thead className="bg-surface-container-low text-left font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
-                <tr>
-                  <th className="px-3 py-2">Description</th>
-                  <th className="px-3 py-2">Category</th>
-                  <th className="w-24 px-3 py-2 text-center">Prob</th>
-                  <th className="w-24 px-3 py-2 text-center">Impact</th>
-                  <th className="w-28 px-3 py-2 text-center">Score</th>
-                  <th className="w-32 px-3 py-2">Status</th>
-                  {canEdit && <th className="w-20 px-3 py-2"></th>}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-outline-variant">
-                {filtered.map((r) => (
-                  <RiskRow
-                    key={r.id}
-                    risk={r}
-                    canEdit={canEdit}
-                    onEdit={() => setEditing(r)}
-                    onDelete={() => setConfirmDelete(r)}
-                    onChange={(patch) =>
-                      updateRisk.mutate({ id: r.id, patch })
-                    }
-                  />
-                ))}
-              </tbody>
-            </table>
+      <div className="md:min-h-0 md:flex-1 md:overflow-y-auto">
+        {filtered.length === 0 ? (
+          <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center text-on-surface-variant">
+            <p className="text-sm">
+              {risks && risks.length > 0
+                ? "No risks match the current filters."
+                : "No risks logged yet."}
+            </p>
+            {canEdit && risks && risks.length === 0 && (
+              <button
+                type="button"
+                onClick={() => setCreating(true)}
+                className="mt-3 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container"
+              >
+                Add the first risk
+              </button>
+            )}
           </div>
+        ) : (
+          <>
+            <div className="hidden overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest md:block">
+              <table className="w-full text-sm">
+                <thead className="bg-surface-container-low text-left font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
+                  <tr>
+                    <th className="px-3 py-2">Description</th>
+                    <th className="px-3 py-2">Category</th>
+                    <th className="w-24 px-3 py-2 text-center">Prob</th>
+                    <th className="w-24 px-3 py-2 text-center">Impact</th>
+                    <th className="w-28 px-3 py-2 text-center">Score</th>
+                    <th className="w-32 px-3 py-2">Status</th>
+                    {canEdit && <th className="w-20 px-3 py-2"></th>}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant">
+                  {filtered.map((r) => (
+                    <RiskRow
+                      key={r.id}
+                      risk={r}
+                      canEdit={canEdit}
+                      onEdit={() => setEditing(r)}
+                      onDelete={() => setConfirmDelete(r)}
+                      onChange={(patch) =>
+                        updateRisk.mutate({ id: r.id, patch })
+                      }
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
 
-          <div className="space-y-2 md:hidden">
-            {filtered.map((r) => (
-              <RiskCard
-                key={r.id}
-                risk={r}
-                canEdit={canEdit}
-                onEdit={() => setEditing(r)}
-                onDelete={() => setConfirmDelete(r)}
-              />
-            ))}
-          </div>
-        </>
-      )}
+            <div className="space-y-2 md:hidden">
+              {filtered.map((r) => (
+                <RiskCard
+                  key={r.id}
+                  risk={r}
+                  canEdit={canEdit}
+                  onEdit={() => setEditing(r)}
+                  onDelete={() => setConfirmDelete(r)}
+                />
+              ))}
+            </div>
+          </>
+        )}
+      </div>
 
       {(creating || editing) && (
         <RiskFormModal
@@ -290,7 +292,7 @@ function RiskRow({
   const score = risk.probability * risk.impact;
   return (
     <tr className="hover:bg-surface-container-low">
-      <td className="max-w-[28rem] px-3 py-2 align-top">
+      <td className="max-w-md px-3 py-2 align-top">
         <button
           type="button"
           onClick={onEdit}
@@ -327,7 +329,7 @@ function RiskRow({
           <select
             value={risk.probability}
             onChange={(e) => onChange({ probability: Number(e.target.value) })}
-            className="rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
+            className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
           >
             {SCALE.map((n) => (
               <option key={n} value={n}>
@@ -344,7 +346,7 @@ function RiskRow({
           <select
             value={risk.impact}
             onChange={(e) => onChange({ impact: Number(e.target.value) })}
-            className="rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
+            className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
           >
             {SCALE.map((n) => (
               <option key={n} value={n}>
@@ -359,7 +361,7 @@ function RiskRow({
       <td className="px-3 py-2 align-top">
         <div
           className={[
-            "flex items-center justify-center gap-1 rounded border px-2 py-1 font-mono text-xs font-bold tabular-nums",
+            "flex items-center justify-center gap-1 rounded-sm border px-2 py-1 font-mono text-xs font-bold tabular-nums",
             scoreClass(score),
           ].join(" ")}
           title={`${risk.probability} × ${risk.impact} = ${score}`}
@@ -376,7 +378,7 @@ function RiskRow({
             value={risk.status}
             onChange={(e) => onChange({ status: e.target.value as RiskStatus })}
             className={[
-              "w-full rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider",
+              "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider",
               STATUS_TONE[risk.status],
             ].join(" ")}
           >
@@ -389,7 +391,7 @@ function RiskRow({
         ) : (
           <span
             className={[
-              "inline-block rounded px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
+              "inline-block rounded-sm px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
               STATUS_TONE[risk.status],
             ].join(" ")}
           >
@@ -403,7 +405,7 @@ function RiskRow({
             <button
               type="button"
               onClick={onEdit}
-              className="rounded p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
+              className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
               aria-label="Edit risk"
             >
               <span className="material-symbols-outlined text-base">edit</span>
@@ -411,7 +413,7 @@ function RiskRow({
             <button
               type="button"
               onClick={onDelete}
-              className="rounded p-1 text-on-surface-variant hover:bg-error-container hover:text-error"
+              className="rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-error"
               aria-label="Delete risk"
             >
               <span className="material-symbols-outlined text-base">delete</span>
@@ -436,7 +438,7 @@ function RiskCard({
 }) {
   const score = risk.probability * risk.impact;
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-3">
+    <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-3">
       <div className="flex items-start justify-between gap-2">
         <button
           type="button"
@@ -447,7 +449,7 @@ function RiskCard({
         </button>
         <div
           className={[
-            "shrink-0 rounded border px-2 py-1 font-mono text-xs font-bold tabular-nums",
+            "shrink-0 rounded-sm border px-2 py-1 font-mono text-xs font-bold tabular-nums",
             scoreClass(score),
           ].join(" ")}
         >
@@ -463,7 +465,7 @@ function RiskCard({
         </span>
         <span
           className={[
-            "rounded px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
+            "rounded-sm px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
             STATUS_TONE[risk.status],
           ].join(" ")}
         >
@@ -475,7 +477,7 @@ function RiskCard({
           <button
             type="button"
             onClick={onEdit}
-            className="rounded p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
+            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
             aria-label="Edit risk"
           >
             <span className="material-symbols-outlined text-base">edit</span>
@@ -483,7 +485,7 @@ function RiskCard({
           <button
             type="button"
             onClick={onDelete}
-            className="rounded p-1 text-on-surface-variant hover:bg-error-container hover:text-error"
+            className="rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-error"
             aria-label="Delete risk"
           >
             <span className="material-symbols-outlined text-base">delete</span>
@@ -513,7 +515,7 @@ function Select({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-sm text-on-surface focus:border-primary focus:outline-none"
+        className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-sm text-on-surface focus:border-primary focus:outline-hidden"
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>
@@ -545,7 +547,7 @@ function Stat({
   return (
     <div
       className={[
-        "rounded border px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider",
+        "rounded-sm border px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider",
         toneClass,
       ].join(" ")}
     >

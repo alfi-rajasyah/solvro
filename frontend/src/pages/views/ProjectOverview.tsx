@@ -26,17 +26,17 @@ export function ProjectOverview() {
       <div className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+            <div key={i} className="h-24 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
           ))}
         </div>
-        <div className="h-72 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+        <div className="h-72 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+      <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
         Could not load tasks: {(error as Error).message}
       </div>
     );
@@ -80,7 +80,7 @@ export function ProjectOverview() {
       </div>
 
       {/* S-Curve segment */}
-      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
+      <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h3 className="font-display text-base font-semibold text-on-surface">
@@ -154,7 +154,7 @@ function Kpi({
           ? "text-primary"
           : "text-on-surface";
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
+    <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
         <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${accent === "primary" ? "text-primary" : accent === "emerald" ? "text-emerald-600" : accent === "error" ? "text-error" : "text-on-surface-variant"}`}>{icon}</span>
@@ -176,7 +176,7 @@ function Legend2({ swatch, label }: { swatch: string; label: string }) {
 
 function EmptyChart({ icon, title, body }: { icon: string; title: string; body: string }) {
   return (
-    <div className="flex h-72 flex-col items-center justify-center gap-2 rounded border border-dashed border-outline-variant text-center">
+    <div className="flex h-72 flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-outline-variant text-center">
       <span className="material-symbols-outlined text-3xl text-on-surface-variant">{icon}</span>
       <p className="text-sm font-semibold text-on-surface">{title}</p>
       <p className="text-xs text-on-surface-variant">{body}</p>

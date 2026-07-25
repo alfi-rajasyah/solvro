@@ -55,7 +55,7 @@ export function TopBar() {
         type="button"
         onClick={toggleSidebar}
         aria-label="Open navigation"
-        className="flex h-9 w-9 shrink-0 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface md:hidden"
+        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface md:hidden"
       >
         <span className="material-symbols-outlined">menu</span>
       </button>
@@ -79,16 +79,16 @@ export function TopBar() {
       )}
 
       <div className="ml-auto flex items-center gap-3">
-        <div className="hidden min-w-[260px] items-center gap-2 rounded bg-surface-container px-3 py-1.5 md:flex">
+        <div className="hidden min-w-[260px] items-center gap-2 rounded-sm bg-surface-container px-3 py-1.5 md:flex">
           <span className="material-symbols-outlined text-base text-on-surface-variant">
             search
           </span>
           <input
             type="text"
             placeholder="Search projects, tasks, customers…"
-            className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-none placeholder:text-on-surface-variant"
+            className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-hidden placeholder:text-on-surface-variant"
           />
-          <span className="rounded border border-outline-variant bg-surface-container-low px-1.5 py-0.5 font-mono text-[10px] text-on-surface-variant">
+          <span className="rounded-sm border border-outline-variant bg-surface-container-low px-1.5 py-0.5 font-mono text-[10px] text-on-surface-variant">
             ⌘K
           </span>
         </div>
@@ -98,7 +98,7 @@ export function TopBar() {
           onClick={toggle}
           aria-label={resolved === "dark" ? "Switch to light theme" : "Switch to dark theme"}
           title={resolved === "dark" ? "Light mode" : "Dark mode"}
-          className="flex h-8 w-8 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+          className="flex h-8 w-8 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
         >
           <span className="material-symbols-outlined text-[20px]">
             {resolved === "dark" ? "light_mode" : "dark_mode"}
@@ -109,7 +109,7 @@ export function TopBar() {
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-2 rounded border-l border-outline-variant pl-3 text-left hover:opacity-90"
+            className="flex items-center gap-2 rounded-sm border-l border-outline-variant pl-3 text-left hover:opacity-90"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[12px] font-bold text-white">
               {initials}
@@ -134,7 +134,7 @@ export function TopBar() {
                 onClick={() => setMenuOpen(false)}
                 className="fixed inset-0 z-40 cursor-default"
               />
-              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
                 <div className="border-b border-outline-variant px-3 py-2 text-[12px] text-on-surface-variant">
                   <div className="font-medium text-on-surface">{user?.email}</div>
                   <div className="text-[10px] font-bold uppercase tracking-wider">

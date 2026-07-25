@@ -183,18 +183,18 @@ function UsersTab() {
         <AdminKpi label="Inactive" value={users.length - activeCount} hint="Cannot sign in" icon="block" tone="neutral" />
       </div>
       {error && (
-        <div className="rounded border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
+        <div className="rounded-sm border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
           {error}
         </div>
       )}
       {resetResult && (
-        <div className="rounded border border-tertiary/40 bg-tertiary/10 px-3 py-3 text-sm text-on-surface">
+        <div className="rounded-sm border border-tertiary/40 bg-tertiary/10 px-3 py-3 text-sm text-on-surface">
           <p className="font-display text-[12px] font-bold uppercase tracking-wider text-tertiary">
             Temporary password generated
           </p>
           <p className="mt-1">
             For <strong>{resetResult.username}</strong>:{" "}
-            <code className="rounded bg-surface px-1.5 py-0.5 font-mono text-[13px]">
+            <code className="rounded-sm bg-surface px-1.5 py-0.5 font-mono text-[13px]">
               {resetResult.tempPassword}
             </code>
           </p>
@@ -212,7 +212,7 @@ function UsersTab() {
       )}
       <form
         onSubmit={handleCreate}
-        className="flex flex-wrap items-end gap-2 rounded border border-outline-variant bg-surface-container-lowest p-3"
+        className="flex flex-wrap items-end gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest p-3"
       >
         <label className="w-full md:flex-1 md:min-w-[160px]">
           <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
@@ -223,7 +223,7 @@ function UsersTab() {
             value={newEmail}
             onChange={(e) => setNewEmail(e.target.value)}
             placeholder="user@example.com"
-            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
           />
         </label>
         <label className="w-full md:flex-1 md:min-w-[120px]">
@@ -236,7 +236,7 @@ function UsersTab() {
             onChange={(e) => setNewUsername(e.target.value)}
             maxLength={50}
             placeholder="alice"
-            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
           />
         </label>
         <label className="w-full md:flex-1 md:min-w-[140px]">
@@ -248,7 +248,7 @@ function UsersTab() {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             autoComplete="new-password"
-            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-none"
+            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
           />
         </label>
         <label className="w-full md:w-auto md:min-w-[120px]">
@@ -258,7 +258,7 @@ function UsersTab() {
           <select
             value={newRole}
             onChange={(e) => setNewRole(e.target.value as Role)}
-            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-none"
+            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-hidden"
           >
             {assignableRoles.map((r) => (
               <option key={r} value={r}>
@@ -275,13 +275,13 @@ function UsersTab() {
             !newUsername.trim() ||
             newPassword.length < 8
           }
-          className="w-full rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
+          className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
         >
           {createUser.isPending ? "Adding…" : "Add user"}
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded border border-outline-variant bg-surface">
+      <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
             <tr>
@@ -318,7 +318,7 @@ function UsersTab() {
                         value={u.role}
                         disabled={isSelf}
                         onChange={(e) => handleRoleChange(u, e.target.value as Role)}
-                        className="rounded border border-outline-variant bg-surface px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60"
+                        className="rounded-sm border border-outline-variant bg-surface px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
                         title={isSelf ? "You cannot change your own role" : undefined}
                       >
                         {roleOptionsFor(u.role).map((r) => (
@@ -358,7 +358,7 @@ function UsersTab() {
                         type="button"
                         onClick={() => handleToggleActive(u)}
                         disabled={isSelf}
-                        className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
                         title={isSelf ? "You cannot deactivate yourself" : undefined}
                       >
                         {u.active ? "Deactivate" : "Reactivate"}
@@ -366,7 +366,7 @@ function UsersTab() {
                       <button
                         type="button"
                         onClick={() => handleResetPassword(u)}
-                        className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                        className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                       >
                         Reset password
                       </button>
@@ -374,7 +374,7 @@ function UsersTab() {
                         type="button"
                         onClick={() => handleDelete(u)}
                         disabled={isSelf || deleteUser.isPending}
-                        className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
+                        className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
                         title={
                           isSelf
                             ? "You cannot delete yourself"
@@ -434,7 +434,7 @@ function AdminKpi({
           ? "text-amber-600"
           : "text-on-surface-variant";
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
+    <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
         <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
@@ -476,7 +476,7 @@ function PermissionPicker({
     );
   }
   return (
-    <ul className="divide-y divide-outline-variant/60 rounded border border-outline-variant bg-surface">
+    <ul className="divide-y divide-outline-variant/60 rounded-sm border border-outline-variant bg-surface">
       {PERMISSION_CATALOG.map((perm) => {
         const isWildcard = perm.value === "*";
         const checked = isWildcard ? all : all || value.includes(perm.value);
@@ -599,14 +599,14 @@ function RolesTab() {
       </p>
 
       {error && (
-        <div className="rounded border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
+        <div className="rounded-sm border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
           {error}
         </div>
       )}
 
       <form
         onSubmit={handleCreate}
-        className="space-y-3 rounded border border-outline-variant bg-surface-container-lowest p-3"
+        className="space-y-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-3"
       >
         <label className="block">
           <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
@@ -618,7 +618,7 @@ function RolesTab() {
             onChange={(e) => setNewName(e.target.value)}
             maxLength={50}
             placeholder="e.g. MANAGER"
-            className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm uppercase focus:border-primary focus:outline-none"
+            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm uppercase focus:border-primary focus:outline-hidden"
           />
         </label>
         <div>
@@ -631,14 +631,14 @@ function RolesTab() {
           <button
             type="submit"
             disabled={createRole.isPending || !newName.trim()}
-            className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
           >
             {createRole.isPending ? "Adding…" : "Add role"}
           </button>
         </div>
       </form>
 
-      <div className="overflow-x-auto rounded border border-outline-variant bg-surface">
+      <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
             <tr>
@@ -664,7 +664,7 @@ function RolesTab() {
                         onChange={(e) => setEditName(e.target.value)}
                         disabled={r.builtIn}
                         maxLength={50}
-                        className="w-32 rounded border border-outline-variant bg-surface px-2 py-1 font-mono text-sm uppercase focus:border-primary focus:outline-none disabled:opacity-60"
+                        className="w-32 rounded-sm border border-outline-variant bg-surface px-2 py-1 font-mono text-sm uppercase focus:border-primary focus:outline-hidden disabled:opacity-60"
                         title={
                           r.builtIn
                             ? "This role is reserved and cannot be renamed"
@@ -695,7 +695,7 @@ function RolesTab() {
                         {r.permissions.map((p) => (
                           <span
                             key={p}
-                            className={`rounded px-1.5 py-0.5 font-mono text-[11px] ${
+                            className={`rounded-sm px-1.5 py-0.5 font-mono text-[11px] ${
                               p === "*"
                                 ? "bg-primary/15 text-primary"
                                 : "bg-surface-container-high text-on-surface"
@@ -718,14 +718,14 @@ function RolesTab() {
                             type="button"
                             onClick={() => saveEdit(r)}
                             disabled={updatePerms.isPending}
-                            className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
+                            className="rounded-sm bg-primary px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
                           >
                             Save
                           </button>
                           <button
                             type="button"
                             onClick={() => setEditingId(null)}
-                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+                            className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
                           >
                             Cancel
                           </button>
@@ -735,7 +735,7 @@ function RolesTab() {
                           <button
                             type="button"
                             onClick={() => startEdit(r)}
-                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                            className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
                           >
                             Edit
                           </button>
@@ -743,7 +743,7 @@ function RolesTab() {
                             type="button"
                             onClick={() => handleDelete(r)}
                             disabled={r.builtIn || r.userCount > 0}
-                            className="rounded px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
+                            className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
                             title={
                               r.builtIn
                                 ? "Reserved role"
@@ -806,7 +806,7 @@ function SignInTab() {
       </p>
 
       {/* Connection card */}
-      <div className="rounded border border-outline-variant bg-surface-container-lowest p-4">
+      <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="flex items-start gap-3">
             <div
@@ -853,7 +853,7 @@ function SignInTab() {
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="rounded bg-primary px-4 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container"
           >
             {connected ? "Manage" : "Connect"}
           </button>
@@ -934,7 +934,7 @@ function ClientIdField({ id }: { id: string }) {
           </span>
         </button>
       </div>
-      <div className="break-all rounded bg-surface px-2 py-1.5 font-mono text-[12px] text-on-surface">
+      <div className="break-all rounded-sm bg-surface px-2 py-1.5 font-mono text-[12px] text-on-surface">
         {revealed ? id : maskClientId(id)}
       </div>
     </div>
@@ -1050,7 +1050,7 @@ function SignInModal({
               type="button"
               onClick={disconnect}
               disabled={update.isPending}
-              className="mr-auto rounded px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-error hover:bg-error-container disabled:opacity-50"
+              className="mr-auto rounded-sm px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-error hover:bg-error-container disabled:opacity-50"
             >
               Disconnect
             </button>
@@ -1059,7 +1059,7 @@ function SignInModal({
             type="button"
             onClick={onClose}
             disabled={update.isPending}
-            className="rounded px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+            className="rounded-sm px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
           >
             Cancel
           </button>
@@ -1067,7 +1067,7 @@ function SignInModal({
             type="button"
             onClick={save}
             disabled={!dirty || update.isPending}
-            className="rounded bg-primary px-4 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
           >
             {update.isPending ? "Saving…" : "Save"}
           </button>
@@ -1075,7 +1075,7 @@ function SignInModal({
       }
     >
       <div className="space-y-5">
-        <details className="rounded border border-outline-variant bg-surface-container text-sm">
+        <details className="rounded-sm border border-outline-variant bg-surface-container text-sm">
           <summary className="cursor-pointer px-3 py-2 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
             How to get a Client ID
           </summary>
@@ -1099,7 +1099,7 @@ function SignInModal({
         </details>
 
         {error && (
-          <div className="rounded border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
+          <div className="rounded-sm border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
             {error}
           </div>
         )}
@@ -1128,7 +1128,7 @@ function SignInModal({
               placeholder="123456789-abc.apps.googleusercontent.com"
               spellCheck={false}
               autoComplete="off"
-              className="w-full rounded border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-none"
+              className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-hidden"
             />
           </label>
           <p className="mt-1 text-[11px] text-on-surface-variant">
@@ -1181,12 +1181,12 @@ function SignInModal({
               onChange={(e) => setNewDomain(e.target.value)}
               placeholder="example.com"
               maxLength={253}
-              className="flex-1 rounded border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-none"
+              className="flex-1 rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-hidden"
             />
             <button
               type="submit"
               disabled={!newDomain.trim()}
-              className="rounded bg-surface-container-high px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface hover:bg-surface-container-highest disabled:opacity-50"
+              className="rounded-sm bg-surface-container-high px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface hover:bg-surface-container-highest disabled:opacity-50"
             >
               Add
             </button>
@@ -1233,11 +1233,11 @@ function ProjectsTab() {
         visibility check.
       </p>
       {error && (
-        <div className="rounded border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
+        <div className="rounded-sm border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
           {error}
         </div>
       )}
-      <div className="overflow-x-auto rounded border border-outline-variant bg-surface">
+      <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface">
         <table className="w-full text-left text-sm">
           <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
             <tr>
@@ -1261,7 +1261,7 @@ function ProjectsTab() {
                 </td>
                 <td className="px-3 py-2 text-on-surface-variant">{p.sa?.username ?? "—"}</td>
                 <td className="px-3 py-2">
-                  <span className="rounded bg-surface-container-low px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
+                  <span className="rounded-sm bg-surface-container-low px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
                     {p.status}
                   </span>
                 </td>
@@ -1272,7 +1272,7 @@ function ProjectsTab() {
                   <select
                     value={p.tamId}
                     onChange={(e) => handleReassign(p, Number(e.target.value))}
-                    className="w-full rounded border border-outline-variant bg-surface px-2 py-1 text-[13px] text-on-surface focus:border-primary focus:outline-none"
+                    className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-[13px] text-on-surface focus:border-primary focus:outline-hidden"
                   >
                     {tamCandidates.map((u) => (
                       <option key={u.id} value={u.id}>
