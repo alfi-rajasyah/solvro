@@ -233,19 +233,36 @@ export function SolvroGantt(props: SolvroGanttProps) {
   }, [colorBy]);
 
   // Walkthrough F6 (2026-07-25) — draggable tree-pane splitter. `treeWidth`
-  // is read once from localStorage as the engine's `treePanel.width` initial
-  // value (createGanttStore-style: consumed once by GanttView's own
-  // `useState(treeConfig.width)`, gantt-view.tsx:916 — later prop changes to
-  // `width` itself are NOT live-tracked by the engine). `onWidthChange`
-  // fires on drag release, keyboard step (Arrow keys), and the splitter's
-  // own double-click reset (gantt-view.tsx:1081-1083,2295), so persistence
-  // and the derived name-column width below stay in sync with every commit.
-  const [treeWidth, setTreeWidthState] = useState<number>(readStoredTreeWidth);
+  // is the LIVE width, following every drag/keyboard/reset commit via
+  // `onWidthChange` (gantt-view.tsx:1081-1083,2295) — it's what the derived
+  // name-column width below tracks. `initialTreeWidth` is a SEPARATE frozen
+  // mount-time snapshot (read once, never updated) used only as the
+  // `treePanel.width` prop.
+  //
+  // F6 follow-up (2026-07-25, post-review) — the two must NOT be the same
+  // value: the engine's splitter double-click handler resets to whatever
+  // `treeConfig.width` (our `treePanel.width` prop) evaluates to FRESH each
+  // render (gantt-view.tsx:2283-2286: `setTreeWidth(treeConfig.width)` then
+  // `treeConfig.onWidthChange?.(treeConfig.width)`) — binding that prop to
+  // the live `treeWidth` state made "reset" a permanent no-op, since it
+  // would always read back the value it had just set. Freezing it at mount
+  // instead makes double-click a real "undo my drag(s) this page load"
+  // affordance, resetting to the width the gantt actually opened with
+  // (whatever was last persisted, or the engine default if nothing was).
+  // Confirmed the reset path DOES fire `onWidthChange` (traced above), so
+  // `treeWidth`/localStorage correctly follow a reset with no extra wiring.
+  const [initialTreeWidth] = useState<number>(readStoredTreeWidth);
+  const [treeWidth, setTreeWidthState] = useState<number>(initialTreeWidth);
   const handleTreeWidthChange = useCallback((width: number) => {
-    const clamped = clampTreeWidth(width);
-    setTreeWidthState(clamped);
-    localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(clamped));
+    setTreeWidthState(clampTreeWidth(width));
   }, []);
+  // Persistence lives in its own effect, same pattern as colorBy just above
+  // (state is the single source of truth; the effect is a pure side-mirror
+  // of it, not fused into the mutator) — also fires once on mount, mirroring
+  // colorBy's own mount-time write-back of whatever was just read.
+  useEffect(() => {
+    localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(treeWidth));
+  }, [treeWidth]);
   // 1:1 delta coupling: the name column grows/shrinks by exactly the same
   // pixel amount the pane does, so dragging the splitter directly reveals
   // more of a truncated task title instead of just adding blank space or
@@ -263,13 +280,13 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // every unrelated re-render (e.g. every task refetch).
   const treePanel = useMemo(
     () => ({
-      width: treeWidth,
+      width: initialTreeWidth,
       minWidth: TREE_PANEL_MIN_WIDTH,
       maxWidth: TREE_PANEL_MAX_WIDTH,
       nameColumnWidth,
       onWidthChange: handleTreeWidthChange,
     }),
-    [treeWidth, nameColumnWidth, handleTreeWidthChange],
+    [initialTreeWidth, nameColumnWidth, handleTreeWidthChange],
   );
 
   const [addingSection, setAddingSection] = useState(false);
