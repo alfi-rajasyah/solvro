@@ -640,6 +640,102 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     }
   });
 
+  // Walkthrough finding F6 (task-f6-report.md): the tree pane's fixed-width
+  // "Resources" name cell truncates long task titles with no on-screen way
+  // to widen it. Investigation found the vendored engine already ships a
+  // controlled tree-panel width AND a built-in draggable splitter
+  // (GanttTreePanelConfig, reui/gantt/gantt.tsx:1218-1231; splitter DOM +
+  // pointer handling at reui/gantt/gantt-view.tsx:2260-2308,1043-1088) — no
+  // vendored-file patch was needed. SolvroGantt.tsx now wires a persisted,
+  // controlled `treePanel` (width/minWidth/maxWidth/nameColumnWidth/
+  // onWidthChange) whose name-column width grows 1:1 with the drag delta, so
+  // widening the splitter directly reveals more of a truncated title instead
+  // of just uncovering the Dates/color columns to its right.
+  test("(j) tree-pane splitter widens the Resources column, reveals a truncated title, and persists across reload", async ({
+    page,
+    seededProject,
+  }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    // Long enough that it reliably overflows the DEFAULT 208px name column
+    // (~120-140px of usable text room once padding/gutters are subtracted)
+    // but comfortably fits once the column grows past ~500px — same shape
+    // of title the walkthrough finding itself cited ("Finalize Eltrader A…").
+    const longTitle = `Finalize Eltrader A Rollout Documentation ${s}`;
+    const task = await createTask(base, token, projectId, {
+      title: longTitle,
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(3),
+    });
+
+    await gotoSeededGantt(page, projectId);
+
+    // Scoped to the TREE pane specifically (not just the shared
+    // data-gantt-row-id, which the hover-link effect also stamps onto the
+    // row's timeline-pane twin) — renderResourceLabel's title-bearing span
+    // only exists in the tree pane's name cell.
+    const nameLabel = page
+      .locator(
+        `[data-slot="gantt-tree-pane"] [data-gantt-row-id="task-${task.id}"] span[title="${longTitle}"]`,
+      )
+      .first();
+    await nameLabel.scrollIntoViewIfNeeded();
+    await expect(nameLabel).toBeVisible();
+
+    const isTruncated = () => nameLabel.evaluate((el) => el.scrollWidth > el.clientWidth + 1);
+    expect(await isTruncated(), "title should start truncated at the default tree width").toBe(
+      true,
+    );
+
+    const treePane = page.locator('[data-slot="gantt-tree-pane"]');
+    const paneBefore = await treePane.boundingBox();
+    expect(paneBefore, "tree pane not found").toBeTruthy();
+
+    await page.mouse.move(5, 5);
+    await page.screenshot({ path: "test-results/f6-tree-before.png" });
+
+    const splitter = page.locator('[data-slot="gantt-splitter"]');
+    const splitterBox = await splitter.boundingBox();
+    expect(splitterBox, "tree-pane splitter not found").toBeTruthy();
+    await mouseDrag(page, center(splitterBox!), { x: splitterBox!.x + 300, y: center(splitterBox!).y });
+
+    const paneAfter = await treePane.boundingBox();
+    expect(paneAfter, "tree pane not found after drag").toBeTruthy();
+    expect(paneAfter!.width).toBeGreaterThan(paneBefore!.width + 200);
+    expect(await isTruncated(), "title should be fully visible after widening the tree pane").toBe(
+      false,
+    );
+
+    await page.mouse.move(5, 5);
+    await page.screenshot({ path: "test-results/f6-tree-after.png" });
+
+    const persistedWidth = await page.evaluate(() =>
+      localStorage.getItem("solvro.gantt.treeWidth"),
+    );
+    expect(persistedWidth).toBeTruthy();
+    expect(Number(persistedWidth)).toBeGreaterThan(500);
+
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+
+    const paneAfterReload = await treePane.boundingBox();
+    expect(paneAfterReload, "tree pane not found after reload").toBeTruthy();
+    expect(paneAfterReload!.width).toBeGreaterThan(paneBefore!.width + 200);
+
+    const nameLabelAfterReload = page
+      .locator(
+        `[data-slot="gantt-tree-pane"] [data-gantt-row-id="task-${task.id}"] span[title="${longTitle}"]`,
+      )
+      .first();
+    await nameLabelAfterReload.scrollIntoViewIfNeeded();
+    const stillNotTruncated = await nameLabelAfterReload.evaluate(
+      (el) => el.scrollWidth <= el.clientWidth + 1,
+    );
+    expect(stillNotTruncated, "widened width (and full title) should survive reload").toBe(true);
+  });
+
   // ---- Browser checklist (B6 Opus review follow-up) — observational only;
   // screenshots for the report, plus light structural assertions so this
   // isn't a pure no-op. Do NOT fix app issues found here — report them. ----
