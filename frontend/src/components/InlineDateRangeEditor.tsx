@@ -63,7 +63,7 @@ export function InlineDateRangeEditor({
       onSubmit={handleSubmit}
       onClick={(e) => e.stopPropagation()}
       className={[
-        "w-[220px] rounded border border-outline-variant bg-surface-container-lowest p-2 shadow-lg",
+        "w-[220px] rounded-sm border border-outline-variant bg-surface-container-lowest p-2 shadow-lg",
         className,
       ].join(" ")}
     >
@@ -75,7 +75,7 @@ export function InlineDateRangeEditor({
           type="date"
           value={start}
           onChange={(e) => setStart(e.target.value)}
-          className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface focus:border-primary focus:outline-none"
+          className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface focus:border-primary focus:outline-hidden"
         />
       </label>
       <label className="flex items-center gap-2 py-0.5">
@@ -86,20 +86,20 @@ export function InlineDateRangeEditor({
           type="date"
           value={end}
           onChange={(e) => setEnd(e.target.value)}
-          className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface focus:border-primary focus:outline-none"
+          className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface focus:border-primary focus:outline-hidden"
         />
       </label>
       <div className="mt-1 flex items-center justify-end gap-1">
         <button
           type="button"
           onClick={onCancel}
-          className="rounded px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+          className="rounded-sm px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
         >
           Cancel
         </button>
         <button
           type="submit"
-          className="rounded bg-primary px-2 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
+          className="rounded-sm bg-primary px-2 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
         >
           Save
         </button>

@@ -172,23 +172,39 @@ test.describe("list & gantt drag & drop — desktop (mouse)", () => {
     const base = apiBase(test.info());
     const before = await getTasks(base, seededProject.token, seededProject.projectId);
     const beforeOrder = topLevelSorted(before);
-    expect(beforeOrder.length).toBeGreaterThanOrEqual(2);
+    // Plan B Task 8 flake fix: `playwright.config.ts` pins `workers: 1` and
+    // `fullyParallel: false`, and worker-scoped fixtures (`seededProject`)
+    // are only re-created when Playwright actually restarts the worker —
+    // which does NOT happen between every spec file in a single-worker run.
+    // In practice this file's project can end up shared with OTHER spec
+    // files that alphabetically sort before it (e.g. `gantt-parity.spec.ts`
+    // seeds a milestone task with no `startDate` — a legitimate, realistic
+    // case since only `dueDate` is required for a milestone). Filtering to
+    // top-level tasks that actually HAVE both dates keeps this test's own
+    // "moved"/"over" selection meaningful regardless of what other files in
+    // the suite have added to the shared project by the time this runs.
+    const datedOrder = beforeOrder.filter((t) => t.startDate && t.dueDate);
+    expect(datedOrder.length).toBeGreaterThanOrEqual(2);
 
-    // Drag the globally-last top-level task onto the globally-first one — a
+    // Drag the last DATED top-level task onto the first DATED one — a
     // deterministic upward drag regardless of what the prior two tests in
-    // this file already did to the order.
-    const moved = beforeOrder[beforeOrder.length - 1];
-    const over = beforeOrder[0];
+    // this file (or another file sharing this project) already did to the
+    // order.
+    const moved = datedOrder[datedOrder.length - 1];
+    const over = datedOrder[0];
     expect(moved.id).not.toBe(over.id);
-    // The seed fixture (e2e/fixtures/seed.ts) assigns every top-level task a
-    // startDate/dueDate at creation, so this is not a vacuous null === null
-    // check — the byte-identical assertion below has teeth.
+    // Not a vacuous null === null check — the byte-identical assertion
+    // below has teeth precisely because `datedOrder` only contains tasks
+    // with both dates set.
     expect(moved.startDate, "moved task has no startDate — dates check would be vacuous").not.toBeNull();
     expect(moved.dueDate, "moved task has no dueDate — dates check would be vacuous").not.toBeNull();
 
     await openGanttView(page, seededProject.projectId);
 
-    const grip = await gripFor(page, moved.title, "Drag handle");
+    // Plan B Task 8: the ReUI-engined Gantt's row-reorder grip carries
+    // aria-label="Reorder" (gantt-i18n.tsx's default `labels.reorder`),
+    // replacing the old hand-rolled engine's "Drag handle".
+    const grip = await gripFor(page, moved.title, "Reorder");
     const overBox = await page.getByText(over.title, { exact: true }).first().boundingBox();
     expect(grip, `grip for ${moved.title} not found`).toBeTruthy();
     expect(overBox, `row for ${over.title} not found`).toBeTruthy();

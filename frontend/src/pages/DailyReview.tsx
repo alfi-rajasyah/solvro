@@ -131,13 +131,13 @@ export function DailyReview() {
       {isLoading && <SkeletonRows />}
 
       {isError && (
-        <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+        <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
           Could not load projects: {(error as Error).message}
         </div>
       )}
 
       {projects && myActive.length === 0 && (
-        <div className="rounded border border-outline-variant bg-surface-container px-6 py-10 text-center text-sm text-on-surface-variant">
+        <div className="rounded-sm border border-outline-variant bg-surface-container px-6 py-10 text-center text-sm text-on-surface-variant">
           No active projects to review. Notes are scoped per project — an
           active project is needed to start logging.
         </div>
@@ -224,7 +224,7 @@ function Stat({
   tone: Tone;
 }) {
   return (
-    <div className="rounded border border-outline-variant bg-surface-container-lowest p-3">
+    <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-3">
       <div className="flex items-center justify-between">
         <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
           {label}
@@ -352,7 +352,7 @@ function ProjectCard({
   const customerFacing = visibility === "CUSTOMER_FACING";
 
   return (
-    <article className="rounded border border-outline-variant bg-surface-container-lowest">
+    <article className="rounded-sm border border-outline-variant bg-surface-container-lowest">
       <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-outline-variant px-4 py-3">
         <Link
           to={`/projects/${project.id}/overview`}
@@ -396,7 +396,7 @@ function ProjectCard({
           }}
           placeholder="What happened on this project today?"
           rows={3}
-          className="w-full resize-y rounded border border-outline-variant bg-surface px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          className="w-full resize-y rounded-sm border border-outline-variant bg-surface px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-1 focus:ring-primary"
         />
 
         <VisibilityToggle value={visibility} onChange={setVisibility} />
@@ -430,7 +430,7 @@ function ProjectCard({
               type="button"
               onClick={submit}
               disabled={!canSubmit}
-              className="rounded bg-primary px-3 py-1.5 font-display text-[12px] font-semibold text-on-primary hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-sm bg-primary px-3 py-1.5 font-display text-[12px] font-semibold text-on-primary hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-50"
             >
               {addNote.isPending ? "Saving…" : "Save note"}
             </button>
@@ -492,7 +492,7 @@ function VisibilityToggle({
     <div
       role="radiogroup"
       aria-label="Note visibility"
-      className="inline-flex items-stretch overflow-hidden rounded border border-outline-variant text-[12px] font-semibold"
+      className="inline-flex items-stretch overflow-hidden rounded-sm border border-outline-variant text-[12px] font-semibold"
     >
       <button
         type="button"
@@ -535,7 +535,7 @@ function SkeletonRows() {
       {[0, 1, 2].map((i) => (
         <div
           key={i}
-          className="h-52 animate-pulse rounded border border-outline-variant bg-surface-container"
+          className="h-52 animate-pulse rounded-sm border border-outline-variant bg-surface-container"
         />
       ))}
     </div>

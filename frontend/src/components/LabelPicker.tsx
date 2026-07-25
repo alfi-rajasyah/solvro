@@ -62,7 +62,7 @@ export function LabelPicker({
               type="button"
               onClick={() => toggle(l)}
               className={[
-                "rounded transition-opacity",
+                "rounded-sm transition-opacity",
                 active ? "ring-2 ring-primary ring-offset-1" : "opacity-60 hover:opacity-100",
               ].join(" ")}
             >
@@ -77,7 +77,7 @@ export function LabelPicker({
               createLabel.reset();
               setCreating(true);
             }}
-            className="rounded border border-dashed border-outline-variant px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+            className="rounded-sm border border-dashed border-outline-variant px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
           >
             + Label
           </button>
@@ -85,7 +85,7 @@ export function LabelPicker({
       </div>
 
       {creating && (
-        <div className="rounded border border-outline-variant bg-surface-container-low p-2">
+        <div className="rounded-sm border border-outline-variant bg-surface-container-low p-2">
           <div className="flex items-center gap-2">
             <input
               autoFocus
@@ -101,13 +101,13 @@ export function LabelPicker({
               }}
               placeholder="Label name"
               maxLength={50}
-              className="flex-1 rounded border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-none"
+              className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
             />
             <button
               type="button"
               onClick={() => void handleCreate()}
               disabled={createLabel.isPending || !newName.trim()}
-              className="rounded bg-primary px-2 py-1 font-display text-label-caps uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className="rounded-sm bg-primary px-2 py-1 font-display text-label-caps uppercase text-on-primary hover:bg-primary-container disabled:opacity-50"
             >
               {createLabel.isPending ? "…" : "Add"}
             </button>
@@ -118,7 +118,7 @@ export function LabelPicker({
                 setCreating(false);
                 setNewName("");
               }}
-              className="rounded px-2 py-1 text-[11px] text-on-surface-variant hover:bg-surface-container"
+              className="rounded-sm px-2 py-1 text-[11px] text-on-surface-variant hover:bg-surface-container"
             >
               Cancel
             </button>
