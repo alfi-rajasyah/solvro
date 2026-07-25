@@ -29,11 +29,11 @@ export function Executive() {
       </div>
 
       {isLoading && (
-        <div className="h-32 animate-pulse rounded border border-outline-variant bg-surface-container-low" />
+        <div className="h-32 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
       )}
 
       {isError && (
-        <div className="rounded border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
+        <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
           Could not load executive report: {(error as Error).message}
         </div>
       )}
@@ -63,7 +63,7 @@ function ExecutiveBody({
 
   return (
     <div className="space-y-8">
-      <p className="rounded border border-outline-variant bg-surface-container-low px-4 py-3 text-sm text-on-surface">
+      <p className="rounded-sm border border-outline-variant bg-surface-container-low px-4 py-3 text-sm text-on-surface">
         {projects.length} project{projects.length === 1 ? "" : "s"} ·{" "}
         <span className={overdue.length > 0 ? "font-semibold text-error" : ""}>
           {overdue.length} overdue
@@ -105,7 +105,7 @@ function OverdueProjectsSection({
           message="No overdue projects — everything is on schedule."
         />
       ) : (
-        <div className="overflow-x-auto rounded border border-outline-variant bg-surface-container-lowest">
+        <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest">
           {/* Desktop grid */}
           <div className="hidden grid-cols-[minmax(200px,1.6fr)_140px_160px_140px_120px] items-center border-b border-outline-variant bg-surface-container-low px-3 py-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant md:grid">
             <span>Project</span>
@@ -207,7 +207,7 @@ function PortfolioTimelinesSection({
           </span>
         </div>
 
-        <div className="inline-flex overflow-hidden rounded border border-outline-variant">
+        <div className="inline-flex overflow-hidden rounded-sm border border-outline-variant">
           {PORTFOLIO_VIEWS.map((v, i) => (
             <button
               key={v.view}
@@ -262,7 +262,7 @@ function TimelineRow({ project: p }: { project: PortfolioProjectRow }) {
   const fillTone = p.isOverdue ? "bg-error" : "bg-primary";
 
   return (
-    <div className="space-y-2 rounded border border-outline-variant bg-surface-container-lowest px-4 py-3">
+    <div className="space-y-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-4 py-3">
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
         <div className="flex min-w-0 items-center gap-2">
           <Link

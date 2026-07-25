@@ -37,14 +37,14 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-stretch justify-center bg-inverse-surface/40 p-0 backdrop-blur-sm md:items-center md:p-4"
+      className="fixed inset-0 z-100 flex items-stretch justify-center bg-inverse-surface/40 p-0 backdrop-blur-sm md:items-center md:p-4"
       onMouseDown={onClose}
     >
       <div
         role="dialog"
         aria-modal="true"
         aria-label={title}
-        className={`flex max-h-screen w-full ${widthClass} flex-col rounded-none border-outline-variant bg-surface-container-lowest shadow-overlay md:h-auto md:max-h-[calc(100vh-2rem)] md:rounded md:border`}
+        className={`flex max-h-screen w-full ${widthClass} flex-col rounded-none border-outline-variant bg-surface-container-lowest shadow-overlay md:h-auto md:max-h-[calc(100vh-2rem)] md:rounded-sm md:border`}
         onMouseDown={(e) => e.stopPropagation()}
       >
         {customHeader !== undefined ? (
@@ -57,7 +57,7 @@ export function Modal({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+              className="flex h-7 w-7 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
               aria-label="Close"
             >
               <span className="material-symbols-outlined text-base">close</span>

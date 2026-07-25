@@ -459,7 +459,7 @@ export function ProjectKanban() {
         {COLUMNS.map((c) => (
           <div
             key={c.id}
-            className="h-64 animate-pulse rounded border border-outline-variant bg-surface-container-low"
+            className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low"
           />
         ))}
       </div>
@@ -510,7 +510,7 @@ export function ProjectKanban() {
                     onChange={(e) =>
                       setFilterAssigneeId(e.target.value === "" ? "" : Number(e.target.value))
                     }
-                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-none"
+                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
                   >
                     <option value="">Everyone</option>
                     {(users ?? []).map((u) => (
@@ -527,7 +527,7 @@ export function ProjectKanban() {
                   <select
                     value={filterPriority}
                     onChange={(e) => setFilterPriority(e.target.value as Priority | "")}
-                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-none"
+                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
                   >
                     <option value="">Any priority</option>
                     <option value="LOW">Low</option>
@@ -623,7 +623,7 @@ export function ProjectKanban() {
       >
         <div
           ref={boardScrollRef}
-          className="flex h-full snap-x snap-mandatory gap-4 overflow-x-auto md:grid md:grid-cols-3 md:overflow-visible md:snap-none"
+          className="flex h-full snap-x snap-mandatory gap-4 overflow-x-auto md:grid md:min-h-0 md:flex-1 md:grid-cols-3 md:overflow-visible md:snap-none"
         >
           {COLUMNS.map((col, idx) => (
             <div
@@ -631,7 +631,7 @@ export function ProjectKanban() {
               ref={(el) => {
                 columnRefs.current[idx] = el;
               }}
-              className="w-full shrink-0 snap-center md:w-auto md:shrink md:snap-align-none"
+              className="w-full shrink-0 snap-center md:w-auto md:shrink md:min-h-0 md:snap-align-none"
             >
               <Column
                 id={col.id}
@@ -747,11 +747,11 @@ function Column({
     <div
       ref={setNodeRef}
       className={[
-        "flex flex-col gap-2.5 rounded-xl bg-surface-container p-2 transition-all",
+        "flex flex-col gap-2.5 rounded-xl bg-surface-container p-2 transition-all md:h-full md:min-h-0",
         isOver ? "ring-2 ring-inset ring-primary/40" : "",
       ].join(" ")}
     >
-      {/* Column header */}
+      {/* Column header — stays pinned; the card list below scrolls on its own (md:+) */}
       <div className="flex items-center gap-2 px-1 pb-1">
         <h3 className="text-sm font-bold text-on-surface">{label}</h3>
         <span
@@ -796,26 +796,30 @@ function Column({
         </div>
       </div>
 
-      <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
-        {tasks.map((task) => (
-          <SortableCard
-            key={task.id}
-            task={task}
-            subtaskMap={subtaskMap}
-            canDrag={canDrag}
-            canToggleSubtasks={canToggleSubtasks}
-            onClick={() => onCardClick(task)}
-            onMenuClick={() => onCardMenuClick(task)}
-            onToggleSubtask={onToggleSubtask}
-          />
-        ))}
-      </SortableContext>
+      {/* Scrollable card region (md:+) — dnd-kit autoscroll picks up this
+          overflow-y-auto ancestor automatically when a drag nears its edge. */}
+      <div className="flex flex-col gap-2.5 md:min-h-0 md:flex-1 md:overflow-y-auto">
+        <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
+          {tasks.map((task) => (
+            <SortableCard
+              key={task.id}
+              task={task}
+              subtaskMap={subtaskMap}
+              canDrag={canDrag}
+              canToggleSubtasks={canToggleSubtasks}
+              onClick={() => onCardClick(task)}
+              onMenuClick={() => onCardMenuClick(task)}
+              onToggleSubtask={onToggleSubtask}
+            />
+          ))}
+        </SortableContext>
 
-      {tasks.length === 0 && (
-        <div className="rounded-lg border border-dashed border-outline-variant px-3 py-8 text-center text-[12px] text-on-surface-variant">
-          Drop tasks here
-        </div>
-      )}
+        {tasks.length === 0 && (
+          <div className="rounded-lg border border-dashed border-outline-variant px-3 py-8 text-center text-[12px] text-on-surface-variant">
+            Drop tasks here
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -907,7 +911,7 @@ function TaskCard({
     <div
       onClick={handleClick}
       className={[
-        "touch-manipulation rounded border bg-surface-container-lowest p-3 transition-colors",
+        "touch-manipulation rounded-sm border bg-surface-container-lowest p-3 transition-colors",
         isDragging ? "opacity-40" : "",
         dragging
           ? "rotate-[-1.2deg] border-[1.5px] border-primary shadow-overlay ring-2 ring-primary"
@@ -1036,7 +1040,7 @@ function SortableSubtaskRow({
   return (
     <li ref={setNodeRef} style={style} className="relative">
       {isOver && !isDragging && (
-        <div className="pointer-events-none absolute -top-[3px] left-0 right-0 z-10 h-0.5 rounded-full bg-primary" />
+        <div className="pointer-events-none absolute top-[-3px] left-0 right-0 z-10 h-0.5 rounded-full bg-primary" />
       )}
       <SubtaskRow
         task={task}
@@ -1069,7 +1073,7 @@ function SubtaskRow({
   return (
     <div
       className={[
-        "flex touch-manipulation items-center gap-1.5 rounded px-0.5 py-0.5 text-[12px]",
+        "flex touch-manipulation items-center gap-1.5 rounded-sm px-0.5 py-0.5 text-[12px]",
         dragging ? "opacity-40" : "",
       ].join(" ")}
     >
@@ -1126,7 +1130,7 @@ function MobileMoveSheet({
   onMove: (status: TaskStatus) => void;
 }) {
   return (
-    <div className="fixed inset-0 z-[100] flex items-end md:hidden" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-100 flex items-end md:hidden" onMouseDown={onClose}>
       <div className="absolute inset-0 bg-inverse-surface/40 backdrop-blur-sm" />
       <div
         className="relative w-full rounded-t-2xl border-t border-outline-variant bg-surface-container p-4"

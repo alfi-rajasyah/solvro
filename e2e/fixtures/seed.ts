@@ -10,6 +10,29 @@
 export const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? "qa@solvro.test";
 export const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? "QaTest1234!";
 
+/**
+ * yyyy-MM-dd for `offsetDays` from today (or from `from`, for chaining an
+ * offset off another offset). Plan B Task 8 finding: the ReUI-engined Gantt
+ * (SolvroGantt.tsx) anchors its initial visible window on `new Date()` (no
+ * `defaultDate` is passed to `<Gantt>`) and does NOT expand that window to
+ * fit the project's actual task dates on mount — a task dated outside the
+ * ~1-week default window simply isn't in the DOM until the user manually
+ * scrolls (confirmed via manual investigation: reaching a task 24 days in
+ * the past took 40 wheel-scroll steps). The OLD engine derived its chart
+ * window from the tasks' own min/max dates, so this is a real regression,
+ * reported separately (see task-b8-report.md) — this helper is the
+ * independent fix for a latent fixture fragility the regression exposed:
+ * hardcoded absolute dates (e.g. "2026-07-01") drift out of any
+ * "near-today" rendering window as wall-clock time advances past them.
+ * Every seeded/spec-created task date should be relative to today so the
+ * suite stays deterministic regardless of which day it actually runs.
+ */
+export function isoDateOffset(offsetDays: number, from: Date = new Date()): string {
+  const d = new Date(from);
+  d.setDate(d.getDate() + offsetDays);
+  return d.toISOString().slice(0, 10);
+}
+
 export interface SeededTask {
   id: number;
   title: string;
@@ -91,10 +114,16 @@ export async function seedFixture(base: string): Promise<SeededFixture> {
       body: JSON.stringify(body),
     }).then((r) => json<SeededTask>(r));
 
-  const alpha = await mk({ title: "Alpha", status: "TODO", startDate: "2026-07-01", dueDate: "2026-07-05" });
-  const beta = await mk({ title: "Beta", status: "TODO", startDate: "2026-07-02", dueDate: "2026-07-08" });
-  const gamma = await mk({ title: "Gamma", status: "TODO", startDate: "2026-07-03", dueDate: "2026-07-09" });
-  const delta = await mk({ title: "Delta", status: "IN_PROGRESS", startDate: "2026-07-01", dueDate: "2026-07-12" });
+  // Relative to today (isoDateOffset, above) — NOT hardcoded calendar dates.
+  // Same relative offsets/durations as the original fixed dates (alpha
+  // 0→+4, beta +1→+7, gamma +2→+8, delta 0→+11), just re-anchored so the
+  // seeded tasks stay near "today" no matter when the suite runs — see
+  // isoDateOffset's doc comment for why that now matters against the
+  // ReUI-engined Gantt.
+  const alpha = await mk({ title: "Alpha", status: "TODO", startDate: isoDateOffset(0), dueDate: isoDateOffset(4) });
+  const beta = await mk({ title: "Beta", status: "TODO", startDate: isoDateOffset(1), dueDate: isoDateOffset(7) });
+  const gamma = await mk({ title: "Gamma", status: "TODO", startDate: isoDateOffset(2), dueDate: isoDateOffset(8) });
+  const delta = await mk({ title: "Delta", status: "IN_PROGRESS", startDate: isoDateOffset(0), dueDate: isoDateOffset(11) });
   const subA = await mk({ title: "Sub one", parentTaskId: alpha.id });
   const subB = await mk({ title: "Sub two", parentTaskId: alpha.id });
 

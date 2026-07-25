@@ -54,7 +54,7 @@ export function Settings() {
 
       <ThemeCard />
 
-      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
+      <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
         <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
           Profile
         </h2>
@@ -78,7 +78,7 @@ export function Settings() {
       </section>
 
       {hasPermission(user, "project:write") && (
-        <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
+        <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
           <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
             Service Catalogue
           </h2>
@@ -86,7 +86,7 @@ export function Settings() {
         </section>
       )}
 
-      <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
+      <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
         <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
           Change password
         </h2>
@@ -110,7 +110,7 @@ export function Settings() {
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
               required
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
             />
           </Field>
           <Field label="New password" required>
@@ -121,7 +121,7 @@ export function Settings() {
               autoComplete="new-password"
               minLength={8}
               required
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
             />
             <p className="mt-1 text-[12px] text-on-surface-variant">
               At least 8 characters. Must differ from the current password.
@@ -135,14 +135,14 @@ export function Settings() {
               autoComplete="new-password"
               minLength={8}
               required
-              className="w-full rounded border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
+              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
             />
           </Field>
           <div className="flex justify-end">
             <button
               type="submit"
               disabled={change.isPending}
-              className="rounded bg-primary px-4 py-1.5 font-display text-xs font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-60"
+              className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-60"
             >
               {change.isPending ? "Saving…" : "Update password"}
             </button>
@@ -166,7 +166,7 @@ function ThemeCard() {
     },
   ];
   return (
-    <section className="rounded border border-outline-variant bg-surface-container-lowest p-5">
+    <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
       <h2 className="mb-1 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
         Appearance
       </h2>
@@ -182,7 +182,7 @@ function ThemeCard() {
               type="button"
               onClick={() => setChoice(opt.key)}
               className={[
-                "flex flex-col gap-2 rounded border p-3 text-left transition-colors",
+                "flex flex-col gap-2 rounded-sm border p-3 text-left transition-colors",
                 active
                   ? "border-primary bg-primary/5"
                   : "border-outline-variant bg-surface-container-lowest hover:border-primary/40",
@@ -200,7 +200,7 @@ function ThemeCard() {
               </div>
               {/* Theme preview tile */}
               <div
-                className="h-12 rounded border border-outline-variant overflow-hidden"
+                className="h-12 rounded-sm border border-outline-variant overflow-hidden"
                 aria-hidden
               >
                 {opt.key === "light" && (
