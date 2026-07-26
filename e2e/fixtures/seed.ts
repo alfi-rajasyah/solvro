@@ -46,6 +46,14 @@ export interface SeededFixture {
   token: string;
   userId: number;
   projectId: number;
+  // T10 stabilization: the seeded project's customer id, exposed so specs
+  // can scope `/tasks` page queries (`TasksFilter.customerId`) to just this
+  // fixture's rows. Unscoped `GET /tasks` windows to `take: 200` globally
+  // ordered rows (backend/src/routes/tasks.ts) — on a dev DB that has
+  // accumulated thousands of tasks across every prior e2e/QA run, this
+  // fixture's own rows can fall entirely outside that window, and the
+  // `/tasks` page renders zero matching `<tr>`s.
+  customerId: number;
   alpha: SeededTask;
   beta: SeededTask;
   gamma: SeededTask;
@@ -76,25 +84,34 @@ export async function login(
   return { token: data.token, userId: data.user.id };
 }
 
-/** Seeds a fresh customer (reused if one already exists) + project + tasks/subtasks. */
+/** Seeds a fresh customer + project + tasks/subtasks. */
 export async function seedFixture(base: string): Promise<SeededFixture> {
   const { token, userId } = await login(base);
   const H = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
 
   const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
 
-  const customers = await fetch(`${base}/api/customers`, { headers: H }).then((r) =>
-    json<Array<{ id: number }>>(r),
-  );
-  let custId = Array.isArray(customers) && customers[0]?.id;
-  if (!custId) {
-    const c = await fetch(`${base}/api/customers`, {
-      method: "POST",
-      headers: H,
-      body: JSON.stringify({ name: `QA Fixture Co ${stamp}`, description: "e2e fixture" }),
-    }).then((r) => json<{ id: number }>(r));
-    custId = c.id;
-  }
+  // T10 stabilization finding: this used to reuse `customers[0]` (GET
+  // /customers, ordered alphabetically by name) whenever any customer
+  // existed, to avoid growing the customers table across repeated suite
+  // runs. In practice that meant every seedFixture call across this repo's
+  // entire e2e/QA history has kept attaching fresh projects to whichever
+  // customer sorts first by name (empirically "Acme Corp", id 1) — which has
+  // accumulated 380+ projects as a result. That pollution is exactly why
+  // customer-scoped queries can't be trusted to surface a freshly seeded
+  // project's own rows: `GET /tasks?customerId=1` alone still returns enough
+  // OTHER (older, lower-id, same-position) rows from Acme Corp's other
+  // projects to fill the backend's `take: 200` window before this run's own
+  // tasks are reached (confirmed empirically against the dev DB). Always
+  // creating an isolated, single-project customer per fixture call is what
+  // makes `TasksFilter.customerId` scoping actually work as an isolation
+  // boundary rather than compounding the same shared-customer pollution.
+  const c = await fetch(`${base}/api/customers`, {
+    method: "POST",
+    headers: H,
+    body: JSON.stringify({ name: `QA Fixture Co ${stamp}`, description: "e2e fixture" }),
+  }).then((r) => json<{ id: number }>(r));
+  const custId = c.id;
 
   const proj = await fetch(`${base}/api/projects`, {
     method: "POST",
@@ -127,7 +144,7 @@ export async function seedFixture(base: string): Promise<SeededFixture> {
   const subA = await mk({ title: "Sub one", parentTaskId: alpha.id });
   const subB = await mk({ title: "Sub two", parentTaskId: alpha.id });
 
-  return { token, userId, projectId: proj.id, alpha, beta, gamma, delta, subA, subB };
+  return { token, userId, projectId: proj.id, customerId: custId, alpha, beta, gamma, delta, subA, subB };
 }
 
 export async function getTasks(base: string, token: string, projectId: number): Promise<SeededTask[]> {
