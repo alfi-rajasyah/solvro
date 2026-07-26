@@ -5,11 +5,18 @@
    replaces the v3 `darkMode: "class"` config. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* CSS-first port of tailwind.config.ts (deleted). Colors keep routing
-   through the :root/.dark RGB triplets below — var-in-var resolves at the
-   consuming element, so the .dark flip keeps working and /opacity modifiers
-   keep working (v4 color-mix). */
-@theme {
+/* CSS-first port of tailwind.config.ts (deleted). Colors route through the
+   :root/.dark RGB triplets below. Must stay `@theme inline`: a non-inline
+   @theme emits `--color-x: rgb(var(--x))` at :root, and var(--x) there
+   substitutes at computed-value time on the DECLARING element (:root)
+   itself — the resolved (light) value then simply inherits down, so a
+   `.dark` class pinned on a nested element (Login.tsx, Sidebar.tsx) has
+   nothing left to override and the subtree pin breaks. `inline` compiles
+   each utility to the RGB triplet directly (e.g. `rgb(var(--background))`),
+   so resolution instead happens at the consuming element and the pins work
+   again. Opacity modifiers still work — v4 wraps inline values in
+   color-mix. */
+@theme inline {
   /* — Semantic colors (Technical Precision) — */
   --color-surface: rgb(var(--surface));
   --color-surface-dim: rgb(var(--surface-dim));
@@ -138,6 +145,19 @@
   --color-input: rgb(var(--outline-variant));
   --color-ring: rgb(var(--primary));
 }
+
+/* No manual re-declaration needed for the raw `var(--color-*)` reads inside
+   vendored reui/gantt (gantt-bar.tsx, gantt-view.tsx, gantt-dnd.tsx) —
+   `--color-primary`/`--color-background`/`--color-border`/`--color-destructive`
+   stay emitted at `:root,:host` under Tailwind's generated `@layer theme`
+   even with the primary block above `inline`, because the Oxide scanner
+   treats a bare `var(--color-x)` in scanned source as a used-variable
+   candidate and keeps emitting it regardless of `inline`. Do NOT add a
+   manual `:root { --color-x: ... }` copy here — being outside `@layer
+   theme` it would have higher cascade priority than these `@theme` blocks
+   and silently shadow them, so a future repoint of one of these tokens
+   (e.g. `--color-border` moving off `--outline-variant`) would update
+   every utility but leave the Gantt's raw reads stuck on the stale value. */
 
 @layer base {
   /* Light theme — off-white surfaces, Elitery Green primary darkened to
