@@ -711,6 +711,53 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await page.mouse.move(5, 5);
     await page.screenshot({ path: "test-results/f6-tree-after.png" });
 
+    const persistedWidthAfterDrag = await page.evaluate(() =>
+      localStorage.getItem("solvro.gantt.treeWidth"),
+    );
+    expect(persistedWidthAfterDrag).toBeTruthy();
+    expect(Number(persistedWidthAfterDrag)).toBeGreaterThan(500);
+
+    // F6 follow-up (2026-07-25, post-review) — double-click reset. The
+    // splitter's own dblclick handler resets to whatever `treePanel.width`
+    // currently evaluates to (gantt-view.tsx:2283-2286); SolvroGantt.tsx
+    // freezes that prop at a mount-time snapshot (`initialTreeWidth`, never
+    // updated) instead of the live drag-tracking state specifically so this
+    // is a real "undo my drag(s) this page load" affordance rather than a
+    // permanent no-op. Verified against `paneBefore` (this test's OWN
+    // pre-drag measurement, taken above) rather than a hardcoded 288 —
+    // immune to whatever width an earlier test in this file/run may have
+    // left in localStorage (each Playwright test gets a fresh browser
+    // context/localStorage by default, but self-referencing is still the
+    // more direct proof of "resets to the page-load width" than a constant
+    // would be), and it doubles as proof the derived name-column width
+    // tracks the reset too (the title re-truncates).
+    await splitter.dblclick();
+    await page.waitForTimeout(300);
+
+    const paneAfterReset = await treePane.boundingBox();
+    expect(paneAfterReset, "tree pane not found after double-click reset").toBeTruthy();
+    expect(Math.abs(paneAfterReset!.width - paneBefore!.width)).toBeLessThanOrEqual(2);
+    expect(
+      await isTruncated(),
+      "title should re-truncate after the splitter resets to the page-load width",
+    ).toBe(true);
+
+    const persistedWidthAfterReset = await page.evaluate(() =>
+      localStorage.getItem("solvro.gantt.treeWidth"),
+    );
+    expect(persistedWidthAfterReset).toBeTruthy();
+    expect(Math.abs(Number(persistedWidthAfterReset) - paneBefore!.width)).toBeLessThanOrEqual(2);
+
+    // Widen again so the reload check below still exercises a real,
+    // non-default persisted width (not just the reset value above).
+    const splitterBoxAfterReset = await splitter.boundingBox();
+    expect(splitterBoxAfterReset, "tree-pane splitter not found after reset").toBeTruthy();
+    await mouseDrag(page, center(splitterBoxAfterReset!), {
+      x: splitterBoxAfterReset!.x + 300,
+      y: center(splitterBoxAfterReset!).y,
+    });
+    expect(await isTruncated(), "title should be fully visible again after re-widening").toBe(false);
+
     const persistedWidth = await page.evaluate(() =>
       localStorage.getItem("solvro.gantt.treeWidth"),
     );
