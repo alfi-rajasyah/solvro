@@ -90,7 +90,12 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
   const deleteTask = useDeleteTask(projectId);
 
   const task = (tasks ?? []).find((t) => t.id === taskId) ?? null;
-  const subtasks = (tasks ?? []).filter((t) => t.parentTaskId === taskId);
+  const subtasks = (tasks ?? [])
+    .filter((t) => t.parentTaskId === taskId)
+    // Explicit per-parent comparator — mirrors backend/src/lib/taskOrdering.ts's
+    // dense per-parent ordering rather than relying on GET /tasks's incidental
+    // global (position asc, id asc) sort surviving the filter() above.
+    .sort((a, b) => a.position - b.position || a.id - b.id);
   const subtasksDone = subtasks.filter((s) => s.status === "DONE").length;
 
   const [menuOpen, setMenuOpen] = useState(false);
@@ -193,6 +198,12 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
 
   function toggleSubtask(s: Task) {
     updateTask.mutate({ id: s.id, patch: { status: s.status === "DONE" ? "TODO" : "DONE" } });
+  }
+
+  function moveSubtask(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= subtasks.length) return;
+    updateTask.mutate({ id: subtasks[index].id, patch: { position: target } });
   }
 
   async function handleDelete() {
@@ -526,7 +537,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
               Subtasks {subtasks.length > 0 && `${subtasksDone}/${subtasks.length}`}
             </p>
             <ul className="space-y-0.5">
-              {subtasks.map((s) => (
+              {subtasks.map((s, index) => (
                 <li key={s.id} className="flex items-center gap-2 rounded-sm px-1 py-1 text-[13px]">
                   <button
                     type="button"
@@ -550,12 +561,32 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                   <span
                     className={
                       s.status === "DONE"
-                        ? "truncate text-on-surface-variant line-through"
-                        : "truncate text-on-surface"
+                        ? "flex-1 truncate text-on-surface-variant line-through"
+                        : "flex-1 truncate text-on-surface"
                     }
                   >
                     {s.title}
                   </span>
+                  <div className="flex shrink-0 items-center gap-0.5">
+                    <button
+                      type="button"
+                      onClick={() => moveSubtask(index, -1)}
+                      disabled={!canEdit || index === 0}
+                      aria-label="Move subtask up"
+                      className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
+                    >
+                      <span className="material-symbols-outlined text-sm">keyboard_arrow_up</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveSubtask(index, 1)}
+                      disabled={!canEdit || index === subtasks.length - 1}
+                      aria-label="Move subtask down"
+                      className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
+                    >
+                      <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
