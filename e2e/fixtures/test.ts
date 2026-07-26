@@ -1,4 +1,4 @@
-import { test as base, type Page, type TestInfo } from "@playwright/test";
+import { test as base, type Page, type Request, type TestInfo } from "@playwright/test";
 import { seedFixture, type SeededFixture } from "./seed";
 
 // Worker-scoped fixture: one seeded project per worker (effectively per test
@@ -56,9 +56,62 @@ export async function loginViaUi(
   await page.waitForTimeout(1000);
 }
 
+/**
+ * Route segment for the Kanban board under test — the ReUI-engine board,
+ * cut over to the real `/kanban` route at
+ * `docs/plans/kanban-reui-swap/plan.md` T11. Single source of truth so specs
+ * don't hardcode the segment.
+ */
+export const KANBAN_ROUTE = "kanban";
+
 export async function openKanban(page: Page, projectId: number): Promise<void> {
-  await page.goto(`/projects/${projectId}/kanban`, { waitUntil: "networkidle" });
+  await page.goto(`/projects/${projectId}/${KANBAN_ROUTE}`, { waitUntil: "networkidle" });
   await page.waitForTimeout(800);
+}
+
+export interface CapturedTaskRequest {
+  method: string;
+  url: string;
+  body: Record<string, unknown> | null;
+}
+
+/**
+ * Captures every PATCH/POST request to `/api/tasks*` fired while `fn` runs —
+ * the shared request-absence AND body-capture tool (scenarios.md's G3-G6,
+ * G9c: no-op guards need to assert zero requests; empty-column/filtered
+ * appends need to inspect the actual body, since API-readback alone can't
+ * distinguish "no `position` key sent" from "a `position` was sent and
+ * happened to compute the same value"). The listener is attached BEFORE
+ * `fn` runs and detached after a short settle window (mutations fire
+ * async, after the gesture's mouse/touch events resolve), so callers can
+ * assert either `.length === 0` or inspect `.body` on what was captured.
+ */
+export async function captureTaskRequests(
+  page: Page,
+  fn: () => Promise<void>,
+): Promise<CapturedTaskRequest[]> {
+  const requests: CapturedTaskRequest[] = [];
+  const onRequest = (req: Request) => {
+    const method = req.method();
+    if (method !== "PATCH" && method !== "POST") return;
+    const url = req.url();
+    if (!url.includes("/api/tasks")) return;
+    let body: Record<string, unknown> | null = null;
+    try {
+      body = req.postDataJSON() as Record<string, unknown>;
+    } catch {
+      body = null;
+    }
+    requests.push({ method, url, body });
+  };
+  page.on("request", onRequest);
+  try {
+    await fn();
+    await page.waitForTimeout(800);
+  } finally {
+    page.off("request", onRequest);
+  }
+  return requests;
 }
 
 /** Locates the drag grip belonging to the element containing `text`: the grip

@@ -127,8 +127,19 @@ export function TaskFormModal(props: TaskFormModalProps) {
     (t) => !editingTask || (t.id !== editingTask.id && t.parentTaskId === null),
   );
   const subtasks = editingTask
-    ? (projectTasks ?? []).filter((t) => t.parentTaskId === editingTask.id)
+    ? (projectTasks ?? [])
+        .filter((t) => t.parentTaskId === editingTask.id)
+        // Explicit per-parent comparator — mirrors backend/src/lib/taskOrdering.ts's
+        // dense per-parent ordering rather than relying on GET /tasks's incidental
+        // global (position asc, id asc) sort surviving the filter() above.
+        .sort((a, b) => a.position - b.position || a.id - b.id)
     : [];
+
+  function moveSubtask(index: number, direction: -1 | 1) {
+    const target = index + direction;
+    if (target < 0 || target >= subtasks.length) return;
+    update.mutate({ id: subtasks[index].id, patch: { position: target } });
+  }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -428,7 +439,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               <p className="text-xs text-on-surface-variant">No subtasks yet.</p>
             ) : (
               <ul className="divide-y divide-outline-variant rounded-xl border border-outline-variant">
-                {subtasks.map((s) => (
+                {subtasks.map((s, index) => (
                   <li key={s.id} className="flex items-center gap-2 px-3 py-2">
                     <input
                       type="checkbox"
@@ -442,10 +453,30 @@ export function TaskFormModal(props: TaskFormModalProps) {
                       className="h-3.5 w-3.5 accent-primary"
                     />
                     <span
-                      className={`text-xs ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
+                      className={`flex-1 text-xs ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
                     >
                       {s.title}
                     </span>
+                    <div className="flex shrink-0 items-center gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => moveSubtask(index, -1)}
+                        disabled={!canEdit || index === 0}
+                        aria-label="Move subtask up"
+                        className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
+                      >
+                        <span className="material-symbols-outlined text-sm">keyboard_arrow_up</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveSubtask(index, 1)}
+                        disabled={!canEdit || index === subtasks.length - 1}
+                        aria-label="Move subtask down"
+                        className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
+                      >
+                        <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+                      </button>
+                    </div>
                   </li>
                 ))}
               </ul>

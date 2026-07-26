@@ -15,6 +15,896 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-27 — Kanban cutover: `/projects/:id/kanban` now serves the ReUI-engine board (plan T11)
+
+`docs/plans/kanban-reui-swap/plan.md` T11 — the deliberate cutover commit
+that ends the parallel-route trial. `SolvroKanban` (the ReUI-engine board,
+`frontend/src/components/kanban-v2/`) now renders on the real `/kanban`
+route; the trial `/kanban2` route is gone.
+
+- **`frontend/src/pages/views/ProjectKanban.tsx`**: the old hand-rolled board
+  deleted and replaced by the former `ProjectKanban2.tsx` thin wrapper
+  (renamed onto this path) — `useProjectContext()` → `<SolvroKanban
+  project={...}/>`. Header comment updated to describe the wrapper as the
+  live `/kanban` route rather than the trial route.
+- **`frontend/src/App.tsx`**: `kanban` child route now renders the new
+  wrapper; the `kanban2` route and its `ProjectKanban2` import removed.
+  `ProjectDetail.tsx`'s tab list needed no change — its `kanban` tab already
+  pointed at this route.
+- **`frontend/src/components/kanban-v2/cards.tsx`, `SolvroKanban.tsx`,
+  `MobileMoveSheet.tsx`**: stale `/kanban2`/"trial window" comments updated
+  to describe the post-cutover state (no behavior change).
+- **`e2e/fixtures/test.ts`**: `KANBAN_ROUTE` flipped from `"kanban2"` to
+  `"kanban"` — the single source of truth for the route segment under test.
+- **`e2e/tests/kanban-dnd.spec.ts`**: stale `KANBAN_ROUTE`/"trial board"
+  comment updated; `kanban-dnd` now exercises the real `/kanban` route.
+- **`.claude/agents/solvro-qa.md`** (R4): added two standing guardrail
+  checks — `frontend/src/components/reui/kanban.tsx` exists, and its
+  `// SOLVRO PATCH` marker count matches the count recorded in this
+  CHANGELOG (currently 0; any future sanctioned patch must update both in
+  the same turn).
+
+**Removed**: `ProjectKanban.tsx`'s legacy hand-rolled board (1,182 lines,
+dnd-kit orchestration + collision-detection logic) — git history preserves
+it in full.
+
+**Final measurements** (recorded at CP2, reconfirmed at cutover): Solvro-owned
+runtime 1,363 lines (`kanban-v2/` + the thin wrapper) including 314 pure
+`adapter.ts`/`commitMapper.ts` lines under 36 unit tests
+(`adapter.test.ts` + `commitMapper.test.ts`); vendored `reui/kanban.tsx` 947
+lines, 0 patches (Gantt precedent was 3); `e2e/tests/kanban-dnd.spec.ts` 21
+cases, green on both the desktop and mobile Playwright projects against
+`/kanban`.
+
+### Changed — 2026-07-27 — kanban-dnd e2e spec final stabilization: fixture isolation, drag geometry, settle timing, locator perf (plan T10 follow-up)
+
+Second follow-up to the T10 e2e rewrite/hardening entries below — spec and
+fixture files only, no frontend source touched. Every failure was
+root-caused against the live dev stack rather than assumed; several of the
+prescribed fixes turned out to be necessary-but-insufficient once verified,
+so this entry documents what was actually found, not just what was
+attempted.
+
+- **`e2e/fixtures/seed.ts`**: `seedFixture` now always creates a fresh,
+  isolated customer instead of reusing `customers[0]` (GET /customers,
+  ordered alphabetically by name) when one already existed. Root cause of
+  the modal-trio ("via Tasks") failures: every prior seedFixture call across
+  this repo's e2e/QA history kept attaching fresh projects to whichever
+  customer sorts first by name (empirically "Acme Corp", id 1), which has
+  accumulated 380+ projects as a result — `GET /tasks?customerId=1` alone
+  still returns enough other, lower-id rows from Acme Corp's other projects
+  to fill the backend's `take: 200` window (`backend/src/routes/tasks.ts`)
+  before a freshly seeded project's own rows are reached. `SeededFixture`
+  gained a `customerId` field so specs can scope `/tasks` queries
+  (`TasksFilter.customerId`) to just their own fixture.
+- **`e2e/tests/kanban-dnd.spec.ts`**:
+  - Modal trio (subtask re-parent, subtask promote, G10): `/tasks` now
+    scoped via the Customer filter (new `openTasksPage(page, customerId)`
+    signature) before locating rows, using the `customerId` above.
+  - G2/G9a same-column one-slot drags: a keyboard-driven lift was
+    investigated first as prescribed and found to be a genuine dead end —
+    `reui/kanban.tsx` spreads dnd-kit's `attributes` (role/tabIndex, what
+    makes an element focusable) onto `KanbanItem`'s outer wrapper but its
+    `listeners` (the actual onKeyDown activator) only onto the inner
+    `KanbanItemHandle`, which carries no tabIndex/role of its own — no real
+    keyboard interaction can ever reach the sensor's activator. Fell back to
+    the prescribed mouse overshoot, but a height-*multiplied* overshoot
+    (1.5x) doesn't scale safely: verified live against a 3-card column with
+    a tall (subtask-bearing) distractor card, it skipped two slots instead
+    of one. Switched to (a) measuring the full card box (`cardBoxFor`, new
+    helper) instead of just the title text's bbox, and (b) a small FIXED
+    pixel clearance (20px) past that box's edge — verified across a 0–30px
+    sweep against both plain and tall cards. G9a also had a second,
+    independent bug: measuring drag-target geometry immediately after
+    closing the priority filter raced dnd-kit's `animateLayoutChanges` CSS
+    transition as the filtered-out card left the DOM — a settle wait
+    (400ms) was needed before measuring, not just before dragging; added to
+    G9a and G9b.
+  - G9b column-space drop: retargeted from a card-adjacent offset to the
+    `[data-slot="kanban-column"][data-value="TODO"]` column's own bottom
+    padding, so the append signal (`over.id === "TODO"`) fires instead of a
+    card-drop being (correctly) read as an insert.
+  - G1: pins a deterministic fixture before dragging (three named roles plus
+    a sweep of any further top-level tasks into `IN_PROGRESS`) instead of
+    trusting whatever earlier tests left the shared project's global order
+    as — previously only passed reliably when a Playwright retry happened to
+    restart the worker with a fresh project. The sweep also fixed a latent
+    bug in G9a's pre-existing pin (which predates this task): it only forced
+    its own three named tasks into place and left any additional top-level
+    task untouched, so an unswept 4th task could sit in TODO alongside the
+    fixture and shift the overshoot's landing slot.
+  - Modal trio's `parentSelect`/`statusSelect` locators switched from
+    `dialog.locator("select").filter({ has: dialog.getByRole("option", {
+    name: ... }) })` to a CSS `:has()` selector scoped to the field's own
+    `FieldRow` row (`div.flex.items-center.gap-3:has(span:text-is("..."))
+    select`). Root cause of a reproducible 60s+ timeout on every "via Tasks"
+    modal interaction: `GET /users` (no pagination) returns every
+    accumulated test user from this repo's e2e/QA history — thousands — and
+    TaskFormModal's Assignee field renders all of them as `<option>`s.
+    `getByRole("option", ...)` resolves via the browser's accessibility
+    tree, and evaluating that role query anywhere on a page holding a
+    `<select>` that large never completed in practice (confirmed live: even
+    a 30s timeout wasn't enough); the CSS form sidesteps the accessibility
+    tree entirely and resolves in well under a second.
+- Verified: `docker compose exec frontend npm test` (36/36, commitMapper
+  unchanged by this entry), `npx tsc --noEmit` (e2e package), and the full
+  `kanban-dnd` spec (desktop + mobile) run twice consecutively with zero
+  retries.
+- Not touched: any `frontend/src/` file, `CLAUDE.md`.
+
+### Fixed — 2026-07-27 — kanban-v2 commitMapper WYSIWYG append-signal fix + kanban-dnd e2e hardening (plan T10 follow-up)
+
+Follow-up to the T10 e2e rewrite below: that run reported 14 passed, 2
+flaky-passed (G1, G2), 5 failed (G9a, G9b, and the three Gantt-path modal
+cases). Root-caused and fixed; the earlier entry below is left as-is
+(append-only) and documents the attempt this one corrects.
+
+- **`frontend/src/components/kanban-v2/commitMapper.ts`** (+
+  `commitMapper.test.ts`, 3 new tests, 27→30): `mapCommitToPatch`'s
+  `appendToStatus` signal (M2 fix, Phase 2 review) is now advisory only — it
+  takes effect ONLY when the committed arrangement independently agrees the
+  moved item landed LAST in the target column (`meta.overIndex ===
+  targetColumn.length - 1`); when the signal disagrees with the arrangement,
+  it's ignored and ordinary neighbor-based `resolvePosition` math runs
+  instead ("the committed arrangement is the truth"). Root cause (G9a
+  failure): dnd-kit's `rectIntersection` can resolve
+  `meta.event.over?.id` to the column itself even while the live-preview
+  arrangement shows a genuine mid-column card-to-card insert; the old
+  unconditional check took the append branch, computed a position equal to
+  the moved card's own current slot, and the no-op guard silently swallowed
+  it — nothing committed while the user watched the card visually move. New
+  tests (describe block "T10 (2026-07-27) M2 refinement"): (a) signal set +
+  moved mid-column → neighbor math wins (the G9a shape, hand-derived to
+  `{ status: "TODO", position: 0 }`); (b) signal set + moved last →
+  unfiltered-anchor append still fires (FA-5 unchanged); (c) no signal +
+  moved last-visible with a hidden true-last → neighbor math anchors on the
+  visible predecessor, not the hidden card (documents the original M2 case
+  as still-correct WYSIWYG behavior for a card-targeted drop — append-to-
+  true-end semantics are reserved for genuine column-space drops).
+  `docs/plans/kanban-reui-swap/scenarios.md`'s FA-5 amendment annotated with
+  a "(T10, 2026-07-27)" follow-up clarifying signal + arrangement agreement.
+- **`e2e/tests/kanban-dnd.spec.ts`**:
+  - G9a/G9b/G1/G2 retargeted from near-card-edge drop points (`y + 8`,
+    `height - 4`) to card vertical centers (`y + height / 2`) — the shared
+    geometry-sensitivity root cause: a drop that close to a card's edge (or
+    a column's own top boundary, for G9a/G1's first-card cases) risked
+    dnd-kit's `rectIntersection` resolving `over` ambiguously. G9b's
+    column-body drop retargeted from `height + 60` to `height + 150` to land
+    unambiguously in genuine column space. All four now wrap their drag in
+    `captureTaskRequests` and assert exactly one PATCH with the derived
+    request body (not just the relative-order/readback assertions, which
+    stay in place unweakened) so a geometry miss fails loudly instead of
+    only a vague ordering mismatch.
+  - Subtask re-parent, subtask promote, and G10 (the modal trio) moved off
+    the Gantt/Timeline paths — the Gantt route never actually opened the
+    dialog in practice (timeout waiting for the parent select) — onto
+    `/tasks` (`Tasks.tsx`), whose every `Row.onClick` reliably opens
+    `TaskFormModal` mode="edit". Added `openTasksPage`, `taskRowByProject`,
+    and `clickTaskRow` helpers: `/tasks` lists tasks across every project,
+    so rows are scoped to both the exact title AND the seeded project (via
+    the Project column's `<Link href="/projects/:id">`, not its display
+    name) to avoid collisions with other specs' fixture projects in the
+    shared dev DB. Re-parent/promote uncheck the page's default
+    `topLevel: true` ("Top-level only") filter first, since Sub one/Sub two
+    aren't top-level; G10 keeps the default filter (Alpha is top-level).
+- **`backend/test/`**: verified, not touched. This task's Fix 4 asked for
+  three new `PATCH /tasks/:id` error-contract tests (cross-project parent →
+  `invalid_parent`, parent-with-a-parent → `max_depth_exceeded`,
+  task-with-subtasks-given-a-parent → `max_depth_exceeded`); all three
+  already exist verbatim in `backend/test/taskOrdering.test.ts`'s
+  pre-existing "depth and parent validation" describe block (predates this
+  branch — commit `471892d`, 2026-07-22) and pass. No duplicate tests added.
+
+### Changed — 2026-07-27 — kanban-dnd e2e spec rewritten against kanban-v2 + shared request-capture fixture (plan T10)
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Task 10
+(e2e augmentation), against the binding scenario table + e2e Coverage Audit
+(`docs/plans/kanban-reui-swap/scenarios.md`).
+
+- **`e2e/fixtures/test.ts`**: `openKanban` now navigates via a new exported
+  `KANBAN_ROUTE` constant (currently `"kanban2"`) instead of a hardcoded
+  `/kanban` path — T11's cutover is a one-line flip of this constant back to
+  `"kanban"`. Added `captureTaskRequests(page, fn)`, promoted from the T8
+  scratch spec's pattern: attaches a `page.on("request")` listener before
+  `fn` runs, filters to PATCH/POST requests whose URL contains `/api/tasks`,
+  captures `{ method, url, body }` (parsed via `postDataJSON()`), and
+  detaches after an 800ms settle window — the shared request-**absence**
+  tool (no-op guards) AND request-**body-capture** tool (position-key
+  presence) used throughout the rewritten spec below.
+- **`e2e/tests/kanban-dnd.spec.ts`** rewritten against `/kanban2`:
+  - **Kept** (route-constant change only, via the updated `openKanban`):
+    reorder-within-column (SC-1), cross-column column-body drop (CC-2), WIP
+    badge, desktop/mobile "no page errors", mobile touch reorder, mobile
+    action-sheet move.
+  - **Rewritten to the modal path** (board-level subtask drag is retired,
+    Architecture Decision 2/8): subtask reorder now goes through
+    `TaskPanel`'s "Move subtask up" arrow (T13b path — open Alpha's card,
+    open its panel, move Sub two up), keeping the original position-0 +
+    parentTaskId assertions — this supersedes scenarios.md's T2 disposition
+    (which classified RG-1 as "no modal equivalent, drop") per CP0 decision
+    log #3, made after that audit: Task 13 added the modal reorder controls
+    specifically to replace this case, so it is rewritten, not dropped.
+    Subtask re-parent (Sub one → Delta) and subtask promote (Sub two →
+    top-level DONE) now go through `TaskFormModal`'s Parent field, reached
+    via the **Gantt** tree's row-label click (`onResourceClick` →
+    `onEditTask`, `SolvroGantt.tsx:1111-1116`) rather than Timeline —
+    Timeline (`ProjectTimeline.tsx`) renders only top-level task titles as
+    clickable buttons; subtask rows there are plain, non-interactive text,
+    so Sub one/Sub two's own edit modals aren't reachable from Timeline at
+    all. Timeline's title-click path (verified reachable per T13, dialog
+    aria-label "Edit task") is used instead for G10 below, where the edited
+    task (Alpha) is top-level. The subtask-promote case preserves the
+    load-bearing GLOBAL-order assertion verbatim in spirit (promoted task
+    lands last in the project's global top-level order, other tasks'
+    relative order unchanged) — this is what actually pins the
+    unified-task-ordering fix, since a modal-driven parent change never
+    sends a `position` key.
+  - **Added gap cases** (scenarios.md's e2e Coverage Audit, all via
+    `captureTaskRequests` + API readback): G1 (cross-column card-to-card
+    drop, CC-1), G2 (same-column downward one-slot drop, the
+    must-not-no-op case, SC-2), G3 (drop-in-place, zero requests,
+    SC-3/NO-1), G4 (already-last card onto its own column body, zero
+    requests, NO-2), G5 (Escape mid-drag, zero requests + DOM order
+    unchanged, NO-3), G6 (drop into a genuinely empty column, status-only
+    body with no `position` key, CC-3 — run early, before the DONE column
+    gets a real member from the subtask-promote rewrite), G9a/G9b/G9c
+    (priority-filter trio, CP0 decision log #2 — FA-1-shape hidden-card
+    shift, FA-5-shape hidden-true-last-member column-append anchor via the
+    M2 fix, and filtered drop-in-place), G10 (modal error path: giving
+    Alpha — guaranteed to have a subtask via a fresh API-created one,
+    decoupling this case from whatever the re-parent/promote rewrites did
+    to Alpha's original seeded subtasks — a Parent surfaces the backend's
+    `max_depth_exceeded` message inline, no state change), and R3
+    (cross-view parity: List view's rendered top-level row order matches
+    the API global order after the file's accumulated drag sequence).
+  - Every new case pins its own task roles/positions via direct API
+    PATCHes at test start (rather than assuming fixed seed identities
+    survive the file's earlier gestures) — same idiom as the pre-existing
+    "subtask promote" case's dynamic `othersBefore`/`othersAfter` snapshot,
+    generalized across the new gap cases so file-order changes don't
+    silently break unrelated assertions.
+- **`backend/test/`**: no new file added. `backend/test/taskOrdering.test.ts`'s
+  pre-existing "depth and parent validation" describe block (unrelated to
+  this plan — shipped under the earlier unified-task-ordering plan) already
+  covers RG-4's three specified cases verbatim: `PATCH /tasks/:id` with a
+  `parentTaskId` from another project → 400 `invalid_parent` ("rejects a
+  parentTaskId that belongs to a different project"), a `parentTaskId`
+  belonging to a task that itself has a parent → 400 `max_depth_exceeded`
+  ("rejects setting a parent that itself has a parent"), and a task with
+  subtasks given a parent → 400 `max_depth_exceeded` ("rejects giving a
+  parent to a task that already has subtasks"). Verified rather than
+  duplicated.
+- Not touched: `frontend/src/pages/views/ProjectKanban.tsx` (byte-identical),
+  `frontend/src/components/kanban-v2/*`, `frontend/src/components/reui/
+  kanban.tsx`, `CLAUDE.md`.
+
+### Fixed — 2026-07-27 — Phase 2 review fixes (drag-freeze leak, filter-aware column append, modal arrow gating, drag overlay treatment, route/view relocation + minor design tokens)
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Phase 2
+review fixes pass — the accepted findings from the T6–T13 review (B1 blocker,
+M2–M4 majors, six minors). Test-first for both behavioral fixes (B1, M2).
+
+- **B1 [Blocker] — `frontend/src/components/kanban-v2/SolvroKanban.tsx`:
+  `liveColumns` leaked (never released) on column-body drops.** Root cause
+  traced in the vendored engine (`reui/kanban.tsx:437-552`): a column-body
+  drop lands in the same-container `arrayMove` branch at drag end (the item
+  was already spliced into the target column during a prior `dragOver`, so
+  `over.id` — the column's own id, not an item id — resolves `overIndex` to
+  `-1`), and that branch calls the container's `onDragEnd` prop (which nulled
+  `liveColumns`) BEFORE its own `setColumns`/`onValueChange` call (which
+  re-armed `liveColumns` with a non-null snapshot) — both synchronously
+  within the same `handleDragEnd` invocation, so the re-arm always wins. Fix:
+  a new `isDraggingRef` (a ref, not state, so the write is synchronously
+  visible within that same call stack) set `true` in `handleDragStart`,
+  `false` in `handleDragEnd` AND `handleDragCancel`; `handleValueChange` now
+  ignores every call when the ref is `false`, so it never writes
+  `liveColumns` outside a live gesture. Verified via a temporary scratch
+  Playwright spec (`e2e/tests/kanban-fix2-scratch.spec.ts`, deleted after the
+  run, `e2e/test-results` also cleared): (a) a column-body drop (Beta -> In
+  Progress), (b) an out-of-band API rename of Gamma (bypassing
+  `useUpdateTask` entirely), (c) a second real UI mutation (open Alpha's
+  panel, cycle its priority) to force a genuine React Query invalidate, then
+  asserted Gamma's renamed title reached the board within 3s — proving the
+  freeze released rather than staying permanently stuck on the pre-rename
+  snapshot. Re-run once with the fix's guard line temporarily reverted:
+  failed exactly as predicted (rename never surfaced); restored, re-ran
+  green.
+- **M2 [Major] — `frontend/src/components/kanban-v2/commitMapper.ts` +
+  `SolvroKanban.tsx`: filter-active column-append anchored on the last
+  VISIBLE card, not the column's true last member.** A column-body drop
+  under an active filter was inferring position from the committed
+  (possibly filtered) arrangement's visible neighbors — correct for
+  card-to-card drops, wrong for column-body appends, where a hidden true-last
+  card would get skipped and the moved card would land before it instead of
+  after. Fix: `KanbanCommitMetaLike` gained an optional `appendToStatus`
+  field — an explicit column-append signal. `SolvroKanban.tsx`'s
+  `handleValueCommit` sets it from a real drag by checking whether
+  `meta.event.over?.id` resolves to a `KANBAN_STATUSES` member (the column's
+  own droppable id) rather than a card id; `buildColumnAppendCommit` (the
+  mobile move sheet's synthesized commit) sets it directly to the same
+  `targetStatus`. When `appendToStatus === overContainer`, `mapCommitToPatch`
+  now anchors on the UNFILTERED last member of that status via a new
+  `columnAppendPosition` helper (factored out of `resolvePosition`'s own
+  empty-neighbor fallback, which now delegates to it) — bypassing committed-
+  arrangement inference entirely. Card-to-card drops never set the signal,
+  so `resolvePosition`'s neighbor-based math is unchanged for them.
+  `docs/plans/kanban-reui-swap/scenarios.md` gained a new FA-5/FA-5-MS row
+  pair (fixture A,B,C TODO / D IN_PROGRESS / E DONE, filter hides C, drag D
+  onto the TODO column body -> `{status:"TODO", position:3}`, the true end)
+  plus an amendment block, marked "(Phase 2 review, 2026-07-27,
+  orchestrator-accepted)". `commitMapper.test.ts` (+3, 30→33): FA-5
+  (drag-shaped meta), FA-5-MS (move-sheet-shaped meta, both written against
+  the failing mapper first and confirmed red before the fix), and a
+  mismatched-`appendToStatus` guard test proving filtered card-to-card drops
+  still use neighbor math. Empirically confirmed live: a scratch e2e case
+  (priority filter hides Gamma — the true last TODO card — drag Delta from
+  In Progress onto the TODO column body) captured the literal PATCH
+  `{status:"TODO", position:3}` and an API readback confirmed the correct
+  global order `[Alpha, Beta, Gamma, Delta]`.
+- **M3 [Major] — `frontend/src/components/TaskFormModal.tsx`: subtask
+  reorder arrows ungated.** Both arrow `disabled` expressions now include
+  `!canEdit ||` (`disabled={!canEdit || index === 0}` /
+  `disabled={!canEdit || index === subtasks.length - 1}`), matching
+  `TaskPanel.tsx`'s existing gating. The pre-existing checkbox gap (subtask
+  DONE toggle isn't itself `canEdit`-gated in either file) is unchanged —
+  out of this fix's scope.
+- **M4 [Major] — `frontend/src/components/kanban-v2/cards.tsx` +
+  `SolvroKanban.tsx`: drag overlay lost the DESIGN.md dragging treatment.**
+  `TaskCard` gained a `dragging?: boolean` prop restoring the old board's
+  overlay classes (`ProjectKanban.tsx:917`:
+  `rotate-[-1.2deg] border-[1.5px] border-primary shadow-overlay
+  ring-2 ring-primary`). `SolvroKanban.tsx`'s `<KanbanOverlay>` now wraps the
+  ghost card in a real `<KanbanItem>` (so `KanbanItemHandle` resolves its
+  context from the actual overlay — `listeners: undefined`/inert,
+  `isDragging: true` — instead of a disconnected drag-disabled render) and
+  passes `canDrag dragging` so the grip renders and the ghost visually
+  matches the source card it stands in for.
+- **Minors** — `frontend/src/components/kanban-v2/SolvroKanban.tsx`: (m1)
+  the `../../pages/ProjectDetail` relative import is gone — folded into the
+  m2 refactor below. (m2) `SolvroKanban` now takes `project: ProjectDetail`
+  as an explicit prop instead of calling `useProjectContext()` itself,
+  matching the `ProjectGantt` -> `SolvroGantt` precedent; a new thin
+  `frontend/src/pages/views/ProjectKanban2.tsx` owns the context read and
+  passes `project` down. `App.tsx`'s `kanban2` route now points at
+  `ProjectKanban2`. (m3) investigated whether the vendored `KanbanColumn`/
+  `KanbanColumnContent` expose an is-over signal usable without patching
+  `reui/kanban.tsx`: they don't — `KanbanContext` only tracks `activeId`
+  (what's being dragged, never an over/hover target), and `KanbanColumn`'s
+  own `data-dragging` reflects the COLUMN being dragged for column
+  reordering, not an item hovering over it. Took the documented fallback:
+  removed the dead `transition-all` (nothing ever toggled a class it would
+  have animated) and added a comment naming the live-preview reshuffle as
+  the replacement affordance. (n1) collapsed `canMove`/`dragEnabled` (two
+  identically-computed consts) to one, kept under the greppable
+  `dragEnabled` name. (n4) `getItemValue` is now `useCallback`-wrapped
+  (empty deps) — it feeds the vendored `Kanban` root's `columnIds`
+  `useMemo`/`findContainer` `useCallback` deps, so a fresh identity on every
+  unrelated render (e.g. toggling the filter popover) was defeating both
+  memos even when `columns` itself hadn't changed. (m6) the card "…" menu
+  (opens `MobileMoveSheet`) is now gated on `dragEnabled` — non-writers get
+  no move affordance at all, not just a disabled drag handle, matching
+  `canDrag`. `frontend/src/components/kanban-v2/MobileMoveSheet.tsx`: (m5)
+  `rounded-t-2xl` -> `rounded-t-xl` (the `2xl` radius token is `initial` —
+  resolves to nothing; DESIGN.md forbids `2xl`).
+- **CHANGELOG formatting fix (m4, QA gate failure)**: added the missing
+  `### Added — 2026-07-27 — kanban-v2 static board slice at /kanban2 (T6)`
+  header above the T6 entry body, which had been orphaned (no header of its
+  own) directly below the T7 entry — a formatting header addition only, T6's
+  entry content is unchanged.
+- **Out of scope (deliberately not done here)**: n2/n3 (copied hardcoded
+  colors/px, deferred to T11), n5 (aria on non-writer cards, parity-neutral),
+  and no vendor patch to `reui/kanban.tsx` (m3's fallback branch was taken
+  instead) — `ProjectKanban.tsx` stays byte-identical.
+- **Verification**: `docker compose exec frontend npm test` — 33/33 green (2
+  files: 6 adapter + 27 commitMapper, up from 30). `docker compose exec
+  frontend npm run typecheck` — 0 errors. Scratch spec
+  `e2e/tests/kanban-fix2-scratch.spec.ts` (desktop project,
+  `BASE_URL=http://localhost:5173`) — 5/5 green: the M2 case above, the B1
+  case above (plus one run against a temporarily-reverted guard, confirmed
+  red), and a fast regression trio (column-body drop -> exactly 1 PATCH
+  `{status:"IN_PROGRESS",position:3}`; drop-in-place -> 0 PATCH; card-to-card
+  cross-column drop payload shape still exactly `{status,position}`, no
+  `appendToStatus` leakage into the request body). Spec file + test-results
+  deleted after the run per plan.
+- Scope: `frontend/src/components/kanban-v2/{SolvroKanban.tsx,cards.tsx,
+  commitMapper.ts,commitMapper.test.ts,MobileMoveSheet.tsx}`,
+  `frontend/src/pages/views/ProjectKanban2.tsx` (new),
+  `frontend/src/App.tsx`, `frontend/src/components/TaskFormModal.tsx`,
+  `docs/plans/kanban-reui-swap/scenarios.md`, this file. Not touched:
+  `frontend/src/components/reui/kanban.tsx` (0 vendor patches, unchanged),
+  `frontend/src/pages/views/ProjectKanban.tsx` (byte-identical), `CLAUDE.md`.
+
+### Added — 2026-07-27 — subtask up/down reorder controls in TaskPanel (board-adjacent path, T13b/CP0 follow-up)
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Task 13b —
+follow-up to Task 13. T13's investigation found the Kanban board's `?task=`
+deep-link opens `TaskPanel.tsx`, not `TaskFormModal.tsx`, so the board-adjacent
+reorder path CP0's decision log intended didn't actually exist yet; this closes
+that gap by mirroring T13's shipped pattern onto `TaskPanel`.
+
+- **`frontend/src/components/TaskPanel.tsx`**: the subtask list derivation
+  (`subtasks`, near the top of the component) gained the same explicit
+  `.sort((a, b) => a.position - b.position || a.id - b.id)` comparator T13
+  added to `TaskFormModal` — it previously had no sort at all and relied on
+  `GET /tasks`'s incidental order surviving the `parentTaskId` filter. Each
+  subtask row gains the same `keyboard_arrow_up`/`keyboard_arrow_down` button
+  pair (aria-labels "Move subtask up"/"Move subtask down",
+  `disabled:pointer-events-none disabled:opacity-30`), calling a new
+  `moveSubtask(index, direction)` helper that no-ops outside the list bounds
+  and otherwise sends `{ position: <targetIndex> }` through the panel's
+  existing `useUpdateTask(projectId)` mutation — the same mutation
+  `toggleSubtask` already uses. Buttons are additionally disabled when
+  `!canEdit`, matching how the panel already gates the checkbox toggle and the
+  add-subtask form. The title `<span>` picked up `flex-1` (mirroring T13) so
+  the new button pair right-aligns instead of crowding the row. Everything
+  else in the panel (toggle, add form, delete warning, comments) is unchanged.
+
+### Added — 2026-07-27 — subtask up/down reorder controls in TaskFormModal (modal-path replacement for retired board subtask drag, plan T13/CP0)
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Task 13
+(CP0 Decision Log item 3). Board-level subtask drag has no equivalent on the new
+`/kanban2` board (RG-1 scenario gap); this restores a reorder path in the shared
+task-edit modal instead of dropping the capability.
+
+- **`frontend/src/components/TaskFormModal.tsx`**: the edit-mode subtask panel
+  gains per-row up/down icon buttons (`keyboard_arrow_up`/`keyboard_arrow_down`,
+  right-aligned via a `flex-1` title span) that swap a subtask one slot via the
+  panel's existing `useUpdateTask(projectId)` mutation, sending `{ position:
+  <targetIndex> }` — the same optimistic/rollback path the checkbox status
+  toggle already uses, and the same `{ position }` contract the parent's
+  per-parent sibling list expects (`backend/src/lib/taskOrdering.ts`). Up is
+  `disabled` on the first row, down on the last, so both are visual no-ops at
+  the list boundaries (disabled buttons fire no click, hence no request). The
+  subtask list gained an explicit `.sort((a, b) => a.position - b.position ||
+  a.id - b.id)` comparator — it previously relied on `GET /tasks`'s incidental
+  global `(position asc, id asc)` order surviving the `parentTaskId` filter;
+  now the per-parent ordering is asserted directly in the component. Checkbox
+  behavior and the rest of the modal are unchanged.
+
+### Added — 2026-07-27 — kanban-v2 mobile pager + touch verification, incl. deferred move-sheet cases (T9)
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Task 9
+(Phase 2, "mobile slice"). Old `ProjectKanban.tsx` remains byte-for-byte
+untouched; `adapter.ts`/`commitMapper.ts` untouched; vendor patch count
+stays 0.
+
+- **Root cause fixed**: below `md:`, `/kanban2` was broken — the vendored
+  `KanbanBoard`'s default className (`grid auto-rows-fr gap-4
+  sm:grid-cols-3`) has no layout of its own below `sm:`, so it collapsed to
+  an implicit single-column grid whose `auto-rows-fr` squeezed all three
+  columns into equal-height rows; each column's actual card content
+  overflowed its row's allotted height and visually bled into the next
+  column, intercepting its clicks (T8's deferred finding — the DONE column's
+  "Drop tasks here" placeholder intercepted a click aimed at a TODO card's
+  `[aria-label="Card options"]` button).
+- **`frontend/src/components/kanban-v2/SolvroKanban.tsx`**: ports the old
+  board's swipeable-columns mobile pager (chevrons + centered label/count
+  chip + dot indicators, `ProjectKanban.tsx` lines 576-616; scoped
+  `IntersectionObserver` tracking the centered page, lines 225-243). The
+  scroll-snap container is now a genuine plain `<div>` (not the vendor's
+  `<KanbanBoard>`) carrying the exact old-board classes (`flex h-full
+  snap-x snap-mandatory gap-4 overflow-x-auto md:grid md:min-h-0 md:flex-1
+  md:grid-cols-3 md:overflow-visible md:snap-none`, ported from
+  `ProjectKanban.tsx` lines 624-634); `<KanbanBoard className="contents">`
+  is reduced to a transparent pass-through so its children (the new
+  per-column wrapper divs, `w-full shrink-0 snap-center md:w-auto md:shrink
+  md:min-h-0 md:snap-align-none`, also ported verbatim) become the plain
+  div's direct flex/grid items, while `KanbanBoard`'s own `SortableContext`
+  (a React-context wrapper, not a DOM concern) keeps functioning unaffected
+  by its box disappearing. This routing was necessary, not cosmetic:
+  `@base-ui/react/merge-props` documents "ref is not merged," so passing a
+  ref straight to `<KanbanColumn>` would silently drop dnd-kit's own
+  `setNodeRef` (breaking that column as a drop target), and React 18 (this
+  repo's version) doesn't forward `ref` as a plain prop to non-`forwardRef`
+  function components either (rules out refing `<KanbanBoard>` itself) — the
+  per-column wrapper divs and the new scroll-container div are ordinary
+  native elements instead, sidestepping both. The `IntersectionObserver`
+  effect's dependency array is `[isLoading, isError]` rather than the old
+  file's `[]`: this component's loading/error branches return an entirely
+  different subtree with no pager DOM nodes at all, so a mount-only effect
+  could fire once against `null` refs before the real board ever renders and
+  never re-attach; re-running once more when the loading gate clears
+  guarantees the nodes exist.
+- **Sensor verdict: vendor defaults left untouched, 0 patches.** The
+  vendored `reui/kanban.tsx` hardcodes its `TouchSensor` activation
+  constraint (`delay: 250, tolerance: 5`) directly in `useSensors(...)` with
+  no prop escape hatch, so verifying it meant exercising it live rather than
+  configuring it. Confirmed via the temporary mobile e2e spec (below): a
+  touch-hold-then-drag gesture on a card's grip still produces exactly one
+  PATCH (Alpha appended to end of TODO), and a fast (~75ms, well under the
+  250ms delay) horizontal swipe starting on that same grip — the only
+  element in the DOM that actually carries dnd-kit's touch listeners, since
+  the card body itself has no pointer-down listener (handle-only
+  activation, T7) — fires zero requests, letting native scroll-snap handle
+  it. No sensor-tuning patch was needed; the sanctioned patch site in
+  `reui/kanban.tsx` was not used.
+- **Verification** (temporary scratch spec `e2e/tests/kanban9-scratch.spec.ts`,
+  deleted after the run, plus `e2e/test-results`): mobile project — (1)
+  no-overlap regression: Gamma's `[aria-label="Card options"]` button opens
+  the sheet reliably (this exact click previously timed out); (2) deferred
+  MS-1/MS-2 from T8: tapping "In Progress" on Gamma's sheet fires exactly
+  one PATCH `{status:"IN_PROGRESS",position:3}` + API readback confirming
+  Gamma last in the IN_PROGRESS column order, then reopening on Delta
+  (already IN_PROGRESS) and tapping "In Progress" again fires zero requests;
+  (3) touch-hold drag: Alpha dragged to the TODO column's empty background
+  produces exactly one PATCH `{status:"TODO",position:1}` + readback
+  confirming Alpha last in TODO order; (4) pager: chevron-tap navigates to
+  the In Progress page (header label updates, Delta becomes visible) and a
+  fast swipe gesture fires zero PATCH. A fifth, desktop-only sanity check
+  (not part of T9's mobile brief, added because this task made
+  `<KanbanBoard>` `display:contents` and inserted wrapper divs around every
+  vendor component) confirmed the three columns still render side-by-side
+  and a same-column drag still produces exactly one PATCH — no desktop
+  regression from the restructuring. `docker compose exec frontend npm run
+  typecheck` — 0 errors. `docker compose exec frontend npm test` — 30/30
+  green, unchanged (adapter/commitMapper untouched).
+- Scope: `frontend/src/components/kanban-v2/SolvroKanban.tsx`, this file.
+  Not touched: `frontend/src/components/kanban-v2/adapter.ts`,
+  `frontend/src/components/kanban-v2/commitMapper.ts`,
+  `frontend/src/components/reui/kanban.tsx`,
+  `frontend/src/pages/views/ProjectKanban.tsx`.
+
+### Added — 2026-07-27 — kanban-v2 filters, subtask toggle, mobile move sheet, per-column add menu (T8)
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Task 8.
+Old `ProjectKanban.tsx` remains byte-for-byte untouched; vendor patch count
+still 0.
+
+- **`frontend/src/components/kanban-v2/SolvroKanban.tsx`**: assignee/priority
+  filter popover ported (render-only visibility predicate into
+  `projectToColumns`; the commit path still hands the mapper the UNFILTERED
+  global list per the FA-row contract), plus the per-column "…" menu with
+  "Add task here" (initialStatus preselect) restoring T6's parity gap.
+- **`frontend/src/components/kanban-v2/cards.tsx`**: subtask checkbox wired to
+  the DONE↔TODO toggle via `useUpdateTask` (permission-gated); mobile-only
+  card `more_horiz` menu button restored.
+- **`frontend/src/components/kanban-v2/MobileMoveSheet.tsx`** (new): copy of
+  the old sheet, routing moves through the same mapper column-append path as
+  a column-body drop (no hand-rolled position math).
+- Verification (temporary scratch spec, deleted after the runs): filtered
+  card-drop with hidden card between → exactly one PATCH
+  `{status:"TODO",position:0}` matching FA-1 math + readback; filtered
+  drop-in-place → zero PATCH (plan addendum 8's desktop leg, empirically
+  clean); subtask toggle → one PATCH each way; "Add task here" → correct
+  preselect, zero requests on close. **Mobile move-sheet verification
+  deferred to T9**: below `md:` the /kanban2 columns currently overlap
+  (vendor grid stacking without the mobile pager), intercepting card-menu
+  clicks — T9 owns the mobile layout and will verify the sheet (MS-1..MS-3)
+  once the pager exists.
+
+### Added — 2026-07-27 — kanban-v2 drag persistence (live preview, single-PATCH commit via mapper, restoreOnCancel) at /kanban2 (T7)
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Task 7
+(Phase 2, "drag slice — the core"). Wires the vendored engine's drag
+lifecycle into `commitMapper.ts` and the existing `useUpdateTask` optimistic
+mutation; old `ProjectKanban.tsx` remains byte-for-byte untouched.
+
+- **`frontend/src/components/kanban-v2/SolvroKanban.tsx`**: `<Kanban>` now
+  wires `onValueCommit`, `restoreOnCancel`, and `onDragStart`/`onDragEnd`/
+  `onDragCancel`. Drag-live local projection (Architecture Decision 5): a new
+  `liveColumns` state, set by `onValueChange`, is authoritative while
+  non-null; `columns = liveColumns ?? derivedColumns` freezes query-derived
+  updates mid-gesture and resumes deriving from query data once
+  `onDragEnd`/`onDragCancel` clear it back to `null`. `onValueCommit` calls
+  `mapCommitToPatch(sortTasksCanonical(topLevelAll), committedValue, meta)`
+  and, on a non-null result, fires exactly one
+  `useUpdateTask.mutate({ id, patch })` — the mapper's no-op guards (drop in
+  place, cancelled drag, unchanged arrangement) mean no request at all in
+  those cases. `dragEnabled` now reads `hasPermission(user, "task:write")`
+  (T6's hardcoded `false` removed). Each `KanbanItem` gets an explicit
+  `className={dragEnabled ? undefined : "opacity-100"}` to cancel out the
+  vendored `reui/kanban.tsx`'s own `disabled && "opacity-50"` styling
+  (`KanbanItem`'s `className` composes via `cn()`/`twMerge`, so a
+  later-in-order `opacity-100` wins over the vendor's baked-in `opacity-50`
+  for the same utility group) — non-writers see normal-looking, non-draggable
+  cards instead of T6's all-cards-faded regression (orchestrator screenshot
+  finding), with zero vendor file changes. `<Kanban>` itself now carries
+  `className="flex h-full flex-col md:min-h-0 md:flex-1"`, giving the root a
+  definite height as a flex item of `ProjectDetail.tsx`'s Outlet wrapper so
+  `KanbanBoard`'s existing `h-full`/`md:flex-1` (and, via CSS Grid's default
+  `align-content: stretch`, `KanbanColumn`'s `md:h-full`) actually resolve —
+  matching the old board's `md:h-full md:min-h-0` full-height column chain
+  (previously a no-op because the vendored `Kanban` root had no defined
+  height of its own).
+- **`frontend/src/components/kanban-v2/cards.tsx`**: the card's
+  `drag_indicator` grip is now wrapped in the vendored engine's
+  `KanbanItemHandle` (rendered only when `canDrag`), making it the sole real
+  drag activator — its `listeners` come from the enclosing `<KanbanItem>`'s
+  React context, so the card body itself still has no pointer-down listener,
+  preserving the old board's handle-only drag activation.
+- **Verification**: `docker compose exec frontend npm test` — 30/30 green
+  (unchanged from T5/Phase 1, no mapper/adapter changes this task);
+  `docker compose exec frontend npm run typecheck` — clean. A temporary
+  Playwright spec (`e2e/tests/kanban7-scratch.spec.ts`, deleted before this
+  entry) exercised all six scenario-table cases named in the T7 dispatch
+  brief against `/kanban2` on the desktop project with `page.on('request')`
+  payload capture: same-column reorder (1 PATCH), cross-column drop-on-card
+  top-half vs bottom-half (plan Phase 1 Review Addendum 6's WYSIWYG check —
+  see finding below), column-body drop (1 PATCH, ends last), drop-in-place (0
+  PATCH), Escape mid-drag (0 PATCH, DOM order unchanged), and empty-column
+  drop (`status`-only body, no `position` key). All six passed.
+- **Addendum 6 finding**: the vendored engine's cross-column drop-on-card
+  reshuffle (`reui/kanban.tsx`'s `handleDragOver`) always splices the moved
+  card in at the *over*-card's own current index — i.e. always "insert
+  before" — regardless of which half of the target card the pointer
+  releases over. Both a top-half and a bottom-half drop of Beta onto Delta
+  produced the *identical* captured payload
+  (`{ status: "IN_PROGRESS", position: 2 }`, committed arrangement
+  `["Beta", "Delta"]`) against a fresh, otherwise-identical seeded project
+  for each half. Only the CC-1/FA-2 arrangement (moved-before-over-card) is
+  reachable through a card-to-card drop in practice; CC-1b/FA-2b (moved
+  after) remain valid mapper unit-test coverage for an arrangement the live
+  engine does not appear to produce via this gesture — this resolves
+  addendum 6's open question in favor of "engine only ever produces one of
+  the two."
+
+### Added — 2026-07-27 — kanban-v2 static board slice at /kanban2 (T6)
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Task 6
+(Phase 2, "static board slice"). Trial route only — no tab registered in
+`ProjectDetail.tsx`; old `ProjectKanban.tsx` stays byte-for-byte untouched
+(Architecture Decision 1). Drag persistence lands in T7.
+
+- **`frontend/src/components/kanban-v2/cards.tsx`** (new): `TaskCard`,
+  `SubtaskRow`, `getDuration` copied from `ProjectKanban.tsx` (Architecture
+  Decision 2 — copy, don't extract; the duplicate dies with the old file at
+  cutover, T11). Stripped of drag plumbing (`dragHandleProps`/`dragHandleRef`/
+  `dragging`/`isDragging`) and the mobile `MobileMoveSheet` menu button
+  (ports in T8). `SubtaskRow` drops its drag handle entirely — subtask
+  dragging is retired from the board for good, not deferred — and renders its
+  checkbox visually but disabled until T8 wires the toggle mutation.
+- **`frontend/src/components/kanban-v2/SolvroKanban.tsx`** (new): container
+  rendering the vendored `reui/kanban.tsx` engine over `adapter.ts`'s
+  `projectToColumns` projection. WIP-limit count chips (amber over-limit
+  state), toolbar `Add task` button + `TaskFormModal` create wiring, card
+  click → `?task=` deep link, loading/error states, and an empty-column "Drop
+  tasks here" placeholder are all ported from `ProjectKanban.tsx`. Every
+  `KanbanItem` renders `disabled={!dragEnabled}` with `dragEnabled` hardcoded
+  `false` (single greppable flag for T7 to flip); `onValueChange` is a
+  no-op placeholder pending T7's live-drag projection. `KanbanOverlay` is
+  wired with a minimal `TaskCard` ghost render function, unreachable in
+  practice while every item is drag-disabled. Filter popover and mobile pager
+  chrome are explicitly out of scope (T8/T9).
+- **`frontend/src/App.tsx`**: registers `Route path="kanban2"` under the
+  existing `projects/:id` route block, alongside (not replacing) `kanban`.
+
+### Changed — 2026-07-27 — kanban-v2 mapper/adapter review hardening + frontend vitest wired into CI (Phase 1 review fixes)
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Phase 1
+Review Addenda (`plan.md`, dated 2026-07-27) — the accepted findings from the
+T3–T5 review pass (reviewer found no blockers). Test-first for every
+behavioral fix.
+
+- **`frontend/src/components/kanban-v2/commitMapper.test.ts`** (+4 tests,
+  20→24): **CC-1b**/**FA-2b** — sibling cases for CC-1/FA-2 covering the
+  *other* reachable arrangement of a cross-column drop-on-card commit (review
+  finding 1). The orchestrator accepted WYSIWYG semantics: ReUI's live-preview
+  commit is arrangement-faithful and a card-to-card cross-column drop can land
+  the moved card on either side of the over-card depending on pointer
+  position — both CC-1 (moved before over-card) and CC-1b (moved after,
+  committed `TODO: [A, B, D, C]` → `{ status: "TODO", position: 2 }`) are
+  reachable engine outputs, same for FA-2/FA-2b under an active filter
+  (FA-2b: moved before over-card, committed `IN_PROGRESS: [A, D]` →
+  `{ status: "IN_PROGRESS", position: 2 }`). Each new test derives its
+  expected patch by hand from the moved-excluded global list in an inline
+  comment. Also added: an **unknown-`overContainer`** test (review finding 5)
+  and a **stale-predecessor clamp** test (review finding 6, see below).
+- **`frontend/src/components/kanban-v2/adapter.test.ts`** (+1 test, 5→6): a
+  full task list including subtasks (`parentTaskId` set) now asserts no
+  subtask ends up in any projected column (review finding 8, see below).
+- **`frontend/src/components/kanban-v2/commitMapper.ts`**: (a) Guard 2's
+  comment now states explicitly that it is defensive-only — analytically
+  unreachable because Guard 1 (`arrangementsEqual`) already subsumes it for
+  every input reachable through this function, kept only as a cheap invariant
+  against future refactors (review finding 2; no test added to reach it, per
+  the review's own instruction not to chase it). (b) `resolvePosition` now
+  clamps its returned index to `[0, movedExcludedGlobal.length]`, mirroring
+  `backend/src/lib/taskOrdering.ts`'s `insertAt` clamp
+  (`Math.max(0, Math.min(requestedPosition, others.length))`) — the
+  neighbor-anchored `+1` branches could otherwise return one past the valid
+  append slot when a committed predecessor/anchor isn't found in the
+  unfiltered global order (stale-drag input), which the new clamp test
+  exercises directly (review finding 6). (c) `meta.overContainer` is now
+  validated via a new `isKanbanStatus` type guard against `KANBAN_STATUSES`
+  (imported from `./adapter.ts`) instead of an unchecked `meta.overContainer
+  as TaskStatus` cast — an unrecognized container now returns `null` instead
+  of silently producing a patch with a garbage `status` (review finding 5).
+  160 → 200 lines.
+- **`frontend/src/components/kanban-v2/adapter.ts`**: `projectToColumns` now
+  filters out `parentTaskId !== null` tasks itself instead of trusting the
+  caller to have already narrowed to top-level tasks (review finding 8) — the
+  board has no subtask-drag surfaces, so a subtask leaking into a column would
+  render unexpectedly. 58 → 64 lines.
+- **`.github/workflows/ci.yml`**: added a "Run frontend test suite" step
+  (`working-directory: frontend`, `run: npm test`) to the `typecheck` job,
+  immediately after "Typecheck frontend" and before the `e2e` `npm ci` step —
+  the frontend Vitest suite (R2's mitigation) wasn't previously wired into CI
+  and ran only locally (review finding 3).
+- **`docs/plans/kanban-reui-swap/scenarios.md`**: amended the CC-1 and FA-2
+  rows (adjacent notes under each table, rows themselves unchanged) recording
+  the WYSIWYG semantics delta from the old board's always-lands-after
+  behavior and both expected patches for the alternate arrangement, marked
+  "(Phase 1 review, 2026-07-27, orchestrator-accepted)".
+- Informational (review finding 9, no code follows from this): T3's vendored
+  `frontend/src/components/reui/kanban.tsx` differs from the raw `@reui/kanban`
+  registry payload by exactly the shadcn CLI's `rsc:false` header transform —
+  3 lines (`eslint-disable` comment, `"use client"` pragma, blank line) that
+  the Gantt engine's vendored files (installed with React Server Components
+  support) retain but this file's install target config omits. Recorded here
+  so a future re-pull diff isn't misread as hand-editing; no `// SOLVRO PATCH`
+  marker applies since this is a CLI install-config artifact, not a hand edit.
+- Verified: `docker compose exec frontend npm test` — 2 test files, 30 tests,
+  all passed (6 adapter + 24 commitMapper — up from 25). `docker compose exec
+  frontend npm run typecheck` — 0 errors. Ruby's `YAML.load_file` confirms
+  `ci.yml` still parses.
+- Scope: `frontend/src/components/kanban-v2/{adapter.ts,commitMapper.ts,
+  adapter.test.ts,commitMapper.test.ts}`, `.github/workflows/ci.yml`,
+  `docs/plans/kanban-reui-swap/scenarios.md`, this file. Not touched:
+  `frontend/src/components/reui/kanban.tsx`,
+  `frontend/src/pages/views/ProjectKanban.tsx`, `CLAUDE.md`.
+
+### Added — 2026-07-26 — kanban-v2 adapter + commit-mapper with scenario-table unit tests
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Task 5 —
+the highest-stakes task in the migration (R2: the global-order drop math). Written
+test-first against `docs/plans/kanban-reui-swap/scenarios.md`'s CP0-approved
+scenario table: every SC/CC/FA/NO/MS row became a named unit test before either
+pure module was implemented; a deliberate mutation run (temporarily stubbing out
+the empty-column fallback) confirmed the FA-3 test fails without it, proving the
+suite isn't tautological against its own implementation.
+
+- **`frontend/src/components/kanban-v2/adapter.ts`** (new, 58 lines): pure
+  projection `projectToColumns(topLevelTasks, isVisible?)` →
+  `Record<TaskStatus, Task[]>` for ReUI Kanban's `value` prop. Columns
+  TODO/IN_PROGRESS/DONE always present (empty arrays allowed); ordering within a
+  column is position ascending, id ascending tiebreak — identical to the old
+  board's `groupedAll`/`grouped` (`ProjectKanban.tsx:204-217`). Also exports
+  `compareTasksByPosition`/`sortTasksCanonical`, the canonical global-order
+  comparator, so T6's container doesn't re-derive it.
+- **`frontend/src/components/kanban-v2/commitMapper.ts`** (new, 160 lines): pure,
+  dnd-free `mapCommitToPatch(unfilteredGlobalOrder, committedValue, meta)` →
+  `{ taskId, patch: { status, position? } } | null` per Architecture Decision 3.
+  `KanbanCommitMetaLike` is a locally-defined structural type mirroring
+  `reui/kanban.tsx`'s `KanbanCommitMeta<T>` shape (`kind`, `activeContainer`,
+  `activeIndex`, `overContainer`, `overIndex`, `previousValue`) — **not
+  imported** from the vendored file, satisfying the acceptance criterion that
+  this module stay import-free of `@dnd-kit/*`/the vendored kanban. Two no-op
+  guards run before any position math: (1) `previousValue` arrangement
+  (id-sequence per column) structurally equal to the committed value → `null`;
+  (2) the resolved `{status, position?}` already matches the moved task's
+  current state → `null`. Position is resolved neighbor-based from the
+  committed target column: a visible predecessor → its moved-excluded global
+  index + 1; no predecessor but a visible successor → the successor's
+  moved-excluded global index; neither → falls back to the **unfiltered**
+  global order restricted to the target status (last member, moved excluded,
+  +1) before concluding the column is genuinely empty — this fallback is what
+  makes FA-3 (a filter hiding the column's only card) resolve to `position: 3`
+  instead of wrongly looking empty, the exact hazard scenarios.md calls out.
+  Only when the unfiltered fallback also comes up empty does the patch become
+  status-only, constructed **without** a `position` key at all (not
+  `position: undefined`) — verified by an explicit `"position" in patch`
+  assertion on the CC-3/MS-3 tests. `kind: "column"` short-circuits to `null`
+  unconditionally (column reordering unsupported).
+- **`frontend/src/components/kanban-v2/adapter.test.ts`** (new, 5 tests):
+  grouping + DONE/TODO/IN_PROGRESS bucketing, always-present empty columns,
+  position/id-tiebreak ordering on shuffled/tied input, filter hiding without
+  mutating input order or `position`, and the exported comparator's consistency
+  with the internal sort.
+- **`frontend/src/components/kanban-v2/commitMapper.test.ts`** (new, 20 tests):
+  all 18 scenario-table rows (SC-1..SC-5, CC-1..CC-3, FA-1..FA-4, NO-1..NO-3,
+  MS-1..MS-3), each test name prefixed with its scenario ID and using the
+  scenario table's reference/EC fixtures literally, plus one test proving MS
+  rows share the exact column-append code path CC rows use (no move-sheet
+  special-casing exists in the mapper's signature) and one proving
+  `kind: "column"` always no-ops independently of the arrangement guard. No
+  table discrepancies found — every row's expected `{status, position?}` or
+  NO REQUEST reproduced exactly as written.
+- **`frontend/src/components/kanban-v2/setup.test.ts`** (deleted): T4's
+  placeholder, superseded by the real test files above per its own comment.
+- Meta-shape sufficiency (Checkpoint 1 input): `KanbanCommitMeta`'s 6 fields
+  (`kind`/`activeContainer`/`activeIndex`/`overContainer`/`overIndex`/
+  `previousValue`) proved sufficient for all 18 rows — no field was missing.
+  Notably, `activeContainer`/`activeIndex` end up unused by the mapper's own
+  logic (the moved task's current server-known status/position is instead
+  looked up by id in `unfilteredGlobalOrder`, which is more robust than
+  trusting the pre-drag index) — kept in `KanbanCommitMetaLike` for structural
+  completeness/documentation rather than because the implementation needs them.
+- Verified: `docker compose exec frontend npm test` — 2 test files, 25 tests,
+  all passed (5 adapter + 20 commitMapper). `docker compose exec frontend npm
+  run typecheck` — 0 errors. `git status --porcelain` — only
+  `frontend/src/components/kanban-v2/*`, this file (plus the pre-existing
+  uncommitted `frontend/package.json`/`package-lock.json`/`vitest.config.ts`
+  from T3/T4 and the untracked `reui/kanban.tsx` from T3).
+- Scope: `frontend/src/components/kanban-v2/adapter.ts`,
+  `commitMapper.ts`, `adapter.test.ts`, `commitMapper.test.ts` (all new),
+  `setup.test.ts` (deleted), this file. Not touched:
+  `frontend/src/pages/views/ProjectKanban.tsx`, `frontend/src/lib/queries.ts`,
+  `frontend/src/components/reui/kanban.tsx`, any other kanban-v2 UI file (T6+).
+
+### Added — 2026-07-26 — Frontend unit test runner (Vitest) + `npm test` script
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Task 4.
+`frontend/` had typecheck only (no unit test runner) until now; this unblocks T5's
+mapper-first testing requirement (R7/R2 mitigation — pure `commitMapper`/`adapter`
+tests written against the scenario table before any UI wiring).
+
+- **`frontend/package.json`**: added `vitest` as a devDependency, pinned `^4.1.10` —
+  matching the backend's installed major/minor (`backend/package.json` also pins
+  `vitest@^4.1.10`, resolved `4.1.10` in both `package-lock.json`s) so the two
+  workspaces stay on the same Vitest generation. Added a `"test": "vitest run"`
+  script alongside the existing `dev`/`build`/`preview`/`typecheck` scripts. No
+  React testing libraries, no jsdom, no coverage packages — deliberately out of
+  scope; T5's tests are pure node-environment function tests.
+- **`frontend/vitest.config.ts`** (new): standalone config (not merged with
+  `vite.config.ts`, to avoid pulling in the Tailwind/React/PWA plugins pure
+  function tests don't need) — `test.environment: "node"`,
+  `test.include: ["src/**/*.test.ts"]` (`.tsx` intentionally excluded — no
+  component tests in scope), `test.globals: false` (explicit `import { describe,
+  it, expect } from "vitest"` per test file, no ambient globals). Mirrors
+  `vite.config.ts`'s `resolve.alias` (`"@" → path.resolve(__dirname, "src")`) via
+  an explicit `resolve.alias` entry so modules under test can import `@/lib/...`
+  identically to app code.
+- **`frontend/src/components/kanban-v2/setup.test.ts`** (new): trivial placeholder
+  assertion (`1 + 1 === 2`) proving the runner works end to end (config resolution,
+  node environment, `npm test` script) — comment notes T5 replaces this file with
+  the real `adapter.test.ts`/`commitMapper.test.ts`.
+- Installed per the node-modules sync rule: `npm install` on the host (IDE
+  typecheck tree) and `docker compose exec frontend npm install` (container tree).
+  No native bindings, no container restart needed.
+- No `frontend/tsconfig.json` change needed: it already has no `exclude` and
+  `"include": ["src"]`, so `*.test.ts` files under `src/` are picked up by
+  `npm run typecheck` (`tsc --noEmit`) automatically; explicit `vitest` imports
+  (globals off) resolve fine under the existing config with no `types` array to
+  extend.
+- Verified: `docker compose exec frontend npm test` — 1 test file, 1 test, passed.
+  `docker compose exec frontend npm run typecheck` — 0 errors. `git status
+  --porcelain` — only `frontend/package.json`, `frontend/package-lock.json`,
+  `frontend/vitest.config.ts`, `frontend/src/components/kanban-v2/setup.test.ts`,
+  this file (plus the untouched, already-uncommitted T3 `reui/kanban.tsx`).
+- Scope: `frontend/package.json`, `frontend/package-lock.json`,
+  `frontend/vitest.config.ts` (new), `frontend/src/components/kanban-v2/setup.test.ts`
+  (new), this file. Not touched: `frontend/vite.config.ts`, any tsconfig, any
+  existing source file.
+
+### Added — 2026-07-26 — Vendored ReUI Kanban engine (`@reui/kanban`), zero patches
+
+Kanban → ReUI Engine Swap plan (`docs/plans/kanban-reui-swap/plan.md`), Task 3. Same
+vendoring pattern as the Gantt engine: `npx shadcn@latest add @reui/kanban` run from
+`frontend/`, no files touched by hand.
+
+- **`frontend/src/components/reui/kanban.tsx`** (new, 947 lines): the registry item
+  installs as a single file (not a directory like the 9-file Gantt engine) — headless
+  primitives (`Kanban`, `KanbanBoard`, `KanbanColumn`, `KanbanColumnHandle`,
+  `KanbanItem`, `KanbanItemHandle`, `KanbanColumnContent`, `KanbanOverlay`) built on
+  `@dnd-kit/core`/`@dnd-kit/sortable`/`@dnd-kit/utilities` and `@base-ui/react`
+  (`merge-props`, `use-render`), all already present in `package.json` — the CLI dry
+  run and post-install diff both confirm zero new dependencies were added, so no
+  `package.json`/`package-lock.json` change and no container `npm install` sync was
+  needed. Zero modifications made to the vendored file (patch count = 0); no
+  `// SOLVRO PATCH` markers.
+- Install-time inspection findings (informational only, no code follows from these
+  yet — recorded for T5/T7/T9): (a) sensors are pre-configured — `MouseSensor`
+  `{ activationConstraint: { distance: 10 } }`, `TouchSensor`
+  `{ activationConstraint: { delay: 250, tolerance: 5 } }`, `KeyboardSensor` with
+  `sortableKeyboardCoordinates` — i.e. the touch sensor already ships the 250ms
+  delay the plan's T9 flagged as a possible sanctioned patch, so that patch may turn
+  out to be unnecessary; (b) no `collisionDetection` prop is passed to `DndContext`,
+  so it falls back to dnd-kit's library default (`rectIntersection`); (c)
+  `onValueCommit`'s second argument (`KanbanCommitMeta<T>`) carries `kind`,
+  `activeContainer`, `activeIndex`, `overContainer`, `overIndex`, `previousValue`
+  exactly as the plan's Architecture Decision 3 assumed, plus one extra field
+  (`event: DragEndEvent`) the plan didn't name; (d) no `Math.random`/`Date.now`/
+  other non-deterministic calls anywhere in the file — the only side effect is a
+  dev-mode-only `console.warn` on duplicate item ids; (e) every import resolves to a
+  dependency already in `package.json` (`react`, `react-dom`, `@base-ui/react/*`,
+  `@dnd-kit/*`) or the internal `@/lib/utils` alias — nothing new to install.
+- Verified: `docker compose exec frontend npm run typecheck` — 0 errors.
+  `git status --porcelain` / `git diff --stat` show only the new vendored file (plus
+  this entry) — no other files touched.
+- Scope: `frontend/src/components/reui/kanban.tsx` (new), this file. Not touched:
+  `frontend/src/pages/views/ProjectKanban.tsx`, any `reui/gantt/` file,
+  `package.json`/`package-lock.json` (unchanged — no new deps).
+
 ### Fixed — 2026-07-25 — PWA/home-screen icons rendered as an unrecognizable dark square with a white blob
 
 All 4 icons under `frontend/public/icons/` composited the on-dark Elitery mark (off-white `#f2f2f2` arc + `#3aae51` green crescent) onto a `#3aae51` GREEN plate — the green crescent visually disappeared into the same-color plate, leaving only the off-white arc as an unrecognizable blob. Alpha wasn't limited to `apple-touch-icon.png`: pre-regeneration measurement found `apple-touch-icon.png` (transparent, pre-rounded corners), `icon-192.png` (3.73% transparent pixels), and `icon-512.png` (4.03% transparent pixels) all carried transparent `#000000` corners — iOS flattens that alpha onto black when applying its own mask, producing the dark-square frame seen in the reported screenshot; only the old `icon-maskable-512.png` was already fully opaque. The maskable icon's glyph was also undersized (~22% of tile width, near-empty).
