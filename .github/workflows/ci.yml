@@ -82,9 +82,16 @@ jobs:
         image: postgres:15-alpine
         env:
           POSTGRES_USER: solvro
-          # Ephemeral service-container password. Supplied from a repo
-          # Actions secret so no credential literal lives in the repo.
-          POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
+          # Deliberate literal, not a secret. A service container's `env:` is
+          # resolved before any step runs, so a per-run generated value is
+          # impossible here — and secrets are unavailable to Dependabot-
+          # triggered runs (GitHub passes only the Dependabot secret store to
+          # those, which is why every Dependabot PR failed with "Database is
+          # uninitialized and superuser password is not specified").
+          # This database lives and dies inside one job on a throwaway runner
+          # and is reachable only on localhost, so the value protects nothing
+          # and granting it secret status bought no security.
+          POSTGRES_PASSWORD: ci-ephemeral-postgres
           POSTGRES_DB: solvro
         ports:
           - 5432:5432
@@ -94,7 +101,8 @@ jobs:
           --health-timeout 5s
           --health-retries 20
     env:
-      DATABASE_URL: postgresql://solvro:${{ secrets.CI_POSTGRES_PASSWORD }}@localhost:5432/solvro?schema=public
+      # Must match the service-container literal above.
+      DATABASE_URL: postgresql://solvro:ci-ephemeral-postgres@localhost:5432/solvro?schema=public
     steps:
       - uses: actions/checkout@v4
 
@@ -125,17 +133,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     env:
-      # Consumed by ci/docker-compose.ci.yml via ${VAR} interpolation and by
-      # the admin-creation / Playwright steps below. Passwords come from repo
-      # Actions secrets; JWT_SECRET is generated per run (step below).
-      POSTGRES_PASSWORD: ${{ secrets.CI_POSTGRES_PASSWORD }}
       ADMIN_EMAIL: qa@solvro.test
-      ADMIN_PASSWORD: ${{ secrets.CI_ADMIN_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Generate ephemeral JWT secret
-        run: echo "JWT_SECRET=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      # Generated per run rather than read from the repo secret store, and
+      # exported via $GITHUB_ENV so every later step sees them: docker compose
+      # interpolation in ci/docker-compose.ci.yml, the admin-creation step,
+      # and Playwright's fixtures (e2e/fixtures/test.ts reads ADMIN_PASSWORD
+      # from the environment).
+      #
+      # This is what makes Dependabot PRs work. GitHub passes only the
+      # Dependabot secret store to Dependabot-triggered runs, so every
+      # `secrets.CI_*` reference resolved to an empty string and the stack
+      # failed to boot. Generating the values removes that whole class of
+      # failure and keeps human and bot PRs on an identical path — while
+      # being strictly better hygiene than a stored credential, since these
+      # now never outlive the job.
+      - name: Generate ephemeral run credentials
+        run: |
+          {
+            echo "JWT_SECRET=$(openssl rand -hex 32)"
+            echo "POSTGRES_PASSWORD=$(openssl rand -hex 24)"
+            echo "ADMIN_PASSWORD=$(openssl rand -hex 24)"
+          } >> "$GITHUB_ENV"
 
       - name: Build and start stack (retry once on failure)
         run: |

@@ -15,6 +15,170 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-07-27 — Dependabot disabled entirely (config deleted + both repo settings turned off)
+
+User decision: the PR volume was not worth the benefit. Grouping and a
+monthly cadence (previous entry) were tried first and still did not settle
+it — a further major-version PR arrived while that change was in review — so
+Dependabot is switched off completely rather than tuned again.
+
+Three separate switches, all now off:
+
+- **`.github/dependabot.yml` deleted** — stops *version* updates, which are
+  driven solely by this file.
+- **`DELETE /repos/:owner/:repo/automated-security-fixes`** — stops
+  *security update* PRs. These come from a repository setting, not from the
+  config file, so deleting the file alone would not have stopped them.
+- **`DELETE /repos/:owner/:repo/vulnerability-alerts`** — stops Dependabot
+  alerts, removing the Security-tab list as well as the PRs.
+
+**Consequence, recorded deliberately:** ~29 open advisories were still
+outstanding when this was turned off, and they are no longer tracked
+anywhere in the repo. Dependency vulnerabilities will now surface only if
+someone runs `npm audit` by hand. The remaining known-unfixed items at
+time of writing were `brace-expansion` ×3 (high), `react-router` ×3 +
+`react-router-dom` ×1 (medium, fix requires the v7 major), `dompurify` ×9,
+`vite` ×3, `uuid`, `@babel/core`, `esbuild` ×2, `tmp`, `fast-uri`,
+`postcss`, `js-yaml` ×2 and `body-parser` — most of which had working PRs
+that were closed as part of the noise cleanup.
+
+To re-enable later: restore this file and `PUT` the same two endpoints.
+
+### Changed — 2026-07-27 — Dependabot version updates grouped and moved to monthly (≈9 PRs/week → 1–2 PRs/month)
+
+Removing `target-branch` (previous entry) released the version-update stream
+that had been suppressed, and nine PRs arrived in one sweep — `zod` 3→4,
+`@prisma/client` 5→7, `recharts` 2→3, `dotenv` 16→17, `react-dom`, plus four
+routine bumps. **None of them closed a security alert.** One PR per package
+per week is unusable noise, and the noise was pushing toward disabling
+Dependabot altogether, which would also have discarded the security updates
+that found the critical `tar` advisory.
+
+Version and security updates are separate systems: this file governs only
+version updates, while security updates come from a repository setting and
+are untouched by anything here. So the version stream is throttled and the
+security stream is left alone.
+
+- **`.github/dependabot.yml`**: every ecosystem gains a `groups:` block
+  collapsing all `minor` + `patch` bumps into one PR per ecosystem;
+  `schedule.interval` weekly → monthly; `open-pull-requests-limit` 5 → 2.
+- Majors are deliberately left **ungrouped** rather than ignored, so they
+  arrive individually and each stays an explicit accept/close decision.
+- No `ignore:` rules were added, on purpose: `ignore` can also suppress
+  *security* updates for the same package, and some security fixes exist
+  only behind a major (react-router's advisories require v7). Silencing
+  majors here would hide those.
+
+Security updates continue to arrive one PR per advisory, promptly and
+ungrouped — the behaviour worth keeping.
+
+### Removed — 2026-07-27 — `target-branch: develop` dropped from `.github/dependabot.yml` (all 6 entries)
+
+The option was added when `main` was the repository's default branch, to
+push dependency PRs onto `develop`. It never achieved that for **security**
+updates: those always target the default branch and ignore `target-branch`,
+which is why all 8 security PRs opened against `main` despite the config.
+
+Once the default branch was changed to `develop` (so security updates would
+land there by themselves), the option became actively harmful — Dependabot
+now read it as describing a *non-default* branch and disowned every open PR:
+
+> The dependabot.yml entry that created this PR has been deleted so this PR
+> can't be rebased. Please close the PR so Dependabot can create a new one
+> with the current dependabot.yml.
+
+Those 8 PRs could then be neither rebased nor retargeted, only closed and
+recreated. With `develop` as the default branch the option is redundant for
+version updates too, so it is removed from all six ecosystem entries;
+schedules, directories, and `open-pull-requests-limit` are unchanged.
+
+`main` remains the release branch, advancing only via develop→main release
+PRs — a convention enforced by `docker-publish.yml`, not by this file.
+
+- **`.github/dependabot.yml`**: `target-branch: develop` removed ×6; header
+  comment rewritten to record why it must not be reintroduced.
+
+### Changed — 2026-07-27 — `bcrypt` 5.1.1 → 6.0.0 to clear the entire `tar` alert cluster (12 Dependabot alerts, incl. the only critical)
+
+Dependabot could not auto-fix `tar` in `/backend`: its update job failed with
+"A patched version exists for tar, but the available update path still
+resolves it to 6.2.1", because `bcrypt@5.1.1` pins `tar@^6.1.11` through
+`@mapbox/node-pre-gyp@1.0.11`. `tar` was reachable by exactly one path in
+`backend/package-lock.json` — that one — so removing `node-pre-gyp` removes
+every `tar` alert rather than papering over them with an `overrides` pin.
+
+`bcrypt@6.0.0` drops `@mapbox/node-pre-gyp` in favour of `node-gyp-build`
+(prebuildify), so its only runtime deps are `node-addon-api` +
+`node-gyp-build`. Net effect on the lockfile: **52 packages removed**, and
+both `tar` and `@mapbox/node-pre-gyp` are gone entirely.
+
+- **`backend/package.json`**: `bcrypt` `^5.1.1` → `^6.0.0`; `@types/bcrypt`
+  `^5.0.2` → `^6.0.0`.
+- **`backend/package-lock.json`**: regenerated (−572/+30 lines).
+
+Call sites are unchanged — the app only uses `bcrypt.hash(pw, 10)` and
+`bcrypt.compare(...)` (`backend/src/routes/auth.ts`,
+`backend/src/routes/admin.ts`, `backend/scripts/create-admin.ts`), and both
+signatures are identical in v6.
+
+**Hash compatibility verified explicitly**, since a regression here would
+lock every existing user out: hashes generated by bcrypt 5.1.1 (`$2b$10$`,
+`$2b$12$`, and `$2a$10$`) were all confirmed to verify correctly under
+6.0.0, with wrong passwords still rejected. No password reset or rehash is
+required, and stored `passwordHash` values need no migration. Note that the
+backend Vitest suite does *not* cover this — `backend/test/testAuth.ts`
+mints JWTs directly with `passwordHash: null` — so the cross-version check
+was done by hand rather than being caught by a gate.
+
+`bcrypt@6` requires Node ≥ 18; the backend image and all three CI jobs are
+already on Node 22. A from-scratch `backend/Dockerfile` build was run to
+confirm the new native module compiles and loads in `node:22-slim`.
+### Fixed — 2026-07-27 — CI no longer depends on the repo secret store, unblocking every Dependabot PR
+
+All 8 open Dependabot PRs failed `backend-tests` and `e2e` identically, with
+`Database is uninitialized and superuser password is not specified` and
+`required variable POSTGRES_PASSWORD is missing a value`. The cause is not
+the dependency bumps: GitHub passes **only the Dependabot secret store** to
+Dependabot-triggered runs, so every `secrets.CI_*` reference in `ci.yml`
+resolved to an empty string. Populating that store was tried first and did
+not resolve it (verified on run `30227846101` — a fresh, fully
+Dependabot-actored run raised after the secrets existed, still empty), so
+the dependency on the secret store is removed instead. This fixes the whole
+class of failure regardless of which secret store is at fault, and puts
+human and bot PRs on an identical code path.
+
+- **`.github/workflows/ci.yml`** (`e2e`): `POSTGRES_PASSWORD` and
+  `ADMIN_PASSWORD` are now generated per run with `openssl rand -hex 24` and
+  exported via `$GITHUB_ENV`, alongside the `JWT_SECRET` that already worked
+  this way. The step is renamed to "Generate ephemeral run credentials".
+  `$GITHUB_ENV` makes them visible to every later step — compose
+  interpolation, admin creation, and Playwright's fixtures, which read
+  `ADMIN_PASSWORD` from the environment (`e2e/fixtures/test.ts`). The
+  48-character output clears `create-admin.ts`'s 8-character minimum.
+- **`.github/workflows/ci.yml`** (`backend-tests`): the postgres service
+  container now uses the literal `ci-ephemeral-postgres`. A service
+  container's `env:` is resolved before any step runs, so a generated value
+  is impossible there. The database is localhost-only and dies with the job,
+  so the literal protects nothing that secret status was protecting.
+- The `CI_POSTGRES_PASSWORD` / `CI_ADMIN_PASSWORD` secrets in both the
+  Actions and Dependabot stores are now unused and can be deleted.
+
+### Fixed — 2026-07-27 — `latest` image tag pinned to `main` instead of the repo default branch
+
+`docker-publish.yml` gated the `latest` tag on `enable={{is_default_branch}}`.
+That silently couples the production tag to a **repo setting**: when the
+default branch was switched to `develop` (so Dependabot security updates
+would stop targeting `main`, which they always aim at the default branch),
+`is_default_branch` became false for `main` and release builds would have
+stopped publishing `latest` — the tag production pulls. No release ran in
+that window, so nothing shipped mistagged.
+
+- **`.github/workflows/docker-publish.yml`**: `latest` is now gated on the
+  literal branch name (`workflow_run.head_branch == 'main'`, plus
+  `workflow_dispatch` on `refs/heads/main` to preserve manual-publish
+  behaviour), so no repo setting can move the production tag. Tag pushes
+  remain excluded, matching previous behaviour.
+
 ### Changed — 2026-07-27 — Kanban cutover: `/projects/:id/kanban` now serves the ReUI-engine board (plan T11)
 
 `docs/plans/kanban-reui-swap/plan.md` T11 — the deliberate cutover commit
