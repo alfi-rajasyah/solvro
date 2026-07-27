@@ -1,5 +1,19 @@
-# Weekly dependency-update PRs. All entries target develop — main is the
-# release branch and only advances via develop→main release PRs.
+# Weekly dependency-update PRs.
+#
+# No `target-branch` here on purpose. develop is the repository's default
+# branch, so version updates and security updates both already land on it.
+# main stays the release branch and only advances via develop→main release
+# PRs — a convention this file has no say over either way.
+#
+# `target-branch: develop` used to be set on every entry, from when main was
+# the default branch. It never worked for security updates: those always
+# target the default branch and ignore the option, which is why security PRs
+# were opened against main regardless. Worse, once the default branch moved
+# to develop, Dependabot read the option as describing a non-default branch
+# and disowned all 8 open PRs — "The dependabot.yml entry that created this
+# PR has been deleted so this PR can't be rebased" — leaving them impossible
+# to rebase or retarget, only to close and recreate. Omitting it keeps both
+# update kinds on one branch and avoids repeating that.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -7,39 +21,33 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    target-branch: develop
 
   - package-ecosystem: npm
     directory: /frontend
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    target-branch: develop
 
   - package-ecosystem: npm
     directory: /e2e
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    target-branch: develop
 
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    target-branch: develop
 
   - package-ecosystem: docker
     directory: /backend
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    target-branch: develop
 
   - package-ecosystem: docker
     directory: /frontend
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    target-branch: develop
