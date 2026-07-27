@@ -4,8 +4,8 @@
 // `scroll-area` registryDependency 401s against the @reui registry and falls back to
 // an unwanted upstream dependency this repo's guardrails forbid reintroducing (see
 // CLAUDE.md; details in the Task 3 report). Content below is the registry item's file
-// content verbatim except for the // SOLVRO PATCH sites (missing React import, icon
-// import swap).
+// content verbatim except for a handful of marked hand-edits (missing React import,
+// icon import swap, a DOM-prop-leak fix — search this file for the marker comment).
 "use client"
 
 // SOLVRO PATCH (2026-07-27): registry source omits this import; `React.ComponentProps<...>`
@@ -122,6 +122,14 @@ function AutocompletePositioner({
 function AutocompleteList({
   className,
   scrollAreaClassName,
+  // SOLVRO PATCH (2026-07-27): `scrollFade`/`scrollbarGutter` were consumed by upstream
+  // ReUI's own scroll-area implementation; our Base-UI `ui/scroll-area.tsx` substitute
+  // doesn't accept them. Destructured (and discarded) here so they don't fall into
+  // `...props` and leak onto the rendered DOM node as unknown attributes — kept in the
+  // type below so callers passing them still typecheck and a future re-pull diff stays
+  // minimal.
+  scrollFade: _scrollFade,
+  scrollbarGutter: _scrollbarGutter,
   ...props
 }: AutocompletePrimitive.List.Props & {
   scrollAreaClassName?: string

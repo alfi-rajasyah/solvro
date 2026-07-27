@@ -15,6 +15,17 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-27 — Vendored autocomplete: stop `scrollFade`/`scrollbarGutter` leaking to the DOM (plan Task 3 review fix round 1)
+
+- `frontend/src/components/reui/autocomplete.tsx`'s `AutocompleteList` declared
+  `scrollFade`/`scrollbarGutter` in its props type but never destructured them, so both
+  fell into the JSX spread `...props` and landed on the rendered `<div>` as unknown DOM
+  attributes. Upstream ReUI's own scroll-area implementation consumed these props; our
+  Base-UI `ui/scroll-area.tsx` substitute does not.
+- Fix: destructure and discard both (`scrollFade: _scrollFade, scrollbarGutter:
+  _scrollbarGutter`), marked with a 5th `// SOLVRO PATCH` comment — kept in the type so
+  callers passing them still typecheck and a future re-pull diff stays minimal.
+
 ### Added — 2026-07-27 — Vendored ReUI autocomplete component (plan Task 3)
 
 - Hand-vendored `frontend/src/components/reui/autocomplete.tsx` (Base-UI-backed) for
