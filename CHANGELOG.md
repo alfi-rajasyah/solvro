@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-27 — Palette nav-command catalogue (plan Task 2)
+
+- Palette page-navigation catalogue: `frontend/src/lib/navCommands.ts` (pure module + tests) mirroring the sidebar's permission-gated destinations for the ⌘K palette.
+
 ### Fixed — 2026-07-27 — `GET /search`: escaped LIKE metacharacters, top-level tasks only (plan Task 1 review fix round 1)
 
 Two fixes to the `GET /search` endpoint added earlier today, from code review:
