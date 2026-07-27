@@ -46,7 +46,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const debounced = useDebounced(query, 200);
-  const { data, isLoading } = useSearch(debounced);
+  const { data, isFetching } = useSearch(debounced);
+  // Same predicate that gates the request (queries.ts's `enabled`) must also
+  // gate consumption of `data` — placeholderData resolves against React
+  // Query's #lastQueryWithDefinedData, which never clears on its own, so
+  // without this a disabled query (< 2 chars, or right after reopen) still
+  // renders the previous successful search's rows with isPlaceholder=true.
+  const hasQuery = debounced.trim().length >= 2;
 
   // Fresh palette every open — stale queries are disorienting on reopen.
   useEffect(() => {
@@ -78,7 +84,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
       to: c.to,
       icon: c.icon,
     }));
-    const remote: PaletteItem[] = !data
+    const remote: PaletteItem[] = !hasQuery || !data
       ? []
       : [
           ...data.projects.map((p) => ({
@@ -104,7 +110,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
           })),
         ];
     return [...pages, ...remote];
-  }, [user, query, data]);
+  }, [user, query, data, hasQuery]);
 
   // Base UI's Autocomplete groups by nesting: `items` is an array of
   // { value, items } buckets rather than a flat list with a `group` field.
@@ -166,16 +172,15 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             </span>
             <AutocompleteInput
               autoFocus
-              size="lg"
               placeholder="Search projects, tasks, customers…"
-              className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-hidden placeholder:text-on-surface-variant"
+              className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-hidden placeholder:text-on-surface-variant dark:bg-transparent rounded-none h-auto px-0 focus-visible:ring-0 focus-visible:border-transparent"
             />
             <span className="rounded-sm border border-outline-variant bg-surface-container-low px-1.5 py-0.5 font-mono text-[10px] text-on-surface-variant">
               esc
             </span>
           </div>
           <AutocompleteStatus className="px-4 text-[11px] text-on-surface-variant">
-            {isLoading && debounced.trim().length >= 2 ? "Searching…" : null}
+            {isFetching && hasQuery ? "Searching…" : null}
           </AutocompleteStatus>
           <div className="flex min-h-0 flex-1 flex-col">
             {/*

@@ -15,7 +15,41 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
-### Added — 2026-07-27 — ⌘K command palette wired to `GET /search` + nav commands (plan Task 4)
+### Fixed — 2026-07-27 — Command palette: stale results below the 2-char gate, permanent focus-ring glow, dead loading indicator (plan Task 4 review fix round 1)
+
+Three fixes to the ⌘K command palette from code review, all in `frontend/src/components/CommandPalette.tsx` unless noted:
+
+- **Stale search hits below the 2-char gate / across reopen (blocker).** `useSearch`'s
+  `placeholderData: (prev) => prev` (`frontend/src/lib/queries.ts`) resolves against React
+  Query's `#lastQueryWithDefinedData`, which never clears on a key change, on `enabled:
+  false`, or on the observer staying mounted (`Shell.tsx` keeps `<CommandPalette>` mounted
+  always). Result: after any successful search, reopening the palette or backspacing below
+  2 characters still rendered the previous query's Projects/Tasks/Customers rows
+  (`isPlaceholder: true`) — `AutocompleteEmpty`'s own `>=2`-char gate didn't help, since
+  there *were* items. Fix: added `hasQuery = debounced.trim().length >= 2` and gated the
+  `remote` items array on it (`!hasQuery || !data ? [] : [...]`), added as a `useMemo` dep.
+  `placeholderData` itself is unchanged — it's correct for in-flight keystrokes at ≥2 chars.
+- **Permanent 3px focus-ring glow on the palette input, exceeding DESIGN.md §4's 2px cap.**
+  The vendored `AutocompleteInput`'s `inputVariants` base survives `cn()`-merging with the
+  call site's className for several classes that don't share a Tailwind variant with any
+  override the call site had set: `dark:bg-input/30` (a visible slab in dark mode),
+  `rounded-lg`/`h-9`/`px-2.5` (a boxed look inside the palette's own padded row), and
+  `focus-visible:ring-3` (a permanent glow on the `autoFocus`ed input). Fix: added
+  `dark:bg-transparent rounded-none h-auto px-0 focus-visible:ring-0
+  focus-visible:border-transparent` to the input's className and dropped `size="lg"`
+  (its only surviving contribution was the now-overridden `h-9 px-2.5`). Verified via the
+  repo's own `tailwind-merge` that the previously-surviving classes are displaced in the
+  merged output (`focus-visible:ring-ring/50` remains in the class list but is inert once
+  paired with `ring-0`, since ring width and ring color are independent Tailwind utilities
+  and a 0px ring has no visible color regardless).
+- **Dead "Searching…" indicator.** `isLoading` (`isPending && isFetching`) is forced false
+  by `placeholderData` after the first successful search of a session (`queryObserver`
+  sets `status: "success"` once a placeholder value exists), so the indicator rendered
+  once and never again — the opposite of useful for a debounced palette. Fix: destructure
+  `isFetching` instead of `isLoading` from `useSearch` and gate the indicator on
+  `isFetching && hasQuery`.
+
+
 
 - `frontend/src/components/CommandPalette.tsx`: searches projects/tasks/customers via
   `GET /search` (debounced `useSearch` hook, 200ms) plus permission-gated page commands
