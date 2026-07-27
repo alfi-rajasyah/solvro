@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-27 — Playwright coverage for the ⌘K command palette (plan Task 5)
+
+- E2E coverage for the ⌘K palette (`e2e/tests/search.spec.ts`): open/close, run-unique task + project hits, task deep-link `?task=` assertion, mobile icon entry point. Also covers the four review-mandated addendum assertions from Task 4's review: Escape closing the palette from the actual focused input (not just an arbitrary keydown target), input autofocus on open, no stale rows surviving a close/reopen cycle (B1 regression guard), and mobile viewport fit (no horizontal overflow, dialog height within viewport).
+
 ### Fixed — 2026-07-27 — Command palette: stale results below the 2-char gate, permanent focus-ring glow, dead loading indicator (plan Task 4 review fix round 1)
 
 Three fixes to the ⌘K command palette from code review, all in `frontend/src/components/CommandPalette.tsx` unless noted:
