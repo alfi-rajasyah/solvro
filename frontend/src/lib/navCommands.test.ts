@@ -37,7 +37,7 @@ describe("filterNavCommands", () => {
     expect(filterNavCommands(none, "zzz")).toEqual([]);
   });
 
-  it("keeps every route in sync with the app's route table", () => {
+  it("pins the catalogue's route list", () => {
     expect(NAV_COMMANDS.map((c) => c.to)).toEqual([
       "/overview",
       "/projects",

@@ -1,7 +1,8 @@
-// Static catalogue of page destinations for the ⌘K palette. Mirrors the
-// sidebar's NAV_ITEMS (Sidebar.tsx) including its permission gating, but as
-// a pure module: the permission check is injected so this file never imports
-// React and stays unit-testable in the node-env Vitest config.
+// Static catalogue of page destinations shared by the sidebar nav
+// (Sidebar.tsx derives its render list from NAV_COMMANDS directly) and the
+// ⌘K palette (CommandPalette.tsx). Single source of truth: this file stays a
+// pure module — the permission check is injected so it never imports React
+// and stays unit-testable in the node-env Vitest config.
 export interface NavCommand {
   to: string;
   label: string;
@@ -10,11 +11,15 @@ export interface NavCommand {
   requires?: string;
 }
 
-export const NAV_COMMANDS: NavCommand[] = [
+export const NAV_COMMANDS: readonly NavCommand[] = [
   { to: "/overview", label: "Overview", icon: "dashboard" },
   { to: "/projects", label: "Projects", icon: "folder_managed" },
   { to: "/customers", label: "Customers", icon: "groups" },
   { to: "/daily-review", label: "Daily Review", icon: "edit_note" },
+  // Work Logs (WorkLogs.tsx) is an unbuilt placeholder (iTop API integration),
+  // so it's intentionally NOT in this catalogue. Route stays registered in
+  // App.tsx — mirror of how Tasks is kept routable but hidden. This also keeps
+  // the nav in CLAUDE.md's canonical order (no Work Logs entry).
   { to: "/reports", label: "Reports", icon: "analytics" },
   { to: "/executive", label: "Executive", icon: "leaderboard", requires: "report:executive" },
   { to: "/settings", label: "Settings", icon: "settings" },

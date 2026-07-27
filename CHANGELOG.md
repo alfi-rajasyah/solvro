@@ -15,6 +15,56 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-27 — ⌘K command palette wired to `GET /search` + nav commands (plan Task 4)
+
+- `frontend/src/components/CommandPalette.tsx`: searches projects/tasks/customers via
+  `GET /search` (debounced `useSearch` hook, 200ms) plus permission-gated page commands
+  from `navCommands.ts`'s `filterNavCommands`; task hits deep-link through the existing
+  `?task=` param on `/projects/:id/list`. Rendered as a Modal-convention centered overlay
+  (Esc + body-scroll-lock recipe from `Modal.tsx`) via `createPortal`.
+- `frontend/src/lib/queries.ts`: `SearchProjectHit`/`SearchTaskHit`/`SearchCustomerHit`/
+  `SearchResults` types mirroring the `GET /search` response contract, `queryKeys.search`,
+  and the `useSearch(q)` hook (`enabled` gates on the backend's 2-char minimum;
+  `placeholderData` keeps the prior results rendered while a keystroke's query is in flight).
+- Composition deviates from the plan brief's literal Step 3 code, reconciled against the
+  vendored component's real Base UI API (verified against `@base-ui/react`'s bundled
+  `.d.ts` files and its own docs, not assumed): uses `AutocompleteGroup`/
+  `AutocompleteGroupLabel`/`AutocompleteCollection` for the four result groups instead of
+  heading-row `div`s; uses `inline`+`open` (unconditional) instead of the anchored
+  `AutocompleteContent`/`Portal`/`Positioner`/`Popup` stack, per Base UI's own documented
+  "command palette" recipe — the anchored popup is built for a dropdown below an input
+  and fights this centered overlay; controls the search text via `value`/`onValueChange`
+  on the `Autocomplete` root (both official Base UI examples for externally-filtered data
+  do this) rather than via raw `value`/`onChange` on `AutocompleteInput`; passes
+  `filter={null}` since results are already server/permission-filtered; keeps
+  `AutocompleteEmpty` unconditionally mounted per Base UI's a11y guidance (it warns
+  against conditionally rendering the component itself) and instead conditionally renders
+  only its *children* to avoid a premature "no results" flash before 2 characters are
+  typed. Full detail and file:line citations in the Task 4 report.
+
+### Changed — 2026-07-27 — TopBar search trigger, Shell ⌘K listener, Sidebar/`navCommands` unification (plan Task 4)
+
+- `frontend/src/components/layout/TopBar.tsx`: the decorative search box is now a live
+  palette trigger button (`onOpenSearch`, now a required prop) with a mobile-only search
+  icon button below `md:`.
+- `frontend/src/components/layout/Shell.tsx`: hosts `<CommandPalette>` and a single
+  app-wide ⌘K/Ctrl+K `keydown` listener that skips editable targets (`INPUT`/`TEXTAREA`/
+  `contentEditable`) so typing "k" with a modifier inside a text field never hijacks focus.
+- `frontend/src/components/layout/Sidebar.tsx`: now derives its nav items directly from
+  `NAV_COMMANDS` (`frontend/src/lib/navCommands.ts`) instead of a hand-copied local
+  `NAV_ITEMS`/`NavItem` — single source of truth for page destinations. Scope amendment
+  approved 2026-07-27, resolving Task 2 review finding I1 (the catalogue must not be a
+  second, hand-copied source of truth). Rendered output is unchanged (same order, labels,
+  icons, Executive/Admin permission gating).
+- `frontend/src/lib/navCommands.ts`: `NAV_COMMANDS` export is now `readonly NavCommand[]`
+  (guards against consumer mutation now that Sidebar also consumes it); absorbed the
+  Work Logs/Tasks sidebar-absence explanatory comment from the deleted `Sidebar.tsx`
+  `NAV_ITEMS`.
+- `frontend/src/lib/navCommands.test.ts`: renamed the route-list test from "keeps every
+  route in sync with the app's route table" to "pins the catalogue's route list" — with
+  Sidebar now consuming the catalogue directly, the pin is genuinely load-bearing rather
+  than an aspirational cross-check against `App.tsx`.
+
 ### Fixed — 2026-07-27 — Vendored autocomplete: stop `scrollFade`/`scrollbarGutter` leaking to the DOM (plan Task 3 review fix round 1)
 
 - `frontend/src/components/reui/autocomplete.tsx`'s `AutocompleteList` declared

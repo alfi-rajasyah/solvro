@@ -147,6 +147,34 @@ export interface TaskWithProject extends Task {
   };
 }
 
+// GET /search response shape (backend/src/routes/search.ts). Powers the ⌘K
+// command palette; deliberately excludes ProjectNote (INTERNAL-notes guardrail).
+export interface SearchProjectHit {
+  id: number;
+  name: string;
+  status: ProjectStatus;
+  customerName: string | null;
+}
+
+export interface SearchTaskHit {
+  id: number;
+  title: string;
+  status: TaskStatus;
+  projectId: number;
+  projectName: string;
+}
+
+export interface SearchCustomerHit {
+  id: number;
+  name: string;
+}
+
+export interface SearchResults {
+  projects: SearchProjectHit[];
+  tasks: SearchTaskHit[];
+  customers: SearchCustomerHit[];
+}
+
 export interface Comment {
   id: number;
   taskId: number;
@@ -268,6 +296,7 @@ export const queryKeys = {
   customer: (id: number) => ["customers", id] as const,
   tasks: (filter?: TasksFilter) => ["tasks", filter ?? {}] as const,
   comments: (taskId: number) => ["tasks", taskId, "comments"] as const,
+  search: (q: string) => ["search", q] as const,
   executiveReport: () => ["executive-report"] as const,
 };
 
@@ -275,6 +304,22 @@ export function useOverview() {
   return useQuery({
     queryKey: queryKeys.overview,
     queryFn: ({ signal }) => apiRequest<OverviewResponse>("/overview", { signal }),
+  });
+}
+
+// Powers the ⌘K command palette (CommandPalette.tsx). `enabled` gates on the
+// backend's own 2-char minimum (search.ts's Zod schema) so we never fire a
+// request that's guaranteed to 400. `placeholderData` keeps the previous
+// page of results rendered while the next keystroke's query is in flight —
+// prevents the list flashing empty on every char.
+export function useSearch(q: string) {
+  return useQuery<SearchResults>({
+    queryKey: queryKeys.search(q),
+    queryFn: ({ signal }) =>
+      apiRequest<SearchResults>(`/search?q=${encodeURIComponent(q)}`, { signal }),
+    enabled: q.trim().length >= 2,
+    staleTime: 30_000,
+    placeholderData: (prev) => prev,
   });
 }
 
