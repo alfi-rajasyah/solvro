@@ -21,6 +21,7 @@ import { risksRouter } from "./routes/risks.js";
 import { dependenciesRouter } from "./routes/dependencies.js";
 import { adminRouter } from "./routes/admin.js";
 import { reportsRouter } from "./routes/reports.js";
+import { searchRouter } from "./routes/search.js";
 
 export function createApp(): Express {
   const app = express();
@@ -54,6 +55,7 @@ export function createApp(): Express {
   app.use("/dependencies", dependenciesRouter);
   app.use("/admin", adminRouter);
   app.use("/reports", reportsRouter);
+  app.use("/search", searchRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);

@@ -14,7 +14,7 @@ const PAGE_TITLES: Record<string, string> = {
   reports: "Reports",
 };
 
-export function TopBar() {
+export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
   const { user, logout } = useAuth();
   const { resolved, toggle } = useTheme();
   const { open, toggle: toggleSidebar } = useSidebar();
@@ -79,19 +79,31 @@ export function TopBar() {
       )}
 
       <div className="ml-auto flex items-center gap-3">
-        <div className="hidden min-w-[260px] items-center gap-2 rounded-sm bg-surface-container px-3 py-1.5 md:flex">
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          aria-label="Open search"
+          className="hidden min-w-[260px] cursor-text items-center gap-2 rounded-sm bg-surface-container px-3 py-1.5 md:flex"
+        >
           <span className="material-symbols-outlined text-base text-on-surface-variant">
             search
           </span>
-          <input
-            type="text"
-            placeholder="Search projects, tasks, customers…"
-            className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-hidden placeholder:text-on-surface-variant"
-          />
+          <span className="flex-1 text-left text-[13px] text-on-surface-variant">
+            Search projects, tasks, customers…
+          </span>
           <span className="rounded-sm border border-outline-variant bg-surface-container-low px-1.5 py-0.5 font-mono text-[10px] text-on-surface-variant">
             ⌘K
           </span>
-        </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={onOpenSearch}
+          aria-label="Open search"
+          className="flex h-8 w-8 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface md:hidden"
+        >
+          <span className="material-symbols-outlined text-[20px]">search</span>
+        </button>
 
         <button
           type="button"

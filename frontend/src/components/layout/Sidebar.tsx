@@ -1,44 +1,18 @@
 import { NavLink } from "react-router-dom";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { NAV_COMMANDS } from "@/lib/navCommands";
 import { useSidebar } from "./SidebarContext";
 import { BrandMark } from "@/components/BrandMark";
 
-interface NavItem {
-  to: string;
-  label: string;
-  icon: string;
-  adminOnly?: boolean;
-  permission?: string;
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { to: "/overview", label: "Overview", icon: "dashboard" },
-  { to: "/projects", label: "Projects", icon: "folder_managed" },
-  { to: "/customers", label: "Customers", icon: "groups" },
-  { to: "/daily-review", label: "Daily Review", icon: "edit_note" },
-  // Work Logs (WorkLogs.tsx) is an unbuilt placeholder (iTop API integration),
-  // so it's intentionally NOT in the sidebar. Route stays registered in
-  // App.tsx — mirror of how Tasks is kept routable but hidden. This also keeps
-  // the nav in CLAUDE.md's canonical order (no Work Logs entry).
-  { to: "/reports", label: "Reports", icon: "analytics" },
-  { to: "/executive", label: "Executive", icon: "leaderboard", permission: "report:executive" },
-  { to: "/settings", label: "Settings", icon: "settings" },
-  { to: "/admin", label: "Admin", icon: "admin_panel_settings", adminOnly: true },
-];
-
 // DESIGN.md: sidebar is charcoal #232321 in both themes (stays dark in light
-// mode). Token defined in tailwind.config.ts — no theme-flipping `dark:` variant.
+// mode). Token lives in index.css's `@theme inline` block — no theme-flipping
+// `dark:` variant.
 const SIDEBAR_BG = "bg-sidebar";
 
 export function Sidebar() {
   const { open, toggle, close } = useSidebar();
   const { user } = useAuth();
-  const items = NAV_ITEMS.filter(
-    (i) =>
-      (!i.adminOnly && !i.permission) ||
-      (i.adminOnly && hasPermission(user, "*")) ||
-      (i.permission && hasPermission(user, i.permission)),
-  );
+  const items = NAV_COMMANDS.filter((i) => !i.requires || hasPermission(user, i.requires));
 
   return (
     <>

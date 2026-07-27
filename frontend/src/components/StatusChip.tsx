@@ -27,6 +27,12 @@ const PROJECT_LABEL: Record<ProjectStatus, string> = {
   CANCELLED: "Cancelled",
 };
 
+// Humanized status text for non-chip surfaces (e.g. CommandPalette's hint
+// slot) that want the same mapping without rendering a full colored chip.
+export function projectStatusLabel(status: ProjectStatus): string {
+  return PROJECT_LABEL[status];
+}
+
 const TASK_TONE: Record<TaskStatus, Tone> = {
   TODO: "gray",
   IN_PROGRESS: "blue",
