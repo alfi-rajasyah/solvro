@@ -15,6 +15,34 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-27 — Dependabot version updates grouped and moved to monthly (≈9 PRs/week → 1–2 PRs/month)
+
+Removing `target-branch` (previous entry) released the version-update stream
+that had been suppressed, and nine PRs arrived in one sweep — `zod` 3→4,
+`@prisma/client` 5→7, `recharts` 2→3, `dotenv` 16→17, `react-dom`, plus four
+routine bumps. **None of them closed a security alert.** One PR per package
+per week is unusable noise, and the noise was pushing toward disabling
+Dependabot altogether, which would also have discarded the security updates
+that found the critical `tar` advisory.
+
+Version and security updates are separate systems: this file governs only
+version updates, while security updates come from a repository setting and
+are untouched by anything here. So the version stream is throttled and the
+security stream is left alone.
+
+- **`.github/dependabot.yml`**: every ecosystem gains a `groups:` block
+  collapsing all `minor` + `patch` bumps into one PR per ecosystem;
+  `schedule.interval` weekly → monthly; `open-pull-requests-limit` 5 → 2.
+- Majors are deliberately left **ungrouped** rather than ignored, so they
+  arrive individually and each stays an explicit accept/close decision.
+- No `ignore:` rules were added, on purpose: `ignore` can also suppress
+  *security* updates for the same package, and some security fixes exist
+  only behind a major (react-router's advisories require v7). Silencing
+  majors here would hide those.
+
+Security updates continue to arrive one PR per advisory, promptly and
+ungrouped — the behaviour worth keeping.
+
 ### Removed — 2026-07-27 — `target-branch: develop` dropped from `.github/dependabot.yml` (all 6 entries)
 
 The option was added when `main` was the repository's default branch, to
