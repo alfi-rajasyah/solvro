@@ -15,6 +15,26 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-27 — Vendored ReUI autocomplete component (plan Task 3)
+
+- Hand-vendored `frontend/src/components/reui/autocomplete.tsx` (Base-UI-backed) for
+  the ⌘K palette — zero new npm dependencies (`@base-ui/react`,
+  `class-variance-authority`, `scroll-area` all pre-existing).
+- Vendored by hand from the registry JSON (`https://reui.io/r/new-york/autocomplete.json`)
+  rather than via `npx shadcn@latest add @reui/autocomplete`: the CLI's `scroll-area`
+  registryDependency 401s against the `@reui` registry and falls back to the default
+  shadcn registry's Radix-based `scroll-area`, which pulled `radix-ui` (plus the full
+  `@radix-ui/*` tree) into `frontend/package.json`/`package-lock.json` — a direct
+  violation of the CLAUDE.md guardrail that `radix-ui` must never be reintroduced. The
+  attempted CLI install was reverted before vendoring by hand; final diff touches only
+  the one component file.
+- Two minimal hand-edits to the vendored file, each marked `// SOLVRO PATCH`: added the
+  `import * as React from "react"` the registry source omitted (required for
+  `React.ComponentProps<...>` under this repo's `jsx: "react-jsx"` tsconfig), and swapped
+  the registry's `IconPlaceholder` import (a ReUI demo-app-only path that doesn't exist
+  in this repo) for the two `lucide-react` icons it mapped to (`XIcon`,
+  `ChevronsUpDownIcon`), matching this repo's existing `*Icon` lucide-react convention.
+
 ### Added — 2026-07-27 — Palette nav-command catalogue (plan Task 2)
 
 - Palette page-navigation catalogue: `frontend/src/lib/navCommands.ts` (pure module + tests) mirroring the sidebar's permission-gated destinations for the ⌘K palette.
