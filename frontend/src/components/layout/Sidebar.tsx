@@ -5,7 +5,8 @@ import { useSidebar } from "./SidebarContext";
 import { BrandMark } from "@/components/BrandMark";
 
 // DESIGN.md: sidebar is charcoal #232321 in both themes (stays dark in light
-// mode). Token defined in tailwind.config.ts — no theme-flipping `dark:` variant.
+// mode). Token lives in index.css's `@theme inline` block — no theme-flipping
+// `dark:` variant.
 const SIDEBAR_BG = "bg-sidebar";
 
 export function Sidebar() {

@@ -13,6 +13,7 @@ import {
   AutocompleteStatus,
 } from "@/components/reui/autocomplete";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { projectStatusLabel } from "@/components/StatusChip";
 import { filterNavCommands } from "@/lib/navCommands";
 import { useSearch } from "@/lib/queries";
 
@@ -92,7 +93,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             label: p.name,
             group: "Projects" as const,
             to: `/projects/${p.id}`,
-            hint: p.customerName ?? p.status,
+            hint: p.customerName ?? projectStatusLabel(p.status),
           })),
           ...data.tasks.map((t) => ({
             value: `task:${t.id}`,
@@ -191,7 +192,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               results" flash before the palette has a real query to report on.
             */}
             <AutocompleteEmpty className="px-4 py-6 text-center text-[13px] text-on-surface-variant">
-              {debounced.trim().length >= 2 ? `No results for "${debounced}"` : null}
+              {hasQuery ? `No results for "${debounced}"` : null}
             </AutocompleteEmpty>
             <AutocompleteList className="p-1" scrollAreaClassName="min-h-0 flex-1">
               {(group: PaletteGroup) => (

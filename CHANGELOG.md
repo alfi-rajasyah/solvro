@@ -15,6 +15,15 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-27 — Final-review fix wave: humanized palette status hints, Enter-key e2e coverage (plan Task 6)
+
+Four small fixes from the branch's final whole-branch review (`solvro-reviewer`, `final-review.md` §C), all on `feat/global-search`:
+
+- **S1 — raw project-status enum rendered in the palette.** `frontend/src/components/CommandPalette.tsx`'s Projects hint fell back to `p.status` (e.g. `ON_HOLD`, `PLANNING`) for the ~34% of dev projects with no customer assigned. Added an exported `projectStatusLabel()` helper next to the existing `PROJECT_LABEL` map in `frontend/src/components/StatusChip.tsx` and used it for the fallback (`hint: p.customerName ?? projectStatusLabel(p.status)`), matching the humanized text ("On hold", "Planning", ...) used everywhere else project status is shown.
+- **S2 — Enter-key selection uncovered in e2e.** `e2e/tests/search.spec.ts`'s project-hit test selected only via row `.click()`, leaving the palette's primary keyboard gesture (`autoHighlight` + Enter) untested despite the spec's own Testing Strategy naming it. Changed the project test to select via `dialog.getByPlaceholder(/search projects/i).press("Enter")` after asserting the row is visible, keeping the existing `waitForURL` assertion. The task-hit test's `.click()` is left as-is, so both selection gestures stay covered across the two tests.
+- **N-a — duplicated `hasQuery` predicate.** `CommandPalette.tsx`'s `AutocompleteEmpty` gate re-expressed `debounced.trim().length >= 2` inline instead of reusing the `hasQuery` constant already defined a few lines above — the same predicate-divergence shape that caused an earlier blocker (B1). Replaced with `{hasQuery ? ... : null}`.
+- **N-c — stale comment in `frontend/src/components/layout/Sidebar.tsx`.** The comment above `SIDEBAR_BG` claimed the `bg-sidebar` token was "defined in tailwind.config.ts" — that file was deleted 2026-07-24. Corrected to say the token lives in `frontend/src/index.css`'s `@theme inline` block.
+
 ### Added — 2026-07-27 — Playwright coverage for the ⌘K command palette (plan Task 5)
 
 - E2E coverage for the ⌘K palette (`e2e/tests/search.spec.ts`): open/close, run-unique task + project hits, task deep-link `?task=` assertion, mobile icon entry point. Also covers the four review-mandated addendum assertions from Task 4's review: Escape closing the palette from the actual focused input (not just an arbitrary keydown target), input autofocus on open, no stale rows surviving a close/reopen cycle (B1 regression guard), and mobile viewport fit (no horizontal overflow, dialog height within viewport).

@@ -103,8 +103,13 @@ test.describe("global search palette", () => {
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await dialog.getByPlaceholder(/search projects/i).fill(project.name);
     await expect(dialog.getByText("Projects", { exact: true })).toBeVisible();
+    await expect(dialog.getByText(project.name, { exact: true })).toBeVisible();
 
-    await dialog.getByText(project.name, { exact: true }).click();
+    // Enter-key selection: autoHighlight keeps the sole matching row active,
+    // and a "Gate <stamp>" query matches no Pages item, so Enter lands on
+    // the project row (verified by the final reviewer against Base UI's
+    // ComboboxInput source, which calls the active item's click handler).
+    await dialog.getByPlaceholder(/search projects/i).press("Enter");
     await page.waitForURL(new RegExp(`/projects/${seededProject.projectId}(/overview)?$`), {
       timeout: 10_000,
     });
