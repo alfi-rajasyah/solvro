@@ -15,6 +15,29 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-27 — Global search API: `GET /search` endpoint for the command palette (plan Task 1)
+
+Backend half of the ⌘K command palette (frontend wiring lands in later plan
+tasks). Returns visibility-scoped project/task/customer matches for a query
+string.
+
+- `GET /search?q=<2–100 chars>` — case-insensitive `contains` match against
+  project name, task title, and customer name; each group capped at 8
+  results, ordered by name/title asc. `401` unauthenticated, `400`
+  invalid/missing `q`. `backend/src/routes/search.ts`, mounted in
+  `backend/src/app.ts` (`app.use("/search", searchRouter)`, after `/reports`).
+- Projects and tasks are scoped via the existing
+  `projectVisibilityFilter(user)` (`backend/src/lib/visibility.ts`) — same
+  TAM/SA/admin visibility rules as `/projects`. Customers aren't
+  project-scoped in the schema, so all customers matching `q` are returned
+  regardless of caller.
+- `ProjectNote` is deliberately NOT searched — the INTERNAL-notes guardrail
+  must hold even at a search surface, so Daily Review notes (INTERNAL by
+  default) can never leak through search results.
+- Tests: `backend/test/search.test.ts` — auth (401), validation (400 on
+  short/missing `q`), response shape, case-insensitive matching, 8-result
+  cap per group, and TAM-vs-admin visibility scoping (6 cases).
+
 ### Removed — 2026-07-27 — Dependabot disabled entirely (config deleted + both repo settings turned off)
 
 User decision: the PR volume was not worth the benefit. Grouping and a
