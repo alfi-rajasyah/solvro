@@ -143,4 +143,65 @@ describe("GET /search", () => {
     expect(adminRes.body.projects).toHaveLength(2);
     expect(adminRes.body.tasks).toHaveLength(2);
   });
+
+  it("escapes LIKE metacharacters so % and _ are not treated as wildcards", async () => {
+    const { token, userId } = await createAdminAndToken();
+    const n = needle();
+
+    // Seed a row containing a literal "%" so we can prove a literal-percent
+    // query only matches it (not the wildcard-inflated pattern), and rows
+    // that a naive q="%%" wildcard search would otherwise match.
+    await prisma.project.create({
+      data: { name: `${n} 100% done`, tamId: userId },
+    });
+    await prisma.project.create({
+      data: { name: `${n} unrelated`, tamId: userId },
+    });
+
+    const literalRes = await request(app)
+      .get("/search")
+      .query({ q: `${n} 100%` })
+      .set("Authorization", `Bearer ${token}`);
+    expect(literalRes.status).toBe(200);
+    expect(literalRes.body.projects.map((p: { name: string }) => p.name)).toEqual([
+      `${n} 100% done`,
+    ]);
+
+    // "%%" passes min(2) but must not become a match-everything wildcard.
+    const wildcardRes = await request(app)
+      .get("/search")
+      .query({ q: "%%" })
+      .set("Authorization", `Bearer ${token}`);
+    expect(wildcardRes.status).toBe(200);
+    expect(wildcardRes.body.projects).toEqual([]);
+    expect(wildcardRes.body.tasks).toEqual([]);
+    expect(wildcardRes.body.customers).toEqual([]);
+  });
+
+  it("excludes subtasks from task results", async () => {
+    const { token, userId } = await createAdminAndToken();
+    const n = needle();
+
+    const project = await prisma.project.create({
+      data: { name: `${n} Parent Project`, tamId: userId },
+    });
+    const topLevel = await prisma.task.create({
+      data: { title: `${n} top-level`, projectId: project.id, position: 0 },
+    });
+    await prisma.task.create({
+      data: {
+        title: `${n} sub-task`,
+        projectId: project.id,
+        position: 0,
+        parentTaskId: topLevel.id,
+      },
+    });
+
+    const res = await request(app)
+      .get("/search")
+      .query({ q: n })
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.tasks.map((t: { title: string }) => t.title)).toEqual([`${n} top-level`]);
+  });
 });

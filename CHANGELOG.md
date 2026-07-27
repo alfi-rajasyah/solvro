@@ -15,6 +15,25 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-27 — `GET /search`: escaped LIKE metacharacters, top-level tasks only (plan Task 1 review fix round 1)
+
+Two fixes to the `GET /search` endpoint added earlier today, from code review:
+
+- **ILIKE metacharacter escaping** — Prisma's `contains` passes `q` straight
+  into the SQL `ILIKE` pattern unescaped, so a literal `%`/`_` in a search
+  term acted as a SQL wildcard (e.g. `q="%%"`, which passes the `min(2)`
+  check, matched every row). `backend/src/routes/search.ts` now escapes
+  `\`, `%`, and `_` in `q` via a Zod `.transform` on the query schema before
+  it reaches any Prisma `contains` filter.
+- **Subtasks excluded from task results** — the task query now adds
+  `parentTaskId: null` (mirrors the `topLevel=true` convention in
+  `tasks.ts`): a command-palette row can't convey a parent task, and the
+  planned `?task=` deep-link is only proven for top-level tasks.
+- Tests added to `backend/test/search.test.ts`: literal `%` in `q` matches
+  only the literal row (not a wildcard-inflated set), `q="%%"` returns all
+  three groups empty, and a seeded subtask is excluded from `tasks` while
+  its top-level sibling is returned.
+
 ### Added — 2026-07-27 — Global search API: `GET /search` endpoint for the command palette (plan Task 1)
 
 Backend half of the ⌘K command palette (frontend wiring lands in later plan

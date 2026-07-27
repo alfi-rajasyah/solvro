@@ -6,7 +6,14 @@ import { validate } from "../http/validate.js";
 import { projectVisibilityFilter } from "../lib/visibility.js";
 
 const searchQuerySchema = z.object({
-  q: z.string().trim().min(2).max(100),
+  q: z
+    .string()
+    .trim()
+    .min(2)
+    .max(100)
+    // Prisma passes `contains` straight into the ILIKE pattern; escape LIKE
+    // metacharacters so a literal "%" or "_" doesn't become a wildcard.
+    .transform((s) => s.replace(/[\\%_]/g, (c) => `\\${c}`)),
 });
 
 // 8 hits per group keeps the palette scannable and the three queries cheap
@@ -35,7 +42,14 @@ searchRouter.get("/", validate("query", searchQuerySchema), async (req, res) => 
       take: GROUP_LIMIT,
     }),
     prisma.task.findMany({
-      where: { title: { contains: q, mode: "insensitive" }, project: visible },
+      // Subtasks are excluded from search v1 — a palette row can't convey a
+      // parent, and the ?task= deep-link is only proven for top-level tasks
+      // (mirrors the topLevel=true convention in tasks.ts).
+      where: {
+        title: { contains: q, mode: "insensitive" },
+        project: visible,
+        parentTaskId: null,
+      },
       select: {
         id: true,
         title: true,
