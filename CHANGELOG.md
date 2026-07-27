@@ -15,6 +15,32 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-07-27 — `target-branch: develop` dropped from `.github/dependabot.yml` (all 6 entries)
+
+The option was added when `main` was the repository's default branch, to
+push dependency PRs onto `develop`. It never achieved that for **security**
+updates: those always target the default branch and ignore `target-branch`,
+which is why all 8 security PRs opened against `main` despite the config.
+
+Once the default branch was changed to `develop` (so security updates would
+land there by themselves), the option became actively harmful — Dependabot
+now read it as describing a *non-default* branch and disowned every open PR:
+
+> The dependabot.yml entry that created this PR has been deleted so this PR
+> can't be rebased. Please close the PR so Dependabot can create a new one
+> with the current dependabot.yml.
+
+Those 8 PRs could then be neither rebased nor retargeted, only closed and
+recreated. With `develop` as the default branch the option is redundant for
+version updates too, so it is removed from all six ecosystem entries;
+schedules, directories, and `open-pull-requests-limit` are unchanged.
+
+`main` remains the release branch, advancing only via develop→main release
+PRs — a convention enforced by `docker-publish.yml`, not by this file.
+
+- **`.github/dependabot.yml`**: `target-branch: develop` removed ×6; header
+  comment rewritten to record why it must not be reintroduced.
+
 ### Changed — 2026-07-27 — `bcrypt` 5.1.1 → 6.0.0 to clear the entire `tar` alert cluster (12 Dependabot alerts, incl. the only critical)
 
 Dependabot could not auto-fix `tar` in `/backend`: its update job failed with
