@@ -20,6 +20,47 @@ async function createUniqueTask(
   return { id: body.id, title };
 }
 
+/**
+ * Local variant of `createUniqueTask`, used only by the mobile row-overflow
+ * test below. Review round 2 measured (against the live palette, truncation
+ * deliberately regressed) that a ~24-char title never produces horizontal
+ * overflow at a 390px viewport regardless of where it's measured — 0px at
+ * 24/40 chars, 7px at 60, 836px at 200 — so the short title from
+ * `createUniqueTask` structurally cannot stress the row this test exists to
+ * guard. Padded to ~100+ chars (well under the server's 200-char `title`
+ * cap, `backend/src/routes/tasks.ts:22`) so a truncation regression has
+ * something to actually overflow. Kept separate from `createUniqueTask`
+ * rather than adding a parameter to it, since every other test in this file
+ * relies on that helper producing a short, readable title.
+ *
+ * Returns a separate `query` (the unpadded prefix) alongside the full
+ * `title`: `GET /search`'s own `q` param is capped at 100 chars
+ * (`backend/src/routes/search.ts:12`, `z.string().min(2).max(100)`), so
+ * filling the palette input with the full ~100+ char padded title fails
+ * that validation outright (discovered by running this test — the search
+ * request 400s and no rows render, timing out `toBeVisible()`). Searching
+ * on the short `query` and asserting the full padded `title` renders keeps
+ * both constraints satisfied: a request the server accepts, and a row long
+ * enough to actually overflow.
+ */
+async function createLongUniqueTask(
+  base: string,
+  token: string,
+  projectId: number,
+): Promise<{ id: number; title: string; query: string }> {
+  const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const query = `SearchTarget ${stamp}`;
+  const title = `${query} ${"x".repeat(80)}`;
+  const res = await fetch(`${base}/api/projects/${projectId}/tasks`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ title }),
+  });
+  if (!res.ok) throw new Error(`task seed failed: ${res.status}`);
+  const body = (await res.json()) as { id: number };
+  return { id: body.id, title, query };
+}
+
 test.describe("global search palette", () => {
   test("⌘K opens the palette and a task hit deep-links into List with the panel param", async ({ page, seededProject }, testInfo) => {
     test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
@@ -149,21 +190,37 @@ test.describe("global search palette", () => {
     await expect(page.getByRole("dialog", { name: /global search/i })).toBeVisible();
   });
 
-  // Addendum #4 (S1 fix, review round 1 on this test): the original recipe
-  // here measured `document.documentElement.scrollWidth/clientWidth`, but
-  // the palette is `position: fixed; inset: 0` — a child overflowing inside
-  // a fixed overlay never bubbles into `documentElement`'s own scroll
-  // metrics (a 900px-wide child inside it still reads 0 there), and the
-  // height bound was structurally guaranteed by the flex container
-  // regardless of content, so both assertions were toothless. Worse, with
-  // no query typed the actual overflow-prone surface (a long result label
-  // sharing a row with a right-aligned hint) never rendered at all. Fixed
-  // per review: seed a run-unique task, populate the input so a real result
-  // row renders, then measure the *dialog's own* scrollWidth/clientWidth and
-  // confirm its box sits fully inside the viewport.
-  test("mobile: a populated result row fits the viewport with no horizontal overflow", async ({ page, seededProject }, testInfo) => {
+  // Addendum #4 (S1, review rounds 1-2 on this test).
+  //
+  // Round 1 fix measured `document.documentElement.scrollWidth/clientWidth`
+  // — toothless, since the palette is `position: fixed; inset: 0` and a
+  // child overflowing inside a fixed overlay never bubbles into
+  // `documentElement`'s own scroll metrics.
+  //
+  // Round 2 re-review (measured against the live palette, not inferred):
+  // moving the poll onto the dialog itself was *still* wrong, because the
+  // dialog isn't the element that absorbs row overflow either. The DOM
+  // chain is `div[role=dialog]` (no `overflow` set) → the flex column →
+  // `ScrollArea.Root` → `[data-slot="scroll-area-viewport"]` (computed
+  // `overflow-x: scroll`, `ui/scroll-area.tsx`) → `AutocompleteList` → the
+  // result rows. The viewport is a scroll container sitting *between* the
+  // dialog and every row, so row overflow terminates there and never
+  // reaches the dialog — measured 0 on `dialog` under a simulated
+  // truncation regression that produced 784px of real overflow on the
+  // viewport. `ui/scroll-area.tsx` only renders a *vertical* ScrollBar, so
+  // a horizontally overflowing row is silently swipe-scrollable with no
+  // visible affordance — exactly the mobile defect this test guards.
+  // Separately, the seeded title was too short (~24 chars) to overflow a
+  // 390px row even when measured correctly — `createLongUniqueTask` above
+  // pads it to ~100+ chars for that reason.
+  //
+  // The boundingBox() x/height assertions from round 1 are dropped: the
+  // dialog is `w-full` inside `fixed inset-0 flex items-stretch
+  // justify-center`, so `{x: 0, y: 0, height: <viewport height>}` is
+  // structurally guaranteed regardless of content — they added no coverage.
+  test("mobile: a long result row doesn't overflow the palette's scroll viewport horizontally", async ({ page, seededProject }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "viewport-fit check is mobile-viewport specific");
-    const target = await createUniqueTask(
+    const target = await createLongUniqueTask(
       apiBase(testInfo),
       seededProject.token,
       seededProject.projectId,
@@ -176,15 +233,12 @@ test.describe("global search palette", () => {
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await expect(dialog).toBeVisible();
 
-    await dialog.getByPlaceholder(/search projects/i).fill(target.title);
+    await dialog.getByPlaceholder(/search projects/i).fill(target.query);
     await expect(dialog.getByText(target.title, { exact: true })).toBeVisible();
 
+    const viewport = dialog.locator('[data-slot="scroll-area-viewport"]');
     await expect
-      .poll(() => dialog.evaluate((el) => el.scrollWidth - el.clientWidth))
+      .poll(() => viewport.evaluate((el) => el.scrollWidth - el.clientWidth))
       .toBeLessThanOrEqual(1);
-
-    const box = (await dialog.boundingBox())!;
-    expect(box.x).toBeGreaterThanOrEqual(0);
-    expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1);
   });
 });
