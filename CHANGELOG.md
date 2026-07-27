@@ -15,6 +15,35 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-07-27 — Dependabot disabled entirely (config deleted + both repo settings turned off)
+
+User decision: the PR volume was not worth the benefit. Grouping and a
+monthly cadence (previous entry) were tried first and still did not settle
+it — a further major-version PR arrived while that change was in review — so
+Dependabot is switched off completely rather than tuned again.
+
+Three separate switches, all now off:
+
+- **`.github/dependabot.yml` deleted** — stops *version* updates, which are
+  driven solely by this file.
+- **`DELETE /repos/:owner/:repo/automated-security-fixes`** — stops
+  *security update* PRs. These come from a repository setting, not from the
+  config file, so deleting the file alone would not have stopped them.
+- **`DELETE /repos/:owner/:repo/vulnerability-alerts`** — stops Dependabot
+  alerts, removing the Security-tab list as well as the PRs.
+
+**Consequence, recorded deliberately:** ~29 open advisories were still
+outstanding when this was turned off, and they are no longer tracked
+anywhere in the repo. Dependency vulnerabilities will now surface only if
+someone runs `npm audit` by hand. The remaining known-unfixed items at
+time of writing were `brace-expansion` ×3 (high), `react-router` ×3 +
+`react-router-dom` ×1 (medium, fix requires the v7 major), `dompurify` ×9,
+`vite` ×3, `uuid`, `@babel/core`, `esbuild` ×2, `tmp`, `fast-uri`,
+`postcss`, `js-yaml` ×2 and `body-parser` — most of which had working PRs
+that were closed as part of the noise cleanup.
+
+To re-enable later: restore this file and `PUT` the same two endpoints.
+
 ### Changed — 2026-07-27 — Dependabot version updates grouped and moved to monthly (≈9 PRs/week → 1–2 PRs/month)
 
 Removing `target-branch` (previous entry) released the version-update stream
