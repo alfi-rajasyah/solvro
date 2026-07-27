@@ -15,6 +15,52 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-27 — CI no longer depends on the repo secret store, unblocking every Dependabot PR
+
+All 8 open Dependabot PRs failed `backend-tests` and `e2e` identically, with
+`Database is uninitialized and superuser password is not specified` and
+`required variable POSTGRES_PASSWORD is missing a value`. The cause is not
+the dependency bumps: GitHub passes **only the Dependabot secret store** to
+Dependabot-triggered runs, so every `secrets.CI_*` reference in `ci.yml`
+resolved to an empty string. Populating that store was tried first and did
+not resolve it (verified on run `30227846101` — a fresh, fully
+Dependabot-actored run raised after the secrets existed, still empty), so
+the dependency on the secret store is removed instead. This fixes the whole
+class of failure regardless of which secret store is at fault, and puts
+human and bot PRs on an identical code path.
+
+- **`.github/workflows/ci.yml`** (`e2e`): `POSTGRES_PASSWORD` and
+  `ADMIN_PASSWORD` are now generated per run with `openssl rand -hex 24` and
+  exported via `$GITHUB_ENV`, alongside the `JWT_SECRET` that already worked
+  this way. The step is renamed to "Generate ephemeral run credentials".
+  `$GITHUB_ENV` makes them visible to every later step — compose
+  interpolation, admin creation, and Playwright's fixtures, which read
+  `ADMIN_PASSWORD` from the environment (`e2e/fixtures/test.ts`). The
+  48-character output clears `create-admin.ts`'s 8-character minimum.
+- **`.github/workflows/ci.yml`** (`backend-tests`): the postgres service
+  container now uses the literal `ci-ephemeral-postgres`. A service
+  container's `env:` is resolved before any step runs, so a generated value
+  is impossible there. The database is localhost-only and dies with the job,
+  so the literal protects nothing that secret status was protecting.
+- The `CI_POSTGRES_PASSWORD` / `CI_ADMIN_PASSWORD` secrets in both the
+  Actions and Dependabot stores are now unused and can be deleted.
+
+### Fixed — 2026-07-27 — `latest` image tag pinned to `main` instead of the repo default branch
+
+`docker-publish.yml` gated the `latest` tag on `enable={{is_default_branch}}`.
+That silently couples the production tag to a **repo setting**: when the
+default branch was switched to `develop` (so Dependabot security updates
+would stop targeting `main`, which they always aim at the default branch),
+`is_default_branch` became false for `main` and release builds would have
+stopped publishing `latest` — the tag production pulls. No release ran in
+that window, so nothing shipped mistagged.
+
+- **`.github/workflows/docker-publish.yml`**: `latest` is now gated on the
+  literal branch name (`workflow_run.head_branch == 'main'`, plus
+  `workflow_dispatch` on `refs/heads/main` to preserve manual-publish
+  behaviour), so no repo setting can move the production tag. Tag pushes
+  remain excluded, matching previous behaviour.
+
 ### Changed — 2026-07-27 — Kanban cutover: `/projects/:id/kanban` now serves the ReUI-engine board (plan T11)
 
 `docs/plans/kanban-reui-swap/plan.md` T11 — the deliberate cutover commit

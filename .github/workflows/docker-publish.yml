@@ -57,6 +57,12 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      # `latest` must track main — the release branch production pulls — and
+      # never "whichever branch is currently the repo default". This was
+      # `enable={{is_default_branch}}`, which silently stops tagging `latest`
+      # the moment the default branch is changed in repo settings. Pinned to
+      # the literal branch name so a settings change can't move the prod tag.
+      # (Tag pushes are deliberately excluded, matching the previous behaviour.)
       - id: meta
         uses: docker/metadata-action@v5
         with:
@@ -65,7 +71,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=tag
             type=raw,value=sha-${{ steps.sha.outputs.short }}
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest,enable=${{ (github.event_name == 'workflow_run' && github.event.workflow_run.head_branch == 'main') || (github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') }}
 
       - uses: docker/build-push-action@v6
         with:
