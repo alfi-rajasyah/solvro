@@ -149,12 +149,26 @@ test.describe("global search palette", () => {
     await expect(page.getByRole("dialog", { name: /global search/i })).toBeVisible();
   });
 
-  // Addendum #4: the palette is `fixed inset-0` full-bleed on phone
-  // viewports (no `md:` centered-card treatment) — confirm it doesn't
-  // introduce horizontal scroll, and that the dialog's own box stays within
-  // the viewport height, same recipe smoke.spec.ts uses for page overflow.
-  test("mobile: palette fits the viewport with no horizontal overflow", async ({ page }, testInfo) => {
+  // Addendum #4 (S1 fix, review round 1 on this test): the original recipe
+  // here measured `document.documentElement.scrollWidth/clientWidth`, but
+  // the palette is `position: fixed; inset: 0` — a child overflowing inside
+  // a fixed overlay never bubbles into `documentElement`'s own scroll
+  // metrics (a 900px-wide child inside it still reads 0 there), and the
+  // height bound was structurally guaranteed by the flex container
+  // regardless of content, so both assertions were toothless. Worse, with
+  // no query typed the actual overflow-prone surface (a long result label
+  // sharing a row with a right-aligned hint) never rendered at all. Fixed
+  // per review: seed a run-unique task, populate the input so a real result
+  // row renders, then measure the *dialog's own* scrollWidth/clientWidth and
+  // confirm its box sits fully inside the viewport.
+  test("mobile: a populated result row fits the viewport with no horizontal overflow", async ({ page, seededProject }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "viewport-fit check is mobile-viewport specific");
+    const target = await createUniqueTask(
+      apiBase(testInfo),
+      seededProject.token,
+      seededProject.projectId,
+    );
+
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
 
@@ -162,20 +176,15 @@ test.describe("global search palette", () => {
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await expect(dialog).toBeVisible();
 
-    const overflow = await page.evaluate(
-      () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-    );
-    expect(overflow, `palette overflowed by ${overflow}px`).toBeLessThanOrEqual(1);
+    await dialog.getByPlaceholder(/search projects/i).fill(target.title);
+    await expect(dialog.getByText(target.title, { exact: true })).toBeVisible();
 
-    const box = await dialog.boundingBox();
-    const viewport = page.viewportSize();
-    expect(box).not.toBeNull();
-    expect(viewport).not.toBeNull();
-    if (box && viewport) {
-      expect(
-        box.height,
-        `dialog height ${box.height} exceeds viewport height ${viewport.height}`,
-      ).toBeLessThanOrEqual(viewport.height + 1);
-    }
+    await expect
+      .poll(() => dialog.evaluate((el) => el.scrollWidth - el.clientWidth))
+      .toBeLessThanOrEqual(1);
+
+    const box = (await dialog.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.y + box.height).toBeLessThanOrEqual(page.viewportSize()!.height + 1);
   });
 });
