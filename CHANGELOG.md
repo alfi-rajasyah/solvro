@@ -49,7 +49,7 @@ Three fixes to the ⌘K command palette from code review, all in `frontend/src/c
   `isFetching` instead of `isLoading` from `useSearch` and gate the indicator on
   `isFetching && hasQuery`.
 
-
+### Added — 2026-07-27 — ⌘K command palette wired to `GET /search` + nav commands (plan Task 4)
 
 - `frontend/src/components/CommandPalette.tsx`: searches projects/tasks/customers via
   `GET /search` (debounced `useSearch` hook, 200ms) plus permission-gated page commands
