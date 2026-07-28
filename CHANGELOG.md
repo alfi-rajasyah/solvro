@@ -15,6 +15,188 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-27 — Final-review fix wave: humanized palette status hints, Enter-key e2e coverage (plan Task 6)
+
+Four small fixes from the branch's final whole-branch review (`solvro-reviewer`, `final-review.md` §C), all on `feat/global-search`:
+
+- **S1 — raw project-status enum rendered in the palette.** `frontend/src/components/CommandPalette.tsx`'s Projects hint fell back to `p.status` (e.g. `ON_HOLD`, `PLANNING`) for the ~34% of dev projects with no customer assigned. Added an exported `projectStatusLabel()` helper next to the existing `PROJECT_LABEL` map in `frontend/src/components/StatusChip.tsx` and used it for the fallback (`hint: p.customerName ?? projectStatusLabel(p.status)`), matching the humanized text ("On hold", "Planning", ...) used everywhere else project status is shown.
+- **S2 — Enter-key selection uncovered in e2e.** `e2e/tests/search.spec.ts`'s project-hit test selected only via row `.click()`, leaving the palette's primary keyboard gesture (`autoHighlight` + Enter) untested despite the spec's own Testing Strategy naming it. Changed the project test to select via `dialog.getByPlaceholder(/search projects/i).press("Enter")` after asserting the row is visible, keeping the existing `waitForURL` assertion. The task-hit test's `.click()` is left as-is, so both selection gestures stay covered across the two tests.
+- **N-a — duplicated `hasQuery` predicate.** `CommandPalette.tsx`'s `AutocompleteEmpty` gate re-expressed `debounced.trim().length >= 2` inline instead of reusing the `hasQuery` constant already defined a few lines above — the same predicate-divergence shape that caused an earlier blocker (B1). Replaced with `{hasQuery ? ... : null}`.
+- **N-c — stale comment in `frontend/src/components/layout/Sidebar.tsx`.** The comment above `SIDEBAR_BG` claimed the `bg-sidebar` token was "defined in tailwind.config.ts" — that file was deleted 2026-07-24. Corrected to say the token lives in `frontend/src/index.css`'s `@theme inline` block.
+
+### Added — 2026-07-27 — Playwright coverage for the ⌘K command palette (plan Task 5)
+
+- E2E coverage for the ⌘K palette (`e2e/tests/search.spec.ts`): open/close, run-unique task + project hits, task deep-link `?task=` assertion, mobile icon entry point. Also covers the four review-mandated addendum assertions from Task 4's review: Escape closing the palette from the actual focused input (not just an arbitrary keydown target), input autofocus on open, no stale rows surviving a close/reopen cycle (B1 regression guard), and mobile viewport fit (no horizontal overflow, dialog height within viewport).
+
+### Fixed — 2026-07-27 — Task 5 mobile-fit assertion measured the wrong element (review fix rounds 1–2)
+
+`e2e/tests/search.spec.ts`'s mobile viewport-fit test (Task 5 addendum #4) went through two review rounds before it actually measured the bug it claims to guard:
+
+- **Round 1** replaced an initial `document.documentElement.scrollWidth/clientWidth` poll (blind to overflow inside the palette's own `position: fixed; inset: 0` overlay) with the same poll against the dialog element itself, plus `boundingBox()` x/height assertions.
+- **Round 2 re-review** measured against the live palette and found round 1's fix still targeted the wrong element: the dialog itself has no `overflow` set, so row overflow never reaches it — it terminates one level down, at `[data-slot="scroll-area-viewport"]` (`frontend/src/components/ui/scroll-area.tsx`, computed `overflow-x: scroll`), the `ScrollArea` sitting between the dialog and the result rows. Measured 0px on the dialog under a simulated truncation regression that produced 784px of real overflow on the viewport element. Separately, the seeded task title (~24 chars) was too short to overflow a 390px row even when measured correctly (0px up to 40 chars, 7px at 60, 836px at 200) — `title` allows up to 200 chars server-side (`backend/src/routes/tasks.ts`), so a padded seed is legal.
+- **Final fix**: the test now polls `[data-slot="scroll-area-viewport"]`'s `scrollWidth − clientWidth` instead of the dialog's, and seeds a dedicated long task (`createLongUniqueTask`, ~100+ char title, local to this test) via a short search query — `GET /search`'s own `q` param is capped at 100 chars (`backend/src/routes/search.ts`), so the palette input is filled with a short prefix while the full padded title is what's asserted visible and what stresses the row. The round-1 `boundingBox()` x/height assertions were dropped: the dialog is `w-full` inside `fixed inset-0 flex items-stretch justify-center`, so its box is structurally pinned to the viewport regardless of content and those assertions added no coverage. Renamed to `"mobile: a long result row doesn't overflow the palette's scroll viewport horizontally"` to match what's actually measured.
+
+### Fixed — 2026-07-27 — Command palette: stale results below the 2-char gate, permanent focus-ring glow, dead loading indicator (plan Task 4 review fix round 1)
+
+Three fixes to the ⌘K command palette from code review, all in `frontend/src/components/CommandPalette.tsx` unless noted:
+
+- **Stale search hits below the 2-char gate / across reopen (blocker).** `useSearch`'s
+  `placeholderData: (prev) => prev` (`frontend/src/lib/queries.ts`) resolves against React
+  Query's `#lastQueryWithDefinedData`, which never clears on a key change, on `enabled:
+  false`, or on the observer staying mounted (`Shell.tsx` keeps `<CommandPalette>` mounted
+  always). Result: after any successful search, reopening the palette or backspacing below
+  2 characters still rendered the previous query's Projects/Tasks/Customers rows
+  (`isPlaceholder: true`) — `AutocompleteEmpty`'s own `>=2`-char gate didn't help, since
+  there *were* items. Fix: added `hasQuery = debounced.trim().length >= 2` and gated the
+  `remote` items array on it (`!hasQuery || !data ? [] : [...]`), added as a `useMemo` dep.
+  `placeholderData` itself is unchanged — it's correct for in-flight keystrokes at ≥2 chars.
+- **Permanent 3px focus-ring glow on the palette input, exceeding DESIGN.md §4's 2px cap.**
+  The vendored `AutocompleteInput`'s `inputVariants` base survives `cn()`-merging with the
+  call site's className for several classes that don't share a Tailwind variant with any
+  override the call site had set: `dark:bg-input/30` (a visible slab in dark mode),
+  `rounded-lg`/`h-9`/`px-2.5` (a boxed look inside the palette's own padded row), and
+  `focus-visible:ring-3` (a permanent glow on the `autoFocus`ed input). Fix: added
+  `dark:bg-transparent rounded-none h-auto px-0 focus-visible:ring-0
+  focus-visible:border-transparent` to the input's className and dropped `size="lg"`
+  (its only surviving contribution was the now-overridden `h-9 px-2.5`). Verified via the
+  repo's own `tailwind-merge` that the previously-surviving classes are displaced in the
+  merged output (`focus-visible:ring-ring/50` remains in the class list but is inert once
+  paired with `ring-0`, since ring width and ring color are independent Tailwind utilities
+  and a 0px ring has no visible color regardless).
+- **Dead "Searching…" indicator.** `isLoading` (`isPending && isFetching`) is forced false
+  by `placeholderData` after the first successful search of a session (`queryObserver`
+  sets `status: "success"` once a placeholder value exists), so the indicator rendered
+  once and never again — the opposite of useful for a debounced palette. Fix: destructure
+  `isFetching` instead of `isLoading` from `useSearch` and gate the indicator on
+  `isFetching && hasQuery`.
+
+### Added — 2026-07-27 — ⌘K command palette wired to `GET /search` + nav commands (plan Task 4)
+
+- `frontend/src/components/CommandPalette.tsx`: searches projects/tasks/customers via
+  `GET /search` (debounced `useSearch` hook, 200ms) plus permission-gated page commands
+  from `navCommands.ts`'s `filterNavCommands`; task hits deep-link through the existing
+  `?task=` param on `/projects/:id/list`. Rendered as a Modal-convention centered overlay
+  (Esc + body-scroll-lock recipe from `Modal.tsx`) via `createPortal`.
+- `frontend/src/lib/queries.ts`: `SearchProjectHit`/`SearchTaskHit`/`SearchCustomerHit`/
+  `SearchResults` types mirroring the `GET /search` response contract, `queryKeys.search`,
+  and the `useSearch(q)` hook (`enabled` gates on the backend's 2-char minimum;
+  `placeholderData` keeps the prior results rendered while a keystroke's query is in flight).
+- Composition deviates from the plan brief's literal Step 3 code, reconciled against the
+  vendored component's real Base UI API (verified against `@base-ui/react`'s bundled
+  `.d.ts` files and its own docs, not assumed): uses `AutocompleteGroup`/
+  `AutocompleteGroupLabel`/`AutocompleteCollection` for the four result groups instead of
+  heading-row `div`s; uses `inline`+`open` (unconditional) instead of the anchored
+  `AutocompleteContent`/`Portal`/`Positioner`/`Popup` stack, per Base UI's own documented
+  "command palette" recipe — the anchored popup is built for a dropdown below an input
+  and fights this centered overlay; controls the search text via `value`/`onValueChange`
+  on the `Autocomplete` root (both official Base UI examples for externally-filtered data
+  do this) rather than via raw `value`/`onChange` on `AutocompleteInput`; passes
+  `filter={null}` since results are already server/permission-filtered; keeps
+  `AutocompleteEmpty` unconditionally mounted per Base UI's a11y guidance (it warns
+  against conditionally rendering the component itself) and instead conditionally renders
+  only its *children* to avoid a premature "no results" flash before 2 characters are
+  typed. Full detail and file:line citations in the Task 4 report.
+
+### Changed — 2026-07-27 — TopBar search trigger, Shell ⌘K listener, Sidebar/`navCommands` unification (plan Task 4)
+
+- `frontend/src/components/layout/TopBar.tsx`: the decorative search box is now a live
+  palette trigger button (`onOpenSearch`, now a required prop) with a mobile-only search
+  icon button below `md:`.
+- `frontend/src/components/layout/Shell.tsx`: hosts `<CommandPalette>` and a single
+  app-wide ⌘K/Ctrl+K `keydown` listener that skips editable targets (`INPUT`/`TEXTAREA`/
+  `contentEditable`) so typing "k" with a modifier inside a text field never hijacks focus.
+- `frontend/src/components/layout/Sidebar.tsx`: now derives its nav items directly from
+  `NAV_COMMANDS` (`frontend/src/lib/navCommands.ts`) instead of a hand-copied local
+  `NAV_ITEMS`/`NavItem` — single source of truth for page destinations. Scope amendment
+  approved 2026-07-27, resolving Task 2 review finding I1 (the catalogue must not be a
+  second, hand-copied source of truth). Rendered output is unchanged (same order, labels,
+  icons, Executive/Admin permission gating).
+- `frontend/src/lib/navCommands.ts`: `NAV_COMMANDS` export is now `readonly NavCommand[]`
+  (guards against consumer mutation now that Sidebar also consumes it); absorbed the
+  Work Logs/Tasks sidebar-absence explanatory comment from the deleted `Sidebar.tsx`
+  `NAV_ITEMS`.
+- `frontend/src/lib/navCommands.test.ts`: renamed the route-list test from "keeps every
+  route in sync with the app's route table" to "pins the catalogue's route list" — with
+  Sidebar now consuming the catalogue directly, the pin is genuinely load-bearing rather
+  than an aspirational cross-check against `App.tsx`.
+
+### Fixed — 2026-07-27 — Vendored autocomplete: stop `scrollFade`/`scrollbarGutter` leaking to the DOM (plan Task 3 review fix round 1)
+
+- `frontend/src/components/reui/autocomplete.tsx`'s `AutocompleteList` declared
+  `scrollFade`/`scrollbarGutter` in its props type but never destructured them, so both
+  fell into the JSX spread `...props` and landed on the rendered `<div>` as unknown DOM
+  attributes. Upstream ReUI's own scroll-area implementation consumed these props; our
+  Base-UI `ui/scroll-area.tsx` substitute does not.
+- Fix: destructure and discard both (`scrollFade: _scrollFade, scrollbarGutter:
+  _scrollbarGutter`), marked with a 5th `// SOLVRO PATCH` comment — kept in the type so
+  callers passing them still typecheck and a future re-pull diff stays minimal.
+
+### Added — 2026-07-27 — Vendored ReUI autocomplete component (plan Task 3)
+
+- Hand-vendored `frontend/src/components/reui/autocomplete.tsx` (Base-UI-backed) for
+  the ⌘K palette — zero new npm dependencies (`@base-ui/react`,
+  `class-variance-authority`, `scroll-area` all pre-existing).
+- Vendored by hand from the registry JSON (`https://reui.io/r/new-york/autocomplete.json`)
+  rather than via `npx shadcn@latest add @reui/autocomplete`: the CLI's `scroll-area`
+  registryDependency 401s against the `@reui` registry and falls back to the default
+  shadcn registry's Radix-based `scroll-area`, which pulled `radix-ui` (plus the full
+  `@radix-ui/*` tree) into `frontend/package.json`/`package-lock.json` — a direct
+  violation of the CLAUDE.md guardrail that `radix-ui` must never be reintroduced. The
+  attempted CLI install was reverted before vendoring by hand; final diff touches only
+  the one component file.
+- Two minimal hand-edits to the vendored file, each marked `// SOLVRO PATCH`: added the
+  `import * as React from "react"` the registry source omitted (required for
+  `React.ComponentProps<...>` under this repo's `jsx: "react-jsx"` tsconfig), and swapped
+  the registry's `IconPlaceholder` import (a ReUI demo-app-only path that doesn't exist
+  in this repo) for the two `lucide-react` icons it mapped to (`XIcon`,
+  `ChevronsUpDownIcon`), matching this repo's existing `*Icon` lucide-react convention.
+
+### Added — 2026-07-27 — Palette nav-command catalogue (plan Task 2)
+
+- Palette page-navigation catalogue: `frontend/src/lib/navCommands.ts` (pure module + tests) mirroring the sidebar's permission-gated destinations for the ⌘K palette.
+
+### Fixed — 2026-07-27 — `GET /search`: escaped LIKE metacharacters, top-level tasks only (plan Task 1 review fix round 1)
+
+Two fixes to the `GET /search` endpoint added earlier today, from code review:
+
+- **ILIKE metacharacter escaping** — Prisma's `contains` passes `q` straight
+  into the SQL `ILIKE` pattern unescaped, so a literal `%`/`_` in a search
+  term acted as a SQL wildcard (e.g. `q="%%"`, which passes the `min(2)`
+  check, matched every row). `backend/src/routes/search.ts` now escapes
+  `\`, `%`, and `_` in `q` via a Zod `.transform` on the query schema before
+  it reaches any Prisma `contains` filter.
+- **Subtasks excluded from task results** — the task query now adds
+  `parentTaskId: null` (mirrors the `topLevel=true` convention in
+  `tasks.ts`): a command-palette row can't convey a parent task, and the
+  planned `?task=` deep-link is only proven for top-level tasks.
+- Tests added to `backend/test/search.test.ts`: literal `%` in `q` matches
+  only the literal row (not a wildcard-inflated set), `q="%%"` returns all
+  three groups empty, and a seeded subtask is excluded from `tasks` while
+  its top-level sibling is returned.
+
+### Added — 2026-07-27 — Global search API: `GET /search` endpoint for the command palette (plan Task 1)
+
+Backend half of the ⌘K command palette (frontend wiring lands in later plan
+tasks). Returns visibility-scoped project/task/customer matches for a query
+string.
+
+- `GET /search?q=<2–100 chars>` — case-insensitive `contains` match against
+  project name, task title, and customer name; each group capped at 8
+  results, ordered by name/title asc. `401` unauthenticated, `400`
+  invalid/missing `q`. `backend/src/routes/search.ts`, mounted in
+  `backend/src/app.ts` (`app.use("/search", searchRouter)`, after `/reports`).
+- Projects and tasks are scoped via the existing
+  `projectVisibilityFilter(user)` (`backend/src/lib/visibility.ts`) — same
+  TAM/SA/admin visibility rules as `/projects`. Customers aren't
+  project-scoped in the schema, so all customers matching `q` are returned
+  regardless of caller.
+- `ProjectNote` is deliberately NOT searched — the INTERNAL-notes guardrail
+  must hold even at a search surface, so Daily Review notes (INTERNAL by
+  default) can never leak through search results.
+- Tests: `backend/test/search.test.ts` — auth (401), validation (400 on
+  short/missing `q`), response shape, case-insensitive matching, 8-result
+  cap per group, and TAM-vs-admin visibility scoping (6 cases).
+
 ### Removed — 2026-07-27 — Dependabot disabled entirely (config deleted + both repo settings turned off)
 
 User decision: the PR volume was not worth the benefit. Grouping and a
