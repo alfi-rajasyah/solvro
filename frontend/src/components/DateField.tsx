@@ -27,6 +27,19 @@ interface DateFieldProps {
   /** Extra classes on the trigger button. */
   className?: string;
   "aria-label"?: string;
+  /**
+   * Display-only override for the trigger's rendered text. For call sites
+   * whose resting label must use a different format than the picker's own
+   * day contract (`formatDisplay`'s `dd/MM/yyyy`) — e.g. a row/card that
+   * shows a short local-format date elsewhere and needs this trigger to
+   * match it byte-for-byte rather than diverge into a second display
+   * format for the same underlying value. When provided (including as an
+   * empty string), replaces `formatDisplay(value) || "—"` in the trigger;
+   * `value`/`onChange`/`commitDraft` semantics are completely untouched —
+   * this only changes what's rendered, never what the picker or its
+   * caller compute from.
+   */
+  triggerLabel?: string;
 }
 
 const triggerBaseClasses =
@@ -59,6 +72,7 @@ export function DateField({
   calendarProps,
   className,
   "aria-label": ariaLabel,
+  triggerLabel,
 }: DateFieldProps) {
   const [open, setOpen] = useState(false);
   const date = dayToDate(value);
@@ -121,7 +135,7 @@ export function DateField({
         }
         className={cn(triggerBaseClasses, variantClasses[variant], className)}
       >
-        {formatDisplay(value) || "—"}
+        {triggerLabel !== undefined ? triggerLabel || "—" : formatDisplay(value) || "—"}
       </PopoverTrigger>
       <PopoverContent align="start" positionerClassName="z-101" className="w-auto p-0! shadow-overlay">
         <Calendar
