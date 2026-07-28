@@ -106,8 +106,7 @@ function formatRangeDisplay(start: string | null, end: string | null): string {
  * Day-string contract like `DateField` (see `frontend/src/lib/dateField.ts`):
  * `start`/`end` and the values handed to `onApply` are plain "yyyy-MM-dd"
  * days, not ISO instants — callers convert at the boundary
- * (`InlineDateRangeEditor` via `commitDraft`, `TaskFormModal` via its own
- * `passthroughDate`).
+ * (`InlineDateRangeEditor` and `TaskFormModal`'s edit mode via `commitDraft`; `TaskFormModal`'s create mode via `isoFromDay`).
  *
  * DRAFT ARCHITECTURE (fix round): the draft is a PAIR of day strings —
  * `draftStart`/`draftEnd`, `string | null` each — seeded verbatim from

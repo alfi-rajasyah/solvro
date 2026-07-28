@@ -4,7 +4,7 @@ import { Drawer } from "./Drawer";
 import { LabelPicker } from "./LabelPicker";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
-import { dayFromIso } from "@/lib/dateField";
+import { commitDraft, dayFromIso, isoFromDay } from "@/lib/dateField";
 import {
   type Priority,
   type Task,
@@ -53,28 +53,6 @@ interface EditProps {
 
 export type TaskFormModalProps = CreateProps | EditProps;
 
-/**
- * Untouched-field passthrough for the Start/Due date inputs, edit mode only
- * (fix round, plan Task 3). `startDate`/`dueDate` draft state is seeded from
- * the persisted ISO via `.slice(0, 10)` (the same slice `dayFromIso`
- * performs) and this call site's picked-day conversion is
- * `new Date(day).toISOString()` — a UTC-midnight parse of the bare
- * "yyyy-MM-dd" string (date-only strings parse as UTC per the ECMAScript
- * date-string grammar), NOT the local-midnight `isoFromDay` that Task 2's
- * `commitDraft` uses for `InlineDateRangeEditor`. Reusing `commitDraft`
- * wholesale here would silently switch this site's picked-day payload
- * convention from UTC-midnight to local-midnight, which is out of scope —
- * so this passthrough is hand-written to change ONLY the untouched case: if
- * the draft still equals the day derived from the ORIGINAL persisted ISO,
- * return that original ISO unchanged (no re-derivation, no walk-back);
- * otherwise apply the pre-existing UTC-midnight conversion, byte-identically
- * to what this call site always did.
- */
-function passthroughDate(draftDay: string, originalIso: string | null): string | null {
-  if (draftDay === dayFromIso(originalIso)) return originalIso;
-  return draftDay ? new Date(draftDay).toISOString() : null;
-}
-
 export function TaskFormModal(props: TaskFormModalProps) {
   const { open, onClose, projectId } = props;
   const isEdit = props.mode === "edit";
@@ -116,8 +94,8 @@ export function TaskFormModal(props: TaskFormModalProps) {
       setDescription(editingTask.description ?? "");
       setStatus(editingTask.status);
       setPriority(editingTask.priority);
-      setStartDate(editingTask.startDate ? editingTask.startDate.slice(0, 10) : "");
-      setDueDate(editingTask.dueDate ? editingTask.dueDate.slice(0, 10) : "");
+      setStartDate(dayFromIso(editingTask.startDate) ?? "");
+      setDueDate(dayFromIso(editingTask.dueDate) ?? "");
       setAssignedToId(editingTask.assignedToId ?? "");
       setParentTaskId(editingTask.parentTaskId ?? "");
       setSectionId(editingTask.sectionId ?? "");
@@ -172,28 +150,22 @@ export function TaskFormModal(props: TaskFormModalProps) {
       setError("Title is required.");
       return;
     }
-    if (startDate && dueDate && new Date(dueDate) < new Date(startDate)) {
+    if (startDate && dueDate && dueDate < startDate) {
       setError("Due date must be on or after start date.");
       return;
     }
 
     // Edit mode: pass through a date unchanged when its draft still matches
     // the day the original ISO was seeded from, instead of unconditionally
-    // re-deriving the ISO — see `passthroughDate`'s doc above. Create mode
-    // has no original ISO to compare against, so it always uses the
-    // picked-day conversion.
-    const startIso =
-      isEdit && editingTask
-        ? passthroughDate(startDate, editingTask.startDate)
-        : startDate
-          ? new Date(startDate).toISOString()
-          : null;
-    const dueIso =
-      isEdit && editingTask
-        ? passthroughDate(dueDate, editingTask.dueDate)
-        : dueDate
-          ? new Date(dueDate).toISOString()
-          : null;
+    // re-deriving the ISO — see `commitDraft`'s doc in `@/lib/dateField`.
+    // Create mode has no original ISO to compare against, so it always
+    // derives fresh via `isoFromDay` (UTC midnight of the picked day).
+    const startIso = isEdit && editingTask
+      ? commitDraft(startDate, editingTask.startDate)
+      : isoFromDay(startDate);
+    const dueIso = isEdit && editingTask
+      ? commitDraft(dueDate, editingTask.dueDate)
+      : isoFromDay(dueDate);
     const parent = parentTaskId === "" ? null : Number(parentTaskId);
     const sec = sectionId === "" ? null : Number(sectionId);
     const assignee = assignedToId === "" ? null : Number(assignedToId);
