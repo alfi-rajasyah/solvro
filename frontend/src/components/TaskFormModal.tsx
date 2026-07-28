@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
+import { DateField } from "./DateField";
 import { Drawer } from "./Drawer";
 import { LabelPicker } from "./LabelPicker";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { dayFromIso, dayToDate, formatDisplay } from "@/lib/dateField";
 import {
   type Priority,
   type Task,
@@ -50,6 +52,28 @@ interface EditProps {
 }
 
 export type TaskFormModalProps = CreateProps | EditProps;
+
+/**
+ * Untouched-field passthrough for the Start/Due date inputs, edit mode only
+ * (fix round, plan Task 3). `startDate`/`dueDate` draft state is seeded from
+ * the persisted ISO via `.slice(0, 10)` (the same slice `dayFromIso`
+ * performs) and this call site's picked-day conversion is
+ * `new Date(day).toISOString()` — a UTC-midnight parse of the bare
+ * "yyyy-MM-dd" string (date-only strings parse as UTC per the ECMAScript
+ * date-string grammar), NOT the local-midnight `isoFromDay` that Task 2's
+ * `commitDraft` uses for `InlineDateRangeEditor`. Reusing `commitDraft`
+ * wholesale here would silently switch this site's picked-day payload
+ * convention from UTC-midnight to local-midnight, which is out of scope —
+ * so this passthrough is hand-written to change ONLY the untouched case: if
+ * the draft still equals the day derived from the ORIGINAL persisted ISO,
+ * return that original ISO unchanged (no re-derivation, no walk-back);
+ * otherwise apply the pre-existing UTC-midnight conversion, byte-identically
+ * to what this call site always did.
+ */
+function passthroughDate(draftDay: string, originalIso: string | null): string | null {
+  if (draftDay === dayFromIso(originalIso)) return originalIso;
+  return draftDay ? new Date(draftDay).toISOString() : null;
+}
 
 export function TaskFormModal(props: TaskFormModalProps) {
   const { open, onClose, projectId } = props;
@@ -153,8 +177,23 @@ export function TaskFormModal(props: TaskFormModalProps) {
       return;
     }
 
-    const startIso = startDate ? new Date(startDate).toISOString() : null;
-    const dueIso = dueDate ? new Date(dueDate).toISOString() : null;
+    // Edit mode: pass through a date unchanged when its draft still matches
+    // the day the original ISO was seeded from, instead of unconditionally
+    // re-deriving the ISO — see `passthroughDate`'s doc above. Create mode
+    // has no original ISO to compare against, so it always uses the
+    // picked-day conversion.
+    const startIso =
+      isEdit && editingTask
+        ? passthroughDate(startDate, editingTask.startDate)
+        : startDate
+          ? new Date(startDate).toISOString()
+          : null;
+    const dueIso =
+      isEdit && editingTask
+        ? passthroughDate(dueDate, editingTask.dueDate)
+        : dueDate
+          ? new Date(dueDate).toISOString()
+          : null;
     const parent = parentTaskId === "" ? null : Number(parentTaskId);
     const sec = sectionId === "" ? null : Number(sectionId);
     const assignee = assignedToId === "" ? null : Number(assignedToId);
@@ -344,23 +383,39 @@ export function TaskFormModal(props: TaskFormModalProps) {
 
           {/* Start Date */}
           <FieldRow icon="calendar_month" label="Start Date">
-            <input
-              type="date"
-              value={startDate}
-              onChange={(e) => setStartDate(e.target.value)}
+            <DateField
+              variant="bare"
+              value={startDate || null}
+              onChange={(d) => setStartDate(d ?? "")}
               disabled={!canEdit}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
+              clearable
+              aria-label={
+                startDate ? `Start date, currently ${formatDisplay(startDate)}` : "Start date"
+              }
             />
           </FieldRow>
 
           {/* Due Date */}
           <FieldRow icon="calendar_today" label="Due Date">
-            <input
-              type="date"
-              value={dueDate}
-              onChange={(e) => setDueDate(e.target.value)}
+            <DateField
+              variant="bare"
+              value={dueDate || null}
+              onChange={(d) => setDueDate(d ?? "")}
               disabled={!canEdit}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
+              clearable
+              aria-label={dueDate ? `Due date, currently ${formatDisplay(dueDate)}` : "Due date"}
+              calendarProps={{
+                disabled: startDate ? { before: dayToDate(startDate)! } : undefined,
+                // react-day-picker computes its initial month as
+                // `month || defaultMonth || today`, never consulting
+                // `selected` — an existing due date's own month must win
+                // here (same precedent as InlineDateRangeEditor.tsx's DUE
+                // field), or opening this picker on a due date set in a
+                // different month than start would silently land on the
+                // START month instead. Falls back to startDate (no-due-yet
+                // nicety) and finally undefined (today).
+                defaultMonth: dayToDate(dueDate) ?? dayToDate(startDate) ?? undefined,
+              }}
             />
           </FieldRow>
 

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseISO } from "date-fns";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { formatDisplay } from "@/lib/dateField";
 import { useGanttExport } from "@/lib/gantt/exportContext";
 import { addDays, buildRows, rowsDateRange, startOfDay, type Row } from "@/lib/gantt/geometry";
 import {
@@ -26,6 +27,7 @@ import {
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { DateField } from "@/components/DateField";
 import { Gantt, type GanttApi, type GanttColumn } from "@/components/reui/gantt/gantt";
 import { GanttView } from "@/components/reui/gantt/gantt-view";
 import type {
@@ -1192,11 +1194,16 @@ export function SolvroGantt(props: SolvroGanttProps) {
               <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
                 Baseline as-of date
               </span>
-              <input
-                type="date"
-                value={baselineAsOf}
-                onChange={(e) => setBaselineAsOf(e.target.value)}
-                className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-xs focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              <DateField
+                variant="boxed"
+                className="w-full px-2 py-1.5 text-xs font-body focus:ring-2 focus:ring-primary/30"
+                value={baselineAsOf || null}
+                onChange={(d) => setBaselineAsOf(d ?? "")}
+                aria-label={
+                  baselineAsOf
+                    ? `Baseline as-of date, currently ${formatDisplay(baselineAsOf)}`
+                    : "Baseline as-of date"
+                }
               />
               <span className="mt-1 block text-[11px] text-on-surface-variant">
                 Defaults to today. Use a different date to backdate the snapshot — e.g. "May 1

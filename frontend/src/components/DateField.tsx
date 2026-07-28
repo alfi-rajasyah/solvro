@@ -64,15 +64,19 @@ export function DateField({
   const date = dayToDate(value);
 
   function handleSelect(day: Date | undefined) {
-    if (day === undefined && !clearable) {
+    if (day === undefined) {
       // react-day-picker fires onSelect(undefined) when the user re-clicks
-      // the already-selected day. Without a Clear affordance that shouldn't
-      // be able to null out the value — just close (mirrors
-      // reui/gantt/gantt-nav.tsx:401-406's `if (next)` guard).
+      // the already-selected day. Always treat this as close-only — never
+      // wipe the value from a re-click swallow, `clearable` or not.
+      // `clearable` only controls whether the explicit Clear button (below)
+      // is rendered; it must not also let a re-click silently clear the
+      // field with no undo (mirrors reui/gantt/gantt-nav.tsx:401-406's
+      // `if (next)` guard, generalized to apply regardless of `clearable`).
+      // Clearing the value is `handleClear`'s job alone.
       setOpen(false);
       return;
     }
-    onChange(dateToDay(day ?? null));
+    onChange(dateToDay(day));
     setOpen(false);
   }
 
