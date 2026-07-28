@@ -19,6 +19,14 @@ function PopoverTrigger({
 
 function PopoverContent({
   className,
+  // SOLVRO PATCH: optional className passthrough for PopoverPrimitive.Positioner.
+  // Base-UI's Positioner carries an inline `transform`, which creates its own
+  // stacking context — a z-index on the Popup (nested inside) can't escape
+  // it. Callers that need the popover to outrank a z-100+ host layer (e.g.
+  // Modal/Drawer) must set the z-index on the Positioner itself via this
+  // prop. Default is unset (Positioner stays z-index:auto) so existing
+  // callers (e.g. gantt-nav) are unaffected.
+  positionerClassName,
   align = "center",
   sideOffset = 4,
   side,
@@ -28,7 +36,7 @@ function PopoverContent({
   Pick<
     React.ComponentProps<typeof PopoverPrimitive.Positioner>,
     "align" | "sideOffset" | "side" | "alignOffset"
-  > & { className?: string }) {
+  > & { className?: string; positionerClassName?: string }) {
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Positioner
@@ -36,6 +44,8 @@ function PopoverContent({
         sideOffset={sideOffset}
         side={side}
         alignOffset={alignOffset}
+        // SOLVRO PATCH: see positionerClassName comment above.
+        className={cn(positionerClassName)}
       >
         <PopoverPrimitive.Popup
           data-slot="popover-content"

@@ -19,9 +19,11 @@ import { CSS } from "@dnd-kit/utilities";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "../ProjectDetail";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
+import { DateField } from "@/components/DateField";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { commitDraft, dayFromIso } from "@/lib/dateField";
 import {
   type Priority,
   type Section,
@@ -236,6 +238,7 @@ export function ProjectList() {
   }
 
   function setDates(task: Task, startDate: string | null, dueDate: string | null) {
+    if (startDate === task.startDate && dueDate === task.dueDate) return;
     updateTask.mutate({ id: task.id, patch: { startDate, dueDate } });
   }
 
@@ -975,60 +978,22 @@ function DueDateEditor({
   dueISO: string | null;
   onSave: (start: string | null, due: string | null) => void;
 }) {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState(dueISO ? dueISO.slice(0, 10) : "");
-
   if (!canEdit) {
     return <span className="text-[12px] text-on-surface-variant">{fmt(dueISO)}</span>;
   }
 
+  const day = dayFromIso(dueISO);
+
   return (
-    <span className="relative inline-block">
-      <button
-        type="button"
-        onClick={() => {
-          setValue(dueISO ? dueISO.slice(0, 10) : "");
-          setOpen(true);
-        }}
-        className="text-left text-[12px] text-on-surface-variant hover:text-primary"
-      >
-        {fmt(dueISO)}
-      </button>
-      {open && (
-        <>
-          <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-20 mt-1 rounded-lg border border-outline-variant bg-surface-container-lowest p-2 shadow-overlay">
-            <input
-              autoFocus
-              type="date"
-              value={value}
-              onChange={(e) => setValue(e.target.value)}
-              className="rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs focus:border-primary focus:outline-hidden"
-            />
-            <div className="mt-1.5 flex justify-end gap-1">
-              <button
-                type="button"
-                onClick={() => setOpen(false)}
-                className="rounded-sm px-2 py-0.5 text-[11px] text-on-surface-variant hover:bg-surface-container"
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const iso = value ? new Date(`${value}T00:00:00`).toISOString() : null;
-                  onSave(startISO, iso);
-                  setOpen(false);
-                }}
-                className="rounded-sm bg-primary px-2 py-0.5 text-[11px] font-bold text-on-primary hover:bg-primary/90"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </>
-      )}
-    </span>
+    <DateField
+      variant="bare"
+      className="text-[12px] font-[450] text-on-surface-variant hover:text-primary"
+      value={day}
+      onChange={(next) => onSave(startISO, commitDraft(next, dueISO))}
+      clearable
+      triggerLabel={fmt(dueISO)}
+      aria-label={day ? `Due date, currently ${fmt(dueISO)}` : "Due date"}
+    />
   );
 }
 
