@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { dateToDay, dayFromIso } from "@/lib/dateField";
 import {
   type NoteVisibility,
   type ProjectSummary,
@@ -313,8 +314,10 @@ function ProjectCard({
   const done = tasks.filter((t) => t.status === "DONE").length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
   const today = startOfToday();
+  // Compare calendar days, not instants —
+  // lexicographic "yyyy-MM-dd" comparison is calendar-correct (dateField.ts).
   const overdue = tasks.filter(
-    (t) => t.status !== "DONE" && t.dueDate && new Date(t.dueDate) < today,
+    (t) => t.status !== "DONE" && t.dueDate && dayFromIso(t.dueDate)! < dateToDay(today)!,
   ).length;
   const openRisks = risks.filter((r) => r.status === "OPEN").length;
   const notesToday = notes.filter(

@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { useProjectContext } from "../ProjectDetail";
+import { dateToDay, dayFromIso } from "@/lib/dateField";
 import { type Task, useProjectTasks } from "@/lib/queries";
 
 export function ProjectOverview() {
@@ -284,8 +285,10 @@ function computeStats(tasks: Task[]): Stats {
   const done = tasks.filter((t) => t.status === "DONE").length;
   const pct = total === 0 ? 0 : Math.round((done / total) * 100);
   const today = startOfToday();
+  // Compare calendar days, not instants —
+  // lexicographic "yyyy-MM-dd" comparison is calendar-correct (dateField.ts).
   const overdue = tasks.filter(
-    (t) => t.status !== "DONE" && t.dueDate && new Date(t.dueDate) < today,
+    (t) => t.status !== "DONE" && t.dueDate && dayFromIso(t.dueDate)! < dateToDay(today)!,
   ).length;
   return { total, topLevel, subtasks, done, pct, overdue };
 }
@@ -307,7 +310,7 @@ function buildSCurve(tasks: Task[]): SCurve {
     if (t.dueDate) dateSet.add(t.dueDate.slice(0, 10));
     if (t.baselineDueDate) dateSet.add(t.baselineDueDate.slice(0, 10));
   }
-  const today = startOfToday().toISOString().slice(0, 10);
+  const today = dateToDay(startOfToday())!;
   dateSet.add(today);
 
   const sortedDates = Array.from(dateSet).sort();

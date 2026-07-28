@@ -23,7 +23,7 @@ import { DateField } from "@/components/DateField";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
-import { commitDraft, dayFromIso } from "@/lib/dateField";
+import { commitDraft, dayFromIso, dayToDate } from "@/lib/dateField";
 import {
   type Priority,
   type Section,
@@ -1104,6 +1104,10 @@ function groupBySection(
 }
 
 function fmt(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  // Derive the day via the UTC date-part
+  // (`dayFromIso`), not a local-time parse of the ISO instant — keeps this
+  // label's day consistent with the tree cell, picker seed, and Gantt bar.
+  const d = dayToDate(dayFromIso(iso));
+  if (!d) return "—";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }

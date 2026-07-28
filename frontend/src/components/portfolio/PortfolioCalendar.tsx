@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { ProjectStatusChip } from "@/components/StatusChip";
+import { dayFromIso, dayToDate } from "@/lib/dateField";
 import { parseISODate } from "@/lib/gantt/geometry";
 import type { PortfolioProjectRow } from "@/lib/queries";
 
@@ -263,8 +264,15 @@ export function PortfolioCalendar({
 // ─────────────────────────────────────────────────────────────────────────
 
 export function fmtDate(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(undefined, {
+  // `iso` is a rollup instant
+  // (`PortfolioProjectRow.start`/`.end`, min/max of `Task.startDate`/
+  // `dueDate` — see backend/src/lib/portfolio.ts) and therefore day-semantic;
+  // derive the day via the UTC date-part, not a local-time parse, so the
+  // tooltip agrees with the bar (which already reads via `parseISODate`,
+  // the same UTC-slice pattern).
+  const d = dayToDate(dayFromIso(iso));
+  if (!d) return "—";
+  return d.toLocaleDateString(undefined, {
     year: "numeric",
     month: "short",
     day: "numeric",

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { InlineDateRangeEditor } from "@/components/InlineDateRangeEditor";
+import { dayFromIso, dayToDate } from "@/lib/dateField";
 import { fmtDateRangeDDMM } from "@/lib/gantt/geometry";
 import { SECTION_COLOR_PRESETS } from "@/lib/gantt/palette";
 import type { Task } from "@/lib/queries";
@@ -14,7 +15,12 @@ import { cn } from "@/lib/utils";
 // structure/classNames, as its own small component so it can mount via a
 // ReUI GanttColumn render prop instead of a bespoke list row.
 
-const isoToDate = (iso: string | null): Date | null => (iso ? new Date(iso) : null);
+// A task date's calendar day is the UTC
+// date-part of its stored ISO instant (see `@/lib/dateField`'s module doc).
+// `dayFromIso` derives that day via the UTC slice; `dayToDate` hands back the
+// LOCAL-midnight Date `fmtDateRangeDDMM` expects — never a raw local-time
+// `new Date(iso)` parse of the ISO instant.
+const isoToDate = (iso: string | null): Date | null => dayToDate(dayFromIso(iso));
 
 interface TaskDatesCellProps {
   task: Task;

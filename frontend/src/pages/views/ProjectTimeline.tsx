@@ -6,6 +6,7 @@ import { PriorityBadge } from "@/components/PriorityBadge";
 import { TaskStatusChip } from "@/components/StatusChip";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { dateToDay, dayFromIso, dayToDate } from "@/lib/dateField";
 import { type Priority, type Task, type TaskStatus, useProjectTasks, useUpdateTask } from "@/lib/queries";
 
 const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
@@ -19,6 +20,10 @@ export function ProjectTimeline() {
   const [editTask, setEditTask] = useState<Task | null>(null);
 
   const canEdit = hasPermission(user, "task:write");
+
+  // Hoisted once per render of the list rather than once per TimelineItem —
+  // the day string is identical for every item in a single render pass.
+  const todayDay = dateToDay(startOfToday());
 
   const ordered = useMemo(() => {
     if (!tasks) return [];
@@ -81,6 +86,7 @@ export function ProjectTimeline() {
               task={task}
               subtasks={subtasksOf.get(task.id) ?? []}
               canEdit={canEdit}
+              todayDay={todayDay}
               onChangeStatus={(status) => updateTask.mutate({ id: task.id, patch: { status } })}
               onEdit={() => setEditTask(task)}
             />
@@ -105,17 +111,21 @@ function TimelineItem({
   task,
   subtasks,
   canEdit,
+  todayDay,
   onChangeStatus,
   onEdit,
 }: {
   task: Task;
   subtasks: Task[];
   canEdit: boolean;
+  todayDay: string | null;
   onChangeStatus: (status: TaskStatus) => void;
   onEdit: () => void;
 }) {
-  const overdue =
-    task.dueDate && task.status !== "DONE" && new Date(task.dueDate) < startOfToday();
+  // Compare calendar days, not instants —
+  // lexicographic "yyyy-MM-dd" comparison is calendar-correct (dateField.ts).
+  // `todayDay` is hoisted by the caller (once per render, not once per item).
+  const overdue = task.dueDate && task.status !== "DONE" && dayFromIso(task.dueDate)! < todayDay!;
 
   return (
     <li className="relative mb-4 ml-6">
@@ -196,8 +206,11 @@ function TimelineItem({
 }
 
 function fmt(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(undefined, {
+  // Derive the day via the UTC date-part,
+  // not a local-time parse of the ISO instant.
+  const d = dayToDate(dayFromIso(iso));
+  if (!d) return "—";
+  return d.toLocaleDateString(undefined, {
     month: "short",
     day: "numeric",
   });
