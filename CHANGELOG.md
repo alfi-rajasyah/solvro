@@ -15,6 +15,52 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-29 — Automated timezone regression coverage for the date-picker fix
+
+**`e2e/tests/date-picker.spec.ts`** — added a browser-timezone regression test that opens the app under a forced `Asia/Jakarta` (UTC+7) context, picks two dates through the task date picker, and asserts the saved values are the exact UTC-midnight instants of the picked calendar days — not a day shifted backward, which is what the app used to save for users east of UTC. The test also confirms the picked days still display correctly after a page reload, in the task list, in the Gantt tree's Dates cell (desktop), and when reopening the picker. The suite's existing date-picker tests were updated to match: a helper that used to reproduce the old backward-shifting behavior for its assertions now expects the corrected behavior directly, and comments describing the old bug were rewritten as historical notes.
+
+### Fixed — 2026-07-28 — Every task-date read path unified on the UTC date-part (date contract)
+
+Local-timezone `new Date(iso)` parses of the four day-semantic fields (`Task.startDate`/`dueDate`/`baselineStartDate`/`baselineDueDate`) could render a different calendar day than the Gantt bar or the date picker on hosts east of UTC. All display/comparison reads now derive the day via `dayFromIso` (UTC date-part), matching the picker seeds and the Gantt engine:
+
+- **Display labels** — `gantt-v2/TreeCells.tsx` (`isoToDate`), `pages/views/ProjectList.tsx` (`fmt`), `pages/Tasks.tsx` (`fmt`), `pages/views/ProjectTimeline.tsx` (`fmt`), `components/TaskPanel.tsx` (`fmtShort`), `components/kanban-v2/cards.tsx` (`getDuration` no-start fallback) — all via `dayToDate(dayFromIso(iso))`, identical output formatting preserved.
+- **Overdue checks** — `pages/Tasks.tsx`, `pages/views/ProjectTimeline.tsx`, `pages/DailyReview.tsx`, `pages/views/ProjectOverview.tsx` — `new Date(dueDate) < today` replaced with lexicographic day-string comparison (`dayFromIso(dueDate)! < dateToDay(today)!`); existing status/null guards preserved.
+- **"Today" derivation** — `pages/views/ProjectOverview.tsx`'s S-curve "today" reference (`startOfToday().toISOString().slice(0,10)` — read as *yesterday* before 07:00 UTC+7) now derives via `dateToDay(startOfToday())`. (A second UTC-clock "today", the export filename, is covered in the export entry below.)
+- **Portfolio rollups** — `components/portfolio/PortfolioCalendar.tsx`'s `fmtDate` (also used by `Executive.tsx`) now derives its day via the UTC date-part of the portfolio rollup instant, matching the bars it labels — the rollup indirection (`PortfolioProjectRow.start`/`.end`, min/max of task dates server-side) had hidden it from a field-name search. The per-row `dateToDay(startOfToday())` calls in `Tasks.tsx`/`ProjectTimeline.tsx` were also hoisted to one per list render.
+- Already-canonical UTC-slice readers (`gantt-v2/adapter.ts`, `GanttOverlay.tsx`, `lib/gantt/geometry.ts`), absolute-instant comparators (sorts, duration deltas), and true-instant fields (`createdAt`, `baselineLockedAt`) were audited and deliberately left unchanged.
+
+### Added — 2026-07-28 — One-off data-normalization script for pre-fix corrupted day dates (date contract)
+
+**`backend/scripts/normalize-day-dates.ts`** (new) — repairs `Task.startDate`/`dueDate`/`baselineStartDate`/`baselineDueDate` rows written by the pre-fix local-midnight serialization bug (see the dateField.ts entry below). Exports a pure `roundToUtcMidnight(d: Date): Date`: UTC time-of-day `>= 12:00:00.000` rounds up to the next UTC midnight (repairs the east-of-UTC write pattern, e.g. `17:00:00.000Z` → next-day `00:00:00.000Z`); `< 12:00:00.000` rounds down to same-day UTC midnight (repairs a hypothetical west-of-UTC write); exact midnight untouched. Dry-run by default (per-project counts, before→after per row, distinct-time-part summary); `--apply` performs the updates in 500-row `$transaction` batches and re-verifies 0 remaining non-midnight rows. Audit-instant columns (`createdAt`, `updatedAt`, `baselineLockedAt`, `receivedAt`, …) are never touched — only the four day-semantic columns are scanned. The `PrismaClient` is constructed inside `main()` rather than at module scope, so importing the module (as the pure-helper test does) can never open a DB connection.
+
+**`backend/test/normalizeDayDates.test.ts`** (new) — pure-helper vitest suite for `roundToUtcMidnight` (no DB): exact-midnight, `17:00:00.000Z`/`23:59:59.999Z` round-up, `11:59:59.999Z`/`00:00:00.001Z` round-down, month/year rollover.
+
+**Dev DB (`solvro`) — repaired** (2026-07-28): 37 non-midnight rows across 25 tasks / 16 projects, all with the expected `17:00:00.000Z` UTC+7 signature, normalized to UTC midnight; post-apply verification confirmed 0 remaining. Prod is untouched — the script must be run once against the existing deployment (`docker compose exec backend npx tsx scripts/normalize-day-dates.ts` to dry-run, then again with `--apply`); it is idempotent, so re-running is safe.
+
+### Fixed — 2026-07-28 — Local "today" and export-overdue boundaries derive from calendar days (date contract)
+
+**`frontend/src/components/gantt-v2/SolvroGantt.tsx`** — the baseline-lock dialog's default "as of" day now derives from the local calendar date (`dateToDay(new Date())`) instead of the UTC clock (`toISOString().slice(0,10)`), which read as *yesterday* before 07:00 on hosts east of UTC. The `baselineLockedAt` instant path is deliberately untouched (locally written, locally displayed — self-consistent).
+
+**`frontend/src/lib/export/projectExport.ts`** — the export's overdue-task count now compares calendar-day strings (`dayFromIso(dueDate) < dateToDay(today)`, lexicographic on `yyyy-MM-dd`) instead of an ISO instant against local now, so a task due today is never miscounted as overdue near a timezone boundary. Status/null guards unchanged; note filtering (CUSTOMER_FACING-only) untouched.
+
+**`frontend/src/lib/export/projectExport.test.ts`** (new) — first test coverage for the export module: overdue boundary cases (due-today, due-yesterday, DONE-yesterday) plus a guardrail regression test asserting an INTERNAL note never appears in export output.
+
+The export packet's downloaded **filename** also stamps the local calendar day (`dateToDay(startOfToday())`) instead of the UTC clock date — before 07:00 on a UTC+7 host it named the file with yesterday's date — with a matching filename regression test in the suite. Note filtering (CUSTOMER_FACING-only) is untouched throughout.
+
+### Changed — 2026-07-28 — CI + gates run the frontend suite a second time under `TZ=Asia/Jakarta`
+
+**`.github/workflows/ci.yml`** — new step after the frontend test run repeats `npm test` with `TZ: Asia/Jakarta`. The date-contract invariant (`dateField.ts`'s UTC-midnight serialization) is indistinguishable from the old local-midnight bug under a UTC clock — the single-zone run was structurally unable to catch a regression; Asia/Jakarta (UTC+7) is the zone that exposed the original walk-back.
+
+### Fixed — 2026-07-28 — Date pickers no longer walk task dates back one day east of UTC (date contract)
+
+**`frontend/src/lib/dateField.ts`** — `isoFromDay` now derives the stored ISO instant from **UTC midnight** of the picked day (`${day}T00:00:00.000Z`) instead of local midnight. Root cause of the reported bug (picking 5–6 July rendered 4–5 July in the Gantt on a UTC+7 host): the writer serialized local midnight while every canonical reader (`dayFromIso`, the Gantt adapter's `slice(0,10)`) takes the UTC date-part, so east of UTC the stored day-part had already walked back one day at save time. `isoFromDay`/`dayFromIso` are now exact inverses in every timezone; the canonical rule — a task date's calendar day is the UTC date-part of its stored instant — is documented in the module doc, which drops its former "byte-identical to legacy" framing. `commitDraft`'s untouched-draft passthrough is unchanged and still load-bearing (untouched fields stay byte-identical; pre-fix corrupted instants persist until the one-off normalization script — see the entry above — repairs them).
+
+**`frontend/src/lib/dateField.test.ts`** — the "legacy equivalence" describe block (which pinned byte-parity with the defective local-midnight helper) and its legacy fixtures are replaced by inverse-invariant tests: `isoFromDay(day) === ${day}T00:00:00.000Z` and `dayFromIso(isoFromDay(day)) === day` across the sample + DST-adjacent + leap-day sets, plus non-midnight-instant slicing. Suite verified green under both `TZ=UTC` and `TZ=Asia/Jakarta`. All other tests byte-untouched.
+
+**`frontend/src/components/TaskFormModal.tsx`** — `passthroughDate` and its 17-line "out of scope" comment deleted; edit-mode date commits now reuse `commitDraft`, which post-fix is semantically identical (untouched passthrough + UTC-midnight emit).
+
+Additionally, create-mode Start/Due conversion also goes through `isoFromDay` (was a hand-rolled `new Date(...).toISOString()`; byte-identical output for picker-shaped input, but unparsable input now yields `null` instead of a thrown `RangeError`), edit-mode draft seeding goes through `dayFromIso` instead of a raw `.slice(0, 10)`, `dayFromIso`'s validity probe is Z-suffixed so both ISO helpers read UTC on their face, and stale doc comments in `dateField.ts`, `dateField.test.ts` (prose only, assertions untouched), `DateRangeField.tsx`, `DateField.tsx`, and `InlineDateRangeEditor.tsx` were aligned with the new convention.
+
 ### Changed — 2026-07-28 — `.gitignore` consolidated: one `docs/` rule, dead entries dropped, root env template anchored
 
 **`.gitignore`** — cleanup pass so the tracked surface stays exactly the app's core (`backend/`, `frontend/`, `e2e/`, `ci/`, `.github/`, `setup.sh`, `README.md`, `CHANGELOG.md`, `.gitguardian.yaml`, `.gitignore` — verified via `git ls-files` before and after; **the tracked set is unchanged by this commit**, only which *untracked* paths stay invisible):
