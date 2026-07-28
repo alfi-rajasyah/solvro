@@ -18,9 +18,11 @@ frontend/tailwind.config.d.ts
 .env
 .env.local
 .env.*.local
-# The ROOT env template is local-only (it pairs with the local compose below).
+# The ROOT env template is local-only (it pairs with the local compose below),
+# and frontend/.env.example is a local dev note (its only variable is optional).
 # Anchored on purpose: backend/.env.example IS tracked as the public template.
 /.env.example
+/frontend/.env.example
 
 # --- Local Docker (the canonical compose definition lives inside setup.sh) ---
 docker-compose.override.yml
