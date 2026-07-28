@@ -1,4 +1,5 @@
 import { format } from "date-fns";
+import type { DateRange } from "react-day-picker";
 
 /**
  * Pure date helpers backing `DateField` (frontend/src/components/DateField.tsx)
@@ -118,4 +119,106 @@ export function formatDisplay(day: string | null): string {
 export function commitDraft(draftDay: string | null, originalIso: string | null): string | null {
   if (draftDay === dayFromIso(originalIso)) return originalIso;
   return isoFromDay(draftDay);
+}
+
+/**
+ * `DateRangeField`'s DISPLAY-boundary mapping: a draft day-string PAIR (the
+ * component's actual source of truth, see `DateRangeField.tsx`'s module doc
+ * for why) -> react-day-picker's `DateRange`, fed to `Calendar`'s `selected`
+ * prop only. Never used to derive what gets emitted on Apply — that's the
+ * pair itself, verbatim.
+ *
+ * - Both null -> `undefined` (nothing highlighted).
+ * - One-sided (e.g. a due-only task) -> `{ from: theDay, to: theDay }` — RDP
+ *   has no one-sided `selected` shape, so a single-day range is the closest
+ *   display that still highlights the known day without inventing a second
+ *   one.
+ * - Both set -> `{ from, to }`.
+ */
+export function rangeFromPair(start: string | null, end: string | null): DateRange | undefined {
+  const from = dayToDate(start);
+  const to = dayToDate(end);
+  if (from && to) return { from, to };
+  const theDay = from ?? to;
+  return theDay ? { from: theDay, to: theDay } : undefined;
+}
+
+/**
+ * The inverse of `rangeFromPair`: react-day-picker's `onSelect` callback
+ * argument -> a draft day-string pair. `range.to` falls back to `range.from`
+ * so a click that only sets `from` (RDP's `addToRange` does this whenever
+ * `min` is left at its default of 0 starting from an empty selection — see
+ * `DateRangeField.tsx`'s capability-trade-off note) still seeds both sides
+ * the same day, matching `rangeFromPair`'s one-sided display convention
+ * above rather than producing a `{ from, to: null }` split the rest of this
+ * module doesn't model. `range` itself `undefined` — RDP's own
+ * re-click-to-deselect signal — maps to both-null.
+ */
+export function pairFromRange(range: DateRange | undefined): [string | null, string | null] {
+  if (!range) return [null, null];
+  return [dateToDay(range.from ?? null), dateToDay(range.to ?? range.from ?? null)];
+}
+
+/**
+ * `DateRangeField`'s `onSelect` boundary (fix round 3, plan Task 3.5 polish):
+ * react-day-picker's callback argument -> the next draft pair. `range ===
+ * undefined` is RDP's own re-click-to-DESELECT signal
+ * (`selection/useRange.js`'s `select()`, via `addToRange`'s "adding a date
+ * that is equal to both start and end of the range" branch, fires whenever
+ * `required` is left at its default `false`) — NOT a user request to wipe the
+ * draft, so it's ignored here and `current` is returned unchanged (by
+ * reference). This matters for a one-sided draft (start-only/due-only) or ANY
+ * milestone task (the backend forces `startDate === dueDate`, see
+ * `tasks.ts`'s milestone lockstep): `rangeFromPair` fabricates a same-day
+ * `{from: D, to: D}` `selected` for both shapes, so clicking that single
+ * highlighted day is an entirely ordinary interaction that fires this exact
+ * deselect signal — not an edge case. The ONLY path to a both-null draft is
+ * `DateRangeField`'s explicit Clear button.
+ *
+ * A defined `range` maps through `pairFromRange` as normal.
+ */
+export function nextDraftFromSelection(
+  range: DateRange | undefined,
+  current: [string | null, string | null],
+): [string | null, string | null] {
+  if (!range) return current;
+  return pairFromRange(range);
+}
+
+/**
+ * `DateRangeField`'s Apply-time ordering fix (fix round 2, plan Task 3.5).
+ * Historically-stored `Task.startDate`/`dueDate` pairs can already be
+ * inverted (`startDate > dueDate`) — nothing upstream of this component
+ * enforces ordering (no relational DB check, and the old two-field editor's
+ * submit-time `start > end` clamp is gone; range mode's structural ordering
+ * only covers a pair `addToRange` builds up itself from an EMPTY selection,
+ * not one SEEDED already-inverted via `rangeFromPair` — see
+ * `DateRangeField.tsx`'s `handleSelect` doc for why RDP doesn't self-correct
+ * that case).
+ *
+ * Swaps `draftStart`/`draftEnd` when both are set and `draftStart >
+ * draftEnd` (plain string comparison is correct for `"yyyy-MM-dd"` — the
+ * same order as calendar order) — but ONLY when at least one draft differs
+ * from its seed (`seedStart`/`seedEnd`, the props `DateRangeField` last
+ * reseeded the draft from on open). This guard is load-bearing: an untouched
+ * open→Apply on an inverted STORED pair (`draftStart === seedStart &&
+ * draftEnd === seedEnd`, both still inverted) must still emit the seed
+ * values verbatim, unswapped — swapping an untouched pair would fabricate a
+ * change the user never made and break `commitDraft`'s untouched-passthrough
+ * byte-parity at the call site (`InlineDateRangeEditor`/`TaskFormModal`).
+ *
+ * One-sided (`null` on either side) and both-null drafts are returned
+ * unchanged regardless of the changed check — there's no pair to order.
+ */
+export function normalizePair(
+  draftStart: string | null,
+  draftEnd: string | null,
+  seedStart: string | null,
+  seedEnd: string | null,
+): [string | null, string | null] {
+  const changed = draftStart !== seedStart || draftEnd !== seedEnd;
+  if (changed && draftStart && draftEnd && draftStart > draftEnd) {
+    return [draftEnd, draftStart];
+  }
+  return [draftStart, draftEnd];
 }

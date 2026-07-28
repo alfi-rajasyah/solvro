@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState, type FormEvent } from "react";
-import { DateField } from "./DateField";
+import { DateRangeField } from "./DateRangeField";
 import { Drawer } from "./Drawer";
 import { LabelPicker } from "./LabelPicker";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
-import { dayFromIso, dayToDate, formatDisplay } from "@/lib/dateField";
+import { dayFromIso } from "@/lib/dateField";
 import {
   type Priority,
   type Task,
@@ -381,41 +381,18 @@ export function TaskFormModal(props: TaskFormModalProps) {
             </select>
           </FieldRow>
 
-          {/* Start Date */}
-          <FieldRow icon="calendar_month" label="Start Date">
-            <DateField
+          {/* Dates (merged Start/Due, plan Task 3.5 — one between-style range picker) */}
+          <FieldRow icon="calendar_month" label="Dates">
+            <DateRangeField
               variant="bare"
-              value={startDate || null}
-              onChange={(d) => setStartDate(d ?? "")}
-              disabled={!canEdit}
-              clearable
-              aria-label={
-                startDate ? `Start date, currently ${formatDisplay(startDate)}` : "Start date"
-              }
-            />
-          </FieldRow>
-
-          {/* Due Date */}
-          <FieldRow icon="calendar_today" label="Due Date">
-            <DateField
-              variant="bare"
-              value={dueDate || null}
-              onChange={(d) => setDueDate(d ?? "")}
-              disabled={!canEdit}
-              clearable
-              aria-label={dueDate ? `Due date, currently ${formatDisplay(dueDate)}` : "Due date"}
-              calendarProps={{
-                disabled: startDate ? { before: dayToDate(startDate)! } : undefined,
-                // react-day-picker computes its initial month as
-                // `month || defaultMonth || today`, never consulting
-                // `selected` — an existing due date's own month must win
-                // here (same precedent as InlineDateRangeEditor.tsx's DUE
-                // field), or opening this picker on a due date set in a
-                // different month than start would silently land on the
-                // START month instead. Falls back to startDate (no-due-yet
-                // nicety) and finally undefined (today).
-                defaultMonth: dayToDate(dueDate) ?? dayToDate(startDate) ?? undefined,
+              start={startDate || null}
+              end={dueDate || null}
+              onApply={(s, e) => {
+                setStartDate(s ?? "");
+                setDueDate(e ?? "");
               }}
+              disabled={!canEdit}
+              clearable
             />
           </FieldRow>
 
