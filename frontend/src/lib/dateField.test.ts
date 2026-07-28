@@ -13,40 +13,21 @@ import {
 } from "./dateField";
 
 /**
- * Legacy pair from the pre-Task-2 `InlineDateRangeEditor.tsx:12-22`,
- * reimplemented here as a fixture (not imported from any component — it's a
- * pure comparison target, not a dependency) so this suite can assert
- * byte-identical output against the behavior every call site relied on
- * before the DateField swap.
- */
-function legacyToInputValue(iso: string | null): string {
-  if (!iso) return "";
-  return iso.slice(0, 10);
-}
-
-function legacyFromInputValue(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
-/**
- * Timezone-independence note: this suite was verified green under both
+ * Timezone-independence note: this suite must stay green under both
  * `TZ=UTC` and `TZ=Asia/Jakarta` (a positive/east-of-UTC offset — the zone
- * that exposed the picker walk-back bug this task fixes, see
+ * that exposed the picker walk-back bug this phase fixes, see
  * `dateField.ts`'s top comment). Run both to reproduce:
  * `docker compose exec frontend npm test` and
  * `docker compose exec -e TZ=Asia/Jakarta frontend npm test`.
  *
- * Post-Task-2, `dayToDate`/`dateToDay` operate purely on local Y/M/D — no
- * ISO round-trip, no `.toISOString()` — so their round-trips are trivially
- * TZ-independent and can be asserted directly (unlike the pre-Task-2
- * `isoToLocalDate`/`localDateToIso` pair, which needed a same-instant
- * invariant to express a TZ-independent property). The ISO-touching
- * helpers (`dayFromIso`, `isoFromDay`) still carry the classic UTC-slice
- * off-by-one deliberately, for byte-parity with the legacy pair above — see
- * the "legacy equivalence" describe block below and `dateField.ts`'s doc.
+ * `dayToDate`/`dateToDay` operate purely on local Y/M/D — no ISO
+ * round-trip, no `.toISOString()` — so their round-trips are trivially
+ * TZ-independent and can be asserted directly. The ISO-touching helpers
+ * (`dayFromIso`, `isoFromDay`) are now TZ-independent by construction too:
+ * `isoFromDay` always derives UTC midnight from the day string and
+ * `dayFromIso` always reads the UTC date-part back, so the two are exact
+ * inverses of one another regardless of host timezone — see the
+ * UTC-midnight invariant describe block below and `dateField.ts`'s doc.
  */
 describe("dayToDate / dateToDay round-trip", () => {
   const sampleDays = [
@@ -162,59 +143,54 @@ describe("formatDisplay", () => {
   });
 });
 
-describe("legacy equivalence: dayFromIso/isoFromDay match toInputValue/fromInputValue byte-for-byte", () => {
-  const sampleIsos = [
-    "2026-07-26T00:00:00.000Z",
-    "2026-07-26T15:42:07.123Z",
-    "2026-01-01T00:00:00.000Z",
-    "2026-12-31T23:59:59.999Z",
-    "2028-02-29T00:00:00.000Z",
-    "2026-03-29T00:00:00.000Z",
-    "2026-10-25T00:00:00.000Z",
+describe("isoFromDay / dayFromIso: UTC-midnight canonical inverse invariant", () => {
+  // Same day sets the rest of this suite already exercises for dayToDate/
+  // dateToDay (sampleDays, incl. the leap day) and the DST-adjacent block
+  // below — re-asserted here for the ISO boundary specifically.
+  const sampleDays = [
+    "2026-07-26",
+    "2026-01-01",
+    "2026-12-31",
+    "2026-02-28",
+    "2028-02-29", // leap day
   ];
+  const dstAdjacentDays = [
+    "2026-03-28",
+    "2026-03-29",
+    "2026-03-30",
+    "2026-10-24",
+    "2026-10-25",
+    "2026-10-26",
+  ];
+  const allDays = [...sampleDays, ...dstAdjacentDays];
 
-  for (const iso of sampleIsos) {
-    it(`dayFromIso matches legacy toInputValue for ${iso}`, () => {
-      expect(dayFromIso(iso)).toBe(legacyToInputValue(iso));
+  for (const day of allDays) {
+    it(`isoFromDay(${day}) is exactly UTC midnight of that day`, () => {
+      expect(isoFromDay(day)).toBe(`${day}T00:00:00.000Z`);
+    });
+
+    it(`dayFromIso(isoFromDay(${day})) round-trips back to ${day}`, () => {
+      expect(dayFromIso(isoFromDay(day))).toBe(day);
     });
   }
 
-  const sampleDays = ["2026-07-26", "2026-01-01", "2026-12-31", "2028-02-29"];
-
-  for (const day of sampleDays) {
-    it(`isoFromDay matches legacy fromInputValue for ${day}`, () => {
-      expect(isoFromDay(day)).toBe(legacyFromInputValue(day));
-    });
-  }
-
-  for (const iso of sampleIsos) {
-    it(`isoFromDay(dayFromIso(iso)) matches legacy fromInputValue(toInputValue(iso)) for ${iso}`, () => {
-      const legacyResult = legacyFromInputValue(legacyToInputValue(iso));
-      const newResult = isoFromDay(dayFromIso(iso));
-      expect(newResult).toBe(legacyResult);
-    });
-  }
-
-  it("both sides agree null propagates for null input", () => {
-    expect(isoFromDay(dayFromIso(null))).toBe(legacyFromInputValue(legacyToInputValue(null)));
-  });
-
-  it("both sides agree empty-string / no-selection propagates to null", () => {
-    expect(legacyFromInputValue(legacyToInputValue(""))).toBeNull();
-    expect(isoFromDay(dayFromIso(""))).toBeNull();
+  it("dayFromIso still derives the UTC date-part of an arbitrary (non-midnight) instant", () => {
+    expect(dayFromIso("2026-07-26T15:42:07.123Z")).toBe("2026-07-26");
   });
 });
 
 describe("commitDraft", () => {
   it("untouched passthrough: draft unchanged from original returns the original ISO unchanged", () => {
     // Non-midnight fixture deliberately: for a midnight-UTC ISO,
-    // isoFromDay(dayFromIso(iso)) === iso under a UTC system clock, which
-    // makes the passthrough branch unobservable — this test would stay
-    // green even with the `if (draftDay === dayFromIso(originalIso))` guard
-    // deleted from commitDraft. A non-midnight ISO keeps its time-of-day
-    // component only via the passthrough, so deleting the guard collapses
-    // it to local midnight and this assertion goes red, in every zone
-    // including UTC.
+    // isoFromDay(dayFromIso(iso)) === iso holds in every timezone now (not
+    // just under a UTC system clock, as it did before this fix) — that
+    // would make the passthrough branch unobservable with a midnight-UTC
+    // fixture, since deleting the
+    // `if (draftDay === dayFromIso(originalIso))` guard from commitDraft
+    // would still round-trip to the same value. A non-midnight ISO keeps
+    // its time-of-day component only via the passthrough, so deleting the
+    // guard collapses it to UTC midnight of the same day and this
+    // assertion goes red, in every zone.
     const originalIso = "2026-07-26T15:42:07.123Z";
     const draftDay = dayFromIso(originalIso); // "2026-07-26"
     expect(commitDraft(draftDay, originalIso)).toBe(originalIso);
@@ -225,7 +201,8 @@ describe("commitDraft", () => {
     // written in ("yyyy-MM-ddT00:00:00.000Z") — kept as its own case so
     // that shape stays covered, even though (unlike the non-midnight case
     // above) this fixture alone can't distinguish the passthrough branch
-    // from isoFromDay(dayFromIso(iso)) under a UTC system clock.
+    // from isoFromDay(dayFromIso(iso)), which now round-trips a
+    // midnight-UTC instant unchanged in every timezone.
     const originalIso = "2026-07-26T00:00:00.000Z";
     const draftDay = dayFromIso(originalIso);
     expect(commitDraft(draftDay, originalIso)).toBe(originalIso);
@@ -235,14 +212,13 @@ describe("commitDraft", () => {
     expect(commitDraft(null, null)).toBeNull();
   });
 
-  it("untouched passthrough is the fix for the legacy walk-back bug: repeated no-op commits never change the stored ISO", () => {
-    // In a positive-offset timezone (e.g. Asia/Jakarta), re-deriving the ISO
-    // from the day string on every save used to walk the stored date back a
-    // day each time (see dateField.ts's top comment). A non-midnight
-    // fixture (see the rationale in the first passthrough test above) also
-    // makes this regression-visible under a UTC system clock: without the
-    // passthrough guard, the first cycle alone would collapse
-    // 15:42:07.123 down to local midnight. Simulate three "reopen and
+  it("untouched passthrough preserves byte-identity across repeated no-op commits: a non-midnight stored ISO never gets rewritten", () => {
+    // Without the untouched-draft passthrough, re-deriving the ISO from the
+    // day string on every save would silently rewrite a non-midnight
+    // stored instant's time-of-day to UTC midnight the moment an untouched
+    // form resaves — a regression visible in every timezone now that
+    // `isoFromDay` is TZ-independent by construction (see the rationale in
+    // the first passthrough test above). Simulate three "reopen and
     // re-save without touching anything" cycles and assert the stored ISO
     // never moves.
     let storedIso: string | null = "2026-07-26T15:42:07.123Z";

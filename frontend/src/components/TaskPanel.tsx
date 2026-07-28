@@ -5,6 +5,7 @@ import { InlineDateRangeEditor } from "./InlineDateRangeEditor";
 import { LabelPicker } from "./LabelPicker";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { dayFromIso, dayToDate } from "@/lib/dateField";
 import {
   type Priority,
   type Task,
@@ -52,8 +53,11 @@ function nextPriority(p: Priority): Priority {
 }
 
 function fmtShort(iso: string | null): string {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  // Derive the day via the UTC date-part,
+  // not a local-time parse of the ISO instant.
+  const d = dayToDate(dayFromIso(iso));
+  if (!d) return "—";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 interface TaskPanelProps {
