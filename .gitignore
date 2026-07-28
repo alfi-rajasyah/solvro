@@ -1,7 +1,6 @@
+# --- Build output ---
 node_modules/
 dist/
-backend/dist/
-frontend/dist/
 frontend/dev-dist/
 *.tsbuildinfo
 .vite/
@@ -14,61 +13,47 @@ frontend/vite.config.d.ts
 frontend/tailwind.config.js
 frontend/tailwind.config.d.ts
 
-# New UI/ — local-only design reference (HTML mockups + Figma source/PDF).
-# Kept out of the repo: the PDF is 163 MB (exceeds GitHub's 100 MB limit)
-# and the HTMLs are dev-only previews, not a build target.
-New UI/
-
+# --- Secrets & local env ---
+# Unanchored .env covers every depth: backend/.env, ci/.env, etc.
 .env
 .env.local
 .env.*.local
+# The ROOT env template is local-only (it pairs with the local compose below),
+# and frontend/.env.example is a local dev note (its only variable is optional).
+# Anchored on purpose: backend/.env.example IS tracked as the public template.
+/.env.example
+/frontend/.env.example
 
-# Local Docker overrides + the deployed compose (setup.sh inlines it; the
-# canonical compose definition lives inside setup.sh, not as a tracked file).
+# --- Local Docker (the canonical compose definition lives inside setup.sh) ---
 docker-compose.override.yml
 docker-compose.yml
 
-# Prisma
+# Prisma dev leftovers
 backend/prisma/migrations/dev.db*
 
-# Playwright e2e artifacts
+# --- Playwright artifacts ---
 e2e/test-results/
 e2e/playwright-report/
 e2e/blob-report/
 
-# Editor / OS
+# --- Editor / OS ---
 .DS_Store
 .vscode/
 .idea/
 *.log
 
-# Claude Code working files (local-only, not for the public repo)
+# --- Local-only agent workflow layer — never pushed (see CLAUDE.md Map) ---
+# CLAUDE.md is unanchored on purpose: it also covers the backend/, frontend/,
+# and e2e/ area contract files.
 CLAUDE.md
 .claude/
-CONFIGURATION.md
 .understand-anything/
+.superpowers/
+# ALL of docs/ is local-only: planning pipeline, reference material, archive,
+# DESIGN.md / CONFIGURATION.md / ISSUES.md. One rule, so a newly created docs
+# subfolder can never leak by omission.
+docs/
 
-# Internal working docs — maintained locally, not part of the public repo
-DESIGN.md
-ISSUES.md
-tasks/
-docs/ideas/
-docs/intent/
-docs/mockups/
-docs/plans/
-docs/prompts/
-docs/archive/
-docs/superpowers/
-
-# Design / product docs — kept locally for reference, not needed in the repo
-UI Design/
-PRD.md
-.env.example
-
-# tsc -b (composite tsconfig.node.json) compiles these .ts configs; ignore the
-# generated .js so they never shadow the .ts sources for PostCSS/Vite resolution.
-/frontend/tailwind.config.js
-/frontend/vite.config.js
-
-# Local CI-stack credentials (see ci/.env.ci.example)
-ci/.env
+# New UI/ — local-only design reference (the Figma PDF is 163 MB, over
+# GitHub's 100 MB limit; the HTMLs are dev-only previews, not a build target).
+New UI/
