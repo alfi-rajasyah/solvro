@@ -1,58 +1,121 @@
 import { format } from "date-fns";
 
 /**
- * Pure date helpers backing `DateField` (frontend/src/components/DateField.tsx).
+ * Pure date helpers backing `DateField` (frontend/src/components/DateField.tsx)
+ * and `InlineDateRangeEditor` (frontend/src/components/InlineDateRangeEditor.tsx).
  * No React here — see the Vitest suite in `dateField.test.ts`.
  *
- * These reproduce the exact ISO<->local-calendar-date semantics the native
- * `<input type="date">` sites used before the swap (see
- * `InlineDateRangeEditor.tsx`'s `toInputValue`/`fromInputValue`, byte-for-byte):
- * the calendar date is always `iso.slice(0, 10)`, and the Date object for that
- * calendar date is always local midnight (`new Date(`${slice}T00:00:00`)`),
- * never a UTC-parsed Date.
+ * Two representations, kept deliberately distinct:
  *
- * This does NOT avoid the classic UTC-slice off-by-one — it deliberately
- * REPRODUCES it, for byte-for-byte parity with the legacy pair. Because
- * `localDateToIso` ends in `.toISOString()`, a timezone east of UTC (positive
- * offset) makes the emitted ISO's date part lag one calendar day behind the
- * day the user picked (local midnight gets serialized to the previous UTC
- * day). `InlineDateRangeEditor.tsx:12-22`'s `fromInputValue` has the exact
- * same drift, so this is intentional parity, not a bug — "fixing" it here
- * would silently change the stored date at every existing call site relative
- * to what they persist today. See `dateField.test.ts`'s
- * "equivalence with the legacy toInputValue/fromInputValue pair" block for
- * the byte-identical comparison, and its round-trip tests for how the drift
- * is verified to be TZ-independent in its effect (same instant, both sides).
+ * - A "day string": `"yyyy-MM-dd"`, no time, no zone. This is what
+ *   `DateField` traffics in as its `value`/`onChange` contract, and what
+ *   draft state holds while a date range is being edited. A day string has
+ *   no timezone to drift across, so parsing it for the Calendar (local
+ *   midnight, `dayToDate`) and re-emitting it after a pick (`dateToDay`) is
+ *   TZ-drift-free by construction — click day N, see day N, in every zone.
+ * - An ISO instant (e.g. `"2026-07-28T00:00:00.000Z"`): the persisted API
+ *   payload currency (`Task.startDate`/`dueDate` etc). Unchanged by this
+ *   module — every helper that touches an ISO string treats it exactly as
+ *   the pre-DateField-swap `InlineDateRangeEditor.tsx` code did
+ *   (`toInputValue`/`fromInputValue`, byte-identical for parsable ISO
+ *   input — `dayFromIso` additionally probes the sliced day for validity,
+ *   a check `toInputValue` lacked, so the two diverge only on unparsable
+ *   input, unreachable with Prisma timestamps): the calendar date is
+ *   always `iso.slice(0, 10)`, and the ISO for a picked day is always
+ *   derived from LOCAL midnight of that day (`new Date(`${day}T00:00:00`)`,
+ *   then `.toISOString()`).
+ *
+ * Why the split exists (root cause of the walk-back bug this module fixes):
+ * an earlier version of `DateField` had `value`/`onChange` carry the ISO
+ * instant directly, transforming through local-midnight -> `toISOString()`
+ * on every pick. East of UTC (positive offset), local midnight serializes to
+ * the *previous* UTC calendar day, so picking July 28 in UTC+7 immediately
+ * re-displayed 27/07/2026 — the freshly emitted ISO's date-part had already
+ * walked back a day before the round-trip back through the picker. Because
+ * `commitDraft` below also used a raw ISO comparison at save time, an
+ * untouched form re-saved in that timezone would walk the *stored* date back
+ * one more day per save (Save → 27 stored → reopen shows 27 → Save again →
+ * 26 stored → ...). Moving `DateField`'s own contract to a plain day string
+ * removes the ISO round-trip from the picker's display path entirely: the
+ * *only* place an ISO instant gets derived from a day string is the save
+ * boundary (`isoFromDay`, via `commitDraft`), once, not on every keystroke of
+ * navigating the calendar. The persisted payload semantics are unchanged —
+ * see `commitDraft`'s doc below for how untouched-draft passthrough
+ * preserves that while still fixing the walk-back.
  */
 
 /**
- * ISO timestamp -> Date at LOCAL midnight of its calendar date.
- * Returns null for null, empty, or unparsable input.
+ * Legacy display boundary (was `InlineDateRangeEditor.tsx`'s `toInputValue`):
+ * ISO timestamp -> plain day string ("yyyy-MM-dd"). Null for null, empty, or
+ * an unparsable slice.
  */
-export function isoToLocalDate(iso: string | null): Date | null {
+export function dayFromIso(iso: string | null): string | null {
   if (!iso) return null;
-  const dayString = iso.slice(0, 10);
-  const local = new Date(`${dayString}T00:00:00`);
-  if (Number.isNaN(local.getTime())) return null;
-  return local;
+  const day = iso.slice(0, 10);
+  const probe = new Date(`${day}T00:00:00`);
+  if (Number.isNaN(probe.getTime())) return null;
+  return day;
 }
 
 /**
- * Date (assumed local midnight of the intended calendar day) -> ISO string.
- * Derives yyyy-MM-dd from the Date's LOCAL year/month/day (not UTC getters),
- * then re-parses that string as local midnight before calling toISOString(),
- * matching the legacy `fromInputValue` round-trip exactly. Null in, null out.
+ * Legacy commit boundary (was `InlineDateRangeEditor.tsx`'s `fromInputValue`):
+ * plain day string -> ISO timestamp, derived from LOCAL midnight of that day.
+ * Byte-identical to the pre-swap helper. Null for null, empty, or an
+ * unparsable day string.
  */
-export function localDateToIso(d: Date | null): string | null {
-  if (!d || Number.isNaN(d.getTime())) return null;
-  const dayString = format(d, "yyyy-MM-dd");
-  const local = new Date(`${dayString}T00:00:00`);
-  if (Number.isNaN(local.getTime())) return null;
-  return local.toISOString();
+export function isoFromDay(day: string | null): string | null {
+  if (!day) return null;
+  const d = new Date(`${day}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toISOString();
 }
 
-/** dd/MM/yyyy display string (matches the native `<input type="date">` locale-agnostic rendering). Empty string for null. */
-export function formatDisplay(d: Date | null): string {
+/**
+ * Day string -> Date at LOCAL midnight of that calendar date, for handing to
+ * the Calendar's `selected`/`defaultMonth`. Null for null, empty, or
+ * unparsable input.
+ */
+export function dayToDate(day: string | null): Date | null {
+  if (!day) return null;
+  const d = new Date(`${day}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return null;
+  return d;
+}
+
+/**
+ * Date -> day string, deriving `yyyy-MM-dd` from the Date's LOCAL
+ * year/month/day (not UTC getters) via `date-fns` `format`. This is the
+ * Calendar's `onSelect` boundary. Null for null or an Invalid Date.
+ */
+export function dateToDay(d: Date | null): string | null {
+  if (!d || Number.isNaN(d.getTime())) return null;
+  return format(d, "yyyy-MM-dd");
+}
+
+/** dd/MM/yyyy display string from a day string. Empty string for null/invalid. */
+export function formatDisplay(day: string | null): string {
+  const d = dayToDate(day);
   if (!d) return "";
   return format(d, "dd/MM/yyyy");
+}
+
+/**
+ * Save-boundary rule reconciling a `DateField` draft (day string) against
+ * the original persisted ISO instant it started from.
+ *
+ * - If the draft is unchanged from the original (`draftDay === dayFromIso(originalIso)`,
+ *   including both being null), returns `originalIso` UNCHANGED — an
+ *   untouched-draft passthrough. This is a FIX, not mere byte-parity: without
+ *   it, re-saving a form the user never touched would re-derive the ISO from
+ *   the day string via `isoFromDay`, which in a positive-offset timezone
+ *   (east of UTC) walks the stored instant back one calendar day per save
+ *   (see this module's top comment for the mechanism). Passthrough means an
+ *   untouched field is byte-identical in and out, in every timezone.
+ * - Otherwise (the user actually changed or cleared the day), returns
+ *   `isoFromDay(draftDay)` — the legacy commit transform, applied only to
+ *   fields that were actually edited.
+ */
+export function commitDraft(draftDay: string | null, originalIso: string | null): string | null {
+  if (draftDay === dayFromIso(originalIso)) return originalIso;
+  return isoFromDay(draftDay);
 }

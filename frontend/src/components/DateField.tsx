@@ -1,13 +1,20 @@
 import { useEffect, useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { formatDisplay, isoToLocalDate, localDateToIso } from "@/lib/dateField";
+import { dateToDay, dayToDate, formatDisplay } from "@/lib/dateField";
 import { cn } from "@/lib/utils";
 
 interface DateFieldProps {
-  /** ISO string — same currency as the API. */
+  /**
+   * Plain calendar day, `"yyyy-MM-dd"` — no time, no timezone. Null = unset.
+   * NOT an ISO instant: an earlier version of this contract carried the ISO
+   * instant directly, which made the picker walk-back a day east of UTC (see
+   * `frontend/src/lib/dateField.ts`'s module doc for the mechanism). Callers
+   * that persist ISO timestamps translate at the boundary via
+   * `isoFromDay`/`dayFromIso`/`commitDraft` from that module.
+   */
   value: string | null;
-  onChange: (iso: string | null) => void;
+  onChange: (day: string | null) => void;
   disabled?: boolean;
   /** "boxed" = bordered inline-editor look (default). "bare" = borderless FieldRow text. */
   variant?: "boxed" | "bare";
@@ -36,6 +43,12 @@ const variantClasses = {
  * sites. Composes ui/calendar.tsx inside ui/popover.tsx, the same pattern as
  * `reui/gantt/gantt-nav.tsx`'s `GanttDatePicker` (validated to render
  * correctly in dark mode without edits to ui/calendar.tsx).
+ *
+ * Traffics in plain calendar days (`"yyyy-MM-dd"`), not ISO instants — see
+ * the `value`/`onChange` doc above and `frontend/src/lib/dateField.ts`'s
+ * module comment for why. Internally, `dayToDate` parses the day string as
+ * local midnight for the Calendar, and `dateToDay` re-derives the day string
+ * from the Calendar's local Y/M/D on select.
  */
 export function DateField({
   value,
@@ -48,7 +61,7 @@ export function DateField({
   "aria-label": ariaLabel,
 }: DateFieldProps) {
   const [open, setOpen] = useState(false);
-  const date = isoToLocalDate(value);
+  const date = dayToDate(value);
 
   function handleSelect(day: Date | undefined) {
     if (day === undefined && !clearable) {
@@ -59,7 +72,7 @@ export function DateField({
       setOpen(false);
       return;
     }
-    onChange(localDateToIso(day ?? null));
+    onChange(dateToDay(day ?? null));
     setOpen(false);
   }
 
@@ -68,14 +81,11 @@ export function DateField({
     setOpen(false);
   }
 
-  // Single source of truth for "is the popover actually visible" — must
-  // gate both the Popover's `open` prop and the Escape capture-listener
-  // effect below. Deriving `open && !disabled` separately in each place let
-  // `disabled` flip true while `open` was still true: the popup would hide
-  // (Popover-level gate) but the effect below, keyed only on `open`, kept
-  // its capture listener attached — swallowing every document Escape (the
-  // host Modal/Drawer became keyboard-unclosable) — and the popover could
-  // spring back open once `disabled` cleared.
+  // Single source of truth for "is the popover actually visible" — feeds the
+  // Popover's `open` prop below. Kept as its own derivation (rather than
+  // inlining `open && !disabled` there) because `disabled` can flip true
+  // while `open` state is still true — see the reset effect right below —
+  // and this is what lets the popup collapse immediately in that case.
   const isOpen = open && !disabled;
 
   // If `disabled` flips true while the popover is open, force `open` back
@@ -84,27 +94,18 @@ export function DateField({
     if (disabled) setOpen(false);
   }, [disabled]);
 
-  // Base-UI's own Escape-to-dismiss listener and the host Drawer/Modal
-  // shells' Escape-to-close listeners are all plain bubble-phase
-  // `document.addEventListener("keydown", ...)` calls — co-located listeners
-  // on the same node/phase all still fire regardless of any one of them
-  // calling stopPropagation(). A capture-phase listener runs strictly before
-  // all of those, so stopImmediatePropagation() there reliably suppresses
-  // the whole bubble pass (including the host shell) while we close the
-  // popover ourselves. Removed as soon as the popover closes (including via
-  // `disabled` flipping true), so a second Escape reaches the host shell
-  // normally.
-  useEffect(() => {
-    if (!isOpen) return;
-    function onKeyDownCapture(e: KeyboardEvent) {
-      if (e.key !== "Escape") return;
-      e.stopImmediatePropagation();
-      e.preventDefault();
-      setOpen(false);
-    }
-    document.addEventListener("keydown", onKeyDownCapture, true);
-    return () => document.removeEventListener("keydown", onKeyDownCapture, true);
-  }, [isOpen]);
+  // No document-level Escape listener here. One used to live in this file
+  // (a capture-phase `document` keydown handler calling
+  // stopImmediatePropagation()) to guard against Base-UI's dismissing
+  // Escape reaching bubble-phase host listeners (Drawer/Modal's own
+  // Escape-to-close) — that was itself the fix for a keyboard-unclosable
+  // trap in an earlier round. Empirically re-measured (2026-07-28, plan
+  // Task 2) at a real call site (TaskPanel's DATES editor): Base-UI's own
+  // Popover dismiss already prevents the dismissing Escape keydown from
+  // reaching document-level host listeners, so the capture listener was
+  // dead complexity duplicating behavior Base-UI provides for free.
+  // `open={isOpen}` / `onOpenChange={setOpen}` below is sufficient — Escape
+  // closes only the popover, and a second Escape reaches the host shell.
 
   return (
     <Popover open={isOpen} onOpenChange={setOpen}>
@@ -112,11 +113,11 @@ export function DateField({
         type="button"
         disabled={disabled}
         aria-label={
-          ariaLabel ?? (date ? `Select date, currently ${formatDisplay(date)}` : "Select date")
+          ariaLabel ?? (value ? `Select date, currently ${formatDisplay(value)}` : "Select date")
         }
         className={cn(triggerBaseClasses, variantClasses[variant], className)}
       >
-        {formatDisplay(date) || "—"}
+        {formatDisplay(value) || "—"}
       </PopoverTrigger>
       <PopoverContent align="start" positionerClassName="z-101" className="w-auto p-0! shadow-overlay">
         <Calendar
