@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AssigneeAvatar } from "./AssigneeAvatar";
 import { ConfirmModal } from "./ConfirmModal";
+import { InlineDateRangeEditor } from "./InlineDateRangeEditor";
 import { LabelPicker } from "./LabelPicker";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -55,18 +56,6 @@ function fmtShort(iso: string | null): string {
   return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
-function toDateInput(iso: string | null): string {
-  if (!iso) return "";
-  return iso.slice(0, 10);
-}
-
-function fromDateInput(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
 interface TaskPanelProps {
   projectId: number;
   taskId: number;
@@ -103,8 +92,6 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState("");
   const [editingDates, setEditingDates] = useState(false);
-  const [startDraft, setStartDraft] = useState("");
-  const [dueDraft, setDueDraft] = useState("");
   const [editingAssignee, setEditingAssignee] = useState(false);
   const [editingSection, setEditingSection] = useState(false);
   const [newSubtask, setNewSubtask] = useState("");
@@ -170,12 +157,6 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
     const trimmed = titleDraft.trim();
     setEditingTitle(false);
     if (trimmed && trimmed !== task!.title) patch({ title: trimmed });
-  }
-
-  function handleDatesSubmit(e: FormEvent) {
-    e.preventDefault();
-    setEditingDates(false);
-    patch({ startDate: fromDateInput(startDraft), dueDate: fromDateInput(dueDraft) });
   }
 
   async function handleAddSubtask(e: FormEvent) {
@@ -386,53 +367,20 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
             </span>
             <div className="relative">
               {editingDates && canEdit ? (
-                <form
-                  onSubmit={handleDatesSubmit}
-                  className="flex flex-col gap-1 rounded-sm border border-outline-variant bg-surface-container-lowest p-2"
-                >
-                  <label className="flex items-center gap-2 text-[11px]">
-                    <span className="w-8 uppercase text-on-surface-variant">Start</span>
-                    <input
-                      type="date"
-                      value={startDraft}
-                      onChange={(e) => setStartDraft(e.target.value)}
-                      className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-xs focus:border-primary focus:outline-hidden"
-                    />
-                  </label>
-                  <label className="flex items-center gap-2 text-[11px]">
-                    <span className="w-8 uppercase text-on-surface-variant">Due</span>
-                    <input
-                      type="date"
-                      value={dueDraft}
-                      onChange={(e) => setDueDraft(e.target.value)}
-                      className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-1 py-0.5 text-xs focus:border-primary focus:outline-hidden"
-                    />
-                  </label>
-                  <div className="flex justify-end gap-1 pt-0.5">
-                    <button
-                      type="button"
-                      onClick={() => setEditingDates(false)}
-                      className="rounded-sm px-2 py-0.5 text-[11px] text-on-surface-variant hover:bg-surface-container-high"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      className="rounded-sm bg-primary px-2 py-0.5 text-[11px] font-bold text-on-primary hover:bg-primary/90"
-                    >
-                      Save
-                    </button>
-                  </div>
-                </form>
+                <InlineDateRangeEditor
+                  startISO={task.startDate}
+                  endISO={task.dueDate}
+                  onSave={(s, e) => {
+                    patch({ startDate: s, dueDate: e });
+                    setEditingDates(false);
+                  }}
+                  onCancel={() => setEditingDates(false)}
+                />
               ) : (
                 <button
                   type="button"
                   disabled={!canEdit}
-                  onClick={() => {
-                    setStartDraft(toDateInput(task.startDate));
-                    setDueDraft(toDateInput(task.dueDate));
-                    setEditingDates(true);
-                  }}
+                  onClick={() => setEditingDates(true)}
                   className="rounded-sm px-1 py-0.5 text-left text-on-surface hover:bg-surface-container-high disabled:cursor-default"
                 >
                   {fmtShort(task.startDate)} – {fmtShort(task.dueDate)}

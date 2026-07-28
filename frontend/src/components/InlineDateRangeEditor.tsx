@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { DateRangeField } from "@/components/DateRangeField";
+import { commitDraft, dayFromIso } from "@/lib/dateField";
 
 interface InlineDateRangeEditorProps {
   startISO: string | null;
@@ -9,18 +10,43 @@ interface InlineDateRangeEditorProps {
   className?: string;
 }
 
-function toInputValue(iso: string | null): string {
-  if (!iso) return "";
-  return iso.slice(0, 10);
-}
-
-function fromInputValue(value: string): string | null {
-  if (!value) return null;
-  const d = new Date(`${value}T00:00:00`);
-  if (Number.isNaN(d.getTime())) return null;
-  return d.toISOString();
-}
-
+/**
+ * Thin wrapper around `DateRangeField` (plan Task 3.5, 2026-07-28 user
+ * add-on): both call sites (`TaskPanel.tsx`'s DATES editor, the Gantt tree's
+ * `TreeCells.tsx`) mount this component only once editing begins, so
+ * `defaultOpen` opens the two-month range calendar immediately — one less
+ * click than the old two-field form. External contract (`startISO`/
+ * `endISO`/`onSave`/`onCancel`/`className`) is unchanged, so neither call
+ * site needs edits.
+ *
+ * `startISO`/`endISO` are the persisted ISO instants; `DateRangeField`
+ * itself only traffics in day strings, so this wrapper is the ISO boundary:
+ * `dayFromIso` seeds the field's `start`/`end`, and `commitDraft` — per
+ * endpoint, exactly as before this task — reconciles each side of the
+ * applied draft against its original ISO on the way back out, preserving
+ * the untouched-field passthrough that avoids the local-midnight walk-back
+ * (see `frontend/src/lib/dateField.ts`'s module doc). The old two-field
+ * shell, its own Save/Cancel buttons, the hand-rolled outside-click/Escape
+ * document listeners, and the submit-time end<start clamp are all gone —
+ * range mode enforces start ≤ end structurally, and Base-UI's Popover
+ * dismiss (outside-click, Escape, or Cancel) is what `DateRangeField`'s
+ * `onCancel` already covers.
+ *
+ * `className` (fix round): positions the whole editor via a wrapping `span`
+ * rather than forwarding straight through to `DateRangeField`'s own
+ * `className` prop. `gantt-v2/TreeCells.tsx` passes a float-below-row
+ * positioning class (`"absolute right-0 top-full z-50 mt-1"`), mirroring the
+ * old form-shell's own placement — its outer `<form>` carried the same
+ * classes (`git show 88c7590^:frontend/src/components/InlineDateRangeEditor.tsx`).
+ * `DateRangeField.className` is documented as "extra classes on the trigger
+ * button" — a styling hook, not a positioning one — so forwarding
+ * caller-supplied layout classes straight into it conflated two different
+ * concerns (this wrapper's placement vs. the trigger's own look) and made
+ * that placement fragile to any future change in `DateRangeField`'s trigger
+ * markup. The wrapping `span` gives the caller its own dedicated
+ * positioning surface, decoupled from the trigger's styling, and the
+ * trigger renders with no positional classes of its own.
+ */
 export function InlineDateRangeEditor({
   startISO,
   endISO,
@@ -28,82 +54,18 @@ export function InlineDateRangeEditor({
   onCancel,
   className = "",
 }: InlineDateRangeEditorProps) {
-  const [start, setStart] = useState(toInputValue(startISO));
-  const [end, setEnd] = useState(toInputValue(endISO));
-  const wrapRef = useRef<HTMLFormElement | null>(null);
-
-  useEffect(() => {
-    function onDocPointer(e: PointerEvent) {
-      const wrap = wrapRef.current;
-      if (wrap && !wrap.contains(e.target as Node)) onCancel();
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onCancel();
-    }
-    document.addEventListener("pointerdown", onDocPointer);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("pointerdown", onDocPointer);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [onCancel]);
-
-  function handleSubmit(e: FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    if (start && end && new Date(start) > new Date(end)) {
-      setEnd(start);
-      return;
-    }
-    onSave(fromInputValue(start), fromInputValue(end));
-  }
-
   return (
-    <form
-      ref={wrapRef}
-      onSubmit={handleSubmit}
-      onClick={(e) => e.stopPropagation()}
-      className={[
-        "w-[220px] rounded-sm border border-outline-variant bg-surface-container-lowest p-2 shadow-lg",
-        className,
-      ].join(" ")}
-    >
-      <label className="flex items-center gap-2 py-0.5">
-        <span className="w-10 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
-          Start
-        </span>
-        <input
-          type="date"
-          value={start}
-          onChange={(e) => setStart(e.target.value)}
-          className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface focus:border-primary focus:outline-hidden"
-        />
-      </label>
-      <label className="flex items-center gap-2 py-0.5">
-        <span className="w-10 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
-          Due
-        </span>
-        <input
-          type="date"
-          value={end}
-          onChange={(e) => setEnd(e.target.value)}
-          className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface focus:border-primary focus:outline-hidden"
-        />
-      </label>
-      <div className="mt-1 flex items-center justify-end gap-1">
-        <button
-          type="button"
-          onClick={onCancel}
-          className="rounded-sm px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
-        >
-          Cancel
-        </button>
-        <button
-          type="submit"
-          className="rounded-sm bg-primary px-2 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container"
-        >
-          Save
-        </button>
-      </div>
-    </form>
+    <span className={className}>
+      <DateRangeField
+        start={dayFromIso(startISO)}
+        end={dayFromIso(endISO)}
+        onApply={(draftStart, draftEnd) => {
+          onSave(commitDraft(draftStart, startISO), commitDraft(draftEnd, endISO));
+        }}
+        onCancel={onCancel}
+        defaultOpen
+        clearable
+      />
+    </span>
   );
 }
