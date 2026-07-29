@@ -24,13 +24,15 @@ interface InlineDateRangeEditorProps {
  * `dayFromIso` seeds the field's `start`/`end`, and `commitDraft` — per
  * endpoint, exactly as before this task — reconciles each side of the
  * applied draft against its original ISO on the way back out, preserving
- * the untouched-field passthrough that avoids the local-midnight walk-back
- * (see `frontend/src/lib/dateField.ts`'s module doc). The old two-field
- * shell, its own Save/Cancel buttons, the hand-rolled outside-click/Escape
- * document listeners, and the submit-time end<start clamp are all gone —
- * range mode enforces start ≤ end structurally, and Base-UI's Popover
- * dismiss (outside-click, Escape, or Cancel) is what `DateRangeField`'s
- * `onCancel` already covers.
+ * the untouched-field passthrough: byte-identical in/out for a field the
+ * user didn't touch, and what keeps a pre-fix non-midnight-UTC instant
+ * stable until `backend/scripts/normalize-day-dates.ts` repairs it.
+ *
+ * The old two-field shell, its own Save/Cancel buttons, the hand-rolled
+ * outside-click/Escape document listeners, and the submit-time end<start
+ * clamp are all gone — range mode enforces start ≤ end structurally, and
+ * Base-UI's Popover dismiss (outside-click, Escape, or Cancel) is what
+ * `DateRangeField`'s `onCancel` already covers.
  *
  * `className` (fix round): positions the whole editor via a wrapping `span`
  * rather than forwarding straight through to `DateRangeField`'s own

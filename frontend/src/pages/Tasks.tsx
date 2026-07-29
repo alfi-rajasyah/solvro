@@ -5,6 +5,7 @@ import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { TaskStatusChip } from "@/components/StatusChip";
+import { dateToDay, dayFromIso, dayToDate } from "@/lib/dateField";
 import {
   type Priority,
   type Task,
@@ -30,6 +31,10 @@ export function Tasks() {
   const { data: tasks, isLoading, isError, error } = useTasks(filter);
   const { data: users } = useUsers();
   const { data: customers } = useCustomers();
+
+  // Hoisted once per render of the list rather than once per Row — the
+  // day string is identical for every row in a single render pass.
+  const todayDay = dateToDay(startOfToday());
 
   const sorted = useMemo(() => {
     if (!tasks) return [];
@@ -164,7 +169,7 @@ export function Tasks() {
             </thead>
             <tbody>
               {sorted.map((t) => (
-                <Row key={t.id} task={t} onEdit={() => setEditTask(t)} />
+                <Row key={t.id} task={t} todayDay={todayDay} onEdit={() => setEditTask(t)} />
               ))}
             </tbody>
           </table>
@@ -190,9 +195,19 @@ export function Tasks() {
   );
 }
 
-function Row({ task, onEdit }: { task: TaskWithProject; onEdit: () => void }) {
-  const overdue =
-    task.dueDate && task.status !== "DONE" && new Date(task.dueDate) < startOfToday();
+function Row({
+  task,
+  todayDay,
+  onEdit,
+}: {
+  task: TaskWithProject;
+  todayDay: string | null;
+  onEdit: () => void;
+}) {
+  // Compare calendar days, not instants —
+  // lexicographic "yyyy-MM-dd" comparison is calendar-correct (dateField.ts).
+  // `todayDay` is hoisted by the caller (once per render, not once per row).
+  const overdue = task.dueDate && task.status !== "DONE" && dayFromIso(task.dueDate)! < todayDay!;
   return (
     <tr
       onClick={onEdit}
@@ -308,8 +323,11 @@ function FilterSelect({
 }
 
 function fmt(iso: string | null) {
-  if (!iso) return "—";
-  return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  // Derive the day via the UTC date-part,
+  // not a local-time parse of the ISO instant.
+  const d = dayToDate(dayFromIso(iso));
+  if (!d) return "—";
+  return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
 
 function startOfToday() {

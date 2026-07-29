@@ -5,6 +5,7 @@
 // the call site (see Reports.tsx). This module does no network and holds
 // no React — it takes already-fetched data and returns a string.
 
+import { dateToDay, dayFromIso } from "@/lib/dateField";
 import type {
   ProjectNote,
   ProjectStatus,
@@ -68,7 +69,7 @@ export function exportFileName(projectName: string): string {
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, "-")
       .replace(/(^-|-$)/g, "") || "project";
-  return `${slug}_export_${startOfToday().toISOString().slice(0, 10)}.md`;
+  return `${slug}_export_${dateToDay(startOfToday())!}.md`;
 }
 
 export function downloadMarkdownFile(filename: string, content: string): void {
@@ -143,7 +144,10 @@ export function buildProjectExportMarkdown(input: ProjectExportInput): string {
   // ── Task signals ──────────────────────────────────────────────
   const today = startOfToday();
   const overdue = tasks.filter(
-    (t) => t.status !== "DONE" && t.dueDate && new Date(t.dueDate) < today,
+    (t) =>
+      t.status !== "DONE" &&
+      t.dueDate &&
+      dayFromIso(t.dueDate)! < dateToDay(today)!,
   ).length;
 
   // Blocked = a non-done task with at least one not-done predecessor.

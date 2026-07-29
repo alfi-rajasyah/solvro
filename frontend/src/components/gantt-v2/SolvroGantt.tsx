@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseISO } from "date-fns";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
-import { formatDisplay } from "@/lib/dateField";
+import { dateToDay, formatDisplay } from "@/lib/dateField";
 import { useGanttExport } from "@/lib/gantt/exportContext";
 import { addDays, buildRows, rowsDateRange, startOfDay, type Row } from "@/lib/gantt/geometry";
 import {
@@ -321,7 +321,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
   }, [baselineToast]);
   useEffect(() => {
     if (confirmingBaseline) {
-      setBaselineAsOf(new Date().toISOString().slice(0, 10));
+      setBaselineAsOf(dateToDay(new Date()) ?? "");
     }
   }, [confirmingBaseline]);
   const baselineLockedAtPretty = baselineLockedAt ? new Date(baselineLockedAt).toLocaleString() : null;

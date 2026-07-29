@@ -65,6 +65,15 @@ jobs:
         working-directory: frontend
         run: npm test
 
+      # Second run east of UTC: the date-contract invariant (dateField.ts, UTC-midnight
+      # serialization) is invisible under a UTC clock — Asia/Jakarta is the zone that
+      # exposed the original walk-back bug and the only run that can catch a regression.
+      - name: Run frontend test suite (TZ=Asia/Jakarta)
+        working-directory: frontend
+        run: npm test
+        env:
+          TZ: Asia/Jakarta
+
       - name: npm ci (e2e, retry once on failure)
         working-directory: e2e
         run: |

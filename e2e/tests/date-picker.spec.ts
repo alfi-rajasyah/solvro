@@ -93,32 +93,31 @@ function pppp(d: Date): string {
 }
 
 /**
- * The `.slice(0, 10)` day-part a FRESHLY-picked calendar day actually
- * persists as, once it goes through `dateField.ts`'s `commitDraft` ->
- * `isoFromDay` (`new Date(`${day}T00:00:00`).toISOString()` — local midnight
- * of the picked day, serialized to UTC). East of UTC (positive offset) this
- * walks the date-part back one calendar day, and that is DOCUMENTED,
- * verified, accepted behavior, not a gap this suite should paper over or
- * flag as a regression: CHANGELOG.md's 2026-07-28 "ProjectList's inline
- * due-date editor swapped to DateField" entry records manually reproducing
- * this exact conversion against a live `Asia/Jakarta` (UTC+7) Playwright
- * context — picking "Aug 3" persisted `dueDate: 2026-08-02T17:00:00.000Z`
- * — and calls it "byte-identical to what the pre-swap ... conversion would
- * have produced." `InlineDateRangeEditor` (TaskPanel DATES, Gantt
- * `TreeCells`) and `ProjectList`'s `DueDateEditor` both commit through this
- * exact path for a freshly-picked (not untouched-passthrough) date, so
- * asserting the picked day-string equals the readback day-part would be a
- * TZ-naive assumption that spuriously fails on any host east of UTC —
- * mirroring the real conversion here keeps the assertion meaningful (a
- * genuine regression in `isoFromDay` would still be caught) without being
- * sandbox-timezone-dependent. `TaskFormModal`'s separate `passthroughDate`
- * is NOT affected (`new Date(day).toISOString()` on a bare date-only
- * string parses as UTC per the ECMAScript date-string grammar, not local
- * time), so that call site's assertions compare the literal picked day
- * directly.
+ * The day-part a picker-committed value persists as. Under the
+ * date-contract-utc-midnight rule (`dateField.ts`'s module doc — a task
+ * date's calendar day is the UTC date-part of its stored ISO instant),
+ * every writer (`isoFromDay`, reached via `commitDraft`) emits
+ * `${day}T00:00:00.000Z` for a freshly-picked day, so the persisted
+ * day-part is always the picked day-string itself, byte-identical, in
+ * every host timezone — `dayFromIso(isoFromDay(day)) === day` always holds
+ * (`dateField.test.ts` pins this as an inverse-property test).
+ *
+ * Kept as a named helper (rather than inlining `pickedDay` at every call
+ * site below) so this invariant has one documented home, and so a future
+ * regression in `isoFromDay`'s UTC-midnight serialization only needs
+ * updating here to make every assertion below fail loudly again.
+ *
+ * Pre-fix, this reconstructed the legacy local-midnight-to-UTC conversion
+ * (`new Date(`${pickedDay}T00:00:00`).toISOString().slice(0, 10)`) to stay
+ * meaningful against the old, TZ-naive contract, which walked the
+ * persisted date-part back one calendar day on any host east of UTC — the
+ * exact defect the UTC-midnight date-contract fix removed. The
+ * `Asia/Jakarta`-forced describe block below pins that removal directly,
+ * asserting the literal `T00:00:00.000Z` PATCH payload rather than a
+ * day-part comparison.
  */
 function persistedDayPart(pickedDay: string): string {
-  return new Date(`${pickedDay}T00:00:00`).toISOString().slice(0, 10);
+  return pickedDay;
 }
 
 /**
@@ -272,12 +271,13 @@ test.describe("date pickers — DateField / DateRangeField", () => {
     expect(patchRes.ok()).toBe(true);
 
     const afterMutation = (await getTasks(base, token, projectId)).find((t) => t.id === task.id)!;
-    // Local-midnight ISO convention (InlineDateRangeEditor -> commitDraft ->
-    // isoFromDay) — assert via day-part, not exact instant, to stay
-    // TZ-agnostic across CI/local (dateOf/isoDateOffset's own convention).
-    // Compared against `persistedDayPart` (mirroring `isoFromDay`'s own
-    // conversion), not the picked day-string directly — see that helper's
-    // doc for why a direct comparison would be TZ-naive.
+    // UTC-midnight ISO convention (InlineDateRangeEditor -> commitDraft ->
+    // isoFromDay) — assert via day-part rather than the exact instant, to
+    // stay agnostic of exactly how `toISOString()` renders the fractional
+    // seconds/Z suffix (not because the day-part could itself diverge from
+    // the picked day-string — it can't, in any host timezone; see
+    // `persistedDayPart`'s doc). Compared via `persistedDayPart` for
+    // consistency with the other cases in this file.
     expect(dateOf(afterMutation, "startDate")!.slice(0, 10)).toBe(persistedDayPart(startDay));
     expect(dateOf(afterMutation, "dueDate")!.slice(0, 10)).toBe(persistedDayPart(endDay));
 
@@ -461,9 +461,11 @@ test.describe("date pickers — DateField / DateRangeField", () => {
     expect(patchRes.ok()).toBe(true);
 
     const after = (await getTasks(base, token, projectId)).find((t) => t.id === task.id)!;
-    // UTC-midnight convention at this site (TaskFormModal's own
-    // `passthroughDate`, `new Date(day).toISOString()`) — still asserted via
-    // day-part for consistency with the other cases.
+    // UTC-midnight convention at this site too — TaskFormModal's Dates
+    // editor commits through the same `commitDraft` -> `isoFromDay` path as
+    // every other call site now that `passthroughDate` was folded into it
+    // — asserted via day-part for
+    // consistency with the other cases.
     expect(dateOf(after, "startDate")!.slice(0, 10)).toBe(startDay);
     expect(dateOf(after, "dueDate")!.slice(0, 10)).toBe(endDay);
     // Untouched fields survive the round-trip unchanged.
@@ -520,40 +522,31 @@ test.describe("date pickers — DateField / DateRangeField", () => {
     await expect(row.getByRole("button", { name: /^Due date/ })).not.toHaveText(textBefore!);
 
     // Re-open and re-click the day DateField ITSELF currently shows as
-    // selected — fix round, BLOCKER. `DueDateEditor`'s `value` prop is
-    // `dayFromIso(dueISO)` (dateField.ts): a bare `.slice(0, 10)` of the
-    // PERSISTED ISO, not `pickedDay` re-derived through any local-TZ math.
-    // `isoFromDay`'s local-midnight-to-UTC walk-back (this file's
-    // `persistedDayPart` mirrors it, see its own doc) means that persisted
-    // day-part is `pickedDay` MINUS one calendar day on any host east of
-    // UTC — so re-clicking `pickedDay` literally would not be a re-click of
-    // the calendar's highlighted day there at all, it would be an ordinary
-    // NEW selection (a different day than what's shown selected), which
-    // fires a real `onChange`, not react-day-picker's re-click-to-deselect
-    // signal. `pickedDueIso!.slice(0, 10)` — the actual API readback above
-    // — is exactly what `dayFromIso` recomputes and what the calendar
-    // therefore highlights, in every timezone, so clicking THAT day-part is
-    // a genuine re-click everywhere. It fires `onSelect(undefined)`, which
+    // selected. `DueDateEditor`'s `value` prop is `dayFromIso(dueISO)`
+    // (dateField.ts) — the UTC date-part of the PERSISTED ISO — and under
+    // the date-contract-utc-midnight rule that's always exactly `pickedDay`
+    // itself, in every host timezone (readback day-part === picked day
+    // never diverges post-fix — contrast the now-deleted local-midnight-to-
+    // UTC walk-back this comment used to document here, which made a plain
+    // `pickedDay` re-click land on a genuinely different day east of UTC).
+    // So clicking `pickedDay` literally IS a re-click of the calendar's
+    // highlighted day everywhere. It fires `onSelect(undefined)`, which
     // `DateField.handleSelect` (components/DateField.tsx) treats as
     // close-only (never a wipe) — no `onChange` call, so no request at all.
     //
     // That guard is DateField's alone. Because `onChange` never fires here,
     // `ProjectList.tsx`'s SEPARATE `setDates` unchanged-value guard
     // (~:240-242, `if (startDate === task.startDate && dueDate ===
-    // task.dueDate) return;`) isn't exercised by this re-click — on a host
-    // where `isoFromDay` doesn't walk the day back (UTC or west), `onChange`
-    // never even reaches `setDates` for THIS click either, since
-    // `DateField`'s own guard already stopped it upstream. The follow-up
-    // block below closes that gap: picking a genuinely different day
-    // asserts exactly one PATCH fires, pinning `setDates`'s "else" branch
-    // and proving the zero-request assert above isn't vacuous — i.e., a
-    // request-emitting path through this exact UI does exist, and
-    // `captureTaskRequests` does see it.
+    // task.dueDate) return;`) isn't exercised by this re-click — `onChange`
+    // never even reaches `setDates` for this click, since `DateField`'s own
+    // guard already stopped it upstream. The follow-up block below closes
+    // that gap: picking a genuinely different day asserts exactly one PATCH
+    // fires, pinning `setDates`'s "else" branch and proving the zero-request
+    // assert above isn't vacuous — i.e., a request-emitting path through
+    // this exact UI does exist, and `captureTaskRequests` does see it.
     const requests = await captureTaskRequests(page, async () => {
       await row.getByRole("button", { name: /^Due date/ }).click();
-      await page
-        .getByRole("button", { name: dayButtonName(pickedDueIso!.slice(0, 10)) })
-        .click();
+      await page.getByRole("button", { name: dayButtonName(pickedDay) }).click();
     });
     expect(requests).toHaveLength(0);
 
@@ -561,9 +554,8 @@ test.describe("date pickers — DateField / DateRangeField", () => {
     expect(dateOf(afterReclick, "dueDate")).toBe(pickedDueIso); // byte-identical
 
     // Pin setDates's inverse branch (fix round, BLOCKER continued): pick an
-    // actually different day — still 10-25, so it stays in-grid regardless
-    // of which side of the walk-back `pickedDueIso`'s day-part landed on —
-    // and assert exactly one PATCH fires.
+    // actually different day — still 10-25, so it stays in the visible
+    // grid — and assert exactly one PATCH fires.
     const changedDay = isoDay(0, 15);
     const changeRequests = await captureTaskRequests(page, async () => {
       await row.getByRole("button", { name: /^Due date/ }).click();
@@ -695,5 +687,162 @@ test.describe("date pickers — DateField / DateRangeField", () => {
     const viewportWidth = page.viewportSize()!.width;
     expect(box!.x).toBeGreaterThanOrEqual(0);
     expect(box!.x + box!.width).toBeLessThanOrEqual(viewportWidth);
+  });
+});
+
+// The browser-level regression
+// proof for the UTC-midnight day contract: a picked calendar day must persist as UTC
+// midnight of that LITERAL day (`isoFromDay`), not local midnight walked
+// through a UTC conversion (the old contract, which lost a day east of UTC).
+// A SIBLING top-level describe block, deliberately NOT nested under the
+// block above — that block's own `beforeEach` asserts Node and the browser
+// agree on IANA timezone, which this block intentionally violates whenever
+// Node's own zone (this file's process) isn't already Asia/Jakarta, e.g. a
+// UTC CI runner forcing the BROWSER context to Jakarta below.
+test.describe("date pickers — Jakarta timezone regression (UTC-midnight day contract)", () => {
+  // Forces the browser context's timezone to Asia/Jakarta (UTC+7) regardless
+  // of the host/runner. CRITICAL PORTABILITY: every day/month/year value this
+  // block computes comes either from a fixed constant (day-of-month 5/6) or
+  // is read back out of the DOM / `page.evaluate` — i.e., computed by the
+  // BROWSER under its forced Jakarta clock — never from a Node-side
+  // `new Date()`/`.toISOString()` call against "now" (unlike `isoDay` above,
+  // which is deliberately NOT reused here). A Node-side "now" computation
+  // would silently disagree with what the Jakarta-forced browser renders
+  // whenever the two processes' clocks straddle a month boundary in
+  // different zones — exactly the failure mode this block exists to avoid,
+  // so it stays green whether run on this UTC+7 host (where Node's own zone
+  // already happens to be Jakarta) or a UTC CI runner (where it doesn't).
+  test.use({ timezoneId: "Asia/Jakarta" });
+
+  test("picking day 5 then 6 in a Jakarta-zoned browser persists UTC midnight of the picked days, not a walked-back neighbour", async ({
+    page,
+    seededProject,
+  }, testInfo) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(testInfo);
+    const s = stamp();
+    const task = await createTask(base, token, projectId, {
+      title: `JakartaTZ ${s}`,
+      status: "TODO",
+    });
+
+    await loginViaUi(page);
+    const panel = await openTaskPanel(page, projectId, task.id);
+
+    // InlineDateRangeEditor mounts `defaultOpen` — one click opens the range
+    // calendar with Apply already visible (same as the TaskPanel range-flow
+    // case above). The task was seeded with no dates, so the draft starts
+    // both-null — no Clear step needed before picking.
+    await panelDatesTrigger(panel).click();
+    const applyBtn = page.getByRole("button", { name: "Apply", exact: true });
+    await expect(applyBtn).toBeVisible();
+
+    // Identify the currently-displayed month/year from the calendar's own
+    // caption (react-day-picker's `formatMonthYear`, default "LLLL y"
+    // pattern, e.g. "August 2026" — verified against
+    // node_modules/react-day-picker's DateLib.formatMonthYear/formatCaption,
+    // enUS locale, independent of host/browser Intl locale settings, same
+    // rationale as this file's own `pppp` helper above). No navigation is
+    // needed first: day 5 and day 6 exist in every month, so whatever month
+    // the popover opens to (the browser's own Jakarta "today") is already a
+    // "known month" to build literal expectations from.
+    const captionRegex = new RegExp(`^(${MONTHS.join("|")}) (\\d{4})$`);
+    const caption = page.getByText(captionRegex).first();
+    await expect(caption).toBeVisible();
+    const captionMatch = (await caption.textContent())!.trim().match(captionRegex)!;
+    const [, monthName, year] = captionMatch;
+    const monthIndex = MONTHS.indexOf(monthName); // 0-based
+    const monthNum = String(monthIndex + 1).padStart(2, "0");
+    const startDay = `${year}-${monthNum}-05`;
+    const endDay = `${year}-${monthNum}-06`;
+
+    await page.getByRole("button", { name: dayButtonName(startDay) }).click();
+    await page.getByRole("button", { name: dayButtonName(endDay) }).click();
+
+    const [patchRes] = await Promise.all([
+      page.waitForResponse(
+        (r) => r.url().includes(`/api/tasks/${task.id}`) && r.request().method() === "PATCH",
+      ),
+      applyBtn.click(),
+    ]);
+    expect(patchRes.ok()).toBe(true);
+
+    // THE regression assertion — fails on the pre-fix code, which serialized
+    // a picked day via LOCAL midnight (`new Date(`${day}T00:00:00`).toISOString()`,
+    // the deleted `isoFromDay`). In Asia/Jakarta (UTC+7) that walked the
+    // date-part back one calendar day, producing `${day-1}T17:00:00.000Z`
+    // instead of the literal picked day at UTC midnight. This is the one
+    // assertion in the file comparing the literal, hardcoded
+    // `T00:00:00.000Z` instant rather than a day-part slice (contrast
+    // `persistedDayPart`, used everywhere else) — that's deliberate, since
+    // the exact instant, not just the calendar day, is precisely what the
+    // old code got wrong.
+    const patchBody = patchRes.request().postDataJSON() as Record<string, unknown>;
+    expect(patchBody.startDate).toBe(`${startDay}T00:00:00.000Z`);
+    expect(patchBody.dueDate).toBe(`${endDay}T00:00:00.000Z`);
+
+    // Persisted, not just sent — re-fetch and pin the same literal instants.
+    const afterApply = (await getTasks(base, token, projectId)).find((t) => t.id === task.id)!;
+    expect(dateOf(afterApply, "startDate")).toBe(`${startDay}T00:00:00.000Z`);
+    expect(dateOf(afterApply, "dueDate")).toBe(`${endDay}T00:00:00.000Z`);
+
+    // Reload onto a clean list view (no `?task=` panel in the way) and check
+    // the row's due-date label reads day 6. The expected label is computed
+    // via `page.evaluate` using the app's own
+    // `toLocaleDateString(undefined, { month: "short", day: "numeric" })`
+    // call (ProjectList.tsx's `fmt`) so the expectation is whatever the SAME
+    // browser/Intl would actually produce, rather than a guess at
+    // Chromium's default locale baked into this Node process.
+    const expectedDueLabel = await page.evaluate(
+      ({ y, m, d }) =>
+        new Date(y, m, d).toLocaleDateString(undefined, { month: "short", day: "numeric" }),
+      { y: Number(year), m: monthIndex, d: 6 },
+    );
+
+    await page.goto(`/projects/${projectId}/list`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+
+    if (testInfo.project.name === "desktop") {
+      const row = page.locator('div[class*="grid-cols-"]', { hasText: task.title });
+      await expect(row.getByRole("button", { name: /^Due date/ })).toHaveText(expectedDueLabel);
+    } else {
+      // Mobile card (ProjectList.tsx's `md:hidden` branch) renders the same
+      // `fmt(task.dueDate)` text but as a plain span, not an interactive
+      // DateField trigger — there's no due-date picker on this layout.
+      const card = page.locator('div[class*="md:hidden"]', { hasText: task.title }).first();
+      await expect(card).toContainText(expectedDueLabel);
+    }
+
+    // Gantt-tree assertions are desktop-only per frontend conventions
+    // (SolvroGantt.tsx is `hidden md:block`) — skipped on the mobile
+    // project, same as every other Gantt case in this file.
+    if (testInfo.project.name === "desktop") {
+      await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
+      await page.waitForTimeout(800);
+      const treeRow = page.locator(
+        `[data-slot="gantt-tree-pane"] [data-gantt-row-id="task-${task.id}"]`,
+      );
+      await treeRow.scrollIntoViewIfNeeded();
+      const abbrev = monthName.slice(0, 3);
+      await expect(treeRow.getByTitle("Click to edit dates")).toHaveText(
+        `05 ${abbrev} – 06 ${abbrev}`,
+      );
+    }
+
+    // Reopen the picker fresh (a new TaskPanel mount — `editingDates` resets
+    // to false) and confirm it highlights day 5/6 as the start/end of the
+    // range: the "reopened picker" leg of this regression's proof.
+    const reopenedPanel = await openTaskPanel(page, projectId, task.id);
+    await panelDatesTrigger(reopenedPanel).click();
+    await expect(applyBtn).toBeVisible();
+    await expect(page.getByText(captionRegex).first()).toHaveText(`${monthName} ${year}`);
+    await expect(page.getByRole("button", { name: dayButtonName(startDay) })).toHaveAttribute(
+      "data-range-start",
+      "true",
+    );
+    await expect(page.getByRole("button", { name: dayButtonName(endDay) })).toHaveAttribute(
+      "data-range-end",
+      "true",
+    );
   });
 });

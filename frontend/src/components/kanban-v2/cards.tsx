@@ -20,6 +20,7 @@ import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { KanbanItemHandle } from "@/components/reui/kanban";
+import { dayFromIso, dayToDate } from "@/lib/dateField";
 import { type Task } from "@/lib/queries";
 
 export function TaskCard({
@@ -220,7 +221,15 @@ export function SubtaskRow({
 
 export function getDuration(start: string | null, end: string | null): string {
   if (!end) return "—";
-  if (!start) return new Date(end).toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  if (!start) {
+    // Derive the day via the UTC
+    // date-part, not a local-time parse of the ISO instant.
+    const d = dayToDate(dayFromIso(end));
+    return d ? d.toLocaleDateString(undefined, { month: "short", day: "numeric" }) : "—";
+  }
+  // Duration is an absolute-instant delta (both sides are full ISO
+  // instants), not a local-time day read — TZ-independent as-is;
+  // deliberately left on direct Date parses.
   const diff = Math.ceil(
     (new Date(end).getTime() - new Date(start).getTime()) / (1000 * 60 * 60 * 24),
   );

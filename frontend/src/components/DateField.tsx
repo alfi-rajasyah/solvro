@@ -8,9 +8,9 @@ interface DateFieldProps {
   /**
    * Plain calendar day, `"yyyy-MM-dd"` — no time, no timezone. Null = unset.
    * NOT an ISO instant: an earlier version of this contract carried the ISO
-   * instant directly, which made the picker walk-back a day east of UTC (see
-   * `frontend/src/lib/dateField.ts`'s module doc for the mechanism). Callers
-   * that persist ISO timestamps translate at the boundary via
+   * instant directly, converting through local midnight on every pick —
+   * east of UTC that walked the displayed day back one calendar day.
+   * Callers that persist ISO timestamps translate at the boundary via
    * `isoFromDay`/`dayFromIso`/`commitDraft` from that module.
    */
   value: string | null;
