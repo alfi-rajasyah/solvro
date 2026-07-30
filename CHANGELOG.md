@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-30 — Subtask-reorder e2e spec follows the drag-handle flow
+
+**`e2e/tests/kanban-dnd.spec.ts`** — the TaskPanel subtask-reorder test now reorders through the drag handle's keyboard flow (focus the handle → Space → ArrowUp → Space) instead of the removed up/down arrow buttons, keeping its original position and parent assertions. The handle locator matches the accessible name exactly, because the drag library also exposes each row as a button whose accessible name contains the handle's label.
+
 ### Added — 2026-07-30 — Vendored ReUI Sortable component
 
 **`frontend/src/components/reui/sortable.tsx`** — vendored ReUI's Sortable drag-to-reorder engine (Base-UI + dnd-kit; zero new dependencies — all four of its runtime deps were already installed) as shared infrastructure for upcoming reorder surfaces: task subtasks and project sections. Exports `Sortable`, `SortableItem`, `SortableItemHandle` (plus the registry's `SortableOverlay`); dnd-kit's `KeyboardSensor` is wired for keyboard reordering, which each consuming surface enables by rendering the drag handle as a focusable button.

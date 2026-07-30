@@ -210,10 +210,11 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
   });
 
   // RG-1 rewrite (T2 disposition superseded by CP0 decision log #3 + plan
-  // Task 13): board-level subtask drag is retired, but T13 restored a
-  // reorder path in TaskPanel's subtask list (Move subtask up/down arrows) —
-  // this is the modal-adjacent path T10 rewrites this case to, keeping the
-  // original position-0 + parentTaskId assertions. Runs BEFORE the RG-2/RG-3
+  // Task 13): board-level subtask drag is retired. TaskPanel's reorder path
+  // is the vendored ReUI Sortable drag handle (2026-07-30 — the Move subtask
+  // up/down arrow buttons were removed); this case reorders via the handle's
+  // keyboard flow (focus → Space → ArrowUp → Space), keeping the original
+  // position-0 + parentTaskId assertions. Runs BEFORE the RG-2/RG-3
   // rewrites below, which move Sub one/Sub two out of Alpha's subtask list
   // entirely.
   test("subtask reorder (TaskPanel path): open Alpha's panel, move Sub two up -> pos 0", async ({
@@ -225,10 +226,19 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await page.getByText("Alpha", { exact: true }).first().click();
     const panel = page.getByRole("dialog", { name: "Task details" });
     await expect(panel).toBeVisible();
+    await expect(panel.getByText("Sub two", { exact: true })).toBeVisible();
 
-    const subTwoRow = panel.locator("li", { hasText: "Sub two" });
-    await expect(subTwoRow).toBeVisible();
-    await subTwoRow.getByRole("button", { name: "Move subtask up" }).click();
+    // Sub one seeds at position 0, Sub two at 1 → Sub two owns the second
+    // "Reorder subtask" handle in the panel's subtask list. exact: true —
+    // dnd-kit also puts role="button" on each row, whose accessible name
+    // CONTAINS the handle's label (docs/ISSUES.md, sortable deferred #4).
+    const handles = panel.getByRole("button", { name: "Reorder subtask", exact: true });
+    await expect(handles).toHaveCount(2);
+    const subTwoHandle = handles.nth(1);
+    await subTwoHandle.focus();
+    await page.keyboard.press("Space");
+    await page.keyboard.press("ArrowUp");
+    await page.keyboard.press("Space");
     await page.waitForTimeout(600);
 
     const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
