@@ -210,10 +210,11 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
   });
 
   // RG-1 rewrite (T2 disposition superseded by CP0 decision log #3 + plan
-  // Task 13): board-level subtask drag is retired, but T13 restored a
-  // reorder path in TaskPanel's subtask list (Move subtask up/down arrows) —
-  // this is the modal-adjacent path T10 rewrites this case to, keeping the
-  // original position-0 + parentTaskId assertions. Runs BEFORE the RG-2/RG-3
+  // Task 13): board-level subtask drag is retired. TaskPanel's reorder path
+  // is the vendored ReUI Sortable drag handle (2026-07-30 — the Move subtask
+  // up/down arrow buttons were removed); this case reorders via the handle's
+  // keyboard flow (focus → Space → ArrowUp → Space), keeping the original
+  // position-0 + parentTaskId assertions. Runs BEFORE the RG-2/RG-3
   // rewrites below, which move Sub one/Sub two out of Alpha's subtask list
   // entirely.
   test("subtask reorder (TaskPanel path): open Alpha's panel, move Sub two up -> pos 0", async ({
@@ -225,16 +226,53 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await page.getByText("Alpha", { exact: true }).first().click();
     const panel = page.getByRole("dialog", { name: "Task details" });
     await expect(panel).toBeVisible();
+    await expect(panel.getByText("Sub two", { exact: true })).toBeVisible();
 
-    const subTwoRow = panel.locator("li", { hasText: "Sub two" });
-    await expect(subTwoRow).toBeVisible();
-    await subTwoRow.getByRole("button", { name: "Move subtask up" }).click();
-    await page.waitForTimeout(600);
+    // Sub one seeds at position 0, Sub two at 1 → Sub two owns the second
+    // "Reorder subtask" handle in the panel's subtask list. exact: true —
+    // dnd-kit also puts role="button" on each row, whose accessible name
+    // CONTAINS the handle's label (docs/ISSUES.md, sortable deferred #4).
+    const handles = panel.getByRole("button", { name: "Reorder subtask", exact: true });
+    await expect(handles).toHaveCount(2);
+    const subTwoHandle = handles.nth(1);
 
-    const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
-    const s = byTitle(tasks, "Sub two");
-    expect(s?.position).toBe(0);
-    expect(s?.parentTaskId).toBe(seededProject.alpha.id);
+    const base = apiBase(test.info());
+
+    // Keyboard drag needs per-step sync on a slow CI runner: a blind
+    // ArrowUp right after Space can arrive before the keyboard sensor is
+    // attached and get silently ignored (drop-in-place, no PATCH — this
+    // exact flake failed CI twice). Activation is observable via dnd-kit's
+    // live region turning non-empty ("Picked up …" itself is replaced
+    // within a frame by the initial self-overlap "moved over" line, so
+    // match no specific text). The move is observable via Sub one's row
+    // being displaced with a CSS transform; retried presses are clamped at
+    // the top of the list, so they are idempotent.
+    const status = panel.getByRole("status");
+    await subTwoHandle.focus();
+    await page.keyboard.press("Space");
+    await expect(status).not.toBeEmpty();
+    const subOneRow = panel.getByRole("button", { name: /Sub one/ });
+    await expect(async () => {
+      await page.keyboard.press("ArrowUp");
+      // Displacement = non-zero translate-Y. During a drag EVERY row gets a
+      // transform (identity matrix at rest), so match a non-zero final
+      // component specifically.
+      await expect(subOneRow).toHaveCSS("transform", /matrix\(1, 0, 0, 1, 0, -?[1-9]/, {
+        timeout: 500,
+      });
+    }).toPass({ timeout: 10_000 });
+    await page.keyboard.press("Space");
+    await expect
+      .poll(
+        async () => {
+          const tasks = await getTasks(base, seededProject.token, seededProject.projectId);
+          return byTitle(tasks, "Sub two")?.position;
+        },
+        { timeout: 10_000 },
+      )
+      .toBe(0);
+    const tasks = await getTasks(base, seededProject.token, seededProject.projectId);
+    expect(byTitle(tasks, "Sub two")?.parentTaskId).toBe(seededProject.alpha.id);
   });
 
   test("WIP badge shows over-limit count in TODO column", async ({ page, seededProject }) => {

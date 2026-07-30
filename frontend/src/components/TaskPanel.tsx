@@ -6,6 +6,7 @@ import { LabelPicker } from "./LabelPicker";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { dayFromIso, dayToDate } from "@/lib/dateField";
+import { Sortable, SortableItem, SortableItemHandle } from "@/components/reui/sortable";
 import {
   type Priority,
   type Task,
@@ -183,12 +184,6 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
 
   function toggleSubtask(s: Task) {
     updateTask.mutate({ id: s.id, patch: { status: s.status === "DONE" ? "TODO" : "DONE" } });
-  }
-
-  function moveSubtask(index: number, direction: -1 | 1) {
-    const target = index + direction;
-    if (target < 0 || target >= subtasks.length) return;
-    updateTask.mutate({ id: subtasks[index].id, patch: { position: target } });
   }
 
   async function handleDelete() {
@@ -488,9 +483,38 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
             <p className="mb-1.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
               Subtasks {subtasks.length > 0 && `${subtasksDone}/${subtasks.length}`}
             </p>
-            <ul className="space-y-0.5">
-              {subtasks.map((s, index) => (
-                <li key={s.id} className="flex items-center gap-2 rounded-sm px-1 py-1 text-[13px]">
+            <Sortable
+              value={subtasks}
+              // No-op: `subtasks` is derived from the tasks query, not local
+              // state. `onValueCommit` below fires the single PATCH, and
+              // `useUpdateTask`'s onMutate optimistically re-packs the query
+              // cache (reorderTasksLocally) — the derived array picks up the
+              // new order on the resulting re-render, no local mirror needed.
+              onValueChange={() => {}}
+              getItemValue={(s) => String(s.id)}
+              onValueCommit={(_value, meta) => {
+                const moved = meta.previousValue[meta.activeIndex];
+                if (!moved) return;
+                updateTask.mutate({ id: moved.id, patch: { position: meta.overIndex } });
+              }}
+              render={<div className="space-y-0.5" />}
+            >
+              {subtasks.map((s) => (
+                <SortableItem
+                  key={s.id}
+                  value={String(s.id)}
+                  // No `disabled` here: the handle is the only thing that
+                  // carries dnd-kit's `listeners` (handle-only activation —
+                  // see the comment on the handle below), and it's only
+                  // rendered at all when `canEdit`, so activation is already
+                  // blocked for read-only users. Passing `disabled={!canEdit}`
+                  // instead dimmed the whole row via the vendor's own
+                  // `disabled && "opacity-50"` (sortable.tsx) — a regression
+                  // vs. the old markup, which only dimmed the arrows.
+                  render={
+                    <div className="flex items-center gap-2 rounded-sm px-1 py-1 text-[13px]" />
+                  }
+                >
                   <button
                     type="button"
                     disabled={!canEdit}
@@ -519,29 +543,28 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
                   >
                     {s.title}
                   </span>
-                  <div className="flex shrink-0 items-center gap-0.5">
-                    <button
-                      type="button"
-                      onClick={() => moveSubtask(index, -1)}
-                      disabled={!canEdit || index === 0}
-                      aria-label="Move subtask up"
-                      className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
+                  {canEdit && (
+                    <SortableItemHandle
+                      // `cursor={false}` opts out of the vendored component's
+                      // own (unconditional, `!important`) grab-cursor class —
+                      // we own the cursor entirely below via a plain class,
+                      // unconditional here since this whole handle only
+                      // renders when `canEdit` is true.
+                      cursor={false}
+                      render={
+                        <button
+                          type="button"
+                          aria-label="Reorder subtask"
+                          className="material-symbols-outlined shrink-0 touch-none rounded-sm text-sm text-on-surface-variant/60 cursor-grab active:cursor-grabbing outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring"
+                        />
+                      }
                     >
-                      <span className="material-symbols-outlined text-sm">keyboard_arrow_up</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => moveSubtask(index, 1)}
-                      disabled={!canEdit || index === subtasks.length - 1}
-                      aria-label="Move subtask down"
-                      className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
-                    >
-                      <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
-                    </button>
-                  </div>
-                </li>
+                      drag_indicator
+                    </SortableItemHandle>
+                  )}
+                </SortableItem>
               ))}
-            </ul>
+            </Sortable>
             {canEdit && (
               <form onSubmit={handleAddSubtask} className="mt-1.5 flex items-center gap-1.5">
                 <span className="material-symbols-outlined text-[13px] text-primary">add</span>

@@ -857,16 +857,45 @@ export function useCreateSection(projectId: number) {
 export function useUpdateSection(projectId: number) {
   const qc = useQueryClient();
   return useMutation({
+    // Serializes concurrent section PATCHes for this project (e.g. two fast
+    // drops in SectionReorderModal): without a shared scope, two mutations
+    // can race and their PATCHes can land out of order server-side, and the
+    // reorder modal never re-seeds its local order mid-session to mask it
+    // (see SectionReorderModal.tsx) — so the wrong drop could "win".
+    scope: { id: `sections-${projectId}` },
     mutationFn: ({ id, patch }: { id: number; patch: Partial<CreateSectionInput> }) =>
       apiRequest<Section>(`/sections/${id}`, { method: "PATCH", body: patch }),
     onMutate: async ({ id, patch }) => {
       await qc.cancelQueries({ queryKey: queryKeys.projectSections(projectId) });
       const prev = qc.getQueryData<Section[]>(queryKeys.projectSections(projectId));
       if (prev) {
-        qc.setQueryData<Section[]>(
-          queryKeys.projectSections(projectId),
-          prev.map((s) => (s.id === id ? ({ ...s, ...patch } as Section) : s)),
-        );
+        let next: Section[];
+        if (patch.position !== undefined) {
+          // A plain field-merge (the `else` branch) can't express a
+          // reorder: it would leave the moved section sharing its new
+          // position with whichever sibling already sat there, and every
+          // other sibling stale, until the onSettled refetch below lands —
+          // visible as a wrong section-group order in the List view behind
+          // an open reorder modal. Re-pack locally instead, mirroring the
+          // backend's dense 0..n-1 transaction (routes/sections.ts): pull
+          // the moved section out, clamp the requested index into the
+          // remaining sibling list, splice it back in, then rewrite every
+          // section's position from its new array index.
+          const moved = prev.find((s) => s.id === id);
+          if (moved) {
+            const siblings = prev
+              .filter((s) => s.id !== id)
+              .sort((a, b) => a.position - b.position || a.id - b.id);
+            const clamped = Math.max(0, Math.min(patch.position, siblings.length));
+            siblings.splice(clamped, 0, { ...moved, ...patch } as Section);
+            next = siblings.map((s, i) => ({ ...s, position: i }));
+          } else {
+            next = prev;
+          }
+        } else {
+          next = prev.map((s) => (s.id === id ? ({ ...s, ...patch } as Section) : s));
+        }
+        qc.setQueryData<Section[]>(queryKeys.projectSections(projectId), next);
       }
       return { prev };
     },
