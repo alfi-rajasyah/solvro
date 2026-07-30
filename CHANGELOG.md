@@ -15,6 +15,26 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-07-30 — Vendored ReUI Sortable component
+
+**`frontend/src/components/reui/sortable.tsx`** — vendored ReUI's Sortable drag-to-reorder engine (Base-UI + dnd-kit; zero new dependencies — all four of its runtime deps were already installed) as shared infrastructure for upcoming reorder surfaces: task subtasks and project sections. Exports `Sortable`, `SortableItem`, `SortableItemHandle` (plus the registry's `SortableOverlay`); dnd-kit's `KeyboardSensor` is wired for keyboard reordering, which each consuming surface enables by rendering the drag handle as a focusable button.
+
+### Added — 2026-07-30 — "Reorder sections" modal in the List view
+
+**`frontend/src/components/SectionReorderModal.tsx`** (new) — a `Modal`-based dialog (opened from `ProjectList.tsx`'s toolbar, shown once a project has 2+ sections and the user can edit) listing a project's sections as a vertically-draggable list (color dot + name + drag handle) via the vendored ReUI Sortable. Dropping a section sends a single `PATCH` for the moved section's new position; the backend re-packs every sibling, and the section list refetches on settle so the List view's section groups (which already order by `position`) pick up the new order. Keyboard reorder works the same as pointer drag: focus a row's drag handle, then Space → arrows → Space. Pressing Escape during an in-progress drag cancels the drag without closing the modal — the modal ignores close requests while a drag is active, tracked via the Sortable's drag callbacks.
+
+**`frontend/src/lib/queries.ts`** — `useUpdateSection` now optimistically re-packs the cached section list when a `position` patch is sent (mirroring the backend's dense `0..n-1` re-pack), so the List view's group order updates instantly instead of showing a stale order until the refetch; concurrent section PATCHes for the same project are serialized so two fast drops can no longer land out of order.
+
+### Changed — 2026-07-30 — Subtask reorder in the task panel is now drag-and-drop
+
+**`frontend/src/components/TaskPanel.tsx`** — subtasks in the task detail panel now reorder via drag (pointer or keyboard, using the vendored ReUI Sortable) instead of up/down buttons, matching the reorder pattern already used elsewhere in the app. Read-only users see no drag affordance. Persistence is unchanged: moving a subtask still sends a single `PATCH` with its new position, and the backend re-packs its siblings.
+
+### Changed — 2026-07-30 — `PATCH /sections/:id` re-packs sibling order on a position move
+
+**`backend/src/routes/sections.ts`** — moving a section (`position` in the PATCH body) now re-packs the project's whole section list dense `0..n-1` inside a transaction, mirroring the existing task-reorder contract: siblings are fetched excluding the moved section, the requested index is clamped to `[0, siblings.length]`, and every section is rewritten to its new dense position. Previously the endpoint wrote the raw `position` value with no re-pack, leaving gaps and duplicate indices after a move. Name/color changes sent in the same request still apply. Lays the groundwork for the upcoming "Reorder sections" UI.
+
+**`backend/test/sections.test.ts`** (new) — vitest coverage for the re-pack: move-to-front, move-to-back, clamping a position past the end of the list, a negative position rejected with a 400 before any re-pack runs, a name/color-only patch leaving order untouched and vice versa, positions staying dense `0..n-1` across a sequence of moves, and a position PATCH on a section in a project invisible to the caller 404ing without re-packing.
+
 ### Added — 2026-07-29 — Automated timezone regression coverage for the date-picker fix
 
 **`e2e/tests/date-picker.spec.ts`** — added a browser-timezone regression test that opens the app under a forced `Asia/Jakarta` (UTC+7) context, picks two dates through the task date picker, and asserts the saved values are the exact UTC-midnight instants of the picked calendar days — not a day shifted backward, which is what the app used to save for users east of UTC. The test also confirms the picked days still display correctly after a page reload, in the task list, in the Gantt tree's Dates cell (desktop), and when reopening the picker. The suite's existing date-picker tests were updated to match: a helper that used to reproduce the old backward-shifting behavior for its assertions now expects the corrected behavior directly, and comments describing the old bug were rewritten as historical notes.
