@@ -763,9 +763,10 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
   });
 
   if (tabWindow !== undefined) {
-    // Browser-viewer path: bypasses the download pipeline, which hangs on
-    // Safe Browsing finalization on the plain-HTTP prod origin (see
-    // docs/plans/gantt-ux-and-export-fixes-plan.md appendix).
+    // Browser-viewer path: renders the PDF in a tab instead of downloading it.
+    // Chromium-family browsers block downloads that originate from a
+    // non-trustworthy origin, and prod is served over plain HTTP — a tab
+    // navigation never enters the download pipeline, so it is unaffected.
     const blobUrl = String(pdf.output("bloburl"));
     if (tabWindow) {
       tabWindow.location.href = blobUrl;
