@@ -235,16 +235,44 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     const handles = panel.getByRole("button", { name: "Reorder subtask", exact: true });
     await expect(handles).toHaveCount(2);
     const subTwoHandle = handles.nth(1);
+
+    const base = apiBase(test.info());
+
+    // Keyboard drag needs per-step sync on a slow CI runner: a blind
+    // ArrowUp right after Space can arrive before the keyboard sensor is
+    // attached and get silently ignored (drop-in-place, no PATCH — this
+    // exact flake failed CI twice). Activation is observable via dnd-kit's
+    // live region turning non-empty ("Picked up …" itself is replaced
+    // within a frame by the initial self-overlap "moved over" line, so
+    // match no specific text). The move is observable via Sub one's row
+    // being displaced with a CSS transform; retried presses are clamped at
+    // the top of the list, so they are idempotent.
+    const status = panel.getByRole("status");
     await subTwoHandle.focus();
     await page.keyboard.press("Space");
-    await page.keyboard.press("ArrowUp");
+    await expect(status).not.toBeEmpty();
+    const subOneRow = panel.getByRole("button", { name: /Sub one/ });
+    await expect(async () => {
+      await page.keyboard.press("ArrowUp");
+      // Displacement = non-zero translate-Y. During a drag EVERY row gets a
+      // transform (identity matrix at rest), so match a non-zero final
+      // component specifically.
+      await expect(subOneRow).toHaveCSS("transform", /matrix\(1, 0, 0, 1, 0, -?[1-9]/, {
+        timeout: 500,
+      });
+    }).toPass({ timeout: 10_000 });
     await page.keyboard.press("Space");
-    await page.waitForTimeout(600);
-
-    const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
-    const s = byTitle(tasks, "Sub two");
-    expect(s?.position).toBe(0);
-    expect(s?.parentTaskId).toBe(seededProject.alpha.id);
+    await expect
+      .poll(
+        async () => {
+          const tasks = await getTasks(base, seededProject.token, seededProject.projectId);
+          return byTitle(tasks, "Sub two")?.position;
+        },
+        { timeout: 10_000 },
+      )
+      .toBe(0);
+    const tasks = await getTasks(base, seededProject.token, seededProject.projectId);
+    expect(byTitle(tasks, "Sub two")?.parentTaskId).toBe(seededProject.alpha.id);
   });
 
   test("WIP badge shows over-limit count in TODO column", async ({ page, seededProject }) => {

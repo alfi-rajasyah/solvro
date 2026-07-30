@@ -17,7 +17,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Changed — 2026-07-30 — Subtask-reorder e2e spec follows the drag-handle flow
 
-**`e2e/tests/kanban-dnd.spec.ts`** — the TaskPanel subtask-reorder test now reorders through the drag handle's keyboard flow (focus the handle → Space → ArrowUp → Space) instead of the removed up/down arrow buttons, keeping its original position and parent assertions. The handle locator matches the accessible name exactly, because the drag library also exposes each row as a button whose accessible name contains the handle's label.
+**`e2e/tests/kanban-dnd.spec.ts`** — the TaskPanel subtask-reorder test now reorders through the drag handle's keyboard flow (focus the handle → Space → ArrowUp → Space) instead of the removed up/down arrow buttons, keeping its original position and parent assertions. The handle locator matches the accessible name exactly, because the drag library also exposes each row as a button whose accessible name contains the handle's label. Each keyboard step syncs on an observable drag signal (live-region activity for pickup, then the displaced sibling row's non-zero transform for the move), so the flow stays deterministic on slow CI runners; the server position is then polled instead of read after a fixed wait.
 
 ### Added — 2026-07-30 — Vendored ReUI Sortable component
 
