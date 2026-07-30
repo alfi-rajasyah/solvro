@@ -20,6 +20,7 @@ import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "../ProjectDetail";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { DateField } from "@/components/DateField";
+import { SectionReorderModal } from "@/components/SectionReorderModal";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -125,6 +126,7 @@ export function ProjectList() {
   } | null>(null);
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
+  const [reorderingSections, setReorderingSections] = useState(false);
   const [renamingSectionKey, setRenamingSectionKey] = useState<GroupKey | null>(null);
   const [renameValue, setRenameValue] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -358,6 +360,16 @@ export function ProjectList() {
   return (
     <>
       <div className="mb-3 flex items-center justify-end gap-2">
+        {canEdit && (sections?.length ?? 0) >= 2 && (
+          <button
+            type="button"
+            onClick={() => setReorderingSections(true)}
+            className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
+          >
+            <span className="material-symbols-outlined text-base">reorder</span>
+            Reorder sections
+          </button>
+        )}
         {canEdit && (
           <button
             type="button"
@@ -478,6 +490,12 @@ export function ProjectList() {
           initialParentTaskId={createTaskCtx.parentTaskId}
         />
       )}
+
+      <SectionReorderModal
+        projectId={project.id}
+        open={reorderingSections}
+        onClose={() => setReorderingSections(false)}
+      />
     </>
   );
 }
