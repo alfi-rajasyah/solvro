@@ -112,22 +112,32 @@ const LEGEND_CAP = 6;
 // tree-panel width + a built-in draggable splitter (GanttTreePanelConfig,
 // reui/gantt/gantt.tsx:1218-1231, forwarded via VIEW_CONFIG_KEYS:1479 and
 // rendered at reui/gantt/gantt-view.tsx:2260-2308) — no vendored-file patch
-// needed, just wiring from here. These three constants mirror that file's
-// own DEFAULT_TREE_PANEL (gantt-view.tsx:203-209) exactly, so an unvisited
-// (no localStorage entry yet) gantt renders pixel-identical to today.
-const TREE_WIDTH_STORAGE_KEY = "solvro.gantt.treeWidth";
-const TREE_PANEL_DEFAULT_WIDTH = 288;
+// needed, just wiring from here. min/max mirror that file's own
+// DEFAULT_TREE_PANEL (gantt-view.tsx:203-209); the default is deliberately
+// wider than the engine's 288 — see the issue #118 block below.
+const TREE_WIDTH_STORAGE_KEY = "solvro.gantt.treeWidth.v2";
+// Pre-#118 key. Its values assumed the old name-column formula; read once by
+// readStoredTreeWidth's migration and otherwise left untouched.
+const TREE_WIDTH_LEGACY_STORAGE_KEY = "solvro.gantt.treeWidth";
+const TREE_PANEL_DEFAULT_WIDTH = 364;
 const TREE_PANEL_MIN_WIDTH = 180;
 const TREE_PANEL_MAX_WIDTH = 640;
-// The engine's own nameColumnWidth default (DEFAULT_TREE_PANEL.nameColumnWidth,
-// gantt-view.tsx:208) — this is the FIXED-width "Resources" cell whose text
-// truncates when a task title outgrows it (the actual F6 symptom: the tree
-// PANE can be wider than the NAME COLUMN inside it, since the "Dates"/color
-// columns sit to the name column's right — gantt-view.tsx:1834-1863,1838).
-// Coupling the name column to the same drag delta as the pane (below) is
-// what makes dragging the splitter actually reveal more of a truncated
-// title, rather than just widening blank space or the Dates/color columns.
-const TREE_NAME_COLUMN_DEFAULT_WIDTH = 208;
+// Issue #118 — the name column used to mirror the engine's 208px default and
+// absorb the splitter delta on top of it, which left the fixed "Dates"/color
+// columns to its right (gantt-view.tsx:1834-1863) clipped past the pane edge
+// at EVERY pane width. The name column is now the pane REMAINDER after those
+// fixed columns, and the default pane width is 364 = 208 + 132 + 24, so a
+// first-visit gantt keeps the old 208px title room AND shows the full
+// DD/MM – DD/MM range + color swatch; each splitter pixel still lands on
+// the title 1:1 (F6's point, walkthrough 2026-07-25). Two known residuals:
+// below a 256px pane the name column floors at its min and the fixed columns
+// clip again (a deliberate user narrowing, not the default), and on narrow
+// desktop viewports the engine renders the pane narrower than `treeWidth`
+// without reporting it (clampContainer, gantt-view.tsx:977-987), so a wide
+// persisted width can still clip the columns there — docs/ISSUES.md.
+const TREE_DATES_COLUMN_WIDTH = 132;
+const TREE_COLOR_COLUMN_WIDTH = 24;
+const TREE_FIXED_COLUMNS_WIDTH = TREE_DATES_COLUMN_WIDTH + TREE_COLOR_COLUMN_WIDTH;
 const TREE_NAME_COLUMN_MIN_WIDTH = 100;
 
 function clampTreeWidth(width: number): number {
@@ -137,7 +147,16 @@ function clampTreeWidth(width: number): number {
 function readStoredTreeWidth(): number {
   const raw = localStorage.getItem(TREE_WIDTH_STORAGE_KEY);
   const parsed = raw ? Number(raw) : NaN;
-  return Number.isFinite(parsed) ? clampTreeWidth(parsed) : TREE_PANEL_DEFAULT_WIDTH;
+  if (Number.isFinite(parsed)) return clampTreeWidth(parsed);
+  // One-time v1 → v2 migration: the old formula sized the name column as
+  // `stored − 80` (208 + stored − 288); the new one sizes it as
+  // `stored − 156`. +76 keeps each user's persisted title width exactly as
+  // it was (the 640 pane max permitting). The mount-time persistence effect
+  // writes the result to the v2 key, so this branch runs once per browser.
+  const legacyRaw = localStorage.getItem(TREE_WIDTH_LEGACY_STORAGE_KEY);
+  const legacy = legacyRaw ? Number(legacyRaw) : NaN;
+  if (Number.isFinite(legacy)) return clampTreeWidth(legacy + 76);
+  return TREE_PANEL_DEFAULT_WIDTH;
 }
 
 // Plan B Task 7 (fix pass) — geometry's buildRows() takes a collapsed-row Set
@@ -265,15 +284,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
   useEffect(() => {
     localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(treeWidth));
   }, [treeWidth]);
-  // 1:1 delta coupling: the name column grows/shrinks by exactly the same
-  // pixel amount the pane does, so dragging the splitter directly reveals
-  // more of a truncated task title instead of just adding blank space or
-  // uncovering the Dates/color columns. At the untouched default width this
-  // evaluates to exactly TREE_NAME_COLUMN_DEFAULT_WIDTH (208), so a gantt
-  // with no persisted width renders identically to before this change.
+  // Pane-remainder sizing (issue #118): the fixed Dates/color columns fit
+  // inside the pane wherever the pane is ≥ 256px and rendered at `treeWidth`
+  // (residuals in the constants block above), and every pixel of splitter
+  // drag still goes to the name column 1:1, so dragging reveals more of a
+  // truncated title without pushing the due date back out of view.
   const nameColumnWidth = Math.max(
     TREE_NAME_COLUMN_MIN_WIDTH,
-    TREE_NAME_COLUMN_DEFAULT_WIDTH + (treeWidth - TREE_PANEL_DEFAULT_WIDTH),
+    treeWidth - TREE_FIXED_COLUMNS_WIDTH,
   );
   // Memoized: gantt.tsx:1623-1634 hands GanttViewConfigContext consumers the
   // PREVIOUS config object across renders unless a value actually changed
@@ -601,7 +619,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
       {
         id: "dates",
         title: "Dates",
-        width: 132,
+        width: TREE_DATES_COLUMN_WIDTH,
         align: "end",
         render: (ctx) => {
           const taskId = parseTaskId(ctx.resource.id);
@@ -614,7 +632,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
       {
         id: "color",
         title: "",
-        width: 24,
+        width: TREE_COLOR_COLUMN_WIDTH,
         align: "center",
         render: (ctx) => {
           if (ctx.resource.id === sectionNodeId(null) || !ctx.resource.id.startsWith("section-")) {

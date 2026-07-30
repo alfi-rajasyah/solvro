@@ -648,9 +648,10 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
   // pointer handling at reui/gantt/gantt-view.tsx:2260-2308,1043-1088) — no
   // vendored-file patch was needed. SolvroGantt.tsx now wires a persisted,
   // controlled `treePanel` (width/minWidth/maxWidth/nameColumnWidth/
-  // onWidthChange) whose name-column width grows 1:1 with the drag delta, so
-  // widening the splitter directly reveals more of a truncated title instead
-  // of just uncovering the Dates/color columns to its right.
+  // onWidthChange) whose name-column width is the pane remainder after the
+  // fixed Dates/color columns (issue #118), so those stay visible while every
+  // pixel of splitter drag still lands on the title 1:1 and reveals more of
+  // a truncated title.
   test("(j) tree-pane splitter widens the Resources column, reveals a truncated title, and persists across reload", async ({
     page,
     seededProject,
@@ -712,7 +713,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await page.screenshot({ path: "test-results/f6-tree-after.png" });
 
     const persistedWidthAfterDrag = await page.evaluate(() =>
-      localStorage.getItem("solvro.gantt.treeWidth"),
+      localStorage.getItem("solvro.gantt.treeWidth.v2"),
     );
     expect(persistedWidthAfterDrag).toBeTruthy();
     expect(Number(persistedWidthAfterDrag)).toBeGreaterThan(500);
@@ -743,7 +744,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     ).toBe(true);
 
     const persistedWidthAfterReset = await page.evaluate(() =>
-      localStorage.getItem("solvro.gantt.treeWidth"),
+      localStorage.getItem("solvro.gantt.treeWidth.v2"),
     );
     expect(persistedWidthAfterReset).toBeTruthy();
     expect(Math.abs(Number(persistedWidthAfterReset) - paneBefore!.width)).toBeLessThanOrEqual(2);
@@ -759,7 +760,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     expect(await isTruncated(), "title should be fully visible again after re-widening").toBe(false);
 
     const persistedWidth = await page.evaluate(() =>
-      localStorage.getItem("solvro.gantt.treeWidth"),
+      localStorage.getItem("solvro.gantt.treeWidth.v2"),
     );
     expect(persistedWidth).toBeTruthy();
     expect(Number(persistedWidth)).toBeGreaterThan(500);
@@ -781,6 +782,81 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
       (el) => el.scrollWidth <= el.clientWidth + 1,
     );
     expect(stillNotTruncated, "widened width (and full title) should survive reload").toBe(true);
+  });
+
+  // Issue #118 — the fixed Dates/color columns used to render past the tree
+  // pane's right edge at every pane width (the name column absorbed the drag
+  // delta on TOP of the engine's 208px default), so start/due dates were
+  // invisible by default and widening never revealed them. Guard the fix's
+  // invariant at the default width: both fixed columns end inside the pane,
+  // and the DD/MM – DD/MM range renders untruncated.
+  test("(k) tree-pane Dates column is visible and untruncated at the default width", async ({
+    page,
+    seededProject,
+  }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    const task = await createTask(base, token, projectId, {
+      title: `Dates visible ${s}`,
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(3),
+    });
+
+    await gotoSeededGantt(page, projectId);
+
+    const treePane = page.locator('[data-slot="gantt-tree-pane"]');
+    const paneBox = await treePane.boundingBox();
+    expect(paneBox, "tree pane not found").toBeTruthy();
+    const paneRight = paneBox!.x + paneBox!.width;
+
+    const row = page.locator(
+      `[data-slot="gantt-tree-pane"] [data-gantt-row-id="task-${task.id}"]`,
+    );
+    const datesCell = row.locator('[data-column="dates"]');
+    await datesCell.scrollIntoViewIfNeeded();
+    const datesBox = await datesCell.boundingBox();
+    expect(datesBox, "dates cell not found").toBeTruthy();
+    expect(datesBox!.x + datesBox!.width, "dates cell should end inside the pane").toBeLessThanOrEqual(paneRight + 1);
+
+    const colorBox = await row.locator('[data-column="color"]').boundingBox();
+    expect(colorBox, "color cell not found").toBeTruthy();
+    expect(colorBox!.x + colorBox!.width, "color cell should end inside the pane").toBeLessThanOrEqual(paneRight + 1);
+
+    const untruncated = await datesCell
+      .locator("button")
+      .evaluate((el) => el.scrollWidth <= el.clientWidth + 1);
+    expect(untruncated, "date range should render untruncated").toBe(true);
+  });
+
+  // Issue #118 follow-up — pre-#118 persisted widths sized the name column
+  // as `stored − 80`; v2 sizes it as `stored − 156`. The one-time key
+  // migration adds +76 so an existing user's title room is unchanged.
+  test("(l) legacy tree-width key migrates +76 into the v2 key", async ({
+    page,
+    seededProject,
+  }) => {
+    const { projectId } = seededProject;
+    await page.addInitScript(() => {
+      // only seed the LEGACY key — the v2 key must come from the migration
+      if (localStorage.getItem("solvro.gantt.treeWidth.v2") === null) {
+        localStorage.setItem("solvro.gantt.treeWidth", "400");
+      }
+    });
+    await gotoSeededGantt(page, projectId);
+
+    const paneBox = await page.locator('[data-slot="gantt-tree-pane"]').boundingBox();
+    expect(paneBox, "tree pane not found").toBeTruthy();
+    expect(Math.abs(paneBox!.width - 476), "pane should render at 400 + 76").toBeLessThanOrEqual(2);
+
+    await page.waitForTimeout(300);
+    const stored = await page.evaluate(() => ({
+      v2: localStorage.getItem("solvro.gantt.treeWidth.v2"),
+      legacy: localStorage.getItem("solvro.gantt.treeWidth"),
+    }));
+    expect(Number(stored.v2), "migrated width should persist to the v2 key").toBe(476);
+    expect(stored.legacy, "legacy key should be left in place").toBe("400");
   });
 
   // ---- Browser checklist (B6 Opus review follow-up) — observational only;
