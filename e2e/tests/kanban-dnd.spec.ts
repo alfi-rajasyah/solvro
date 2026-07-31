@@ -105,13 +105,18 @@ async function createSubtask(
  * tasks across every prior e2e/QA run, this fixture's own rows can fall
  * entirely outside that window and no matching `<tr>` ever renders. Scope
  * the page to this fixture's own customer first via the Customer filter
- * (`TasksFilter.customerId`, frontend/src/lib/queries.ts:246) — `FilterSelect`
- * wraps the `<select>` in an implicit `<label>{"Customer"}<select/></label>`
- * (Tasks.tsx ~92-102), so `getByLabel("Customer")` resolves it directly. */
-async function openTasksPage(page: Page, customerId: number): Promise<void> {
+ * (`TasksFilter.customerId`, frontend/src/lib/queries.ts) — driven through
+ * the ReUI Filters chip toolbar by the customer's display name. */
+async function openTasksPage(page: Page, customerName: string): Promise<void> {
   await page.goto(`/tasks`, { waitUntil: "networkidle" });
   await page.waitForTimeout(800);
-  await page.getByLabel("Customer").selectOption(String(customerId));
+  // The customer filter is a ReUI Filters chip flow (2026-07-31): open the
+  // "+ Filter" menu, hover the Customer field to open its option submenu,
+  // pick the fixture customer by exact display name.
+  await page.getByRole("button", { name: /filter/i }).first().click();
+  await page.getByRole("option", { name: "Customer", exact: true }).hover();
+  await page.waitForTimeout(400);
+  await page.getByRole("option", { name: customerName, exact: true }).click();
   await page.waitForTimeout(500);
 }
 
@@ -834,7 +839,7 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     seededProject,
   }) => {
     const base = apiBase(test.info());
-    await openTasksPage(page, seededProject.customerId);
+    await openTasksPage(page, seededProject.customerName);
 
     await page.getByRole("checkbox", { name: "Top-level only" }).uncheck();
     await page.waitForTimeout(500);
@@ -884,7 +889,7 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
       .filter((t) => t.title !== "Sub two")
       .map((t) => t.title);
 
-    await openTasksPage(page, seededProject.customerId);
+    await openTasksPage(page, seededProject.customerName);
     await page.getByRole("checkbox", { name: "Top-level only" }).uncheck();
     await page.waitForTimeout(500);
 
@@ -945,7 +950,7 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     const candidateParent = globalTopLevel(before).find((t) => t.title !== "Alpha");
     expect(candidateParent, "need another top-level task to attempt as parent").toBeTruthy();
 
-    await openTasksPage(page, seededProject.customerId);
+    await openTasksPage(page, seededProject.customerName);
     await clickTaskRow(page, seededProject.projectId, "Alpha");
     const dialog = page.getByRole("dialog", { name: "Edit task" });
     await expect(dialog).toBeVisible();

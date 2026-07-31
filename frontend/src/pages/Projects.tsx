@@ -1,9 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { ProjectStatusChip } from "@/components/StatusChip";
+import {
+  createFilter,
+  Filters,
+  type Filter,
+  type FilterFieldConfig,
+} from "@/components/reui/filters";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { type ProjectSummary, useCustomers, useProjects } from "@/lib/queries";
+
+const CUSTOMER_FILTER_FIELD = "customerId";
 
 export function Projects() {
   const { user } = useAuth();
@@ -36,6 +44,47 @@ export function Projects() {
 
   const activeCustomer = customers?.find((c) => c.id === customerFilter);
 
+  // Single-field Filters config: "Customer" mapped onto the existing
+  // ?customerId= URL contract. Only the affirmative "is" operator is
+  // offered — the URL contract only ever expresses "filtered to this one
+  // customer" or "no filter", so "is not"/"empty"/"not empty" (the other
+  // defaults the vendored select-type field would otherwise expose) have no
+  // corresponding URL state and are dropped to avoid a chip that can be set
+  // into a meaningless combination.
+  const customerFields: FilterFieldConfig<number>[] = useMemo(
+    () => [
+      {
+        key: CUSTOMER_FILTER_FIELD,
+        label: "Customer",
+        type: "select",
+        operators: [{ value: "is", label: "is" }],
+        options: (customers ?? []).map((c) => ({ value: c.id, label: c.name })),
+      },
+    ],
+    [customers],
+  );
+
+  // Filters state is derived FROM the URL param (not an independent
+  // useState) so the param stays the single source of truth.
+  const activeFilters: Filter<number>[] = useMemo(
+    () =>
+      customerFilter === undefined
+        ? []
+        : [createFilter<number>(CUSTOMER_FILTER_FIELD, "is", [customerFilter])],
+    [customerFilter],
+  );
+
+  // Every chip interaction (add, change value, remove) funnels back through
+  // the existing setCustomerFilter — same set/remove + { replace: true }
+  // behavior as the plain <select> this replaces. Deliberately a plain
+  // function (like setCustomerFilter above): it closes over the current
+  // searchParams and must stay fresh each render.
+  function handleCustomerFiltersChange(next: Filter<number>[]) {
+    const entry = next.find((f) => f.field === CUSTOMER_FILTER_FIELD);
+    const value = entry?.values[0];
+    setCustomerFilter(value ?? "");
+  }
+
   return (
     <div>
       <div className="mb-4 flex items-start justify-between gap-4">
@@ -61,29 +110,13 @@ export function Projects() {
 
       {/* Filter row */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
-        <select
-          value={customerFilter ?? ""}
-          onChange={(e) =>
-            setCustomerFilter(e.target.value === "" ? "" : Number(e.target.value))
-          }
-          className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
-        >
-          <option value="">All customers</option>
-          {(customers ?? []).map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        {customerFilter && (
-          <button
-            type="button"
-            onClick={() => setCustomerFilter("")}
-            className="rounded-sm border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
-          >
-            Clear
-          </button>
-        )}
+        <Filters
+          filters={activeFilters}
+          fields={customerFields}
+          onChange={handleCustomerFiltersChange}
+          size="sm"
+          allowMultiple={false}
+        />
         {projects && projects.length > 0 && (
           <span className="ml-auto font-mono text-[12px] text-on-surface-variant">
             {projects.length} {projects.length === 1 ? "project" : "projects"}
