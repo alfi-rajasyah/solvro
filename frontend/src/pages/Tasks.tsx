@@ -7,6 +7,11 @@ import { TaskFormModal } from "@/components/TaskFormModal";
 import { TaskStatusChip } from "@/components/StatusChip";
 import { dateToDay, dayFromIso, dayToDate } from "@/lib/dateField";
 import {
+  type Filter,
+  type FilterFieldConfig,
+  Filters,
+} from "@/components/reui/filters";
+import {
   type Priority,
   type Task,
   type TaskStatus,
@@ -21,16 +26,83 @@ const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
 const PRIORITIES: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const PRIORITY_ORDER: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
+// Only the affirmative "is" operator is offered on every filter field below —
+// the derivation in Tasks() reads just `.values[0]` per field, so a
+// select-type field's other vendored-default operators ("is not", "is
+// empty", "is not empty") would render a chip whose label lies about what's
+// actually being sent to useTasks (e.g. a "Status is not DONE" chip would
+// still filter as "Status is DONE"). Same fix as Projects.tsx's customer field.
+const ONLY_IS_OPERATOR = [{ value: "is", label: "is" }];
+
 type SortKey = "due" | "priority" | "project" | "status";
 
 export function Tasks() {
-  const [filter, setFilter] = useState<TasksFilter>({ topLevel: true });
+  // Filters chip state is UI-only (Filter[]); it is derived down into the
+  // TasksFilter shape useTasks/queries.ts already expects — see `filter` below.
+  const [activeFilters, setActiveFilters] = useState<Filter<string>[]>([]);
+  const [overdue, setOverdue] = useState(false);
+  const [topLevel, setTopLevel] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>("due");
   const [editTask, setEditTask] = useState<TaskWithProject | null>(null);
 
-  const { data: tasks, isLoading, isError, error } = useTasks(filter);
   const { data: users } = useUsers();
   const { data: customers } = useCustomers();
+
+  const filterFields = useMemo<FilterFieldConfig<string>[]>(
+    () => [
+      {
+        key: "status",
+        label: "Status",
+        type: "select",
+        operators: ONLY_IS_OPERATOR,
+        options: STATUSES.map((s) => ({ value: s, label: s.replace("_", " ") })),
+      },
+      {
+        key: "priority",
+        label: "Priority",
+        type: "select",
+        operators: ONLY_IS_OPERATOR,
+        options: PRIORITIES.map((p) => ({ value: p, label: p })),
+      },
+      {
+        key: "assignedToId",
+        label: "Assignee",
+        type: "select",
+        operators: ONLY_IS_OPERATOR,
+        options: (users ?? []).map((u) => ({ value: String(u.id), label: u.username })),
+      },
+      {
+        key: "customerId",
+        label: "Customer",
+        type: "select",
+        operators: ONLY_IS_OPERATOR,
+        options: (customers ?? []).map((c) => ({ value: String(c.id), label: c.name })),
+      },
+    ],
+    [users, customers],
+  );
+
+  // Derive the TasksFilter useTasks/queries.ts expects from the active Filter
+  // chips: first value per field, absent field -> undefined (never ""/null —
+  // a different shape would splinter the react-query cache key).
+  const filter = useMemo<TasksFilter>(() => {
+    const valueFor = (key: string) =>
+      activeFilters.find((f) => f.field === key)?.values[0];
+    const status = valueFor("status");
+    const priority = valueFor("priority");
+    const assignedToId = valueFor("assignedToId");
+    const customerId = valueFor("customerId");
+    return {
+      status: status as TaskStatus | undefined,
+      priority: priority as Priority | undefined,
+      assignedToId: assignedToId === undefined ? undefined : Number(assignedToId),
+      customerId: customerId === undefined ? undefined : Number(customerId),
+      overdue: overdue || undefined,
+      topLevel: topLevel || undefined,
+    };
+  }, [activeFilters, overdue, topLevel]);
+
+  const { data: tasks, isLoading, isError, error } = useTasks(filter);
 
   // Hoisted once per render of the list rather than once per Row — the
   // day string is identical for every row in a single render pass.
@@ -67,51 +139,18 @@ export function Tasks() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-end gap-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-3">
-        <FilterSelect
-          label="Status"
-          value={filter.status ?? ""}
-          options={STATUSES.map((s) => [s, s.replace("_", " ")] as const)}
-          onChange={(v) =>
-            setFilter((f) => ({ ...f, status: (v as TaskStatus) || undefined }))
-          }
-        />
-        <FilterSelect
-          label="Priority"
-          value={filter.priority ?? ""}
-          options={PRIORITIES.map((p) => [p, p] as const)}
-          onChange={(v) =>
-            setFilter((f) => ({ ...f, priority: (v as Priority) || undefined }))
-          }
-        />
-        <FilterSelect
-          label="Assignee"
-          value={filter.assignedToId === undefined ? "" : String(filter.assignedToId)}
-          options={(users ?? []).map((u) => [String(u.id), u.username] as const)}
-          onChange={(v) =>
-            setFilter((f) => ({
-              ...f,
-              assignedToId: v === "" ? undefined : Number(v),
-            }))
-          }
-        />
-        <FilterSelect
-          label="Customer"
-          value={filter.customerId === undefined ? "" : String(filter.customerId)}
-          options={(customers ?? []).map((c) => [String(c.id), c.name] as const)}
-          onChange={(v) =>
-            setFilter((f) => ({
-              ...f,
-              customerId: v === "" ? undefined : Number(v),
-            }))
-          }
+        <Filters
+          filters={activeFilters}
+          fields={filterFields}
+          onChange={setActiveFilters}
+          size="sm"
+          allowMultiple={false}
         />
         <label className="flex items-center gap-2 text-xs text-on-surface-variant">
           <input
             type="checkbox"
-            checked={filter.overdue ?? false}
-            onChange={(e) =>
-              setFilter((f) => ({ ...f, overdue: e.target.checked || undefined }))
-            }
+            checked={overdue}
+            onChange={(e) => setOverdue(e.target.checked)}
             className="h-3.5 w-3.5 accent-primary"
           />
           Overdue only
@@ -119,15 +158,19 @@ export function Tasks() {
         <label className="flex items-center gap-2 text-xs text-on-surface-variant">
           <input
             type="checkbox"
-            checked={filter.topLevel ?? false}
-            onChange={(e) => setFilter((f) => ({ ...f, topLevel: e.target.checked || undefined }))}
+            checked={topLevel}
+            onChange={(e) => setTopLevel(e.target.checked)}
             className="h-3.5 w-3.5 accent-primary"
           />
           Top-level only
         </label>
         <button
           type="button"
-          onClick={() => setFilter({ topLevel: true })}
+          onClick={() => {
+            setActiveFilters([]);
+            setOverdue(false);
+            setTopLevel(true);
+          }}
           className="ml-auto rounded-sm border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
         >
           Reset
@@ -287,38 +330,6 @@ function Th({
       {children}
       {sortable && current === sortKey ? " ↑" : ""}
     </th>
-  );
-}
-
-function FilterSelect({
-  label,
-  value,
-  options,
-  onChange,
-}: {
-  label: string;
-  value: string;
-  options: ReadonlyArray<readonly [string, string]>;
-  onChange: (v: string) => void;
-}) {
-  return (
-    <label className="block">
-      <span className="mb-1 block text-label-caps uppercase tracking-wider text-on-surface-variant">
-        {label}
-      </span>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
-      >
-        <option value="">Any</option>
-        {options.map(([v, lbl]) => (
-          <option key={v} value={v}>
-            {lbl}
-          </option>
-        ))}
-      </select>
-    </label>
   );
 }
 

@@ -54,6 +54,10 @@ export interface SeededFixture {
   // fixture's own rows can fall entirely outside that window, and the
   // `/tasks` page renders zero matching `<tr>`s.
   customerId: number;
+  // The customer's display name — the Tasks/Projects filter is a ReUI
+  // Filters chip flow since 2026-07-31, and its option list is driven by
+  // names, not ids, so UI-side scoping needs this alongside customerId.
+  customerName: string;
   alpha: SeededTask;
   beta: SeededTask;
   gamma: SeededTask;
@@ -106,10 +110,11 @@ export async function seedFixture(base: string): Promise<SeededFixture> {
   // creating an isolated, single-project customer per fixture call is what
   // makes `TasksFilter.customerId` scoping actually work as an isolation
   // boundary rather than compounding the same shared-customer pollution.
+  const customerName = `QA Fixture Co ${stamp}`;
   const c = await fetch(`${base}/api/customers`, {
     method: "POST",
     headers: H,
-    body: JSON.stringify({ name: `QA Fixture Co ${stamp}`, description: "e2e fixture" }),
+    body: JSON.stringify({ name: customerName, description: "e2e fixture" }),
   }).then((r) => json<{ id: number }>(r));
   const custId = c.id;
 
@@ -144,7 +149,7 @@ export async function seedFixture(base: string): Promise<SeededFixture> {
   const subA = await mk({ title: "Sub one", parentTaskId: alpha.id });
   const subB = await mk({ title: "Sub two", parentTaskId: alpha.id });
 
-  return { token, userId, projectId: proj.id, customerId: custId, alpha, beta, gamma, delta, subA, subB };
+  return { token, userId, projectId: proj.id, customerId: custId, customerName, alpha, beta, gamma, delta, subA, subB };
 }
 
 export async function getTasks(base: string, token: string, projectId: number): Promise<SeededTask[]> {
