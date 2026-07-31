@@ -1,5 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
@@ -11,6 +18,11 @@ import {
   type FilterFieldConfig,
   Filters,
 } from "@/components/reui/filters";
+import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-grid";
+import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
+import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
+import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   type Priority,
   type Task,
@@ -26,6 +38,11 @@ const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
 const PRIORITIES: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const PRIORITY_ORDER: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
+// Stable empty-array reference for `data:` while `useTasks` is loading —
+// avoids a fresh `[]` literal (and therefore a new TanStack row model) on
+// every render that a `tasks ?? []` inline fallback would produce.
+const EMPTY_TASKS: TaskWithProject[] = [];
+
 // Only the affirmative "is" operator is offered on every filter field below —
 // the derivation in Tasks() reads just `.values[0]` per field, so a
 // select-type field's other vendored-default operators ("is not", "is
@@ -34,15 +51,16 @@ const PRIORITY_ORDER: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2
 // still filter as "Status is DONE"). Same fix as Projects.tsx's customer field.
 const ONLY_IS_OPERATOR = [{ value: "is", label: "is" }];
 
-type SortKey = "due" | "priority" | "project" | "status";
-
 export function Tasks() {
   // Filters chip state is UI-only (Filter[]); it is derived down into the
   // TasksFilter shape useTasks/queries.ts already expects — see `filter` below.
   const [activeFilters, setActiveFilters] = useState<Filter<string>[]>([]);
   const [overdue, setOverdue] = useState(false);
   const [topLevel, setTopLevel] = useState(true);
-  const [sortKey, setSortKey] = useState<SortKey>("due");
+  // Replaces the old hand-rolled `sortKey` header state: TanStack owns
+  // sorting now, driven entirely through DataGridColumnHeader. Same default
+  // as before — due ascending.
+  const [sorting, setSorting] = useState<SortingState>([{ id: "due", desc: false }]);
   const [editTask, setEditTask] = useState<TaskWithProject | null>(null);
 
   const { data: users } = useUsers();
@@ -104,30 +122,140 @@ export function Tasks() {
 
   const { data: tasks, isLoading, isError, error } = useTasks(filter);
 
-  // Hoisted once per render of the list rather than once per Row — the
+  // Hoisted once per render of the list rather than once per cell — the
   // day string is identical for every row in a single render pass.
   const todayDay = dateToDay(startOfToday());
 
-  const sorted = useMemo(() => {
-    if (!tasks) return [];
-    const copy = [...tasks];
-    copy.sort((a, b) => {
-      switch (sortKey) {
-        case "due": {
-          const ad = a.dueDate ? new Date(a.dueDate).getTime() : Number.POSITIVE_INFINITY;
-          const bd = b.dueDate ? new Date(b.dueDate).getTime() : Number.POSITIVE_INFINITY;
-          return ad - bd;
-        }
-        case "priority":
-          return PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
-        case "project":
-          return a.project.name.localeCompare(b.project.name);
-        case "status":
-          return STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status);
-      }
-    });
-    return copy;
-  }, [tasks, sortKey]);
+  const columns = useMemo<ColumnDef<TaskWithProject>[]>(
+    () => [
+      {
+        id: "id",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="ID" />,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span className="font-mono text-[11px] uppercase tracking-widest text-on-surface-variant">
+            T-{String(row.original.id).padStart(3, "0")}
+          </span>
+        ),
+        meta: { skeleton: <Skeleton className="h-3.5 w-10" /> },
+      },
+      {
+        id: "title",
+        accessorKey: "title",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Title" />,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <span className="font-medium text-on-surface">{row.original.title}</span>
+        ),
+        meta: { skeleton: <Skeleton className="h-3.5 w-32" /> },
+      },
+      {
+        id: "project",
+        accessorFn: (row) => row.project.name,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Project" />,
+        // DELIBERATE change from the old table's `a.project.name.localeCompare(b.project.name)`
+        // (reui-data-grid.md Checkpoint B fix round, SF4 — endorsed as an
+        // improvement, not a regression to fix): TanStack's built-in
+        // "alphanumeric" sortingFn gives natural number ordering within
+        // project names ("Project 2" before "Project 10"), which
+        // `localeCompare` does not. Trade-off: accented characters sort
+        // after "z" instead of locale-aware collation — acceptable for
+        // project names, which are operator-entered ASCII in practice.
+        sortingFn: "alphanumeric",
+        cell: ({ row }) => (
+          <Link
+            to={`/projects/${row.original.project.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="text-on-surface-variant hover:text-primary"
+          >
+            {row.original.project.name}
+          </Link>
+        ),
+        meta: { skeleton: <Skeleton className="h-3.5 w-24" /> },
+      },
+      {
+        id: "labels",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Labels" />,
+        enableSorting: false,
+        cell: ({ row }) => (
+          <div className="flex flex-wrap gap-1">
+            {row.original.labels.slice(0, 2).map((l) => (
+              <LabelChip key={l.id} label={l} compact />
+            ))}
+            {row.original.labels.length > 2 && (
+              <span className="text-[11px] text-on-surface-variant">
+                +{row.original.labels.length - 2}
+              </span>
+            )}
+          </div>
+        ),
+        meta: { skeleton: <Skeleton className="h-4 w-12 rounded-full" /> },
+      },
+      {
+        id: "priority",
+        accessorFn: (row) => PRIORITY_ORDER[row.priority],
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Priority" />,
+        cell: ({ row }) => <PriorityBadge priority={row.original.priority} compact />,
+        meta: { skeleton: <Skeleton className="h-4 w-10 rounded-full" /> },
+      },
+      {
+        id: "assignee",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Assignee" />,
+        enableSorting: false,
+        cell: ({ row }) => <AssigneeAvatar user={row.original.assignedTo} size="xs" />,
+        meta: { skeleton: <Skeleton className="h-5 w-5 rounded-full" /> },
+      },
+      {
+        id: "due",
+        accessorFn: (row) =>
+          row.dueDate ? new Date(row.dueDate).getTime() : Number.POSITIVE_INFINITY,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Due" />,
+        cell: ({ row }) => {
+          const task = row.original;
+          // Compare calendar days, not instants — lexicographic "yyyy-MM-dd"
+          // comparison is calendar-correct (dateField.ts). `todayDay` is
+          // hoisted above (once per render, not once per cell).
+          const isOverdue =
+            task.dueDate && task.status !== "DONE" && dayFromIso(task.dueDate)! < todayDay!;
+          return (
+            <span
+              className={
+                isOverdue
+                  ? "font-mono text-[12px] font-bold text-error"
+                  : "font-mono text-[12px] text-on-surface-variant"
+              }
+            >
+              {fmt(task.dueDate)}
+              {isOverdue && " · OVERDUE"}
+            </span>
+          );
+        },
+        meta: { skeleton: <Skeleton className="h-3.5 w-16" /> },
+      },
+      {
+        id: "status",
+        accessorFn: (row) => STATUSES.indexOf(row.status),
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => <TaskStatusChip status={row.original.status} />,
+        meta: { skeleton: <Skeleton className="h-4 w-16 rounded-full" /> },
+      },
+    ],
+    [todayDay],
+  );
+
+  const table = useReactTable({
+    data: tasks ?? EMPTY_TASKS,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getRowId: (row) => String(row.id),
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    // Pagination stays OFF (pilot verdict — see docs/plans/reui-data-grid.md
+    // Checkpoint B): no getPaginationRowModel, so the full sorted row model
+    // renders. `pageSize` here only sizes the loading-skeleton row count.
+    initialState: { pagination: { pageSize: 8 } },
+  });
 
   return (
     <div>
@@ -177,52 +305,61 @@ export function Tasks() {
         </button>
       </div>
 
-      {isLoading && (
-        <div className="h-64 animate-pulse rounded-xl bg-surface-container-low" />
-      )}
-
       {isError && (
         <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
           Could not load tasks: {(error as Error).message}
         </div>
       )}
 
-      {sorted.length > 0 && (
-        <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest">
-          <table className="w-full text-xs">
-            <thead className="border-b border-outline-variant bg-surface-container-low text-on-surface-variant">
-              <tr className="text-left">
-                <Th>ID</Th>
-                <Th>Title</Th>
-                <Th sortKey="project" current={sortKey} onSort={setSortKey}>
-                  Project
-                </Th>
-                <Th>Labels</Th>
-                <Th sortKey="priority" current={sortKey} onSort={setSortKey}>
-                  Priority
-                </Th>
-                <Th>Assignee</Th>
-                <Th sortKey="due" current={sortKey} onSort={setSortKey}>
-                  Due
-                </Th>
-                <Th sortKey="status" current={sortKey} onSort={setSortKey}>
-                  Status
-                </Th>
-              </tr>
-            </thead>
-            <tbody>
-              {sorted.map((t) => (
-                <Row key={t.id} task={t} todayDay={todayDay} onEdit={() => setEditTask(t)} />
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-
-      {!isLoading && sorted.length === 0 && (
-        <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center text-on-surface-variant">
-          <p className="text-sm">No tasks match the current filters.</p>
-        </div>
+      {!isError && (
+        <DataGrid
+          table={table}
+          recordCount={tasks?.length ?? 0}
+          isLoading={isLoading}
+          loadingMode="skeleton"
+          onRowClick={(task) => setEditTask(task)}
+          emptyMessage="No tasks match the current filters."
+          tableLayout={{
+            dense: true,
+            rowBorder: true,
+            headerBorder: true,
+            headerBackground: false,
+            // SOLVRO PATCH (reui-data-grid.md Checkpoint B fix round, SF2)
+            // — "fixed" gave every column TanStack's untouched 150px
+            // default (no column defines its own `size`), so long titles
+            // wrapped instead of the columns sizing proportionally to their
+            // content the way the pre-DataGrid `<table>` did. "auto" (→
+            // `table-auto` in DataGridTableBase, `<col>` left unsized) lets
+            // the browser's own auto-layout algorithm distribute width by
+            // content again, matching the old table's look.
+            width: "auto",
+          }}
+          tableClassNames={{
+            // SOLVRO PATCH (reui-data-grid.md Checkpoint B fix round, SF6)
+            // — dropped `text-on-surface-variant`: every `<th>` already
+            // renders `text-muted-foreground` via
+            // `data-grid-column-header.tsx`'s headerLabelClassName/
+            // headerButtonClassName (both header paths, since the fix
+            // round's lib/utils.ts twMerge fix), so this `<thead>`-level
+            // color class had no descendant left to reach. `bg-surface-
+            // container-low` stays — it's the one piece the grid's own
+            // `headerBackground` boolean can't reproduce (its `bg-muted`
+            // resolves to a different token, `--surface-container`).
+            header: "bg-surface-container-low",
+          }}
+        >
+          {/* SOLVRO PATCH — see data-grid.tsx's DataGridContainer: its
+              `border` prop is accepted-and-ignored (no hairline painted), so
+              the Level-1 hairline (DESIGN.md §4) is carried on this
+              className instead. Phase-wide decision (reui-data-grid.md
+              Checkpoint B) — every DataGrid table across the app wraps its
+              DataGridContainer this way. */}
+          <DataGridContainer className="rounded-sm border border-outline-variant bg-surface-container-lowest">
+            <DataGridScrollArea>
+              <DataGridTable />
+            </DataGridScrollArea>
+          </DataGridContainer>
+        </DataGrid>
       )}
 
       {editTask && (
@@ -235,101 +372,6 @@ export function Tasks() {
         />
       )}
     </div>
-  );
-}
-
-function Row({
-  task,
-  todayDay,
-  onEdit,
-}: {
-  task: TaskWithProject;
-  todayDay: string | null;
-  onEdit: () => void;
-}) {
-  // Compare calendar days, not instants —
-  // lexicographic "yyyy-MM-dd" comparison is calendar-correct (dateField.ts).
-  // `todayDay` is hoisted by the caller (once per render, not once per row).
-  const overdue = task.dueDate && task.status !== "DONE" && dayFromIso(task.dueDate)! < todayDay!;
-  return (
-    <tr
-      onClick={onEdit}
-      className="cursor-pointer border-t border-outline-variant transition-colors hover:bg-surface-container-low"
-    >
-      <td className="px-3 py-2">
-        <span className="font-mono text-[11px] uppercase tracking-widest text-on-surface-variant">
-          T-{String(task.id).padStart(3, "0")}
-        </span>
-      </td>
-      <td className="px-3 py-2 font-medium text-on-surface">{task.title}</td>
-      <td className="px-3 py-2">
-        <Link
-          to={`/projects/${task.project.id}`}
-          onClick={(e) => e.stopPropagation()}
-          className="text-on-surface-variant hover:text-primary"
-        >
-          {task.project.name}
-        </Link>
-      </td>
-      <td className="px-3 py-2">
-        <div className="flex flex-wrap gap-1">
-          {task.labels.slice(0, 2).map((l) => (
-            <LabelChip key={l.id} label={l} compact />
-          ))}
-          {task.labels.length > 2 && (
-            <span className="text-[11px] text-on-surface-variant">+{task.labels.length - 2}</span>
-          )}
-        </div>
-      </td>
-      <td className="px-3 py-2">
-        <PriorityBadge priority={task.priority} compact />
-      </td>
-      <td className="px-3 py-2">
-        <AssigneeAvatar user={task.assignedTo} size="xs" />
-      </td>
-      <td className="px-3 py-2">
-        <span
-          className={
-            overdue
-              ? "font-mono text-[12px] font-bold text-error"
-              : "font-mono text-[12px] text-on-surface-variant"
-          }
-        >
-          {fmt(task.dueDate)}
-          {overdue && " · OVERDUE"}
-        </span>
-      </td>
-      <td className="px-3 py-2">
-        <TaskStatusChip status={task.status} />
-      </td>
-    </tr>
-  );
-}
-
-function Th({
-  children,
-  sortKey,
-  current,
-  onSort,
-}: {
-  children: React.ReactNode;
-  sortKey?: SortKey;
-  current?: SortKey;
-  onSort?: (k: SortKey) => void;
-}) {
-  const sortable = sortKey && onSort;
-  return (
-    <th
-      onClick={sortable ? () => onSort!(sortKey) : undefined}
-      className={[
-        "px-3 py-2 font-display text-label-caps uppercase tracking-widest",
-        sortable ? "cursor-pointer hover:text-primary" : "",
-        sortKey && current === sortKey ? "text-primary" : "",
-      ].join(" ")}
-    >
-      {children}
-      {sortable && current === sortKey ? " ↑" : ""}
-    </th>
   );
 }
 
