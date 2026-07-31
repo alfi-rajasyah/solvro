@@ -15,6 +15,34 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-08-01 — Admin users and customer-detail projects on the data grid; customer cards on Frame
+
+**`frontend/src/pages/Admin.tsx`** — the admin panel's user table now renders through the vendored data grid: sortable name/email/role/projects/status columns with locale-aware comparison on the person columns (a codepoint sort would have placed capitalized names first), unpaginated, denser rows. Every action cell — role changes, activate/deactivate, password reset, delete, including both confirmation flows — behaves exactly as before, and inactive users keep their dimmed appearance. The Roles and Project-Override tabs' small tables are unchanged.
+
+**`frontend/src/pages/CustomerDetail.tsx`** — the Overview tab's linked-projects table is now the vendored data grid with sortable headers (locale-aware on TAM/SA person columns) and the same dense, horizontally self-scrolling layout as the other grids. Project status now renders through the shared `ProjectStatusChip` instead of a plain uppercase text span. Tabs, notes, placeholders, and the zero-projects empty state are unchanged.
+
+**`frontend/src/pages/Customers.tsx`** — customer card shells now compose the vendored `Frame` component instead of a hand-rolled bordered container — same radius, hairline, padding, hover, and layout; presentation-only.
+
+**`frontend/src/lib/tableSort.ts`** (new) — a shared `personNameSortingFn`, used by the Admin user table's Name column and the customer-detail projects table's TAM/SA columns above. TanStack's auto-detected sort samples rows from index 10 onward, so any table with 10 or fewer rows is never sampled and silently falls back to raw codepoint comparison (capitalized names sort before lowercase ones); declaring this sortingFn explicitly avoids that regardless of row count.
+
+### Changed — 2026-08-01 — Tasks list renders through the vendored data grid
+
+**`frontend/src/pages/Tasks.tsx`** — the cross-project task list's hand-rolled table is now the vendored ReUI data grid: same filter chips, checkboxes, row-click-to-edit, loading and empty states; sorting moves onto sortable column headers (default due-ascending) with denser rows and no pagination — the full filtered list renders, and on narrow screens the grid scrolls horizontally inside its own container while the page body stays still. Column widths are content-proportional, and project-name sorting deliberately switches to natural number ordering (recorded in-code; accented characters now sort after "z").
+
+**`frontend/src/lib/utils.ts`** (+ new **`utils.test.ts`**) — the class-merging helper now registers the design system's six named typography roles (`h1`, `h2`, `body-lg`, `body-sm`, `data-mono`, `label-caps`) as font sizes. They previously fell through to the merger's catch-all colour matcher, which could silently discard a real text colour used alongside them in vendored components — the cause of an invisible-header bug caught in review. Five regression tests lock the behavior.
+
+**`frontend/src/components/reui/data-grid/data-grid-column-header.tsx`, `data-grid-table.tsx`** — column-header labels use the design system's label-caps role on both header paths, giving uniform 12px/700/uppercase grid headers.
+
+### Added — 2026-08-01 — Vendored ReUI Data Grid family, Badge, and three primitives (first migration dependencies)
+
+**`frontend/package.json`** — three new dependencies, user-approved 2026-08-01: `@tanstack/react-table` + `@tanstack/react-virtual` (headless table logic and row virtualization for the vendored data grid) and `@dnd-kit/modifiers` (drag-constraint helpers its column/row drag uses). These are the first dependency additions of the ReUI migration; the lockfile is written from inside the dev container, not the host — host and CI npm versions disagree about lockfile shape.
+
+**`frontend/src/components/reui/data-grid/`** (new directory, 10 files) — the ReUI data-grid family: grid context, table + virtualized renderers, sortable column headers, column filters/visibility, pagination, drag helpers, scroll wrapper. Local deviations are marked `// SOLVRO PATCH`: the registry's icon-placeholder build artifact was replaced with lucide icons; the pinned-column separators used an inset shadow with an undefined custom property (it silently painted nothing, upstream included) and hardcoded-rgba pinned-row shadows — both replaced with real hairline borders; all bare border utilities were paired with the hairline token; a decorative shadow was dropped; dead generics and an unsupported submenu prop were cleaned.
+
+**`frontend/src/components/reui/badge.tsx`** — status badge riding the tone tokens added earlier in this release; the orphaned "focus" variants were dropped (their tokens exist nowhere, upstream included), and tint-variant text follows the app's text-on-tint convention.
+
+**`frontend/src/components/ui/select.tsx`** (hand-authored on Base UI — the upstream registry version is Radix-based and ReUI's re-export is license-gated), **`ui/skeleton.tsx`, `ui/spinner.tsx`** (shadcn registry, verified Radix-free). Consumers land with the table migrations in this release.
+
 ### Fixed — 2026-07-31 — Cross-project task specs follow the chip filter flow
 
 **`e2e/tests/kanban-dnd.spec.ts`**, **`e2e/fixtures/seed.ts`** — the modal-path specs scoped `/tasks` through the old customer `<select>`, which the filter-chip toolbar replaced, so three tests timed out looking for a control that no longer exists. The shared helper now drives the chip flow (open "+ Filter", pick Customer, pick the fixture customer by display name), and the seed fixture exposes the customer's display name alongside its id for that purpose.
