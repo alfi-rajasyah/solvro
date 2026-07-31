@@ -15,6 +15,30 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-31 — Popup menus no longer draw a text-colored border
+
+**`frontend/src/components/ui/dropdown-menu.tsx`, `context-menu.tsx`, `popover.tsx`** — every popup surface carried a bare `border` with no color source, so the border fell back to the text color: a near-white outline in dark mode and near-black in light. All five popup class lists now use the standard hairline (`border-border` → `outline-variant`), matching every other bordered surface in the app.
+
+### Fixed — 2026-07-31 — Vendored controls forward refs on React 18; date-picker keyboard focus restored
+
+**`frontend/src/components/ui/button.tsx`, `input-group.tsx`** (with the earlier `input.tsx`/`textarea.tsx` fixes) — the vendored controls now forward refs (`React.forwardRef`); the upstream registry targets React 19, where refs are plain props, so on this project's React 18 every ref silently arrived null. Restored behavior: keyboard navigation in the date pickers now moves focus to the highlighted day (the calendar always had this code — its ref was dead), the filter menus' anchor refs are live, and the "Function components cannot be given refs" console warning is gone.
+
+### Changed — 2026-07-31 — Filter chips replace the dropdown filter rows on Tasks and Projects
+
+**`frontend/src/pages/Tasks.tsx`** — the cross-project task list's four always-visible dropdowns (status, priority, assignee, customer) are now filter chips added on demand from a single "+ Filter" control, backed by the vendored Filters component. The overdue and top-level checkboxes, column sorting, and the Reset behavior are unchanged, and filter requests to the server keep their exact previous shape, so cached results stay valid.
+
+**`frontend/src/pages/Projects.tsx`** — the customer filter is the same chip control instead of a plain dropdown. Deep links with `?customerId=`, clearing the filter, and the automatic reset when a customer no longer exists all behave exactly as before.
+
+### Changed — 2026-07-31 — One focus style for all vendored form controls
+
+**`frontend/src/components/ui/button.tsx`, `checkbox.tsx`, `calendar.tsx`, `input.tsx`, `textarea.tsx`, `input-group.tsx`** — every vendored form control now uses the design system's focus treatment — a 2px primary outline at 30% opacity — replacing the mixed 3px half-opacity ring the vendored files shipped with. The remaining drop shadows in `button` (outline variant), `checkbox`, and `calendar` were removed (shadows are reserved for overlays), and text inputs sit on the standard deepest-inset surface with the same small radius as every hand-written form field. Focused controls across the app now match the form modals.
+
+### Added — 2026-07-31 — Vendored ReUI Filters and six form primitives
+
+**`frontend/src/components/reui/filters.tsx`** (new) — vendored ReUI's Filters chip-toolbar system (Base UI + class-variance-authority; zero npm dependency changes). Local deviations are marked `// SOLVRO PATCH`: the upstream demo's icon placeholder was replaced with lucide icons, and a submenu `side` prop that Solvro's dropdown does not forward was dropped (Base UI already opens nested submenus on the inline-end side); the filter chip's `sm`/`lg` control heights were aligned to the app's button ladder, and an upstream radius formula that relies on a custom property this codebase does not define was replaced with the standard small radius. Three later additions: when a field pins a single operator, the chip renders a compact static "is" segment instead of a dropdown that could never change anything; the default "+ Filter" trigger inherits the toolbar's size so the whole row shares one control height; and when only one filterable field is available — always on Projects, or on Tasks once the other fields are chipped — "+ Filter" opens that field's option list directly instead of a one-item field menu.
+
+**`frontend/src/components/ui/button-group.tsx`, `input.tsx`, `input-group.tsx`, `kbd.tsx`, `textarea.tsx`** (new) — generic form primitives vendored from the canonical shadcn registry (ReUI's re-export of these is license-gated); drop shadows stripped per the design system, and `button-group` drops the upstream Slot-based `asChild` composition (unused by the filter toolbar; matches how the project's other Base-UI primitives dropped it). **`frontend/src/components/ui/separator.tsx`** (new) — hand-authored on Base UI's Separator because the upstream registry version is Radix-based, which the project's Base-UI-only rule forbids. These components are consumed by the Tasks and Projects filter-toolbar updates in this release.
+
 ### Changed — 2026-07-31 — Empty states, the Timeline tab, and form errors render on the vendored ReUI components
 
 **`frontend/src/components/EmptyState.tsx`** — the shared empty-state placeholder now composes the vendored `Frame` and `IconTile` instead of a hand-rolled div: same dashed `outline-variant` border, small radius, muted surface, and centered layout (verified at desktop and 375px widths in both themes); the glyph now sits in a quiet bordered tile sized to the tile's proportions. The props API is unchanged, so the five consuming views are untouched (`Projects.tsx` defines its own local empty state and never imported the shared one).
