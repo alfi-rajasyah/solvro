@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import {
@@ -312,12 +313,9 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
         </label>
 
         {error && (
-          <div
-            role="alert"
-            className="rounded-lg border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
-          >
-            {error}
-          </div>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
       </form>
     </Modal>
