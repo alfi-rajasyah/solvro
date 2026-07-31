@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-07-31 — Cross-project task specs follow the chip filter flow
+
+**`e2e/tests/kanban-dnd.spec.ts`**, **`e2e/fixtures/seed.ts`** — the modal-path specs scoped `/tasks` through the old customer `<select>`, which the filter-chip toolbar replaced, so three tests timed out looking for a control that no longer exists. The shared helper now drives the chip flow (open "+ Filter", pick Customer, pick the fixture customer by display name), and the seed fixture exposes the customer's display name alongside its id for that purpose.
+
 ### Fixed — 2026-07-31 — Popup menus no longer draw a text-colored border
 
 **`frontend/src/components/ui/dropdown-menu.tsx`, `context-menu.tsx`, `popover.tsx`** — every popup surface carried a bare `border` with no color source, so the border fell back to the text color: a near-white outline in dark mode and near-black in light. All five popup class lists now use the standard hairline (`border-border` → `outline-variant`), matching every other bordered surface in the app.
