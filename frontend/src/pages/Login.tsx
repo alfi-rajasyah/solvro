@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useGoogleAuthConfig } from "@/lib/queries";
 import { BrandMark } from "@/components/BrandMark";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 
 function messageForApiError(err: ApiError): string {
   const code =
@@ -239,12 +240,9 @@ export function Login() {
           ) : null}
 
           {error && (
-            <div
-              role="alert"
-              className="mt-4 rounded-sm border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
-            >
-              {error}
-            </div>
+            <Alert variant="destructive" className="mt-4">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
           )}
 
           {googleAvailable && (

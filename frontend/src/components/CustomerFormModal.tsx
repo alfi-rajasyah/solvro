@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { Modal } from "./Modal";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
 import {
   type CustomerSummary,
@@ -162,12 +163,9 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
         </Field>
 
         {error && (
-          <div
-            role="alert"
-            className="rounded-sm border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
-          >
-            {error}
-          </div>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
       </form>
     </Modal>

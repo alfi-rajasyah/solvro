@@ -1,5 +1,8 @@
 import type { ReactNode } from "react";
 
+import { Frame } from "@/components/reui/frame";
+import { IconTile } from "@/components/reui/icon-tile";
+
 interface EmptyStateProps {
   icon?: string;
   title?: string;
@@ -14,10 +17,19 @@ export function EmptyState({
   action,
 }: EmptyStateProps) {
   return (
-    <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center">
-      <span className="material-symbols-outlined mb-2 text-4xl text-on-surface-variant">
-        {icon}
-      </span>
+    <Frame
+      className="[--frame-radius:var(--radius-sm)] [--frame-gap:0px] [--frame-px:--spacing(12)] [--frame-py:--spacing(12)] items-center border-dashed border-outline-variant bg-surface-container-lowest text-center"
+    >
+      <IconTile
+        aria-hidden="true"
+        variant="outline"
+        size="lg"
+        className="mb-2"
+      >
+        <span className="material-symbols-outlined text-2xl text-on-surface-variant">
+          {icon}
+        </span>
+      </IconTile>
       {title && (
         <p className="mb-1 font-display text-sm font-semibold text-on-surface">
           {title}
@@ -25,6 +37,6 @@ export function EmptyState({
       )}
       <p className="mb-4 text-sm text-on-surface-variant">{message}</p>
       {action}
-    </div>
+    </Frame>
   );
 }

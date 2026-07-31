@@ -15,6 +15,20 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-07-31 — Empty states, the Timeline tab, and form errors render on the vendored ReUI components
+
+**`frontend/src/components/EmptyState.tsx`** — the shared empty-state placeholder now composes the vendored `Frame` and `IconTile` instead of a hand-rolled div: same dashed `outline-variant` border, small radius, muted surface, and centered layout (verified at desktop and 375px widths in both themes); the glyph now sits in a quiet bordered tile sized to the tile's proportions. The props API is unchanged, so the five consuming views are untouched (`Projects.tsx` defines its own local empty state and never imported the shared one).
+
+**`frontend/src/pages/views/ProjectTimeline.tsx`** — the Timeline tab renders its task list on the vendored ReUI `Timeline` primitives (spine, dot indicators, separators) instead of a hand-rolled line-and-dot layout, keeping the previous 16px card rhythm and keeping list semantics intact for screen readers. Task ordering, overdue highlighting, the status buttons, and the edit dialog are unchanged; the DONE indicator now uses the theme-aware chip-emerald token instead of a fixed palette green, the tab's empty placeholder reuses the shared `EmptyState` component, and the vendored component's built-in step-highlighting is disabled because this view has no notion of a "current step".
+
+**`frontend/src/pages/Login.tsx`**, **`frontend/src/components/TaskFormModal.tsx`, `ProjectFormModal.tsx`, `CustomerFormModal.tsx`, `RiskFormModal.tsx`** — form-error messages now render in the vendored `Alert` (destructive variant) instead of ad-hoc colored boxes, with identical show/hide conditions and message text. Messages use the alert's description slot rather than its title slot (whose one-line clamp would have truncated long API error text), and the vendored alert's destructive variant was patched so the message text renders in the error palette rather than muted grey.
+
+### Added — 2026-07-31 — Vendored ReUI presentation components (Timeline, Alert, Frame, IconTile, IconStack)
+
+**`frontend/src/components/reui/timeline.tsx`, `alert.tsx`, `frame.tsx`, `icon-tile.tsx`, `icon-stack.tsx`** (new) — vendored the five ReUI presentation components (Base-UI + class-variance-authority; zero new dependencies). Local deviations are marked `// SOLVRO PATCH`: drop shadows were removed from `Frame` and `IconTile` (the design system reserves shadows for overlays), the `Alert` `default` variant gained an explicit `border-border` (upstream leaves that variant's hairline at `currentColor`), the `Alert` `destructive` variant colors its message text with the error palette (upstream leaves it muted grey), and dead class fragments that ship in the upstream `frame` registry item were deleted.
+
+**`frontend/src/index.css`** — the shadcn semantic bridge gained `--color-success`, `--color-info`, `--color-warning`, `--color-invert`, and `--color-invert-foreground`, each aliasing an existing theme token (the chip emerald/amber/violet text values and the inverse-surface pair) so `Alert`'s variants render from the established palette in both light and dark mode; no new custom properties were introduced. These components are consumed by the empty-state, timeline, and form-error updates in this release.
+
 ### Changed — 2026-07-31 — Corrected the PDF-in-tab code comment
 
 **`frontend/src/lib/gantt/exportPdf.ts`** — the comment above the browser-viewer branch attributed production's failing Gantt export downloads to a Safe Browsing check stalling on the plain-HTTP origin, and cited a planning document that has since moved. Both were wrong: Chromium-family browsers block downloads that originate from a non-trustworthy origin, independently of Safe Browsing, of network reachability, and of file type — which is why opening the PDF in a tab still works. The comment now records that cause and drops the stale path. Comment only; export behaviour is unchanged.

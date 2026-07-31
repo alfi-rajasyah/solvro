@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { Modal } from "./Modal";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import {
   type Risk,
   type RiskCategory,
@@ -125,9 +126,9 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
     >
       <div className="space-y-4">
         {error && (
-          <div className="rounded-sm border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container">
-            {error}
-          </div>
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         <div>
