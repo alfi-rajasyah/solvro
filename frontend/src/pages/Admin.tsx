@@ -1,4 +1,11 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import { Modal } from "@/components/Modal";
 import { Tabs } from "@/components/Tabs";
 import { ApiError } from "@/lib/api";
@@ -24,6 +31,12 @@ import {
 import type { Role } from "@/lib/auth";
 import { PERMISSION_CATALOG, useAuth } from "@/lib/auth";
 import { copyText } from "@/lib/clipboard";
+import { personNameSortingFn } from "@/lib/tableSort";
+import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-grid";
+import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
+import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
+import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type Tab = "users" | "roles" | "signin" | "projects";
 
@@ -36,6 +49,12 @@ const TAB_ITEMS: ReadonlyArray<{ key: Tab; label: string }> = [
 
 // Domain regex matches the backend validator (PATCH /admin/settings/auth).
 const DOMAIN_PATTERN = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,}$/;
+
+// Stable empty-array reference for the users DataGrid's `data:` while
+// useAdminUsers is loading — same rationale as Tasks.tsx's EMPTY_TASKS:
+// avoids a fresh `[]` literal (and therefore a new TanStack row model) on
+// every render that a `users ?? []` inline fallback would produce.
+const EMPTY_USERS: AdminUser[] = [];
 
 export function Admin() {
   const [tab, setTab] = useState<Tab>("users");
@@ -68,6 +87,14 @@ export function Admin() {
 function UsersTab() {
   const { user: currentUser } = useAuth();
   const { data: users, isLoading, isError } = useAdminUsers();
+  // Loading-safe fallback (fix round S2): the grid's own `loadingMode`
+  // skeleton is now the loading UI (see `isLoading` on <DataGrid> below), so
+  // this component no longer blocks its whole render on `isLoading` — every
+  // `users`-derived computation below (KPI counts, table data, recordCount)
+  // reads through `rows` instead of the possibly-undefined `users` so they
+  // render safely (as zero/empty) during the brief window before the first
+  // response lands.
+  const rows = users ?? EMPTY_USERS;
   const { data: roles } = useAdminRoles();
   const createUser = useAdminCreateUser();
   const deleteUser = useAdminDeleteUser();
@@ -98,8 +125,251 @@ function UsersTab() {
       : assignableRoles;
   }
 
-  if (isLoading) return <p className="text-on-surface-variant">Loading users…</p>;
-  if (isError || !users) return <p className="text-error">Failed to load users.</p>;
+  // No default sort — rows render in the order useAdminUsers returns them,
+  // same as the pre-DataGrid table.
+  const [sorting, setSorting] = useState<SortingState>([]);
+
+  // `handleRoleChange`/`handleToggleActive`/`handleResetPassword`/
+  // `handleDelete` are `function` declarations further down this component —
+  // hoisted within the function body, so referencing them here (columns are
+  // defined before their textual position) is valid.
+  //
+  // Not wrapped in useMemo: several cell renderers close over the mutation
+  // handlers above, and this table has no resizing/pinning/visibility state
+  // (Wave 3 binding decisions leave those off) for a stale/fresh columns
+  // identity to disturb — a plain per-render array keeps every handler
+  // reference current with zero staleness risk, at negligible cost for an
+  // admin-sized user list.
+  const columns: ColumnDef<AdminUser>[] = [
+    {
+      id: "user",
+      accessorKey: "username",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="User" />,
+      // Person column (username) — decision 7 (reui-data-grid.md
+      // Checkpoint B) requires every string column to declare an explicit
+      // sortingFn. Shared helper: see lib/tableSort.ts for the full
+      // ≤10-row auto-detection rationale (also used by CustomerDetail.tsx's
+      // TAM/SA columns).
+      sortingFn: personNameSortingFn,
+      cell: ({ row }) => (
+        <span
+          className={[
+            "font-medium text-on-surface",
+            row.original.active ? "" : "opacity-60",
+          ].join(" ")}
+        >
+          {row.original.username}
+        </span>
+      ),
+      meta: { skeleton: <Skeleton className="h-3.5 w-24" /> },
+    },
+    {
+      id: "email",
+      accessorKey: "email",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Email" />,
+      // Person column — same shared-helper rationale as "user" above.
+      sortingFn: personNameSortingFn,
+      cell: ({ row }) => (
+        <span
+          className={[
+            // text-xs (13px, this theme's own --text-xs override — see
+            // index.css) replaces the carried-over text-[13px] magic number.
+            "font-mono text-xs text-on-surface-variant",
+            row.original.active ? "" : "opacity-60",
+          ].join(" ")}
+        >
+          {row.original.email}
+        </span>
+      ),
+      meta: { skeleton: <Skeleton className="h-3.5 w-36" /> },
+    },
+    {
+      id: "provider",
+      accessorFn: (row) => row.provider,
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Provider" />,
+      enableSorting: false,
+      cell: ({ row }) => (
+        <span className={row.original.active ? undefined : "opacity-60"}>
+          <ProviderChip provider={row.original.provider} />
+        </span>
+      ),
+      meta: { skeleton: <Skeleton className="h-4 w-16 rounded-full" /> },
+    },
+    {
+      id: "role",
+      accessorKey: "role",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Role" />,
+      // Not a person column — role names are operator-entered, uppercase
+      // ASCII only (create/rename validates `[A-Z0-9_]+`), so the
+      // "alphanumeric" built-in is enough. Still explicit per decision 7's
+      // ≤10-row auto-detection gap (see "user"/"email" above) — same
+      // deliberate choice as Tasks.tsx's project-name column.
+      sortingFn: "alphanumeric",
+      cell: ({ row }) => {
+        const u = row.original;
+        const isSelf = currentUser?.id === u.id;
+        return (
+          <div
+            className={["flex items-center gap-2", u.active ? "" : "opacity-60"].join(
+              " ",
+            )}
+          >
+            <select
+              value={u.role}
+              disabled={isSelf}
+              onChange={(e) => handleRoleChange(u, e.target.value as Role)}
+              // text-label-caps (12px/700/0.05em) replaces the carried-over
+              // text-[12px] font-bold ... tracking-wider combo. Near-exact:
+              // size/weight/tracking match the token, but the token also
+              // sets line-height 1 where text-[12px] inherited ~1.35 — the
+              // select renders ~4px shorter, accepted as a density win.
+              // font-bold stays explicit — see data-grid-column-header.tsx's
+              // comment on why the token's baked-in weight needs the guard.
+              className="rounded-sm border border-outline-variant bg-surface px-2 py-1 font-display text-label-caps font-bold uppercase text-on-surface focus:border-primary focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
+              title={isSelf ? "You cannot change your own role" : undefined}
+            >
+              {roleOptionsFor(u.role).map((r) => (
+                <option key={r} value={r} disabled={r === "PENDING"}>
+                  {r}
+                </option>
+              ))}
+            </select>
+            {u.role === "PENDING" && (
+              <span
+                title="Auto-provisioned via Google. Pick a role above to grant access."
+                // No token matches 10px (the smallest named size is
+                // text-label-caps at 12px) — left as an arbitrary value per
+                // N5 (do not invent a size to fill the gap).
+                className="rounded-full bg-chip-amber-bg px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-chip-amber-text"
+              >
+                Needs role
+              </span>
+            )}
+          </div>
+        );
+      },
+      meta: { skeleton: <Skeleton className="h-6 w-28" /> },
+    },
+    {
+      id: "projects",
+      // Sorts by projectsAsTAM only — the cell displays "TAM / SA" as a
+      // single combined string, but there's no single natural sort order
+      // over a pair, so clicking this header orders by the TAM count (the
+      // first of the two numbers shown), same as the pre-DataGrid table's
+      // implicit column order never having offered a "sort by SA" option.
+      accessorFn: (row) => row.projectsAsTAM,
+      header: ({ column }) => (
+        <DataGridColumnHeader column={column} title="Projects (TAM/SA)" />
+      ),
+      cell: ({ row }) => (
+        <span className={row.original.active ? undefined : "opacity-60"}>
+          {row.original.projectsAsTAM} / {row.original.projectsAsSA}
+        </span>
+      ),
+      meta: {
+        headerClassName: "text-right",
+        // text-xs (13px, this theme's own --text-xs override) replaces the
+        // carried-over text-[13px] magic number — see the "email" column.
+        cellClassName: "text-right font-mono text-xs text-on-surface-variant",
+        skeleton: <Skeleton className="ml-auto h-3.5 w-10" />,
+      },
+    },
+    {
+      id: "status",
+      accessorFn: (row) => (row.active ? 1 : 0),
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Status" />,
+      cell: ({ row }) => (
+        <span
+          className={[
+            "rounded-full px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
+            row.original.active
+              ? "bg-chip-emerald-bg text-chip-emerald-text"
+              : "bg-surface-container-high text-on-surface-variant opacity-60",
+          ].join(" ")}
+        >
+          {row.original.active ? "Active" : "Disabled"}
+        </span>
+      ),
+      meta: { skeleton: <Skeleton className="h-4 w-16 rounded-full" /> },
+    },
+    {
+      id: "actions",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Actions" />,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const u = row.original;
+        const isSelf = currentUser?.id === u.id;
+        return (
+          <div
+            className={[
+              "flex items-center justify-end gap-1",
+              u.active ? "" : "opacity-60",
+            ].join(" ")}
+          >
+            <button
+              type="button"
+              onClick={() => handleToggleActive(u)}
+              disabled={isSelf}
+              className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
+              title={isSelf ? "You cannot deactivate yourself" : undefined}
+            >
+              {u.active ? "Deactivate" : "Reactivate"}
+            </button>
+            <button
+              type="button"
+              onClick={() => handleResetPassword(u)}
+              className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+            >
+              Reset password
+            </button>
+            <button
+              type="button"
+              onClick={() => handleDelete(u)}
+              disabled={isSelf || deleteUser.isPending}
+              className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
+              title={
+                isSelf
+                  ? "You cannot delete yourself"
+                  : "Permanently delete this user"
+              }
+            >
+              Delete
+            </button>
+          </div>
+        );
+      },
+      meta: {
+        headerClassName: "text-right",
+        skeleton: <Skeleton className="ml-auto h-6 w-44" />,
+      },
+    },
+  ];
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getRowId: (row) => String(row.id),
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    // Pagination stays OFF (docs/plans/reui-data-grid.md Checkpoint B,
+    // binding for every DataGrid table this phase): no
+    // getPaginationRowModel, so the full sorted row model renders.
+    // `pageSize` here only sizes the loading-skeleton row count.
+    initialState: { pagination: { pageSize: 8 } },
+  });
+
+  // Fix round S2: no blocking return on isLoading anymore — Tasks.tsx's own
+  // pilot pattern (never blocks the whole page on isLoading, only shows a
+  // banner in place of the grid on a genuine isError) is the model. The
+  // grid's `isLoading`/`loadingMode="skeleton"` below is the loading UI now,
+  // engaging the seven `meta.skeleton` entries in `columns`. isError still
+  // short-circuits the whole tab, same as before — a fetch failure means
+  // there's nothing else on this tab worth rendering (the KPI strip and
+  // create-user form are meaningless without a user list to reconcile
+  // against), so this keeps the original full-block behavior for that case.
+  if (isError) return <p className="text-error">Failed to load users.</p>;
 
   async function handleCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -166,9 +436,9 @@ function UsersTab() {
     }
   }
 
-  const activeCount = users.filter((u) => u.active).length;
-  const adminCount = users.filter((u) => u.role === "ADMIN").length;
-  const pendingCount = users.filter((u) => u.role === "PENDING").length;
+  const activeCount = rows.filter((u) => u.active).length;
+  const adminCount = rows.filter((u) => u.role === "ADMIN").length;
+  const pendingCount = rows.filter((u) => u.role === "PENDING").length;
   const customRoleCount = (roles ?? []).filter(
     (r) => !["ADMIN", "TAM", "SA", "STAKEHOLDER", "PENDING"].includes(r.roleName),
   ).length;
@@ -177,10 +447,10 @@ function UsersTab() {
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <AdminKpi label="Users" value={users.length} hint={`${activeCount} active · ${adminCount} admins`} icon="group" tone="primary" />
+        <AdminKpi label="Users" value={rows.length} hint={`${activeCount} active · ${adminCount} admins`} icon="group" tone="primary" />
         <AdminKpi label="Pending" value={pendingCount} hint="Needs role assignment" icon="hourglass_top" tone="amber" />
         <AdminKpi label="Custom roles" value={customRoleCount} hint={`${(roles ?? []).length} total roles`} icon="shield_person" tone="emerald" />
-        <AdminKpi label="Inactive" value={users.length - activeCount} hint="Cannot sign in" icon="block" tone="neutral" />
+        <AdminKpi label="Inactive" value={rows.length - activeCount} hint="Cannot sign in" icon="block" tone="neutral" />
       </div>
       {error && (
         <div className="rounded-sm border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
@@ -281,116 +551,43 @@ function UsersTab() {
         </button>
       </form>
 
-      <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
-            <tr>
-              <th className="px-3 py-2">User</th>
-              <th className="px-3 py-2">Email</th>
-              <th className="px-3 py-2">Provider</th>
-              <th className="px-3 py-2">Role</th>
-              <th className="px-3 py-2 text-right">Projects (TAM/SA)</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {users.map((u) => {
-              const isSelf = currentUser?.id === u.id;
-              return (
-                <tr
-                  key={u.id}
-                  className={[
-                    "border-b border-outline-variant/60 last:border-0",
-                    u.active ? "" : "opacity-60",
-                  ].join(" ")}
-                >
-                  <td className="px-3 py-2 font-medium text-on-surface">{u.username}</td>
-                  <td className="px-3 py-2 font-mono text-[13px] text-on-surface-variant">
-                    {u.email}
-                  </td>
-                  <td className="px-3 py-2">
-                    <ProviderChip provider={u.provider} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={u.role}
-                        disabled={isSelf}
-                        onChange={(e) => handleRoleChange(u, e.target.value as Role)}
-                        className="rounded-sm border border-outline-variant bg-surface px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
-                        title={isSelf ? "You cannot change your own role" : undefined}
-                      >
-                        {roleOptionsFor(u.role).map((r) => (
-                          <option key={r} value={r} disabled={r === "PENDING"}>
-                            {r}
-                          </option>
-                        ))}
-                      </select>
-                      {u.role === "PENDING" && (
-                        <span
-                          title="Auto-provisioned via Google. Pick a role above to grant access."
-                          className="rounded-full bg-chip-amber-bg px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-chip-amber-text"
-                        >
-                          Needs role
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                  <td className="px-3 py-2 text-right font-mono text-[13px] text-on-surface-variant">
-                    {u.projectsAsTAM} / {u.projectsAsSA}
-                  </td>
-                  <td className="px-3 py-2">
-                    <span
-                      className={[
-                        "rounded-full px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
-                        u.active
-                          ? "bg-chip-emerald-bg text-chip-emerald-text"
-                          : "bg-surface-container-high text-on-surface-variant",
-                      ].join(" ")}
-                    >
-                      {u.active ? "Active" : "Disabled"}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <div className="flex items-center justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleToggleActive(u)}
-                        disabled={isSelf}
-                        className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface disabled:cursor-not-allowed disabled:opacity-50"
-                        title={isSelf ? "You cannot deactivate yourself" : undefined}
-                      >
-                        {u.active ? "Deactivate" : "Reactivate"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleResetPassword(u)}
-                        className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-                      >
-                        Reset password
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(u)}
-                        disabled={isSelf || deleteUser.isPending}
-                        className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
-                        title={
-                          isSelf
-                            ? "You cannot delete yourself"
-                            : "Permanently delete this user"
-                        }
-                      >
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid
+        table={table}
+        recordCount={rows.length}
+        isLoading={isLoading}
+        loadingMode="skeleton"
+        emptyMessage="No users found."
+        tableLayout={{
+          dense: true,
+          rowBorder: true,
+          headerBorder: true,
+          headerBackground: false,
+          // SOLVRO PATCH — see Tasks.tsx's DataGrid pilot (reui-data-grid.md
+          // Checkpoint B, decision 6): "fixed" pins every column to
+          // TanStack's untouched 150px default, crushing the table instead
+          // of sizing columns to content. "auto" restores content-
+          // proportional layout, matching the pre-DataGrid table's look.
+          width: "auto",
+        }}
+        tableClassNames={{
+          // SOLVRO PATCH — Checkpoint B decision 2: the grid's own
+          // `headerBackground` boolean resolves to `bg-muted` →
+          // `surface-container`, the wrong token; pinned here instead. No
+          // text colour here — every `<th>` already renders
+          // `text-muted-foreground` via data-grid-column-header.tsx.
+          header: "bg-surface-container-low",
+        }}
+      >
+        {/* SOLVRO PATCH — DataGridContainer's own `border` prop is
+            accepted-and-ignored (see data-grid.tsx), so the Level-1 hairline
+            (DESIGN.md §4) is carried on this className instead — same
+            phase-wide convention as Tasks.tsx's pilot. */}
+        <DataGridContainer className="rounded-sm border border-outline-variant bg-surface-container-lowest">
+          <DataGridScrollArea>
+            <DataGridTable />
+          </DataGridScrollArea>
+        </DataGridContainer>
+      </DataGrid>
     </div>
   );
 }
