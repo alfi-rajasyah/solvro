@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
 import { useProjectContext } from "../ProjectDetail";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
+import { EmptyState } from "@/components/EmptyState";
 import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
+import { Timeline, TimelineIndicator, TimelineItem, TimelineSeparator } from "@/components/reui/timeline";
 import { TaskStatusChip } from "@/components/StatusChip";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -11,6 +13,21 @@ import { type Priority, type Task, type TaskStatus, useProjectTasks, useUpdateTa
 
 const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
 const PRIORITY_ORDER: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+
+// SOLVRO PATCH: status -> TimelineIndicator color, transplanted verbatim from the
+// hand-rolled dot markers this file used to render (DONE emerald, IN_PROGRESS
+// primary, TODO neutral). Border stays the surface-container-lowest "cutout"
+// ring on every status, matching the previous dot's border.
+// SOLVRO PATCH (fix round): DONE now points at the chip-emerald semantic
+// token (index.css's `@theme inline` bridge) instead of the raw Tailwind
+// palette color it carried over from the old hand-rolled dot — this makes
+// the DONE indicator theme-aware (mint in dark, green in light) like the
+// rest of the chip family, rather than a fixed palette shade.
+const STATUS_INDICATOR_CLASS: Record<TaskStatus, string> = {
+  DONE: "border-surface-container-lowest bg-chip-emerald-text",
+  IN_PROGRESS: "border-surface-container-lowest bg-primary",
+  TODO: "border-surface-container-lowest bg-surface-container-highest",
+};
 
 export function ProjectTimeline() {
   const { project } = useProjectContext();
@@ -69,20 +86,26 @@ export function ProjectTimeline() {
   }
 
   if (ordered.length === 0) {
-    return (
-      <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center text-on-surface-variant">
-        <p className="text-sm">No tasks yet. Add tasks from the Kanban board.</p>
-      </div>
-    );
+    return <EmptyState icon="checklist" message="No tasks yet. Add tasks from the Kanban board." />;
   }
 
   return (
     <>
       <div className="md:min-h-0 md:flex-1 md:overflow-y-auto">
-        <ol className="relative ml-3 border-l border-outline-variant">
-          {ordered.map((task) => (
-            <TimelineItem
+        {/* SOLVRO PATCH: `value={-1}` neutralizes ReUI Timeline's step/active-state
+            concept. This view has no "current step" — every TaskTimelineItem's
+            `step` is a 0-based index (>= 0), so `step <= activeStep` never holds
+            and no item ever receives the vendored component's `data-completed`
+            active styling (which would otherwise ring one indicator in primary
+            and tint the separator before it). */}
+        {/* SOLVRO PATCH (fix round): `role="list"`/`role="listitem"` restore the
+            list semantics the old `<ol>`/`<li>` gave screen readers — the
+            vendored primitives render plain `<div>`s. */}
+        <Timeline value={-1} role="list">
+          {ordered.map((task, index) => (
+            <TaskTimelineItem
               key={task.id}
+              step={index}
               task={task}
               subtasks={subtasksOf.get(task.id) ?? []}
               canEdit={canEdit}
@@ -91,7 +114,7 @@ export function ProjectTimeline() {
               onEdit={() => setEditTask(task)}
             />
           ))}
-        </ol>
+        </Timeline>
       </div>
 
       {editTask && (
@@ -107,7 +130,8 @@ export function ProjectTimeline() {
   );
 }
 
-function TimelineItem({
+function TaskTimelineItem({
+  step,
   task,
   subtasks,
   canEdit,
@@ -115,6 +139,7 @@ function TimelineItem({
   onChangeStatus,
   onEdit,
 }: {
+  step: number;
   task: Task;
   subtasks: Task[];
   canEdit: boolean;
@@ -128,17 +153,20 @@ function TimelineItem({
   const overdue = task.dueDate && task.status !== "DONE" && dayFromIso(task.dueDate)! < todayDay!;
 
   return (
-    <li className="relative mb-4 ml-6">
-      <span
-        className={[
-          "absolute left-[-34px] flex h-4 w-4 items-center justify-center rounded-full border-2 border-surface-container-lowest",
-          task.status === "DONE"
-            ? "bg-emerald-500"
-            : task.status === "IN_PROGRESS"
-              ? "bg-primary"
-              : "bg-surface-container-highest",
-        ].join(" ")}
-      />
+    <TimelineItem
+      step={step}
+      role="listitem"
+      // SOLVRO PATCH (fix round): tighten the vendored default's inter-item
+      // gap (`not-last:pb-6`, 24px) back to the old hand-rolled `mb-4` (16px).
+      // Must repeat the exact same variant prefix as the base class or
+      // tailwind-merge won't recognize the conflict and both survive.
+      className="group-data-[orientation=vertical]/timeline:not-last:pb-4"
+    >
+      {/* SOLVRO PATCH: neutral spine color (matches the previous hand-rolled
+          `border-outline-variant` line) instead of the vendored default's
+          primary-tinted separator — status color lives on the indicator only. */}
+      <TimelineSeparator className="bg-outline-variant" />
+      <TimelineIndicator className={STATUS_INDICATOR_CLASS[task.status]} />
       <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary/40">
         <div className="mb-1 flex items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2">
@@ -201,7 +229,7 @@ function TimelineItem({
           </div>
         )}
       </div>
-    </li>
+    </TimelineItem>
   );
 }
 
