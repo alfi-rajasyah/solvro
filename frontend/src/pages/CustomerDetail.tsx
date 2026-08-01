@@ -1,17 +1,33 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import { CustomerFormModal } from "@/components/CustomerFormModal";
+import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-grid";
+import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
+import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
+import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
 import { EmptyState } from "@/components/EmptyState";
 import { ServiceMappingList } from "@/components/services/ServiceMappingList";
+import { ProjectStatusChip } from "@/components/StatusChip";
 import { Tabs } from "@/components/Tabs";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import {
   type CustomerDetail as CustomerDetailType,
+  type ProjectStatus,
+  type ProjectSummary,
   useCustomer,
   useDeleteCustomer,
   useUpdateCustomerServices,
 } from "@/lib/queries";
+import { personNameSortingFn } from "@/lib/tableSort";
 
 type Tab = "overview" | "services" | "topology" | "documents" | "org";
 
@@ -320,49 +336,138 @@ function OverviewTab({
             message="When projects are linked to this customer, they'll appear here."
           />
         ) : (
-          <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface">
-            <table className="w-full text-left text-sm">
-              <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
-                <tr>
-                  <th className="px-3 py-2">Project</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">TAM</th>
-                  <th className="px-3 py-2">SA</th>
-                  <th className="px-3 py-2 text-right">Tasks</th>
-                </tr>
-              </thead>
-              <tbody>
-                {customer.projects.map((p) => (
-                  <tr
-                    key={p.id}
-                    className="border-b border-outline-variant/60 last:border-0 hover:bg-surface-container-low/50"
-                  >
-                    <td className="px-3 py-2">
-                      <Link
-                        to={`/projects/${p.id}`}
-                        className="font-medium text-on-surface hover:text-primary"
-                      >
-                        {p.name}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-2">
-                      <span className="rounded-sm bg-surface-container-low px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
-                        {p.status}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-on-surface-variant">{p.tam.username}</td>
-                    <td className="px-3 py-2 text-on-surface-variant">{p.sa?.username ?? "—"}</td>
-                    <td className="px-3 py-2 text-right font-mono text-[13px] text-on-surface-variant">
-                      {p._count.tasks}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ProjectsDataGrid projects={customer.projects} />
         )}
       </div>
     </div>
+  );
+}
+
+const PROJECT_STATUSES: ProjectStatus[] = [
+  "PLANNING",
+  "ACTIVE",
+  "ON_HOLD",
+  "COMPLETED",
+  "CANCELLED",
+];
+
+function ProjectsDataGrid({ projects }: { projects: ProjectSummary[] }) {
+  const [sorting, setSorting] = useState<SortingState>([]);
+
+  const columns = useMemo<ColumnDef<ProjectSummary>[]>(
+    () => [
+      {
+        id: "project",
+        accessorKey: "name",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Project" />,
+        // Same underlying field as Tasks.tsx's "project" column
+        // (Project.name) — mirrors its "alphanumeric" choice (decision 7)
+        // for natural number ordering ("Project 2" before "Project 10"),
+        // consistent across the app for the same data.
+        sortingFn: "alphanumeric",
+        cell: ({ row }) => (
+          <Link
+            to={`/projects/${row.original.id}`}
+            className="font-medium text-on-surface hover:text-primary"
+          >
+            {row.original.name}
+          </Link>
+        ),
+        meta: { skeleton: <Skeleton className="h-3.5 w-32" /> },
+      },
+      {
+        id: "status",
+        // Numeric accessor (workflow-order index), not a string column —
+        // decision 7's auto-detect hazard is specific to string columns, so
+        // no explicit sortingFn is needed here (same pattern as Tasks.tsx's
+        // own status/priority/due columns).
+        accessorFn: (row) => PROJECT_STATUSES.indexOf(row.status),
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => <ProjectStatusChip status={row.original.status} />,
+        meta: { skeleton: <Skeleton className="h-4 w-16 rounded-full" /> },
+      },
+      {
+        id: "tam",
+        accessorFn: (row) => row.tam.username,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="TAM" />,
+        sortingFn: personNameSortingFn,
+        cell: ({ row }) => (
+          <span className="text-on-surface-variant">{row.original.tam.username}</span>
+        ),
+        meta: { skeleton: <Skeleton className="h-3.5 w-20" /> },
+      },
+      {
+        id: "sa",
+        // "" fallback (not null) so the column's cell values stay string —
+        // required for personNameSortingFn's localeCompare, and sorts
+        // unassigned SAs first ascending, matching localeCompare("", x) < 0.
+        accessorFn: (row) => row.sa?.username ?? "",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="SA" />,
+        sortingFn: personNameSortingFn,
+        cell: ({ row }) => (
+          <span className="text-on-surface-variant">{row.original.sa?.username ?? "—"}</span>
+        ),
+        meta: { skeleton: <Skeleton className="h-3.5 w-20" /> },
+      },
+      {
+        id: "tasks",
+        accessorFn: (row) => row._count.tasks,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Tasks" />,
+        cell: ({ row }) => (
+          <span className="font-mono text-[13px] text-on-surface-variant">
+            {row.original._count.tasks}
+          </span>
+        ),
+        meta: {
+          headerClassName: "text-right",
+          cellClassName: "text-right",
+          skeleton: <Skeleton className="ml-auto h-3.5 w-6" />,
+        },
+      },
+    ],
+    [],
+  );
+
+  const table = useReactTable({
+    data: projects,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getRowId: (row) => String(row.id),
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  return (
+    <DataGrid
+      table={table}
+      recordCount={projects.length}
+      tableLayout={{
+        dense: true,
+        rowBorder: true,
+        headerBorder: true,
+        headerBackground: false,
+        // "auto" (not "fixed"): see Tasks.tsx / reui-data-grid.md Checkpoint
+        // B, decision 6 — "fixed" pins every column to TanStack's untouched
+        // 150px default instead of sizing to content.
+        width: "auto",
+      }}
+      tableClassNames={{
+        // The one piece tableLayout.headerBackground can't reproduce (its
+        // `bg-muted` resolves to the wrong token) — see Tasks.tsx / decision 2.
+        header: "bg-surface-container-low",
+      }}
+    >
+      {/* Hairline wrapper — DataGridContainer's own `border` prop is
+          accepted-and-ignored (Tasks.tsx / reui-data-grid.md Checkpoint B,
+          decision 2). Phase-wide: every DataGrid table wraps its
+          DataGridContainer this way. */}
+      <DataGridContainer className="rounded-sm border border-outline-variant bg-surface-container-lowest">
+        <DataGridScrollArea>
+          <DataGridTable />
+        </DataGridScrollArea>
+      </DataGridContainer>
+    </DataGrid>
   );
 }
 
