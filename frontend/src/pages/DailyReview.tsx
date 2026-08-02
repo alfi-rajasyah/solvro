@@ -60,8 +60,10 @@ interface CardMetrics {
 
 // Daily Review is the INPUT screen of the core TAM loop: one scrollable
 // cross-project page where the TAM logs a note per active project. The
-// CUSTOMER_FACING toggle is the only thing that promotes a note into the
-// Reports export — it is deliberately the most prominent control on a card.
+// CUSTOMER_FACING toggle is the only thing that marks a note as safe for
+// customer-facing output — it is deliberately the most prominent control
+// on a card. (The Reports export packet that consumed it was removed
+// 2026-08-03; the visibility contract itself stays.)
 export function DailyReview() {
   const { user } = useAuth();
   const { data: projects, isLoading, isError, error } = useProjects();
@@ -408,7 +410,7 @@ function ProjectCard({
         {customerFacing && (
           <p className="flex items-center gap-1.5 text-[12px] font-medium text-primary">
             <span className="material-symbols-outlined text-sm">campaign</span>
-            This note will be included in the customer-facing export packet.
+            This note is marked customer-facing — safe to share outside the team.
           </p>
         )}
 
@@ -518,7 +520,7 @@ function VisibilityToggle({
         role="radio"
         aria-checked={cf}
         onClick={() => onChange("CUSTOMER_FACING")}
-        title="Customer-facing notes feed the Reports export packet."
+        title="Customer-facing notes are safe to share outside the team."
         className={[
           "flex items-center gap-1.5 px-3 py-1.5 transition-colors",
           cf

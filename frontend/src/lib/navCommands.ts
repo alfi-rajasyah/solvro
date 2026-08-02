@@ -20,7 +20,6 @@ export const NAV_COMMANDS: readonly NavCommand[] = [
   // so it's intentionally NOT in this catalogue. Route stays registered in
   // App.tsx — mirror of how Tasks is kept routable but hidden. This also keeps
   // the nav in CLAUDE.md's canonical order (no Work Logs entry).
-  { to: "/reports", label: "Reports", icon: "analytics" },
   { to: "/executive", label: "Executive", icon: "leaderboard", requires: "report:executive" },
   { to: "/settings", label: "Settings", icon: "settings" },
   { to: "/admin", label: "Admin", icon: "admin_panel_settings", requires: "*" },
