@@ -502,7 +502,7 @@ projectsRouter.post(
 
 // Project-scoped Daily Review notes.
 // INTERNAL is the default visibility; CUSTOMER_FACING is opt-in per note
-// and is the only visibility the Reports export packet ever surfaces.
+// and is the only visibility any customer-facing output may ever surface.
 const noteListQuerySchema = z.object({
   visibility: z.nativeEnum(NoteVisibility).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),

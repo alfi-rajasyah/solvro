@@ -36,6 +36,22 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 **`frontend/src/components/gantt-v2/SolvroBar.tsx`, `frontend/src/lib/gantt/palette.ts`** — a task bar's incomplete portion now renders as a diagonal hatch of the bar's own color over an opaque composite base (labels stay readable) instead of a flat black overlay on the completed portion; done tasks stay fully solid, 0%-progress tasks fully hatched. Section rollup bars changed from a full-width rounded pill to a thin summary bar with squared end caps at the section's true date extents. The PDF export keeps its previous progress-overlay treatment and rounded rollup pill — two accepted screen/export divergences for now.
 
 **`frontend/src/components/gantt-v2/SolvroGantt.tsx`, `frontend/src/components/reui/gantt/gantt-view.tsx`** — the engine's bottom-right floating +/− zoom widget (continuous 0.5–3× column-width zoom) is no longer suppressed; its `shadow-sm` is removed per the no-shadow elevation doctrine.
+### Removed — 2026-08-03 — Reports page and its export-packet builder
+
+The Reports screen (pick an active project → generate a markdown packet for an external AI tool) is retired: it no longer has a place in the current workflow.
+
+- **`frontend/src/pages/Reports.tsx`** — deleted, with its route in `App.tsx`, its Sidebar/⌘K entry in `lib/navCommands.ts` (tests updated), and its `reports` breadcrumb label in `components/layout/TopBar.tsx`.
+- **`frontend/src/lib/export/`** — the whole module (`projectExport.ts` + test) deleted; the Reports page was its only consumer. The INTERNAL/CUSTOMER_FACING note-visibility contract is unchanged — `ProjectNote.visibility`, the Daily Review toggle, and the backend notes routes all stay, so a future export surface can rebuild on them.
+- **`frontend/src/lib/auth.tsx`** — the now-orphaned `report:read` permission removed from the role-editor catalog (`report:executive` and the Executive dashboard are unrelated and stay). Custom roles that stored `report:read` keep the string harmlessly; nothing checks it anymore. **`backend/prisma/seed.ts`, `backend/test/testAuth.ts`** — the dead `report:read` grant dropped from the seeded STAKEHOLDER role for the same reason.
+- **`frontend/src/pages/DailyReview.tsx`** — the customer-facing toggle's tooltip and confirmation callout no longer promise the export packet; they now say the note is safe to share outside the team. **`backend/src/routes/projects.ts`, `backend/prisma/schema.prisma`** — comment-only rewording of the note-visibility contract off the deleted packet (no schema or migration change).
+
+### Changed — 2026-08-03 — Project Overview tab: attention/status/risk panels fill the empty lower half
+
+**`frontend/src/pages/views/ProjectOverview.tsx`** — the Overview tab now uses the space below the S-Curve for three panels: **Needs attention** (open tasks overdue or due within 7 days, sorted most-urgent first, capped at 6 with a "more in List" link; rows deep-link to the task panel via `?task=`), **Status breakdown** (segmented done/in-progress/to-do bar with counts), and **Top open risks** (three highest probability×impact scores, reusing the risks grid's score badge; links to the Risks tab). Polish in the same pass: the project description now opens the tab (it left the page header earlier today), the Completion KPI gained a thin progress bar, KPI hints step down to `text-xs`, and the S-Curve's current line gained a subtle primary area fill (`LineChart` → `ComposedChart`). All data comes from the existing `useProjectTasks` / `useProjectRisks` hooks — no new endpoints.
+
+### Changed — 2026-08-03 — Project description moved from the page header to the Context sidebar
+
+**`frontend/src/pages/ProjectDetail.tsx`** — the description paragraph is removed from the meta row above the tabs; the row now holds only the SA → TAM roles line and the actions, freeing vertical space for the tab content. **`frontend/src/components/layout/RightSidebar.tsx`** — the Context sidebar's description loses its `line-clamp-3` and now shows the full text.
 
 ### Removed — 2026-08-03 — Secure Ingestion Port cancelled; Blueprint remnants deleted
 

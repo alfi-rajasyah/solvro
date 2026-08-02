@@ -9,7 +9,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   ADMIN: ["*"],
   SA: ["project:read"],
   TAM: ["project:read", "project:write", "task:read", "task:write"],
-  STAKEHOLDER: ["project:read", "report:read", "project:view-all"],
+  STAKEHOLDER: ["project:read", "project:view-all"],
   PENDING: [],
 };
 

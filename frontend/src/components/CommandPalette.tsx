@@ -19,7 +19,7 @@ import { filterNavCommands } from "@/lib/navCommands";
 import { useSearch } from "@/lib/queries";
 
 interface PaletteItem {
-  value: string; // unique: "page:/reports", "project:3", "task:17", "customer:2"
+  value: string; // unique: "page:/overview", "project:3", "task:17", "customer:2"
   label: string;
   group: "Pages" | "Projects" | "Tasks" | "Customers";
   to: string;

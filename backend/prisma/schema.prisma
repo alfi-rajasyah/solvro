@@ -345,7 +345,7 @@ model Risk {
 
 // Daily Review notes — TAM logs cross-project notes per session, each
 // scoped to a single project. INTERNAL notes never leave the app;
-// CUSTOMER_FACING notes feed the Reports export packet (last 14 days).
+// CUSTOMER_FACING is the per-note opt-in for any customer-facing output.
 model ProjectNote {
   id         Int            @id @default(autoincrement())
   projectId  Int            @map("project_id")

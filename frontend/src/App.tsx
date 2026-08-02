@@ -12,7 +12,6 @@ import { Login } from "@/pages/Login";
 import { Overview } from "@/pages/Overview";
 import { ProjectDetail } from "@/pages/ProjectDetail";
 import { Projects } from "@/pages/Projects";
-import { Reports } from "@/pages/Reports";
 import { Settings } from "@/pages/Settings";
 import { Tasks } from "@/pages/Tasks";
 import { WorkLogs } from "@/pages/WorkLogs";
@@ -54,7 +53,6 @@ export function App() {
         <Route path="daily-review" element={<DailyReview />} />
         <Route path="tasks" element={<Tasks />} />
         <Route path="work-logs" element={<WorkLogs />} />
-        <Route path="reports" element={<Reports />} />
         <Route
           path="executive"
           element={

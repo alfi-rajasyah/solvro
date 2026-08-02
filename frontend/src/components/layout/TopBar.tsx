@@ -11,7 +11,6 @@ const PAGE_TITLES: Record<string, string> = {
   projects: "My Projects",
   customers: "Customers",
   tasks: "Tasks",
-  reports: "Reports",
 };
 
 export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
