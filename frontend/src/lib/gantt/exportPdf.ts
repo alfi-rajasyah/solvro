@@ -540,9 +540,12 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
 
       if (row.kind === "section") {
         // Slim rollup pill (~3pt), spanning the section's children date
-        // range in the section color — parity with SolvroBar.tsx's
-        // `data-rollup` pill (rendered on the section's own resource row on
-        // screen, same placement here).
+        // range in the section color, drawn on the section's own resource
+        // row (same placement as the live UI's rollup). SolvroBar.tsx's
+        // on-screen `data-rollup` was restyled from a pill to a thin bar
+        // with squared end caps in the Gantt visual refresh (Task 3); this
+        // export still draws the rounded pill below — an accepted,
+        // unsynced screen/PDF divergence, not a bug.
         if (row.start && row.end) {
           const startMs = startOfDay(row.start).getTime();
           const endMs = startOfDay(row.end).getTime();

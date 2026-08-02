@@ -15,6 +15,28 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-08-03 — Gantt toolbar controls unified into segmented pill groups
+
+**`frontend/src/components/gantt-v2/SolvroGantt.tsx`** — the toolbar's remaining controls (Add Task/Section, Today + navigation + period title, Baseline pair, Color by, Export) now sit in segmented pill containers matching the Day/Week/Month/Quarter scale selector, replacing the individually outlined buttons. Behavior, disabled states, and keyboard focus are unchanged; the Baseline show/hide toggle additionally reports `aria-pressed`. Every group now renders at the same fixed height, so the toolbar reads as one consistent row instead of visibly mismatched card sizes.
+
+### Added — 2026-08-03 — Gantt tree rows: action menu (Edit / Add subtask / Delete)
+
+**`frontend/src/components/gantt-v2/SolvroGantt.tsx`, `frontend/src/pages/views/ProjectGantt.tsx`** — task rows gained an action menu, opened by right-click or a hover-revealed "…" button: Edit opens the task modal, Add subtask opens the create modal pre-parented (offered on top-level rows only — subtasks cap at one level), Delete confirms first and cascades to subtasks. Hidden for read-only users and on section rows. **`frontend/src/components/ui/context-menu.tsx`** — menu shadows now use the sanctioned `shadow-overlay` token and z-index moved onto the Positioner (Base-UI stacking-context convention); the Gantt export dropdown received the same shadow fix. **`e2e/tests/gantt-parity.spec.ts`** — new row-menu interaction test.
+
+### Added — 2026-08-03 — Gantt tree: status dot, status chip column, overdue-aware due-date column
+
+**`frontend/src/components/gantt-v2/TreeCells.tsx`, `frontend/src/components/gantt-v2/SolvroGantt.tsx`** — every task row in the Gantt tree now shows a colored status dot before its name, a status chip column, and a due-date column that turns red with a bolder weight (plus a screen-reader cue) when an open task is past its due date — calendar-day semantics, DONE tasks never flag. To fit the new columns the tree pane's default width grows 364 → 558 and its max 640 → 834; previously persisted widths migrate one time under a new storage key, so existing layouts keep their title text room. **`e2e/tests/gantt-parity.spec.ts`** — splitter and width-migration tests updated to the new key and math.
+
+### Added — 2026-08-03 — Gantt toolbar: prev/next navigation and a live period title
+
+**`frontend/src/components/gantt-v2/SolvroGantt.tsx`** — prev/next arrows join the Today button, and a period title (e.g. "July 2026") now names the visible window, tracking both navigation and infinite-scroll panning via the engine's own navigation hook. Step through the timeline without dragging.
+
+### Changed — 2026-08-03 — Gantt task bars: hatched remainder, squared rollup caps; floating zoom enabled
+
+**`frontend/src/components/gantt-v2/SolvroBar.tsx`, `frontend/src/lib/gantt/palette.ts`** — a task bar's incomplete portion now renders as a diagonal hatch of the bar's own color over an opaque composite base (labels stay readable) instead of a flat black overlay on the completed portion; done tasks stay fully solid, 0%-progress tasks fully hatched. Section rollup bars changed from a full-width rounded pill to a thin summary bar with squared end caps at the section's true date extents. The PDF export keeps its previous progress-overlay treatment and rounded rollup pill — two accepted screen/export divergences for now.
+
+**`frontend/src/components/gantt-v2/SolvroGantt.tsx`, `frontend/src/components/reui/gantt/gantt-view.tsx`** — the engine's bottom-right floating +/− zoom widget (continuous 0.5–3× column-width zoom) is no longer suppressed; its `shadow-sm` is removed per the no-shadow elevation doctrine.
+
 ### Removed — 2026-08-03 — Secure Ingestion Port cancelled; Blueprint remnants deleted
 
 The planned SA-blueprint webhook (`POST /webhook/blueprint`) is cancelled: Solvro is a TAM-only tool for now, with no Solution Architect ingestion path. The feature was never built — this removes its dormant scaffolding.

@@ -713,7 +713,10 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await page.screenshot({ path: "test-results/f6-tree-after.png" });
 
     const persistedWidthAfterDrag = await page.evaluate(() =>
-      localStorage.getItem("solvro.gantt.treeWidth.v2"),
+      // T2 fix round: the persistence effect now writes the live v3 key
+      // (SolvroGantt.tsx's TREE_WIDTH_STORAGE_KEY) — see test (l) for the
+      // v2 → v3 migration this key rename introduced.
+      localStorage.getItem("solvro.gantt.treeWidth.v3"),
     );
     expect(persistedWidthAfterDrag).toBeTruthy();
     expect(Number(persistedWidthAfterDrag)).toBeGreaterThan(500);
@@ -744,7 +747,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     ).toBe(true);
 
     const persistedWidthAfterReset = await page.evaluate(() =>
-      localStorage.getItem("solvro.gantt.treeWidth.v2"),
+      localStorage.getItem("solvro.gantt.treeWidth.v3"),
     );
     expect(persistedWidthAfterReset).toBeTruthy();
     expect(Math.abs(Number(persistedWidthAfterReset) - paneBefore!.width)).toBeLessThanOrEqual(2);
@@ -760,7 +763,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     expect(await isTruncated(), "title should be fully visible again after re-widening").toBe(false);
 
     const persistedWidth = await page.evaluate(() =>
-      localStorage.getItem("solvro.gantt.treeWidth.v2"),
+      localStorage.getItem("solvro.gantt.treeWidth.v3"),
     );
     expect(persistedWidth).toBeTruthy();
     expect(Number(persistedWidth)).toBeGreaterThan(500);
@@ -830,17 +833,23 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     expect(untruncated, "date range should render untruncated").toBe(true);
   });
 
-  // Issue #118 follow-up — pre-#118 persisted widths sized the name column
-  // as `stored − 80`; v2 sizes it as `stored − 156`. The one-time key
-  // migration adds +76 so an existing user's title room is unchanged.
-  test("(l) legacy tree-width key migrates +76 into the v2 key", async ({
+  // Issue #118 follow-up, updated for T2's fix round (gantt visual refresh —
+  // Status/Due columns changed the name-column formula, forcing a new v3
+  // key; see SolvroGantt.tsx's TREE_WIDTH_STORAGE_KEY block): pre-#118
+  // persisted widths sized the name column as `stored − 80`; v3 sizes it as
+  // `stored − 316`. A browser that only ever had the original v1 key (never
+  // picked up the intermediate v2 one) migrates straight to v3 in one hop,
+  // compounding both historical offsets (v1→v2's +76, then v2→v3's +194 —
+  // the Status/Due columns plus the in-cell dot and "…" button adornments)
+  // into a single +270.
+  test("(l) legacy tree-width key migrates +270 into the v3 key", async ({
     page,
     seededProject,
   }) => {
     const { projectId } = seededProject;
     await page.addInitScript(() => {
-      // only seed the LEGACY key — the v2 key must come from the migration
-      if (localStorage.getItem("solvro.gantt.treeWidth.v2") === null) {
+      // only seed the LEGACY (v1) key — the v3 key must come from the migration
+      if (localStorage.getItem("solvro.gantt.treeWidth.v3") === null) {
         localStorage.setItem("solvro.gantt.treeWidth", "400");
       }
     });
@@ -848,15 +857,119 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
 
     const paneBox = await page.locator('[data-slot="gantt-tree-pane"]').boundingBox();
     expect(paneBox, "tree pane not found").toBeTruthy();
-    expect(Math.abs(paneBox!.width - 476), "pane should render at 400 + 76").toBeLessThanOrEqual(2);
+    expect(Math.abs(paneBox!.width - 670), "pane should render at 400 + 270").toBeLessThanOrEqual(2);
 
     await page.waitForTimeout(300);
     const stored = await page.evaluate(() => ({
+      v3: localStorage.getItem("solvro.gantt.treeWidth.v3"),
       v2: localStorage.getItem("solvro.gantt.treeWidth.v2"),
       legacy: localStorage.getItem("solvro.gantt.treeWidth"),
     }));
-    expect(Number(stored.v2), "migrated width should persist to the v2 key").toBe(476);
+    expect(Number(stored.v3), "migrated width should persist to the v3 key").toBe(670);
+    expect(stored.v2, "intermediate v2 key should stay untouched — v1 → v3 skips it").toBeNull();
     expect(stored.legacy, "legacy key should be left in place").toBe("400");
+  });
+
+  // T5 (gantt visual refresh) — row menu (Edit / Add subtask / Delete),
+  // wired via the vendored engine's `renderResourceMenu` (gantt-view.tsx's
+  // `data-slot="gantt-resource-menu"` marks the open ContextMenuContent).
+  test("(m) row menu — Edit/Add subtask/Delete on a task row, none on a section row", async ({
+    page,
+    seededProject,
+  }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const s = stamp();
+    const section = await createSection(base, token, projectId, `RowMenuSection ${s}`);
+    const task = await createTask(base, token, projectId, {
+      title: `RowMenu ${s}`,
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(2),
+      sectionId: section.id,
+    });
+
+    await gotoSeededGantt(page, projectId);
+    const resourceMenu = page.locator('[data-slot="gantt-resource-menu"]');
+    const taskRow = page.locator(
+      `[data-slot="gantt-row-group"][data-gantt-row-id="task-${task.id}"]`,
+    );
+    const sectionRow = page.locator(
+      `[data-slot="gantt-row-group"][data-gantt-row-id="section-${section.id}"]`,
+    );
+    const editItem = page.getByRole("menuitem", { name: "Edit" });
+    const addSubtaskItem = page.getByRole("menuitem", { name: "Add subtask" });
+    const deleteItem = page.getByRole("menuitem", { name: "Delete" });
+
+    // Task row: right-click offers Edit / Add subtask / Delete. Proven
+    // POSITIVE first — the section-row check right after only means
+    // anything once we know right-click genuinely opens a menu somewhere
+    // on this page (a bare "not visible" check on the section row alone
+    // can't tell "correctly suppressed" apart from "menu wiring broken
+    // everywhere").
+    await taskRow.click({ button: "right" });
+    await expect(resourceMenu).toBeVisible();
+    await expect(editItem).toBeVisible();
+    await expect(addSubtaskItem).toBeVisible();
+    await expect(deleteItem).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(resourceMenu).not.toBeVisible();
+
+    // No menu on a section row — `renderResourceMenu` returns null there,
+    // so the row never gets a ContextMenu wrapper at all.
+    await expect(sectionRow).toBeVisible();
+    await sectionRow.click({ button: "right" });
+    // Give a wrongly-mounted menu time to open before asserting absence —
+    // an immediate toHaveCount(0) would pass even if the wiring were live.
+    // The "…" block below re-proves the positive path right after this.
+    await page.waitForTimeout(400);
+    await expect(resourceMenu).toHaveCount(0);
+
+    // Fix round (T5) — the hover-revealed "…" button opens the SAME menu
+    // right-click does (user-requested: right-click alone was judged
+    // undiscoverable). It dispatches a synthetic bubbling "contextmenu"
+    // event rather than exposing any different affordance.
+    await taskRow.hover();
+    await taskRow.getByRole("button", { name: "Task actions" }).click();
+    await expect(resourceMenu).toBeVisible();
+    await expect(editItem).toBeVisible();
+    await expect(addSubtaskItem).toBeVisible();
+    await expect(deleteItem).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(resourceMenu).not.toBeVisible();
+
+    // Edit opens the same modal a row click does (TaskFormModal, edit mode).
+    await taskRow.click({ button: "right" });
+    await editItem.click();
+    const editDialog = page.getByRole("dialog", { name: "Edit task" });
+    await expect(editDialog).toBeVisible();
+    await expect(editDialog.locator('input[placeholder="Task title"]')).toHaveValue(task.title);
+    await page.keyboard.press("Escape");
+    await expect(editDialog).not.toBeVisible();
+    await page.waitForTimeout(400); // drawer slide-out transition
+
+    // Add subtask opens create, pre-parented to this row's task.
+    await taskRow.click({ button: "right" });
+    await addSubtaskItem.click();
+    const createDialog = page.getByRole("dialog", { name: "New task" });
+    await expect(createDialog).toBeVisible();
+    const parentSelect = createDialog
+      .locator('span:text-is("Parent")')
+      .locator("xpath=following-sibling::div//select");
+    await expect(parentSelect).toHaveValue(String(task.id));
+    await page.keyboard.press("Escape");
+    await expect(createDialog).not.toBeVisible();
+    await page.waitForTimeout(400);
+
+    // Delete goes through the shared ConfirmModal, never a bare
+    // window.confirm — TaskPanel.tsx's own delete flow, mirrored here.
+    await taskRow.click({ button: "right" });
+    await deleteItem.click();
+    const confirmDialog = page.getByRole("dialog", { name: "Delete task" });
+    await expect(confirmDialog).toBeVisible();
+    await confirmDialog.getByRole("button", { name: "Delete" }).click();
+    await expect(confirmDialog).not.toBeVisible();
+    await expect(taskRow).toHaveCount(0);
   });
 
   // ---- Browser checklist (B6 Opus review follow-up) — observational only;

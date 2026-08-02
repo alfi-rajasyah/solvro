@@ -18,6 +18,7 @@ import {
   useCreateDependency,
   useCreateSection,
   useDeleteDependency,
+  useDeleteTask,
   useHolidays,
   useLockBaseline,
   useProjectDependencies,
@@ -29,7 +30,16 @@ import {
 import { cn } from "@/lib/utils";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { DateField } from "@/components/DateField";
-import { Gantt, type GanttApi, type GanttColumn } from "@/components/reui/gantt/gantt";
+import {
+  Gantt,
+  type GanttApi,
+  type GanttColumn,
+  useGanttNavigation,
+} from "@/components/reui/gantt/gantt";
+import {
+  ContextMenuItem,
+  ContextMenuSeparator,
+} from "@/components/ui/context-menu";
 import { GanttView } from "@/components/reui/gantt/gantt-view";
 import type {
   GanttEvent,
@@ -49,7 +59,13 @@ import {
 } from "./adapter";
 import { GanttOverlay } from "./GanttOverlay";
 import { SolvroBar } from "./SolvroBar";
-import { SectionColorCell, TaskDatesCell } from "./TreeCells";
+import {
+  SectionColorCell,
+  TaskDatesCell,
+  TaskDueDateCell,
+  TaskStatusCell,
+  TaskStatusDot,
+} from "./TreeCells";
 
 // Plan B Task 4 — SolvroBar owns every bar's inner content (solid fills,
 // milestones, rollup pills, measured-fit labels, the dormant AI-glow hook).
@@ -66,7 +82,11 @@ export interface SolvroGanttProps {
   baselineLockedAt: string | null;
   baselineLockedBy: { id: number; username: string } | null;
   onEditTask: (task: Task) => void;
-  onCreateTaskOpen: (sectionId: number | null) => void;
+  // T5 (gantt visual refresh) — `parentTaskId` is new, optional so the
+  // pre-existing "+ Task" toolbar call site (`onCreateTaskOpen(null)`)
+  // keeps compiling unchanged. Only the row menu's "Add subtask" action
+  // (below) passes it, pre-parenting the create modal to the row's task.
+  onCreateTaskOpen: (sectionId: number | null, parentTaskId?: number | null) => void;
 }
 
 // Plan B Task 9 walkthrough fix (Finding F3) — the four zoom-pill LABELS are
@@ -101,6 +121,18 @@ const SCALES: Array<{ mode: GanttScale; label: string }> = [
   { mode: "year", label: "Quarter" },
 ];
 
+// T6 (fix round, user-reported: toolbar "cards" rendered at visibly
+// different sizes) — every segmented-pill item (buttons AND the Color-by
+// <select>) shares this exact box height, with vertical padding (py-*)
+// dropped everywhere in favor of it + `items-center`. The mismatch wasn't
+// container padding (that was already identical — `p-0.5` everywhere) but
+// CONTENT-driven sizing: text-label-caps carries line-height 1 while the
+// arbitrary text-[11.5px] used elsewhere inherits the ambient ~1.5, the
+// "add" icon was text-base (17px) against every other icon's 15px, and a
+// native <select>'s UA chrome renders taller than a <button> at matching
+// padding. An explicit height makes the box immune to all three.
+const TOOLBAR_ITEM_HEIGHT = "h-7";
+
 // Ported verbatim from GanttFrame.tsx:72 — same key, same values, so a user's
 // existing pick survives the engine swap.
 const COLOR_BY_STORAGE_KEY = "solvro.gantt.colorBy";
@@ -116,29 +148,78 @@ const LEGEND_CAP = 6;
 // needed, just wiring from here. min/max mirror that file's own
 // DEFAULT_TREE_PANEL (gantt-view.tsx:203-209); the default is deliberately
 // wider than the engine's 288 — see the issue #118 block below.
-const TREE_WIDTH_STORAGE_KEY = "solvro.gantt.treeWidth.v2";
-// Pre-#118 key. Its values assumed the old name-column formula; read once by
-// readStoredTreeWidth's migration and otherwise left untouched.
+// T2 fix round (gantt visual refresh) — BLOCKER fix: the Status/Due columns
+// changed the name-column formula from `stored − 156` to `stored − 316`
+// (see TREE_FIXED_COLUMNS_WIDTH below), so a v2-era stored width — even the
+// OLD 364 default, which every prior visitor already has cemented in
+// localStorage via the mount-time persistence effect below — now reads back
+// as a name column floored at its 100px minimum with Dates/color pushed
+// into horizontal scroll. A new v3 key + one-time migration (mirroring the
+// existing v1 → v2 migration further down) fixes existing users instead of
+// silently regressing them.
+const TREE_WIDTH_STORAGE_KEY = "solvro.gantt.treeWidth.v3";
+// Pre-v3 (T2) key. Its values assumed the v2 name-column formula
+// (`stored − 156`); read once by readStoredTreeWidth's migration and
+// otherwise left untouched — same "leave old keys in place" convention the
+// v1 key below already follows.
+const TREE_WIDTH_V2_LEGACY_STORAGE_KEY = "solvro.gantt.treeWidth.v2";
+// Pre-#118 key. Its values assumed the original (pre-v2) name-column
+// formula; read once by readStoredTreeWidth's migration and otherwise left
+// untouched.
 const TREE_WIDTH_LEGACY_STORAGE_KEY = "solvro.gantt.treeWidth";
-const TREE_PANEL_DEFAULT_WIDTH = 364;
+// The gantt-visual-refresh phase bumped this from 364 to 558: +160 for the
+// Status/Due columns joining the fixed set below, then +34 for the two
+// adornments the phase put INSIDE the name cell (status dot ≈14px, hover
+// "…" actions button ≈20px — invisible but always in layout). Net: the
+// name column is 242px (558 − 316), of which 208px is text room — the same
+// 208px the old 364 default gave. A user's already-persisted
+// `TREE_WIDTH_STORAGE_KEY` (or a value migrated up from an older key, see
+// readStoredTreeWidth) wins over this default regardless.
+const TREE_PANEL_DEFAULT_WIDTH = 558;
 const TREE_PANEL_MIN_WIDTH = 180;
-const TREE_PANEL_MAX_WIDTH = 640;
+// The phase bumped this from 640 to 834 to keep the same 484px of MAX
+// name-column TEXT room (834 − 316 fixed columns − 34 in-cell adornments)
+// that the pre-phase Dates/color-only layout gave (640 − 156 = 484), by
+// the same +34 fold as TREE_PANEL_DEFAULT_WIDTH above.
+const TREE_PANEL_MAX_WIDTH = 834;
 // Issue #118 — the name column used to mirror the engine's 208px default and
 // absorb the splitter delta on top of it, which left the fixed "Dates"/color
 // columns to its right (gantt-view.tsx:1834-1863) clipped past the pane edge
 // at EVERY pane width. The name column is now the pane REMAINDER after those
-// fixed columns, and the default pane width is 364 = 208 + 132 + 24, so a
+// fixed columns, and the default pane width is
+// 524 = 208 + 132 + 24 + 100 + 60 (208 = old title room; 132/24 = the
+// original Dates/color columns; 100/60 = T2's new Status/Due columns), so a
 // first-visit gantt keeps the old 208px title room AND shows the full
-// DD/MM – DD/MM range + color swatch; each splitter pixel still lands on
-// the title 1:1 (F6's point, walkthrough 2026-07-25). Two known residuals:
-// below a 256px pane the name column floors at its min and the fixed columns
-// clip again (a deliberate user narrowing, not the default), and on narrow
-// desktop viewports the engine renders the pane narrower than `treeWidth`
-// without reporting it (clampContainer, gantt-view.tsx:977-987), so a wide
-// persisted width can still clip the columns there — docs/ISSUES.md.
+// DD/MM – DD/MM range + status chip + due date + color swatch; each
+// splitter pixel still lands on the title 1:1 (F6's point, walkthrough
+// 2026-07-25). Two known residuals, both pre-existing and now slightly
+// wider in their trigger range since the fixed-column total grew from 156px
+// to 316px: below a (316 + 100 =) 416px pane the name column floors at its
+// min and the fixed columns clip again (a deliberate user narrowing, not
+// the default — was 256px pre-T2), and on narrow desktop viewports the
+// engine renders the pane narrower than `treeWidth` without reporting it
+// (clampContainer, gantt-view.tsx:977-987), so a wide persisted width can
+// still clip the columns there — docs/ISSUES.md.
 const TREE_DATES_COLUMN_WIDTH = 132;
 const TREE_COLOR_COLUMN_WIDTH = 24;
-const TREE_FIXED_COLUMNS_WIDTH = TREE_DATES_COLUMN_WIDTH + TREE_COLOR_COLUMN_WIDTH;
+// T2 (gantt visual refresh) — Height-style Status chip + Due-date columns.
+// 100px comfortably fits the widest chip label ("In progress") without
+// truncating; 60px fits the "DD MMM" due-date format (TreeCells.tsx's
+// TaskDueDateCell, same fmtDateDDMM the Dates column already uses) with a
+// little headroom. Both columns render at a FIXED width regardless of pane
+// width — gantt-view.tsx's tree-column-cell wrapper is `shrink-0`, so a
+// narrower pane makes the ROW scroll horizontally, not the column shrink
+// (see the residuals note above). The truncate/overflow-hidden guards in
+// TreeCells.tsx exist purely as defense against unusually long CONTENT
+// (e.g. a future locale with longer status words) overflowing that fixed
+// width, not against the pane narrowing.
+const TREE_STATUS_COLUMN_WIDTH = 100;
+const TREE_DUE_COLUMN_WIDTH = 60;
+const TREE_FIXED_COLUMNS_WIDTH =
+  TREE_DATES_COLUMN_WIDTH +
+  TREE_COLOR_COLUMN_WIDTH +
+  TREE_STATUS_COLUMN_WIDTH +
+  TREE_DUE_COLUMN_WIDTH;
 const TREE_NAME_COLUMN_MIN_WIDTH = 100;
 
 function clampTreeWidth(width: number): number {
@@ -149,14 +230,23 @@ function readStoredTreeWidth(): number {
   const raw = localStorage.getItem(TREE_WIDTH_STORAGE_KEY);
   const parsed = raw ? Number(raw) : NaN;
   if (Number.isFinite(parsed)) return clampTreeWidth(parsed);
-  // One-time v1 → v2 migration: the old formula sized the name column as
-  // `stored − 80` (208 + stored − 288); the new one sizes it as
-  // `stored − 156`. +76 keeps each user's persisted title width exactly as
-  // it was (the 640 pane max permitting). The mount-time persistence effect
-  // writes the result to the v2 key, so this branch runs once per browser.
+  // One-time v2 → v3 migration (see the BLOCKER note on
+  // TREE_WIDTH_STORAGE_KEY above): the old (v2) formula sized the name
+  // column as `stored − 156`; the new (v3) one sizes its TEXT room as
+  // `stored − 316 − 34` (Status/Due fixed columns + the in-cell dot and "…"
+  // button). +194 keeps each user's persisted title text width exactly as
+  // it was (the 834 pane max permitting). The mount-time persistence effect
+  // writes the result to the v3 key, so this branch runs once per browser.
+  const v2Raw = localStorage.getItem(TREE_WIDTH_V2_LEGACY_STORAGE_KEY);
+  const v2 = v2Raw ? Number(v2Raw) : NaN;
+  if (Number.isFinite(v2)) return clampTreeWidth(v2 + 194);
+  // One-time v1 → v3 migration, for a browser that never picked up the v2
+  // key at all — compounds both historical offsets (the v1 → v2 step's own
+  // +76, then v2 → v3's +194 above) into a single +270 jump straight to v3,
+  // same end result as if the two migrations had run back to back.
   const legacyRaw = localStorage.getItem(TREE_WIDTH_LEGACY_STORAGE_KEY);
   const legacy = legacyRaw ? Number(legacyRaw) : NaN;
-  if (Number.isFinite(legacy)) return clampTreeWidth(legacy + 76);
+  if (Number.isFinite(legacy)) return clampTreeWidth(legacy + 270);
   return TREE_PANEL_DEFAULT_WIDTH;
 }
 
@@ -204,6 +294,23 @@ function yearsCoveredBy(events: Array<{ start: Date; end: Date }>): number[] {
   return out;
 }
 
+/**
+ * T1 (fix round) — invisible bridge child so the toolbar (a SIBLING that
+ * renders above <Gantt>, with no context of its own) can show the engine's
+ * own live nav title. Must be a child of <Gantt> to call useGanttNavigation
+ * (gantt.tsx:1702, throws outside <Gantt>'s context) — that hook's `title`
+ * already follows scroll-driven viewportCenter moves (gantt.tsx:950-967,
+ * documented at gantt-types.tsx:195-201), not just the anchor date, so this
+ * stays correct through drag/scroll, not only prev/next/today presses.
+ */
+function GanttNavTitleSync({ onTitleChange }: { onTitleChange: (title: string) => void }) {
+  const { title } = useGanttNavigation();
+  useEffect(() => {
+    onTitleChange(title);
+  }, [title, onTitleChange]);
+  return null;
+}
+
 export function SolvroGantt(props: SolvroGanttProps) {
   const { projectId, projectName, baselineLockedAt, baselineLockedBy, onEditTask, onCreateTaskOpen } =
     props;
@@ -226,6 +333,11 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // remove, matching the old engine's dependency mutations exactly.
   const createDependency = useCreateDependency(projectId);
   const deleteDependency = useDeleteDependency(projectId);
+  // T5 (gantt visual refresh) — row menu's Delete action. Invalidate-only,
+  // same shape as every other mutation in this file (no optimistic write:
+  // deletion isn't inline-edit territory per frontend/CLAUDE.md's
+  // convention split).
+  const deleteTask = useDeleteTask(projectId);
   const ganttContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Plan B Task 9 (F3 fix) — default is the "Week" pill, whose underlying
@@ -233,6 +345,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // "week" — day-granular columns, closest to the old engine's Week-mode
   // default look.
   const [scale, setScale] = useState<GanttScale>("month");
+  // T1 (fix round) — toolbar nav title (e.g. "July 2026"), lifted out of
+  // <Gantt>'s own context by the GanttNavTitleSync bridge child below: the
+  // sibling toolbar that renders it has no context access of its own, but
+  // GanttNavTitleSync calls the vendored useGanttNavigation() from inside
+  // <Gantt> and pushes its live `title` up here on every change — including
+  // scroll-driven viewportCenter moves (gantt.tsx:950-967), not just
+  // button presses.
+  const [navTitle, setNavTitle] = useState("");
   const [showBaseline, setShowBaseline] = useState(false);
   // Plan B Task 7 (fix pass) — controlled collapse state, wired into
   // <Gantt>'s `collapsedGroups`/`onCollapsedGroupsChange` (gantt.tsx:1344-
@@ -285,8 +405,8 @@ export function SolvroGantt(props: SolvroGanttProps) {
   useEffect(() => {
     localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(treeWidth));
   }, [treeWidth]);
-  // Pane-remainder sizing (issue #118): the fixed Dates/color columns fit
-  // inside the pane wherever the pane is ≥ 256px and rendered at `treeWidth`
+  // Pane-remainder sizing (issue #118): the four fixed columns (Status/Due/
+  // Dates/color) fit inside the pane wherever the pane is ≥ 416px and rendered at `treeWidth`
   // (residuals in the constants block above), and every pixel of splitter
   // drag still goes to the name column 1:1, so dragging reveals more of a
   // truncated title without pushing the due date back out of view.
@@ -313,6 +433,10 @@ export function SolvroGantt(props: SolvroGanttProps) {
   const [addingSection, setAddingSection] = useState(false);
   const [newSectionName, setNewSectionName] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
+  // T5 (gantt visual refresh) — row menu's Delete action, confirmed via the
+  // shared ConfirmModal (mirrors TaskPanel.tsx's confirmDelete pattern) —
+  // never a bare window.confirm.
+  const [deleteTarget, setDeleteTarget] = useState<Task | null>(null);
 
   // Export menu — ported verbatim from GanttFrame.tsx:104-107,123-132.
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
@@ -608,15 +732,69 @@ export function SolvroGantt(props: SolvroGanttProps) {
     [updateSection],
   );
 
+  // T5 (gantt visual refresh) — row menu's Delete action, fired from the
+  // ConfirmModal below. Mirrors TaskPanel.tsx:190-201's handleDelete (same
+  // useDeleteTask hook, same close-on-either-outcome shape) rather than
+  // TaskFormModal.tsx's own bare-window.confirm delete path.
+  const handleConfirmDeleteTask = useCallback(async () => {
+    if (!deleteTarget) return;
+    setActionError(null);
+    try {
+      await deleteTask.mutateAsync(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Could not delete task.");
+      setDeleteTarget(null);
+    }
+  }, [deleteTarget, deleteTask]);
+
+  // T2 fix round (gantt visual refresh) — hoisted once per render (the day
+  // string is identical for every row in a single render pass), rather than
+  // recomputed once per row inside TaskDueDateCell. Same pattern as
+  // `pages/views/ProjectTimeline.tsx`'s own `todayDay` hoist.
+  const todayDay = dateToDay(new Date());
+
   // Tree-pane inline editors, ported into ReUI's GanttColumn contract —
   // GanttListRow.tsx:240-270 (dates popover) and :151-194 (section color
   // popover); see TreeCells.tsx for the ported bodies. "Dates" renders only
   // on task nodes (parseTaskId !== null); the color swatch only on real
   // section groups (excludes the "(No section)" pseudo-group, matching
   // GanttListRow's `row.sectionId === null` guard on its color button).
+  //
+  // T2 (gantt visual refresh) — "status" and "due" are new, same task-node
+  // guard as "dates" (blank on section/pseudo-group rows). Placed BEFORE the
+  // pre-existing "dates"/"color" columns — closer to the name, matching the
+  // Height reference's at-a-glance status/due-date placement — while
+  // leaving "dates"'s own full range + inline editor and the color swatch
+  // untouched, per this task's brief.
   const columns = useMemo<GanttColumn[]>(() => {
     const sectionColors = resolveSectionColors(sections);
     return [
+      {
+        id: "status",
+        title: "Status",
+        width: TREE_STATUS_COLUMN_WIDTH,
+        render: (ctx) => {
+          const taskId = parseTaskId(ctx.resource.id);
+          if (taskId === null) return null;
+          const task = taskById.get(taskId);
+          if (!task) return null;
+          return <TaskStatusCell task={task} />;
+        },
+      },
+      {
+        id: "due",
+        title: "Due",
+        width: TREE_DUE_COLUMN_WIDTH,
+        align: "end",
+        render: (ctx) => {
+          const taskId = parseTaskId(ctx.resource.id);
+          if (taskId === null) return null;
+          const task = taskById.get(taskId);
+          if (!task) return null;
+          return <TaskDueDateCell task={task} todayDay={todayDay} />;
+        },
+      },
       {
         id: "dates",
         title: "Dates",
@@ -652,7 +830,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
         },
       },
     ];
-  }, [sections, taskById, canEdit, handleUpdateDates, handleSetSectionColor]);
+  }, [sections, taskById, canEdit, handleUpdateDates, handleSetSectionColor, todayDay]);
 
   // Plan B Task 7 — register Excel/PDF export handlers in the shared context
   // (`GanttExportProvider`, mounted by ProjectDetail.tsx around the whole
@@ -858,7 +1036,10 @@ export function SolvroGantt(props: SolvroGanttProps) {
       aria-label={`${projectName} Gantt chart`}
     >
       <div className="flex flex-wrap items-center gap-2 border-b border-outline-variant bg-surface-container-lowest px-3 py-1.5">
-        {/* Zoom pill group — Day / Week / Month / Quarter, active segment solid green. */}
+        {/* Zoom pill group — Day / Week / Month / Quarter, active segment solid
+            green. The rest of the toolbar below mirrors this container+item
+            +hover treatment; the focus classes here are the app-standard set
+            the mirrored groups also carry. */}
         <div className="inline-flex overflow-hidden rounded-md bg-surface-container-low p-0.5">
           {SCALES.map((s) => (
             <button
@@ -866,7 +1047,8 @@ export function SolvroGantt(props: SolvroGanttProps) {
               type="button"
               onClick={() => setScale(s.mode)}
               className={cn(
-                "rounded-sm px-2.5 py-1 font-display text-[11.5px] font-semibold tracking-wide transition-colors",
+                TOOLBAR_ITEM_HEIGHT,
+                "inline-flex items-center rounded-sm px-2.5 font-display text-[11.5px] font-semibold tracking-wide outline-hidden transition-colors focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
                 s.mode === scale
                   ? "bg-primary text-on-primary"
                   : "text-on-surface-variant hover:text-on-surface",
@@ -880,22 +1062,31 @@ export function SolvroGantt(props: SolvroGanttProps) {
         {canEdit && (
           <>
             <span className="mx-1 h-4 w-px bg-outline-variant" aria-hidden />
-            <button
-              type="button"
-              onClick={() => onCreateTaskOpen(null)}
-              className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface hover:border-primary hover:text-primary"
-            >
-              <span className="material-symbols-outlined text-base">add</span>
-              Task
-            </button>
-            <button
-              type="button"
-              onClick={() => setAddingSection(true)}
-              className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
-            >
-              <span className="material-symbols-outlined text-base">add</span>
-              Section
-            </button>
+            {/* T6 — segmented shell mirrored from the scale-pill group above. */}
+            <div className="inline-flex overflow-hidden rounded-md bg-surface-container-low p-0.5">
+              <button
+                type="button"
+                onClick={() => onCreateTaskOpen(null)}
+                className={cn(
+                  TOOLBAR_ITEM_HEIGHT,
+                  "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-label-caps uppercase tracking-wider text-on-surface outline-hidden transition-colors hover:text-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+                )}
+              >
+                <span className="material-symbols-outlined text-[15px]">add</span>
+                Task
+              </button>
+              <button
+                type="button"
+                onClick={() => setAddingSection(true)}
+                className={cn(
+                  TOOLBAR_ITEM_HEIGHT,
+                  "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+                )}
+              >
+                <span className="material-symbols-outlined text-[15px]">add</span>
+                Section
+              </button>
+            </div>
           </>
         )}
 
@@ -904,48 +1095,139 @@ export function SolvroGantt(props: SolvroGanttProps) {
         </span>
 
         <div className="ml-auto flex items-center gap-2">
-          <button
-            type="button"
-            onClick={() => apiRef.current?.today()}
-            disabled={resources.length === 0}
-            className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined text-[15px]">today</span>
-            Today
-          </button>
-          <button
-            type="button"
-            onClick={() => setShowBaseline((v) => !v)}
-            title={
-              baselineLockedAt
-                ? `Baseline locked ${baselineLockedAtPretty}${baselineLockedBy ? ` by ${baselineLockedBy.username}` : ""}`
-                : "No baseline locked yet — lock one from the project menu"
-            }
-            className={cn(
-              "inline-flex items-center gap-1 rounded-sm border px-2.5 py-1 font-display text-[11.5px] font-medium",
-              showBaseline
-                ? "border-primary bg-primary/10 text-primary"
-                : "border-outline-variant text-on-surface-variant hover:border-primary hover:text-primary",
-            )}
-          >
-            <span className="material-symbols-outlined text-[15px]">show_chart</span>
-            Baseline
-          </button>
-          <div className="flex items-center gap-1.5">
-            <label className="flex items-center gap-1.5">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                Color by
-              </span>
-              <select
-                value={colorBy}
-                onChange={(e) => setColorBy(e.target.value as ColorByMode)}
-                className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[11.5px] font-medium text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+          {/* T6 — Today/prev/next merged into one segmented pill (mirrors the
+              scale-pill container above); the period title stays plain text
+              (per the plan's "text elements ... stay text"), positioned right
+              after the pill so it still reads as part of the same cluster.
+              T1 note retained: prev/next step by apiRef's own stepGanttDate
+              at the CURRENT `scale`, same anchor path Today already drives;
+              the title follows via the GanttNavTitleSync bridge child (below,
+              inside <Gantt>) lifting useGanttNavigation()'s live title up. */}
+          <div className="inline-flex overflow-hidden rounded-md bg-surface-container-low p-0.5">
+            <button
+              type="button"
+              onClick={() => apiRef.current?.today()}
+              disabled={resources.length === 0}
+              className={cn(
+                TOOLBAR_ITEM_HEIGHT,
+                "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-[11.5px] font-medium text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50",
+              )}
+            >
+              <span className="material-symbols-outlined text-[15px]">today</span>
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => apiRef.current?.prev()}
+              disabled={resources.length === 0}
+              aria-label="Previous period"
+              className={cn(
+                TOOLBAR_ITEM_HEIGHT,
+                "inline-flex w-7 items-center justify-center rounded-sm text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50",
+              )}
+            >
+              <span className="material-symbols-outlined text-[15px]">chevron_left</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => apiRef.current?.next()}
+              disabled={resources.length === 0}
+              aria-label="Next period"
+              className={cn(
+                TOOLBAR_ITEM_HEIGHT,
+                "inline-flex w-7 items-center justify-center rounded-sm text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50",
+              )}
+            >
+              <span className="material-symbols-outlined text-[15px]">chevron_right</span>
+            </button>
+          </div>
+          {/* resources.length gate: <Gantt> (and the GanttNavTitleSync bridge
+              child inside it) only mounts once there's data, so a stale
+              title from a previously open project must not linger next to
+              the disabled nav above. */}
+          {navTitle && resources.length > 0 && (
+            <span
+              className="min-w-0 truncate font-display text-[11.5px] font-semibold text-on-surface"
+              aria-live="polite"
+            >
+              {navTitle}
+            </span>
+          )}
+          {/* T6 — Baseline toggle + Lock/Reset baseline merged into one
+              segmented pill; the toggle's active state now mirrors the
+              scale-pill's exact active treatment (bg-primary/text-on-primary)
+              instead of its old border+tint styling, so aria-pressed is added
+              to carry that state semantically now that it's a proper
+              pressed-toggle look, not just a border/color cue. */}
+          <div className="inline-flex overflow-hidden rounded-md bg-surface-container-low p-0.5">
+            <button
+              type="button"
+              onClick={() => setShowBaseline((v) => !v)}
+              aria-pressed={showBaseline}
+              title={
+                baselineLockedAt
+                  ? `Baseline locked ${baselineLockedAtPretty}${baselineLockedBy ? ` by ${baselineLockedBy.username}` : ""}`
+                  : "No baseline locked yet — lock one from the project menu"
+              }
+              className={cn(
+                TOOLBAR_ITEM_HEIGHT,
+                "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-[11.5px] font-medium outline-hidden transition-colors focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+                showBaseline
+                  ? "bg-primary text-on-primary"
+                  : "text-on-surface-variant hover:text-on-surface",
+              )}
+            >
+              <span className="material-symbols-outlined text-[15px]">show_chart</span>
+              Baseline
+            </button>
+            {canEdit && (
+              <button
+                type="button"
+                onClick={() => setConfirmingBaseline(true)}
+                className={cn(
+                  TOOLBAR_ITEM_HEIGHT,
+                  "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-[11.5px] font-medium text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+                )}
               >
-                <option value="status">Status</option>
-                <option value="section">Section</option>
-                <option value="priority">Priority</option>
-              </select>
-            </label>
+                <span className="material-symbols-outlined text-[15px]">
+                  {baselineLockedAt ? "bookmark" : "bookmark_add"}
+                </span>
+                {baselineLockedAt ? "Reset baseline" : "Lock baseline"}
+              </button>
+            )}
+          </div>
+          <div className="flex items-center gap-1.5">
+            {/* T6 — Color-by shell uses the exact same container classes as
+                every other group (fix round: was carrying extra items-
+                center/gap/pl-2 that also broke the "identical container"
+                rule) so the native select "reads as part of the family";
+                the <label> wrapping (text + <select> as descendants, no
+                for/id) is unchanged, so accessible-name lookups (getByLabel)
+                keep working — the pl-2 that gave the label breathing room
+                against the pill's rounded edge just moved onto the label
+                itself. The select keeps its own border — it's a distinct
+                input control nested inside the shell, not a segmented
+                action item — but now shares TOOLBAR_ITEM_HEIGHT so its
+                native UA chrome can't render it taller than its siblings. */}
+            <div className="inline-flex overflow-hidden rounded-md bg-surface-container-low p-0.5">
+              <label className="flex items-center gap-1.5 pl-2">
+                <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                  Color by
+                </span>
+                <select
+                  value={colorBy}
+                  onChange={(e) => setColorBy(e.target.value as ColorByMode)}
+                  className={cn(
+                    TOOLBAR_ITEM_HEIGHT,
+                    "rounded-sm border border-outline-variant bg-surface-container-lowest px-2 font-display text-[11.5px] font-medium text-on-surface outline-hidden focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+                  )}
+                >
+                  <option value="status">Status</option>
+                  <option value="section">Section</option>
+                  <option value="priority">Priority</option>
+                </select>
+              </label>
+            </div>
             {legendShown.length > 0 && (
               <div data-testid="gantt-legend" className="ml-1 flex flex-wrap items-center gap-2">
                 {legendShown.map(([label, hex], i) => (
@@ -972,31 +1254,32 @@ export function SolvroGantt(props: SolvroGanttProps) {
               </div>
             )}
           </div>
-          {canEdit && (
-            <button
-              type="button"
-              onClick={() => setConfirmingBaseline(true)}
-              className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary"
-            >
-              <span className="material-symbols-outlined text-[15px]">
-                {baselineLockedAt ? "bookmark" : "bookmark_add"}
-              </span>
-              {baselineLockedAt ? "Reset baseline" : "Lock baseline"}
-            </button>
-          )}
-          {/* Export (Excel/PDF) — ported from GanttFrame.tsx:882-910. */}
+          {/* Export (Excel/PDF) — ported from GanttFrame.tsx:882-910. T6 —
+              the segmented shell wraps ONLY the trigger button, not the
+              dropdown: the dropdown is `absolute top-full`, positioned
+              BELOW the shell's bounds, so putting it inside an
+              `overflow-hidden` sibling of the button (like the other groups)
+              would silently clip it invisible. exportMenuRef stays on the
+              outer `relative` div, which still contains both the shell and
+              the dropdown, so the existing outside-click-to-close handler
+              (below, via .contains()) is unaffected. */}
           <div className="relative" ref={exportMenuRef}>
-            <button
-              type="button"
-              onClick={() => setExportMenuOpen((v) => !v)}
-              disabled={!exportHandlers || exporting !== null}
-              className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1 font-display text-[11.5px] font-medium text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
-            >
-              <span className="material-symbols-outlined text-[15px]">download</span>
-              {exporting ? "Exporting…" : "Export"}
-            </button>
+            <div className="inline-flex overflow-hidden rounded-md bg-surface-container-low p-0.5">
+              <button
+                type="button"
+                onClick={() => setExportMenuOpen((v) => !v)}
+                disabled={!exportHandlers || exporting !== null}
+                className={cn(
+                  TOOLBAR_ITEM_HEIGHT,
+                  "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-[11.5px] font-medium text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50",
+                )}
+              >
+                <span className="material-symbols-outlined text-[15px]">download</span>
+                {exporting ? "Exporting…" : "Export"}
+              </button>
+            </div>
             {exportMenuOpen && (
-              <div className="absolute right-0 top-full z-50 mt-1 w-32 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-lg">
+              <div className="absolute right-0 top-full z-50 mt-1 w-32 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
                 <button
                   type="button"
                   onClick={() => runExport("excel")}
@@ -1096,7 +1379,10 @@ export function SolvroGantt(props: SolvroGanttProps) {
             // TREE_WIDTH_STORAGE_KEY block above and `treePanel` memo).
             treePanel={treePanel}
             rowCheckboxes={false}
-            zoomControl={false}
+            // Engine's floating +/− zoom widget (bottom-right) stays default-on:
+            // continuous 0.5–3× column-width zoom on top of the scale pills.
+            // Its shadow is stripped in gantt-view.tsx (SOLVRO PATCH).
+
             // Plan B Task 7 (fix pass) — controlled collapse (gantt.tsx:1344-
             // 1348), fed straight through to the export effect above so
             // exports match on-screen collapse exactly like the old engine
@@ -1115,16 +1401,152 @@ export function SolvroGantt(props: SolvroGanttProps) {
             barLabel="inside"
             renderResourceLabel={({ resource }) => {
               const label = resource.id === sectionNodeId(null) ? "(No section)" : resource.title;
-              // Walkthrough F6 (2026-07-25) — cheap hover affordance: a
-              // native title tooltip surfaces the full name even before the
-              // user discovers the splitter, and stays useful for names that
-              // still overflow the widened column.
+              // T2 (gantt visual refresh) — colored status dot before the
+              // name, task rows only (`parseTaskId` returns null for
+              // section/pseudo-group ids, same guard the "status"/"due"
+              // columns above use — dot stays blank on section rows).
+              // Subtasks share the same `task-<id>` id shape as top-level
+              // tasks, so they get the dot too, per this task's brief.
+              const taskId = parseTaskId(resource.id);
+              const task = taskId !== null ? taskById.get(taskId) : undefined;
               return (
-                <span className="truncate" title={label}>
-                  {label}
-                </span>
+                <>
+                  {task && <TaskStatusDot status={task.status} />}
+                  {/* Walkthrough F6 (2026-07-25) — cheap hover affordance: a
+                    native title tooltip surfaces the full name even before
+                    the user discovers the splitter, and stays useful for
+                    names that still overflow the widened column. */}
+                  <span className="truncate" title={label}>
+                    {label}
+                  </span>
+                  {/* Fix round (T5) — user-requested visible row-menu
+                    affordance: right-click alone was judged undiscoverable.
+                    No vendored edit needed — this renders inside the same
+                    `rowNode` the engine wraps in <ContextMenuTrigger>
+                    (gantt-view.tsx:2791-2792), whose onContextMenu handler
+                    is a plain React-bound listener on that DOM node
+                    (confirmed in @base-ui/react's ContextMenuTrigger
+                    source), so a synthetic, bubbling "contextmenu" event
+                    dispatched from a descendant button reaches it exactly
+                    like a real right-click would. `stopPropagation` here is
+                    cheap insurance, not the primary gate — the row's own
+                    onClick already ignores any `button` descendant
+                    (gantt-view.tsx:2628-2629's `.closest("button, [role=
+                    checkbox]")` guard), same pattern the drag-grip button
+                    below relies on. Hover-reveal reuses the engine's own
+                    drag-grip fade-in classes verbatim (`group-hover/
+                    gantt-row`, gantt-view.tsx:2675) — no vendored edit
+                    needed for that either, since this content already
+                    renders inside the row wrapper carrying that group. */}
+                  {canEdit && task && (
+                    <button
+                      type="button"
+                      aria-label="Task actions"
+                      className="text-on-surface-variant hover:text-on-surface ms-auto flex size-5 shrink-0 items-center justify-center rounded-sm outline-hidden opacity-0 transition-opacity group-hover/gantt-row:opacity-100 group-data-hover/gantt-row:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-primary/30 pointer-coarse:opacity-100"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        e.currentTarget.dispatchEvent(
+                          new MouseEvent("contextmenu", {
+                            bubbles: true,
+                            cancelable: true,
+                            clientX: rect.left,
+                            clientY: rect.bottom,
+                          }),
+                        );
+                      }}
+                    >
+                      <span className="material-symbols-outlined text-sm" aria-hidden="true">
+                        more_horiz
+                      </span>
+                    </button>
+                  )}
+                </>
               );
             }}
+            // T5 (gantt visual refresh) — per-row "…" menu (Height-style:
+            // Edit / Add subtask / Delete). `renderResourceMenu` is called
+            // for EVERY row, including section/pseudo-group rows
+            // (gantt-view.tsx:2607) — returning `null` there is what keeps
+            // those rows menu-free (gantt-view.tsx:2789's `if (!menu) return
+            // rowNode`), same `parseTaskId` guard the status/due columns and
+            // the status dot above already use. Passed as `undefined`
+            // (rather than a function that internally checks `canEdit`)
+            // when the user can't edit — same gating shape as
+            // `onResourceReorder` below, so read-only users get no menu
+            // affordance at all rather than an empty one.
+            renderResourceMenu={
+              canEdit
+                ? (ctx) => {
+                    const taskId = parseTaskId(ctx.resource.id);
+                    if (taskId === null) return null;
+                    const task = taskById.get(taskId);
+                    if (!task) return null;
+                    return (
+                      <>
+                        <ContextMenuItem className="text-xs" onClick={() => onEditTask(task)}>
+                          <span
+                            className="material-symbols-outlined text-sm text-on-surface-variant"
+                            aria-hidden="true"
+                          >
+                            edit
+                          </span>
+                          Edit
+                        </ContextMenuItem>
+                        {/* Fix round — the removed comment here claimed
+                          TaskFormModal's own "Parent" dropdown "only lists
+                          top-level tasks", which is false in CREATE mode:
+                          TaskFormModal.tsx:129-131's `possibleParents` filter
+                          short-circuits to EVERY project task there
+                          (`!editingTask` is `true`, so the right side of the
+                          `||` — the `parentTaskId === null` check — never
+                          runs; only EDIT mode enforces it). The real
+                          authority for this guard is the BACKEND:
+                          assertValidParent (backend/src/lib/
+                          taskOrdering.ts:134-140) rejects a parent that
+                          itself has a parent (max depth 1), reached from
+                          this create call via routes/projects.ts:362.
+                          Hiding "Add subtask" on subtask rows keeps this
+                          menu from offering an action that would 400 — the
+                          create-mode dropdown bug above is real but out of
+                          this task's scope (flagged for the phase review,
+                          not fixed here). */}
+                        {task.parentTaskId === null && (
+                          <ContextMenuItem
+                            className="text-xs"
+                            onClick={() => onCreateTaskOpen(task.sectionId, task.id)}
+                          >
+                            <span
+                              className="material-symbols-outlined text-sm text-on-surface-variant"
+                              aria-hidden="true"
+                            >
+                              playlist_add
+                            </span>
+                            Add subtask
+                          </ContextMenuItem>
+                        )}
+                        <ContextMenuSeparator />
+                        <ContextMenuItem
+                          className="text-xs"
+                          variant="destructive"
+                          onClick={() => setDeleteTarget(task)}
+                        >
+                          {/* No explicit color class — inherits
+                            ContextMenuItem's `data-[variant=destructive]:
+                            text-destructive` via normal CSS color
+                            inheritance (that rule targets the item's own
+                            text color, not just `svg` children like the
+                            component's other muting rules do). */}
+                          <span className="material-symbols-outlined text-sm" aria-hidden="true">
+                            delete
+                          </span>
+                          Delete
+                        </ContextMenuItem>
+                      </>
+                    );
+                  }
+                : undefined
+            }
             onEventClick={(occurrence) => {
               const task = occurrence.event.data;
               if (task) onEditTask(task);
@@ -1151,6 +1573,8 @@ export function SolvroGantt(props: SolvroGanttProps) {
             onResourceReorder={canEdit ? handleResourceReorder : undefined}
           >
             <GanttView />
+            {/* T1 (fix round) — see GanttNavTitleSync's doc comment above. */}
+            <GanttNavTitleSync onTitleChange={setNavTitle} />
           </Gantt>
           {/* Plan B Task 6 — chart-space overlay (dependency connectors,
               drag-create, baselines). A sibling of <Gantt>, not a child of
@@ -1255,6 +1679,34 @@ export function SolvroGantt(props: SolvroGanttProps) {
             )}
           </div>
         }
+      />
+
+      {/* T5 (gantt visual refresh) — row menu's Delete confirmation.
+          Subtask count mirrors TaskPanel.tsx's ConfirmModal body verbatim
+          (same cascade-delete warning copy). */}
+      <ConfirmModal
+        open={deleteTarget !== null}
+        onClose={() => setDeleteTarget(null)}
+        onConfirm={handleConfirmDeleteTask}
+        title="Delete task"
+        body={
+          <>
+            Delete task &quot;{deleteTarget?.title}&quot;? This cannot be undone.
+            {deleteTarget &&
+              tasks.filter((t) => t.parentTaskId === deleteTarget.id).length > 0 && (
+                <>
+                  <br />
+                  <br />
+                  This task has{" "}
+                  {tasks.filter((t) => t.parentTaskId === deleteTarget.id).length} subtask(s)
+                  which will also be deleted.
+                </>
+              )}
+          </>
+        }
+        confirmLabel="Delete"
+        confirmTone="warning"
+        busy={deleteTask.isPending}
       />
 
       {baselineToast && (
