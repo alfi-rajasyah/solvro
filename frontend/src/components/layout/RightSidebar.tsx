@@ -74,7 +74,7 @@ export function RightSidebar({ project, open, onClose }: RightSidebarProps) {
             {project.name}
           </h2>
           {project.description && (
-            <p className="mt-1 line-clamp-3 text-xs text-on-surface-variant">
+            <p className="mt-1 text-xs text-on-surface-variant">
               {project.description}
             </p>
           )}
