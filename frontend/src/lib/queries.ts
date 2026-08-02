@@ -115,7 +115,6 @@ export interface ProjectDetail extends ProjectSummary {
   customer: { id: number; name: string } | null;
   baselineLockedBy: { id: number; username: string } | null;
   services: ProjectServiceAssignment[];
-  _count: { tasks: number; blueprints: number };
 }
 
 export interface Task {

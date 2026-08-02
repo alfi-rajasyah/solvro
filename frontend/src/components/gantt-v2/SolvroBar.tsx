@@ -219,17 +219,10 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
     rawProgress === null ? null : Math.min(Math.max(Math.round(rawProgress), 0), 100);
   const showProgressOverlay = progress !== null && progress > 0 && progress < 100;
 
-  // Dormant until the Secure Ingestion Port ships (CLAUDE.md "not yet
-  // built"): every blueprint-generated task gets an amber "AI Breakdown"
-  // ring once `Task.blueprintId` exists. No such field on Task today, so
-  // this is always false in production — the conditional stays live on
-  // purpose so the hook activates with zero further changes once it ships.
-  const isAiBreakdown = (task as { blueprintId?: number }).blueprintId != null;
-
-  // Selection affordance uses `outline` rather than `ring` specifically so
-  // it can coexist with the AI-glow `ring` below without the two fighting
-  // over the same tailwind-merge conflict group (both are "ring-color" —
-  // outline is a separate CSS property/utility group entirely).
+  // Selection affordance uses `outline` rather than `ring` so it can coexist
+  // with any future ring-based decoration without the two fighting over the
+  // same tailwind-merge conflict group (outline is a separate CSS
+  // property/utility group entirely).
   const selectedOutline = isSelected && "outline outline-2 outline-offset-1 outline-on-surface/70";
 
   if (task.isMilestone) {
@@ -237,10 +230,8 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
       <span
         data-task-id={task.id}
         data-milestone
-        data-ai-breakdown={isAiBreakdown || undefined}
         className={cn(
           "flex min-w-0 items-center gap-1.5 rounded-sm",
-          isAiBreakdown && "ring-2 ring-chip-amber-text",
           selectedOutline,
         )}
       >
@@ -286,7 +277,6 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
         "group-hover/gantt-bar-group:brightness-110",
         segment.continuesBefore ? "rounded-s-none" : "rounded-s-sm",
         segment.continuesAfter ? "rounded-e-none" : "rounded-e-sm",
-        isAiBreakdown && "ring-2 ring-chip-amber-text",
         selectedOutline,
       )}
     />
@@ -296,7 +286,6 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
     <span
       ref={containerRef}
       data-task-id={task.id}
-      data-ai-breakdown={isAiBreakdown || undefined}
       data-label-outside={!fits || undefined}
       className="flex h-full min-w-0 flex-1 items-center"
     >
