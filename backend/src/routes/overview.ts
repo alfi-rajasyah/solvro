@@ -1,9 +1,12 @@
 import { Router } from "express";
+import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { requireAuth, type JwtPayload } from "../http/auth.js";
+import { validate } from "../http/validate.js";
 import { projectVisibilityFilter } from "../lib/visibility.js";
 import { computePortfolioRows } from "../lib/portfolio.js";
+import { isValidDayString } from "../lib/dateBoundary.js";
 
 export const overviewRouter = Router();
 
@@ -15,7 +18,18 @@ function projectScope(user: JwtPayload): Prisma.ProjectWhereInput {
   return projectVisibilityFilter(user);
 }
 
-overviewRouter.get("/", async (req, res) => {
+const overviewQuerySchema = z.object({
+  // Caller's local calendar day ("yyyy-MM-dd"), threaded into the
+  // portfolio block's isOverdue/daysOverdue — see lib/dateBoundary.ts.
+  // Falls back to the server's UTC day when absent.
+  today: z
+    .string()
+    .refine(isValidDayString, { message: "today must be a valid yyyy-MM-dd date" })
+    .optional(),
+});
+
+overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res) => {
+  const { today } = req.query as unknown as z.infer<typeof overviewQuerySchema>;
   const user = req.user!;
   // Administrative containers (excludeFromPortfolio) are out of ALL Overview
   // roll-ups — KPI counts and recent-lists included, not just the portfolio
@@ -57,7 +71,7 @@ overviewRouter.get("/", async (req, res) => {
           assignedTo: { select: { id: true, username: true } },
         },
       }),
-      computePortfolioRows(scope),
+      computePortfolioRows(scope, today),
     ]);
 
   const taskCounts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
