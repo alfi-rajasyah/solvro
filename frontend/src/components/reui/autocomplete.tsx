@@ -23,8 +23,13 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 // repo's existing `*Icon` lucide-react convention (see ui/checkbox.tsx, ui/dropdown-menu.tsx).
 import { ChevronsUpDownIcon, XIcon } from "lucide-react"
 
+// SOLVRO PATCH (focus-style unification tail) — DESIGN.md §4: the one focus
+// treatment app-wide is `focus-visible:border-primary focus-visible:ring-2
+// focus-visible:ring-primary/30`. Replaced the upstream `focus-visible:border-ring`
+// / `focus-visible:ring-ring/50 focus-visible:ring-3` pair (see ui/input.tsx for
+// the same swap).
 const inputVariants = cva(
-  "outline-none flex w-full text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 [[readonly]]:bg-muted/80 [[readonly]]:cursor-not-allowed border border-input focus-visible:border-ring aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-lg bg-transparent dark:bg-input/30 text-sm transition-colors focus-visible:ring-ring/50 focus-visible:ring-3 aria-invalid:ring-3",
+  "outline-none flex w-full text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 [[readonly]]:bg-muted/80 [[readonly]]:cursor-not-allowed border border-input focus-visible:border-primary aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-lg bg-transparent dark:bg-input/30 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-primary/30 aria-invalid:ring-3",
   {
     variants: {
       size: {
