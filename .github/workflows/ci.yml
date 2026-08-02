@@ -101,17 +101,19 @@ jobs:
           # and is reachable only on localhost, so the value protects nothing
           # and granting it secret status bought no security.
           POSTGRES_PASSWORD: ci-ephemeral-postgres
-          POSTGRES_DB: solvro
+          # _test suffix required: the backend test globalSetup hard-refuses
+          # to truncate any database whose name doesn't end in "_test".
+          POSTGRES_DB: solvro_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U solvro -d solvro"
+          --health-cmd "pg_isready -U solvro -d solvro_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 20
     env:
       # Must match the service-container literal above.
-      DATABASE_URL: postgresql://solvro:ci-ephemeral-postgres@localhost:5432/solvro?schema=public
+      DATABASE_URL: postgresql://solvro:ci-ephemeral-postgres@localhost:5432/solvro_test?schema=public
     steps:
       - uses: actions/checkout@v4
 

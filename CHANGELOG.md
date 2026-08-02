@@ -17,7 +17,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Fixed — 2026-08-02 — Backend tests start from a clean database; dead diagram CSS removed
 
-**`backend/test/globalSetup.ts`, `test/env.ts`** — the backend suite now truncates every table in the isolated `solvro_test` database before each run, killing the intermittent `taskOrdering.test.ts` failure caused by rows accumulating past the task-listing endpoint's cap across invocations. Truncation is hard-guarded to databases whose name ends in `_test` — invoked with the dev database's URL it fails loudly instead of wiping data.
+**`backend/test/globalSetup.ts`, `test/env.ts`** — the backend suite now truncates every table in the isolated `solvro_test` database before each run, killing the intermittent `taskOrdering.test.ts` failure caused by rows accumulating past the task-listing endpoint's cap across invocations. Truncation is hard-guarded to databases whose name ends in `_test` — invoked with the dev database's URL it fails loudly instead of wiping data. **`.github/workflows/ci.yml`** — the backend-tests job's ephemeral database is renamed `solvro_test` to satisfy that guard (the guard refused the old name, by design). **`e2e/tests/search.spec.ts`** — the failed-search test blocks service-worker registration: the built CI app registers a PWA worker whose fetches bypass Playwright's request mocking, so the mocked 500 never fired there.
 
 **`frontend/src/index.css`** — removed 179 lines of unused Network Diagram CSS (a feature decided never-to-build; zero consumers verified).
 

@@ -250,7 +250,17 @@ test.describe("global search palette", () => {
   // destructured, so a failed `/search` rendered the same `No results for
   // "x"` copy as a genuine zero-hit query. Assert the failure copy is
   // distinct and the "no results" copy never appears for a failed request.
-  test("a failed /search request renders a distinct failure message, not \"No results\"", async ({ page }, testInfo) => {
+  //
+  // Nested describe with service workers BLOCKED: the CI stack (:8080)
+  // serves the built app, which registers a PWA service worker — and
+  // Playwright's page.route cannot intercept SW-handled fetches, so the
+  // 500 mock below silently never fires there (passes on the dev server,
+  // which registers no SW). Blocking SW registration makes the mock
+  // authoritative on both stacks.
+  test.describe("with service workers blocked", () => {
+    test.use({ serviceWorkers: "block" });
+
+    test("a failed /search request renders a distinct failure message, not \"No results\"", async ({ page }, testInfo) => {
     test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
     await loginViaUi(page);
     await page.route("**/api/search*", (route) =>
@@ -270,6 +280,7 @@ test.describe("global search palette", () => {
     // settling into the error state — give it room beyond the default 5s.
     await expect(dialog.getByText(/could not load results/i)).toBeVisible({ timeout: 10_000 });
     await expect(dialog.getByText(/no results for/i)).toHaveCount(0);
+  });
   });
 
   // Ledger item 6 (docs/ISSUES.md, "Shared body-scroll-lock helper needed"):
