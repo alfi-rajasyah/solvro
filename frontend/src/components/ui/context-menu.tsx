@@ -88,7 +88,11 @@ function ContextMenuSubContent({
 }) {
   return (
     <ContextMenuPrimitive.Portal>
-      <ContextMenuPrimitive.Positioner>
+      {/* SOLVRO PATCH — frontend/CLAUDE.md's popover convention: z-index
+        lives on the Positioner (z-101, one above Modal.tsx's z-100), not
+        the Popup — Base-UI's Positioner carries an inline transform that
+        creates its own stacking context, so a Popup-level z-index is dead. */}
+      <ContextMenuPrimitive.Positioner className="z-101">
         <ContextMenuPrimitive.Popup
           data-slot="context-menu-sub-content"
           className={cn(
@@ -96,7 +100,11 @@ function ContextMenuSubContent({
             // this codebase (no global border-color reset), so popups drew a
             // text-colored outline: near-white in dark, near-black in light.
             // `border-border` routes to the outline-variant hairline.
-            "z-50 min-w-[8rem] origin-(--transform-origin) overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-lg data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-ending-style:animate-out data-ending-style:fade-out-0 data-ending-style:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
+            // SOLVRO PATCH — shadow-lg is heavier than this codebase's
+            // elevation doctrine allows outside true overlays; shadow-overlay
+            // is the one popover/menu shadow token (index.css, also used by
+            // Drawer.tsx/Modal.tsx).
+            "min-w-[8rem] origin-(--transform-origin) overflow-hidden rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-overlay data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-ending-style:animate-out data-ending-style:fade-out-0 data-ending-style:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
             className
           )}
           {...props}
@@ -120,16 +128,21 @@ function ContextMenuContent({
   > & { className?: string }) {
   return (
     <ContextMenuPrimitive.Portal>
+      {/* SOLVRO PATCH — same Positioner-owned z-index as ContextMenuSubContent
+        above; see its comment for the full rationale. */}
       <ContextMenuPrimitive.Positioner
         side={side}
         align={align}
         sideOffset={sideOffset}
         alignOffset={alignOffset}
+        className="z-101"
       >
         <ContextMenuPrimitive.Popup
           data-slot="context-menu-content"
           className={cn(
-            "z-50 max-h-(--available-height) min-w-[8rem] origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-md data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-ending-style:animate-out data-ending-style:fade-out-0 data-ending-style:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
+            // SOLVRO PATCH — shadow-md → shadow-overlay, same elevation-
+            // doctrine fix as ContextMenuSubContent above.
+            "max-h-(--available-height) min-w-[8rem] origin-(--transform-origin) overflow-x-hidden overflow-y-auto rounded-md border border-border bg-popover p-1 text-popover-foreground shadow-overlay data-[side=bottom]:slide-in-from-top-2 data-[side=left]:slide-in-from-right-2 data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2 data-ending-style:animate-out data-ending-style:fade-out-0 data-ending-style:zoom-out-95 data-open:animate-in data-open:fade-in-0 data-open:zoom-in-95",
             className
           )}
           {...props}
