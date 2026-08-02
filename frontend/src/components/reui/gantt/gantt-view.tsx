@@ -2319,7 +2319,9 @@ function GanttView({
           {viewConfig.zoomControl && (
             <div
               data-slot="gantt-zoom"
-              className="bg-background absolute end-3 bottom-5 z-40 flex flex-col rounded-md border shadow-sm"
+              // SOLVRO PATCH: shadow-sm removed — elevation doctrine allows no
+              // shadows outside the overlay whitelist (same as the jump chips).
+              className="bg-background absolute end-3 bottom-5 z-40 flex flex-col rounded-md border"
             >
               {/* aria-disabled instead of disabled: the not-allowed cursor
                   must still show at the zoom limits */}

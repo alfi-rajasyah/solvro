@@ -1,7 +1,14 @@
 import { useLayoutEffect, useRef, useState } from "react";
 import type { GanttRenderEventProps } from "@/components/reui/gantt/gantt";
-import { DEFAULT_SECTION_COLOR, PROGRESS_OVERLAY_ALPHA } from "@/lib/gantt/palette";
+import {
+  DEFAULT_SECTION_COLOR,
+  HATCH_CANVAS_HEX_DARK,
+  HATCH_CANVAS_HEX_LIGHT,
+  hatchCompositeHex,
+  progressHatchBackground,
+} from "@/lib/gantt/palette";
 import type { Task } from "@/lib/queries";
+import { useTheme } from "@/lib/theme";
 import { cn } from "@/lib/utils";
 
 // Solvro's `renderEvent` content renderer for the ReUI-engined Gantt (Plan B
@@ -185,20 +192,50 @@ export interface SolvroBarProps extends GanttRenderEventProps<Task> {
 export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBarProps) {
   const event = occurrence.event;
   const title = event.title;
-  // Hook called unconditionally, before any branch/early-return, so every
+  // Hooks called unconditionally, before any branch/early-return, so every
   // bar kind (rollup included) keeps a stable hook order across re-renders.
   const { containerRef, measureRef, fits } = useLabelFits(title);
+  // Resolved theme drives which canvas hex the hatch composite blends
+  // against (T3 phase-review fix — see `canvasHex` below); only the regular
+  // task-bar path below actually reads it, but Rules of Hooks still requires
+  // this above the rollup/milestone early-returns.
+  const { resolved: resolvedTheme } = useTheme();
 
-  // Section rollup pill (point 6): synthetic events from buildRollupEvents
-  // carry no `data` — the id prefix is the only signal, and is also what
-  // e2e specs and this component agree on instead of a shared type guard.
+  // Section rollup (point 6): synthetic events from buildRollupEvents carry
+  // no `data` — the id prefix is the only signal, and is also what e2e specs
+  // and this component agree on instead of a shared type guard.
+  //
+  // Gantt visual refresh Task 3: restyled from a full-width rounded pill to
+  // a thin summary bar with squared end caps (reference style) — a short
+  // vertical cap at each end joined by a thinner horizontal line through
+  // the middle. All three pieces share the section's resolved color via the
+  // engine's `--gantt-event-color` var (set on the bar wrapper,
+  // gantt-bar.tsx:275) — no local hex needed here, same as the pill this
+  // replaces.
+  //
+  // T3 fix round: `absolute inset-0` (not a statically-sized block) so the
+  // caps sit at the bar's TRUE edges — the button's own content box is
+  // padded (`px-1.5 py-0.5`, gantt-bar.tsx:292), and a merely `relative`
+  // block confined to that padded box put the caps 6px inside the section's
+  // real date range. Same escape trick the task-bar fill below already uses
+  // (see its comment). `min-w-2` (8px) guards a 1-day section at a coarse
+  // zoom, where the bar's rendered width can fall below the two 3px caps'
+  // combined width — without a floor they'd visually meet or overlap. Where
+  // the true width is already narrower than that floor, the browser resolves
+  // the over-constrained inset by extending the wrapper past the right edge
+  // (small, and only at zoom levels too coarse to show a 1-day bar legibly
+  // anyway) rather than shrinking a cap into the other.
   if (event.id.startsWith("section-rollup-")) {
     return (
       <span
         data-rollup
         aria-hidden
-        className="mx-auto h-1.5 w-full rounded-full bg-(--gantt-event-color)"
-      />
+        className="pointer-events-none absolute inset-0 min-w-2"
+      >
+        <span className="absolute inset-y-0 start-0 w-[3px] bg-(--gantt-event-color)" />
+        <span className="absolute inset-y-0 end-0 w-[3px] bg-(--gantt-event-color)" />
+        <span className="absolute inset-x-0 top-1/2 h-1 -translate-y-1/2 bg-(--gantt-event-color)" />
+      </span>
     );
   }
 
@@ -212,12 +249,34 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
   const showConnectDots = canEdit && !event.readOnly;
 
   const color = event.color ?? DEFAULT_SECTION_COLOR;
-  const textColor = insideLabelTextColor(color);
 
   const rawProgress = typeof event.progress === "number" ? event.progress : null;
-  const progress =
-    rawProgress === null ? null : Math.min(Math.max(Math.round(rawProgress), 0), 100);
-  const showProgressOverlay = progress !== null && progress > 0 && progress < 100;
+  // Absent progress data (every milestone — the only event kind here whose
+  // `progress` is legitimately non-numeric, adapter.ts's taskToEvent) renders
+  // fully solid: doneWidth 100 means the milestone branch below, which never
+  // reads doneWidth/showHatch, stays exactly as before.
+  const doneWidth =
+    rawProgress === null ? 100 : Math.min(Math.max(Math.round(rawProgress), 0), 100);
+  const showHatch = doneWidth < 100;
+
+  // T3 phase-review fix: the hatch layer paints its two translucent bands
+  // (see the `backdrop` JSX below) directly over the theme's plain canvas
+  // hex — NOT over `hatchCompositeHex`'s output, which would double-count
+  // `color` (see that function's own doc). `canvasHex` is what both the
+  // paint and the label decision below key off of, so they describe the
+  // same physical surface in whichever theme is active.
+  const canvasHex = resolvedTheme === "dark" ? HATCH_CANVAS_HEX_DARK : HATCH_CANVAS_HEX_LIGHT;
+
+  // When the visible label sits entirely over the hatch (doneWidth === 0 —
+  // per geometry.ts's `progressForTask`, every non-DONE leaf task has
+  // progress 0, so this is the common case, not an edge case), the label's
+  // actual painted background is `hatchCompositeHex(color, canvasHex)`, not
+  // the pure bar hex — the two gradient bands average out lighter or darker
+  // than the pure hex depending on the theme's canvas, enough to flip the
+  // 0.6 luminance threshold for some palette colors (e.g. TODO-status
+  // slate, HIGH-priority amber) and land unreadable text on the hatch.
+  const labelBackgroundHex = doneWidth === 0 ? hatchCompositeHex(color, canvasHex) : color;
+  const textColor = insideLabelTextColor(labelBackgroundHex);
 
   // Selection affordance uses `outline` rather than `ring` so it can coexist
   // with any future ring-based decoration without the two fighting over the
@@ -258,8 +317,8 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
     );
   }
 
-  // Solid fill: rendered by us (not classNames.event) so it can stay OFF
-  // for rollup/milestone bars while still being the full-bleed backdrop for
+  // Fill: rendered by us (not classNames.event) so it can stay OFF for
+  // rollup/milestone bars while still being the full-bleed backdrop for
   // regular bars. `inset-0` anchors to the button (the nearest positioned
   // ancestor — our own wrapper below is deliberately left non-positioned so
   // this reaches the button's true edges, padding included, rather than
@@ -268,18 +327,68 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
   // `segment.continuesBefore/After` classes) so a bar split across the
   // visible range's edge doesn't show mismatched corners between the
   // button's shape and our backdrop's.
+  //
+  // Gantt visual refresh Task 3: inverted from a solid backdrop + a flat
+  // black overlay covering the COMPLETED portion, to a diagonal hatch of the
+  // bar color as the base with a solid fill laid over its [0, doneWidth%)
+  // head — the reference treatment. The outer span owns rounding/selection-
+  // outline/hover-brightness exactly as the old single backdrop did
+  // (`overflow-hidden` clips both inner fills to that same rounded shape).
+  //
+  // T3 fix round (nit): the hatch paints FULL-BLEED (`inset-0`, no width
+  // math) instead of being sized to exactly [doneWidth%, 100%] — the solid
+  // head simply paints over whatever hatch is underneath it. Two
+  // independently-computed percentage widths that are supposed to sum to
+  // exactly 100% can round to adjacent device pixels differently and leave
+  // a hairline gap or overlap at the seam; painting the hatch everywhere
+  // and letting the solid head cover it removes that failure mode entirely
+  // (`showHatch` now only skips rendering it at all for DONE bars, where
+  // the solid head already covers 100% and the hatch would be invisible).
+  //
+  // T3 fix round (should-fix): `progressHatchBackground`'s two gradient
+  // bands are both translucent rgba, so the hatch layer also carries an
+  // opaque `backgroundColor` underneath the gradient — without it, the
+  // row's grid lines / weekend hatch / today wash would paint straight
+  // through the hatch's "gaps."
+  //
+  // T3 phase-review fix: that opaque backing is `canvasHex` (the theme's
+  // plain background token), NOT `hatchCompositeHex(color, canvasHex)`. The
+  // composite already has `color` blended into it at HATCH_MEAN_ALPHA;
+  // painting the gradient's `color`-at-alpha bands on top of THAT would
+  // double-count `color` (mean painted alpha ends up ~0.86, not the
+  // intended 0.625) and silently desync the label's contrast decision above
+  // from what's actually on screen — see `hatchCompositeHex`'s doc in
+  // palette.ts for the full arithmetic. The raw canvas is what the
+  // composite math (and the label decision built on it) actually models.
   const backdrop = (
     <span
       aria-hidden
       data-slot="solvro-bar-fill"
       className={cn(
-        "pointer-events-none absolute inset-0 bg-(--gantt-event-color)",
+        "pointer-events-none absolute inset-0 overflow-hidden",
         "group-hover/gantt-bar-group:brightness-110",
         segment.continuesBefore ? "rounded-s-none" : "rounded-s-sm",
         segment.continuesAfter ? "rounded-e-none" : "rounded-e-sm",
         selectedOutline,
       )}
-    />
+    >
+      {showHatch && (
+        <span
+          aria-hidden
+          data-slot="solvro-bar-hatch"
+          className="absolute inset-0"
+          style={{
+            backgroundColor: canvasHex,
+            backgroundImage: progressHatchBackground(color),
+          }}
+        />
+      )}
+      <span
+        aria-hidden
+        className="absolute inset-y-0 start-0"
+        style={{ width: `${doneWidth}%`, backgroundColor: color }}
+      />
+    </span>
   );
 
   return (
@@ -290,17 +399,6 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
       className="flex h-full min-w-0 flex-1 items-center"
     >
       {backdrop}
-      {showProgressOverlay && (
-        <span
-          aria-hidden
-          data-slot="solvro-bar-progress"
-          className="pointer-events-none absolute inset-y-0 start-0 rounded-s-sm"
-          style={{
-            width: `${progress}%`,
-            backgroundColor: `rgba(0, 0, 0, ${PROGRESS_OVERLAY_ALPHA})`,
-          }}
-        />
-      )}
       {/* Invisible measurer: same font/size as the real label, never
           truncated, removed from flow so it never affects layout — its
           scrollWidth is the title's true rendered width (see useLabelFits). */}

@@ -90,16 +90,12 @@ export function ProjectDetail() {
         contextOpen ? "md:mr-80" : openTaskId !== null ? "md:mr-[380px]" : "mr-0",
       ].join(" ")}
     >
-      {/* Project name + status now live in the TopBar (see TopBar.tsx).
-          This thin meta row keeps description + roles + actions next to the tabs. */}
+      {/* Project name + status now live in the TopBar (see TopBar.tsx); the
+          description lives in the Context sidebar (RightSidebar.tsx).
+          This thin meta row keeps roles + actions next to the tabs. */}
       <div className="mb-3 flex flex-col gap-2 md:flex-row md:items-start md:justify-between md:gap-4">
         <div className="min-w-0">
-          {project.description && (
-            <p className="max-w-2xl wrap-break-word text-sm text-on-surface-variant">
-              {project.description}
-            </p>
-          )}
-          <p className="mt-1 text-[12px] text-on-surface-variant">
+          <p className="text-[12px] text-on-surface-variant">
             {project.sa && (
               <>
                 SA <span className="font-medium text-on-surface">{project.sa.username}</span>

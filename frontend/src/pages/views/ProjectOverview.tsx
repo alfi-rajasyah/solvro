@@ -1,10 +1,11 @@
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
+  Area,
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Tooltip,
@@ -13,8 +14,10 @@ import {
 } from "recharts";
 import { useProjectContext } from "../ProjectDetail";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import { scoreClass, scoreLevel } from "@/components/RiskFormModal";
+import { Chip } from "@/components/StatusChip";
 import { dateToDay, dayFromIso } from "@/lib/dateField";
-import { type Task, useProjectTasks } from "@/lib/queries";
+import { type Task, useProjectRisks, useProjectTasks } from "@/lib/queries";
 
 export function ProjectOverview() {
   const { project } = useProjectContext();
@@ -32,6 +35,10 @@ export function ProjectOverview() {
           ))}
         </div>
         <div className="h-72 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+        <div className="grid gap-4 lg:grid-cols-2">
+          <div className="h-48 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+          <div className="h-48 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+        </div>
       </div>
     );
   }
@@ -46,6 +53,12 @@ export function ProjectOverview() {
 
   return (
     <div className="space-y-4">
+      {project.description && (
+        <p className="max-w-3xl wrap-break-word text-sm text-on-surface-variant">
+          {project.description}
+        </p>
+      )}
+
       {/* KPI strip */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <Kpi
@@ -60,6 +73,7 @@ export function ProjectOverview() {
           value={`${stats.pct}%`}
           hint={`${stats.done} of ${stats.total} done`}
           accent={stats.pct === 100 ? "emerald" : undefined}
+          progress={stats.pct}
         />
         <Kpi
           icon="warning"
@@ -130,8 +144,198 @@ export function ProjectOverview() {
           </div>
         )}
       </section>
+
+      {/* Detail panels — the TAM's morning glance */}
+      <div className="grid items-start gap-4 lg:grid-cols-2">
+        <NeedsAttention tasks={tasks ?? []} projectId={project.id} />
+        <div className="grid gap-4">
+          <StatusBreakdown tasks={tasks ?? []} />
+          <TopRisks projectId={project.id} />
+        </div>
+      </div>
     </div>
   );
+}
+
+const PANEL_CLASS =
+  "rounded-sm border border-outline-variant bg-surface-container-lowest p-4";
+const PANEL_HEADING =
+  "text-label-caps uppercase tracking-wider text-on-surface-variant";
+
+function NeedsAttention({ tasks, projectId }: { tasks: Task[]; projectId: number }) {
+  const today = dateToDay(startOfToday())!;
+  const rows = tasks
+    .filter((t) => t.status !== "DONE" && t.dueDate)
+    .map((t) => ({ task: t, delta: dayDelta(dayFromIso(t.dueDate!)!, today) }))
+    .filter((r) => r.delta <= 7)
+    .sort((a, b) => a.delta - b.delta);
+  const shown = rows.slice(0, 6);
+
+  return (
+    <section className={PANEL_CLASS}>
+      <header className="mb-3 flex items-center justify-between">
+        <h3 className={PANEL_HEADING}>Needs attention</h3>
+        <span className="text-xs text-on-surface-variant">overdue + next 7 days</span>
+      </header>
+      {shown.length === 0 ? (
+        <PanelEmpty icon="check_circle" text="Nothing overdue or due in the next 7 days." />
+      ) : (
+        <ul className="-mx-2">
+          {shown.map(({ task, delta }) => (
+            <li key={task.id}>
+              <Link
+                to={`?task=${task.id}`}
+                className="flex items-center justify-between gap-3 rounded-sm px-2 py-1.5 hover:bg-surface-container"
+              >
+                <span className="min-w-0 truncate text-sm text-on-surface">
+                  {task.title}
+                </span>
+                <span className="shrink-0">
+                  <Chip tone={delta < 0 ? "rose" : "amber"}>
+                    {delta < 0
+                      ? `${-delta}d overdue`
+                      : delta === 0
+                        ? "due today"
+                        : `due in ${delta}d`}
+                  </Chip>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      )}
+      {rows.length > shown.length && (
+        <Link
+          to={`/projects/${projectId}/list`}
+          className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
+        >
+          {rows.length - shown.length} more in List
+          <span className="material-symbols-outlined text-[15px]">chevron_right</span>
+        </Link>
+      )}
+    </section>
+  );
+}
+
+function StatusBreakdown({ tasks }: { tasks: Task[] }) {
+  const done = tasks.filter((t) => t.status === "DONE").length;
+  const inProgress = tasks.filter((t) => t.status === "IN_PROGRESS").length;
+  const todo = tasks.length - done - inProgress;
+  const pct = (n: number) => `${(n / tasks.length) * 100}%`;
+
+  return (
+    <section className={PANEL_CLASS}>
+      <h3 className={`${PANEL_HEADING} mb-3`}>Status breakdown</h3>
+      {tasks.length === 0 ? (
+        <PanelEmpty icon="list_alt" text="No tasks yet." />
+      ) : (
+        <>
+          <div className="flex h-2 overflow-hidden rounded-full bg-surface-container-high">
+            {done > 0 && <div className="bg-primary" style={{ width: pct(done) }} />}
+            {inProgress > 0 && (
+              <div className="bg-primary/45" style={{ width: pct(inProgress) }} />
+            )}
+          </div>
+          <dl className="mt-3 space-y-1.5 text-xs">
+            <BreakdownRow swatch="bg-primary" label="Done" count={done} />
+            <BreakdownRow swatch="bg-primary/45" label="In progress" count={inProgress} />
+            <BreakdownRow swatch="bg-surface-container-high" label="To do" count={todo} />
+          </dl>
+        </>
+      )}
+    </section>
+  );
+}
+
+function BreakdownRow({
+  swatch,
+  label,
+  count,
+}: {
+  swatch: string;
+  label: string;
+  count: number;
+}) {
+  return (
+    <div className="flex items-center justify-between">
+      <dt className="inline-flex items-center gap-1.5 text-on-surface-variant">
+        <span className={`h-2.5 w-2.5 rounded-full ${swatch}`} />
+        {label}
+      </dt>
+      <dd className="font-medium tabular-nums text-on-surface">{count}</dd>
+    </div>
+  );
+}
+
+function TopRisks({ projectId }: { projectId: number }) {
+  const { data: risks, isLoading, isError } = useProjectRisks(projectId);
+  const top = (risks ?? [])
+    .filter((r) => r.status === "OPEN")
+    .sort((a, b) => b.probability * b.impact - a.probability * a.impact)
+    .slice(0, 3);
+
+  return (
+    <section className={PANEL_CLASS}>
+      <header className="mb-3 flex items-center justify-between">
+        <h3 className={PANEL_HEADING}>Top open risks</h3>
+        <Link
+          to={`/projects/${projectId}/risks`}
+          className="text-xs font-semibold text-primary hover:underline"
+        >
+          View all
+        </Link>
+      </header>
+      {isLoading ? (
+        <div className="h-16 animate-pulse rounded-sm bg-surface-container-low" />
+      ) : isError ? (
+        <p className="text-xs text-on-surface-variant">Could not load risks.</p>
+      ) : top.length === 0 ? (
+        <PanelEmpty icon="shield" text="No open risks." />
+      ) : (
+        <ul className="space-y-2">
+          {top.map((risk) => {
+            const score = risk.probability * risk.impact;
+            return (
+              <li key={risk.id} className="flex items-center justify-between gap-3">
+                <span className="min-w-0 truncate text-sm text-on-surface">
+                  {risk.description}
+                </span>
+                <span
+                  className={[
+                    "flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-xs font-bold tabular-nums",
+                    scoreClass(score),
+                  ].join(" ")}
+                  title={`${risk.probability} × ${risk.impact} = ${score}`}
+                >
+                  {score}
+                  <span className="font-display text-[10px] font-bold uppercase tracking-wider">
+                    {scoreLevel(score)}
+                  </span>
+                </span>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function PanelEmpty({ icon, text }: { icon: string; text: string }) {
+  return (
+    <div className="flex items-center gap-2 rounded-sm border border-dashed border-outline-variant px-3 py-4 text-xs text-on-surface-variant">
+      <span className="material-symbols-outlined text-base">{icon}</span>
+      {text}
+    </div>
+  );
+}
+
+// Delta in calendar days between two "yyyy-MM-dd" days (dateField.ts contract);
+// local-midnight parse + rounding absorbs DST-shifted day lengths.
+function dayDelta(day: string, today: string): number {
+  const ms =
+    new Date(day + "T00:00:00").getTime() - new Date(today + "T00:00:00").getTime();
+  return Math.round(ms / 86400000);
 }
 
 function Kpi({
@@ -140,12 +344,14 @@ function Kpi({
   value,
   hint,
   accent,
+  progress,
 }: {
   icon: string;
   label: string;
   value: string;
   hint?: string;
   accent?: "primary" | "emerald" | "error";
+  progress?: number;
 }) {
   const accentClass =
     accent === "emerald"
@@ -162,7 +368,15 @@ function Kpi({
         <span className={`material-symbols-outlined text-base ${accent === "primary" ? "text-primary" : accent === "emerald" ? "text-emerald-600" : accent === "error" ? "text-error" : "text-on-surface-variant"}`}>{icon}</span>
       </div>
       <div className={`mt-2 font-body text-3xl font-bold tabular-nums ${accentClass}`}>{value}</div>
-      {hint && <div className="mt-1 text-on-surface-variant">{hint}</div>}
+      {progress !== undefined && (
+        <div className="mt-2 h-1 overflow-hidden rounded-full bg-surface-container-high">
+          <div
+            className="h-full rounded-full bg-primary"
+            style={{ width: `${progress}%` }}
+          />
+        </div>
+      )}
+      {hint && <div className="mt-1 text-xs text-on-surface-variant">{hint}</div>}
     </div>
   );
 }
@@ -205,7 +419,13 @@ function SCurveChart({
   return (
     <div className="h-72 w-full">
       <ResponsiveContainer>
-        <LineChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: -8 }}>
+        <ComposedChart data={data} margin={{ top: 8, right: 16, bottom: 0, left: -8 }}>
+          <defs>
+            <linearGradient id="scurve-fill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="rgb(var(--primary))" stopOpacity={0.16} />
+              <stop offset="100%" stopColor="rgb(var(--primary))" stopOpacity={0} />
+            </linearGradient>
+          </defs>
           <CartesianGrid stroke="rgb(var(--outline-variant))" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="label"
@@ -255,6 +475,15 @@ function SCurveChart({
               activeDot={{ r: 4 }}
             />
           )}
+          <Area
+            type="monotone"
+            dataKey="current"
+            stroke="none"
+            fill="url(#scurve-fill)"
+            activeDot={false}
+            tooltipType="none"
+            legendType="none"
+          />
           <Line
             type="monotone"
             dataKey="current"
@@ -264,7 +493,7 @@ function SCurveChart({
             dot={false}
             activeDot={{ r: 4 }}
           />
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

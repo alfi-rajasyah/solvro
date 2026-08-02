@@ -13,7 +13,6 @@ describe("filterNavCommands", () => {
       "Projects",
       "Customers",
       "Daily Review",
-      "Reports",
       "Settings",
     ]);
   });
@@ -32,8 +31,8 @@ describe("filterNavCommands", () => {
   });
 
   it("filters by label, case-insensitively", () => {
-    expect(filterNavCommands(none, "rep").map((c) => c.label)).toEqual(["Reports"]);
-    expect(filterNavCommands(none, "REPORTS").map((c) => c.label)).toEqual(["Reports"]);
+    expect(filterNavCommands(none, "cust").map((c) => c.label)).toEqual(["Customers"]);
+    expect(filterNavCommands(none, "CUSTOMERS").map((c) => c.label)).toEqual(["Customers"]);
     expect(filterNavCommands(none, "zzz")).toEqual([]);
   });
 
@@ -43,7 +42,6 @@ describe("filterNavCommands", () => {
       "/projects",
       "/customers",
       "/daily-review",
-      "/reports",
       "/executive",
       "/settings",
       "/admin",
