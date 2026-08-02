@@ -223,6 +223,98 @@ test.describe("global search palette", () => {
   // dialog is `w-full` inside `fixed inset-0 flex items-stretch
   // justify-center`, so `{x: 0, y: 0, height: <viewport height>}` is
   // structurally guaranteed regardless of content — they added no coverage.
+  // Ledger item 7 (docs/ISSUES.md, "⌘K toggle-close is effectively
+  // unreachable"): the palette autofocuses its own input the instant it
+  // opens (AutocompleteInput's `autoFocus`), so a second ⌘K press almost
+  // always fires with focus already inside that input. The fix checks
+  // Shell.tsx's `paletteOpen` state directly for the close direction
+  // instead of inferring "not editing a field" from the focused element's
+  // tag, so this exact focus state must no longer block the close.
+  test("a second ⌘K press closes the palette even though its own input has focus", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
+    await loginViaUi(page);
+    await page.goto("/overview", { waitUntil: "networkidle" });
+    await page.keyboard.press("ControlOrMeta+k");
+
+    const dialog = page.getByRole("dialog", { name: /global search/i });
+    await expect(dialog).toBeVisible();
+    const input = dialog.getByPlaceholder(/search projects/i);
+    await expect(input).toBeFocused();
+
+    await page.keyboard.press("ControlOrMeta+k");
+    await expect(dialog).toHaveCount(0);
+  });
+
+  // Ledger item 4 (docs/ISSUES.md, "Palette result-state machine: error
+  // state indistinguishable from empty"): `useSearch`'s `error` was never
+  // destructured, so a failed `/search` rendered the same `No results for
+  // "x"` copy as a genuine zero-hit query. Assert the failure copy is
+  // distinct and the "no results" copy never appears for a failed request.
+  test("a failed /search request renders a distinct failure message, not \"No results\"", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
+    await loginViaUi(page);
+    await page.route("**/api/search*", (route) =>
+      route.fulfill({
+        status: 500,
+        contentType: "application/json",
+        body: JSON.stringify({ message: "Internal error" }),
+      }),
+    );
+    await page.goto("/overview", { waitUntil: "networkidle" });
+    await page.keyboard.press("ControlOrMeta+k");
+
+    const dialog = page.getByRole("dialog", { name: /global search/i });
+    await dialog.getByPlaceholder(/search projects/i).fill("zzzz-search-failure-probe");
+
+    // The default QueryClient retries once (main.tsx, `retry: 1`) before
+    // settling into the error state — give it room beyond the default 5s.
+    await expect(dialog.getByText(/could not load results/i)).toBeVisible({ timeout: 10_000 });
+    await expect(dialog.getByText(/no results for/i)).toHaveCount(0);
+  });
+
+  // Ledger item 6 (docs/ISSUES.md, "Shared body-scroll-lock helper needed"):
+  // Modal.tsx and CommandPalette.tsx each wrote `document.body.style.overflow`
+  // directly with no ref-count, so closing the palette while a Modal was
+  // still open behind it unlocked the page. `useBodyScrollLock` fixes this
+  // with a shared ref count — prove the collision case survives: open a form
+  // Modal, open the palette on top of it, close only the palette (via its
+  // own backdrop — Escape would hit both components' independent document
+  // keydown listeners and close them both, which isn't the scenario under
+  // test), and confirm the Modal is still open with scroll still locked.
+  test("closing the palette doesn't unlock body scroll while a Modal stays open (ref-counted scroll lock)", async ({
+    page,
+  }, testInfo) => {
+    test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
+    await loginViaUi(page);
+    await page.goto("/customers", { waitUntil: "networkidle" });
+
+    await page.getByRole("button", { name: /new customer/i }).click();
+    const modal = page.getByRole("dialog", { name: /new customer/i });
+    await expect(modal).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => document.body.style.overflow))
+      .toBe("hidden");
+
+    // The modal's Name field autofocuses on open — the ⌘K listener's
+    // editable-target guard (intentionally, per spec) would swallow the
+    // shortcut with focus still there. Click the modal's own title to move
+    // focus off the input before invoking the palette, same as a real user
+    // clicking anywhere non-editable in the modal chrome first.
+    await modal.getByText("New customer", { exact: true }).click();
+    await page.keyboard.press("ControlOrMeta+k");
+    const palette = page.getByRole("dialog", { name: /global search/i });
+    await expect(palette).toBeVisible();
+
+    // Click the palette's own backdrop (top-left corner, clear of its
+    // centered dialog box) — the palette portal mounts after the Modal's,
+    // so it paints on top and receives the click first, closing only itself.
+    await page.mouse.click(10, 10);
+    await expect(palette).toHaveCount(0);
+
+    await expect(modal).toBeVisible();
+    await expect(page.evaluate(() => document.body.style.overflow)).resolves.toBe("hidden");
+  });
+
   test("mobile: a long result row doesn't overflow the palette's scroll viewport horizontally", async ({ page, seededProject }, testInfo) => {
     test.skip(testInfo.project.name !== "mobile", "viewport-fit check is mobile-viewport specific");
     const target = await createLongUniqueTask(

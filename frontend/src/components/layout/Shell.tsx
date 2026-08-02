@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Outlet } from "react-router-dom";
 import { CommandPalette } from "@/components/CommandPalette";
 import { InstallBanner } from "@/components/InstallBanner";
@@ -9,16 +9,42 @@ import { TopBar } from "./TopBar";
 function ShellLayout() {
   const { open } = useSidebar();
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // Mirror of `paletteOpen` for the listener below, which stays mounted once
+  // ([] deps) instead of re-attaching on every open/close — a passive
+  // `[paletteOpen]`-deps effect leaves a brief stale-closure window (a
+  // key-repeat ⌘K can fire before React tears down and re-attaches the old
+  // closure) where the guard reads a stale value. The ref is updated inline,
+  // synchronously, at the exact point the listener itself decides to
+  // open/close (no waiting on a render+effect round-trip to catch up), and
+  // mirrored by the effect below for opens/closes that originate elsewhere
+  // (TopBar's search icon, CommandPalette's own Escape/backdrop close).
+  const paletteOpenRef = useRef(paletteOpen);
+  useEffect(() => {
+    paletteOpenRef.current = paletteOpen;
+  }, [paletteOpen]);
 
-  // Single app-wide ⌘K/Ctrl+K listener. Skips editable targets so typing
-  // "k" with modifiers inside inputs/textareas never hijacks focus (spec).
+  // Single app-wide ⌘K/Ctrl+K listener. The editable-target guard only
+  // applies to the OPEN direction (typing "k" with modifiers inside an
+  // input/textarea never hijacks focus, per spec); the CLOSE direction
+  // checks `paletteOpenRef` directly instead, since the palette autofocuses
+  // its own input the instant it opens (CommandPalette.tsx) — inferring
+  // "closing" from `document.activeElement`'s tag made a second ⌘K press
+  // no-op almost every time, because focus was already sitting inside that
+  // same input.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (!(e.metaKey || e.ctrlKey) || e.key.toLowerCase() !== "k") return;
+      if (paletteOpenRef.current) {
+        e.preventDefault();
+        paletteOpenRef.current = false;
+        setPaletteOpen(false);
+        return;
+      }
       const t = e.target as HTMLElement | null;
       if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
       e.preventDefault();
-      setPaletteOpen((v) => !v);
+      paletteOpenRef.current = true;
+      setPaletteOpen(true);
     }
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

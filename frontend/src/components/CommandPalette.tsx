@@ -13,6 +13,7 @@ import {
   AutocompleteStatus,
 } from "@/components/reui/autocomplete";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { useBodyScrollLock } from "@/hooks/useBodyScrollLock";
 import { projectStatusLabel } from "@/components/StatusChip";
 import { filterNavCommands } from "@/lib/navCommands";
 import { useSearch } from "@/lib/queries";
@@ -47,31 +48,33 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
   const navigate = useNavigate();
   const [query, setQuery] = useState("");
   const debounced = useDebounced(query, 200);
-  const { data, isFetching } = useSearch(debounced);
+  const { data, error, isFetching } = useSearch(debounced);
   // Same predicate that gates the request (queries.ts's `enabled`) must also
   // gate consumption of `data` — placeholderData resolves against React
   // Query's #lastQueryWithDefinedData, which never clears on its own, so
   // without this a disabled query (< 2 chars, or right after reopen) still
   // renders the previous successful search's rows with isPlaceholder=true.
-  const hasQuery = debounced.trim().length >= 2;
+  // Gated on the LIVE `query` too, not just the debounced one: `query` resets
+  // synchronously to "" on close (effect below), but `debounced` lags behind
+  // by up to the 200ms debounce window — without this, a reopen inside that
+  // window could still read the prior session's now-stale `debounced` value
+  // as a valid query and flash its rows before the debounce catches up.
+  const hasQuery = query.trim().length >= 2 && debounced.trim().length >= 2;
 
   // Fresh palette every open — stale queries are disorienting on reopen.
   useEffect(() => {
     if (!open) setQuery("");
   }, [open]);
 
-  // Esc + body scroll lock, same recipe as Modal.tsx.
+  useBodyScrollLock(open);
+
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
       if (e.key === "Escape") onClose();
     }
     document.addEventListener("keydown", onKey);
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.removeEventListener("keydown", onKey);
-      document.body.style.overflow = "";
-    };
+    return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
   const items = useMemo<PaletteItem[]>(() => {
@@ -192,7 +195,11 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
               results" flash before the palette has a real query to report on.
             */}
             <AutocompleteEmpty className="px-4 py-6 text-center text-[13px] text-on-surface-variant">
-              {hasQuery ? `No results for "${debounced}"` : null}
+              {hasQuery
+                ? error
+                  ? "Could not load results. Try again."
+                  : `No results for "${debounced}"`
+                : null}
             </AutocompleteEmpty>
             <AutocompleteList className="p-1" scrollAreaClassName="min-h-0 flex-1">
               {(group: PaletteGroup) => (
