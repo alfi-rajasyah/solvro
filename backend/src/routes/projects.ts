@@ -72,7 +72,7 @@ const projectDetailInclude = {
   tam: { select: { id: true, username: true, email: true } },
   customer: { select: { id: true, name: true } },
   baselineLockedBy: { select: { id: true, username: true } },
-  _count: { select: { tasks: true, blueprints: true } },
+  _count: { select: { tasks: true } },
   services: {
     orderBy: { service: { name: "asc" } },
     include: { service: true },

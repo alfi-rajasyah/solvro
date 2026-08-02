@@ -9,17 +9,9 @@ interface RightSidebarProps {
   project: ProjectDetailType;
   open: boolean;
   onClose: () => void;
-  blueprintVersion?: string;
-  blueprintDocsUrl?: string;
 }
 
-export function RightSidebar({
-  project,
-  open,
-  onClose,
-  blueprintVersion = "SA Blueprint v2.4",
-  blueprintDocsUrl = "https://docs.solvro.dev/blueprints/v2.4",
-}: RightSidebarProps) {
+export function RightSidebar({ project, open, onClose }: RightSidebarProps) {
   const { handlers: exportHandlers } = useGanttExport();
   const [exporting, setExporting] = useState<"excel" | "pdf" | "pdfTab" | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -86,41 +78,6 @@ export function RightSidebar({
               {project.description}
             </p>
           )}
-        </section>
-
-        <section>
-          <h3 className="mb-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
-            Blueprint reference
-          </h3>
-          <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-3">
-            <div className="flex items-start gap-3">
-              <span
-                className="material-symbols-outlined text-primary"
-                style={{ fontVariationSettings: "'FILL' 1" }}
-              >
-                schema
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="truncate font-display text-sm font-semibold text-on-surface">
-                  {blueprintVersion}
-                </p>
-                <p className="mt-0.5 text-[12px] text-on-surface-variant">
-                  Source-of-truth payload (JSONB) — read-only.
-                </p>
-                <a
-                  href={blueprintDocsUrl}
-                  target="_blank"
-                  rel="noreferrer noopener"
-                  className="mt-2 inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
-                >
-                  View source documentation
-                  <span className="material-symbols-outlined text-[15px]">
-                    open_in_new
-                  </span>
-                </a>
-              </div>
-            </div>
-          </div>
         </section>
 
         <section>

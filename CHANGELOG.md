@@ -15,6 +15,18 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-08-03 — Secure Ingestion Port cancelled; Blueprint remnants deleted
+
+The planned SA-blueprint webhook (`POST /webhook/blueprint`) is cancelled: Solvro is a TAM-only tool for now, with no Solution Architect ingestion path. The feature was never built — this removes its dormant scaffolding.
+
+- **`backend/prisma/schema.prisma` + migration `20260803000000_remove_blueprints`** — dropped the never-written `Blueprint` model and its empty `blueprints` table (plus the `Project.blueprints` relation). The table had zero rows and zero writers; its only reader was the project-detail `_count`.
+- **`backend/src/routes/projects.ts`, `frontend/src/lib/queries.ts`** — `_count.blueprints` removed from the project-detail include and its TypeScript type.
+- **`frontend/src/components/layout/RightSidebar.tsx`** — removed the "Blueprint reference" card (hardcoded "SA Blueprint v2.4" placeholder linking to a non-existent docs URL) and its two unused props.
+- **`frontend/src/components/gantt-v2/SolvroBar.tsx`** — removed the dormant AI-Breakdown amber-ring hook (`data-ai-breakdown` + `ring-chip-amber-text` on a `blueprintId` field that never existed); it could never fire. **`frontend/src/lib/auth.tsx`** — dropped the stale `blueprint:*` mention from the permission-catalog comment.
+- **`README.md`** — intro reworded to the TAM-only scope; the Secure Ingestion Port bullet removed from the Roadmap.
+
+The SA user role, `Project.saId`, and the SA stakeholder row stay — role-based access is unrelated to the ingestion webhook.
+
 ### Fixed — 2026-08-02 — Backend tests start from a clean database; dead diagram CSS removed
 
 **`backend/test/globalSetup.ts`, `test/env.ts`** — the backend suite now truncates every table in the isolated `solvro_test` database before each run, killing the intermittent `taskOrdering.test.ts` failure caused by rows accumulating past the task-listing endpoint's cap across invocations. Truncation is hard-guarded to databases whose name ends in `_test` — invoked with the dev database's URL it fails loudly instead of wiping data. **`.github/workflows/ci.yml`** — the backend-tests job's ephemeral database is renamed `solvro_test` to satisfy that guard (the guard refused the old name, by design). **`e2e/tests/search.spec.ts`** — the failed-search test blocks service-worker registration: the built CI app registers a PWA worker whose fetches bypass Playwright's request mocking, so the mocked 500 never fired there.
