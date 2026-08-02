@@ -1,5 +1,6 @@
 import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { EmptyState } from "@/components/EmptyState";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
 import {
   type ServiceAssignmentInput,
@@ -137,9 +138,9 @@ export function ServiceMappingList({
       </div>
 
       {error && (
-        <div className="rounded-sm border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">
-          {error}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
       )}
 
       {isLoading ? (

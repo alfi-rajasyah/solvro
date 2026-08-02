@@ -20,6 +20,7 @@ import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "../ProjectDetail";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { DateField } from "@/components/DateField";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { SectionReorderModal } from "@/components/SectionReorderModal";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { ApiError } from "@/lib/api";
@@ -351,9 +352,9 @@ export function ProjectList() {
 
   if (isError) {
     return (
-      <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-        Could not load tasks: {(error as Error).message}
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>Could not load tasks: {(error as Error).message}</AlertDescription>
+      </Alert>
     );
   }
 
@@ -393,9 +394,9 @@ export function ProjectList() {
       </div>
 
       {actionError && (
-        <div className="mb-3 rounded-lg border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container">
-          {actionError}
-        </div>
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription className="text-xs">{actionError}</AlertDescription>
+        </Alert>
       )}
 
       <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest md:min-h-0 md:flex-1 md:overflow-y-auto">

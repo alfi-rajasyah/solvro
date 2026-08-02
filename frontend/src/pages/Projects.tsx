@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import {
   createFilter,
@@ -127,9 +128,9 @@ export function Projects() {
       {isLoading && <SkeletonGrid />}
 
       {isError && (
-        <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-          Could not load projects: {(error as Error).message}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>Could not load projects: {(error as Error).message}</AlertDescription>
+        </Alert>
       )}
 
       {projects && projects.length === 0 && (

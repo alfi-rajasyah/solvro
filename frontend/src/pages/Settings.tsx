@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from "react";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ServiceCatalogueManager } from "@/components/services/ServiceCatalogueManager";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -97,9 +98,9 @@ export function Settings() {
           </div>
         )}
         {error && (
-          <div className="mb-3 rounded-lg border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">
-            {error}
-          </div>
+          <Alert variant="destructive" className="mb-3">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         )}
 
         <form onSubmit={handleSubmit} className="space-y-3">

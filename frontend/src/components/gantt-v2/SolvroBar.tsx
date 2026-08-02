@@ -151,7 +151,9 @@ function ConnectDots() {
         data-connect-side="left"
         aria-hidden
         title="Drag from another task to make this task depend on it"
-        className="border-white bg-primary absolute top-1/2 start-0 z-10 size-3 -translate-x-[16px] -translate-y-1/2 cursor-crosshair rounded-full border-2 opacity-0 shadow-xs transition-opacity group-hover/gantt-bar-group:opacity-100 pointer-coarse:opacity-100"
+        // SOLVRO PATCH (shadow-style unification tail) — DESIGN.md §4: no
+        // shadows outside overlays. Dropped `shadow-xs`.
+        className="border-white bg-primary absolute top-1/2 start-0 z-10 size-3 -translate-x-[16px] -translate-y-1/2 cursor-crosshair rounded-full border-2 opacity-0 transition-opacity group-hover/gantt-bar-group:opacity-100 pointer-coarse:opacity-100"
         onPointerDown={(e) => {
           e.stopPropagation();
           e.preventDefault();
@@ -162,7 +164,9 @@ function ConnectDots() {
         data-connect-side="right"
         aria-hidden
         title="Drag to a task to create a dependency"
-        className="border-white bg-primary absolute top-1/2 end-0 z-10 size-3 translate-x-[16px] -translate-y-1/2 cursor-crosshair rounded-full border-2 opacity-0 shadow-xs transition-opacity group-hover/gantt-bar-group:opacity-100 pointer-coarse:opacity-100"
+        // SOLVRO PATCH (shadow-style unification tail) — DESIGN.md §4: no
+        // shadows outside overlays. Dropped `shadow-xs`.
+        className="border-white bg-primary absolute top-1/2 end-0 z-10 size-3 translate-x-[16px] -translate-y-1/2 cursor-crosshair rounded-full border-2 opacity-0 transition-opacity group-hover/gantt-bar-group:opacity-100 pointer-coarse:opacity-100"
         onPointerDown={(e) => {
           e.stopPropagation();
           e.preventDefault();

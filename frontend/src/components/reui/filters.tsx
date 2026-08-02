@@ -1811,6 +1811,28 @@ export function Filters<T = unknown>({
     [filters, onChange]
   )
 
+  // SOLVRO PATCH — idempotence guard (duplicate-chip mouse race, see
+  // docs/ISSUES.md's "Duplicate-chip mouse race" entry): Base UI's
+  // useMenuItemCommonProps fires a programmatic `itemRef.current.click()` on
+  // mouseup once a trigger press has been held long enough (submenus share
+  // the parent trigger's ref, so this reaches value-submenu clicks too), and
+  // MenuCheckboxItem fires onCheckedChange on every click — programmatic or
+  // natural — so a single user interaction can invoke a chip-creating
+  // handler twice in rapid succession. Shared by every unconditional
+  // `onChange([...filters, newFilter])` append below (the plain field-only
+  // add, the single-remaining-field direct list, and both branches of the
+  // field-then-value submenu flow): the matching filter if a chip for this
+  // field with these exact values already exists — that's the raced
+  // duplicate, not a legitimate second chip. A deliberate second
+  // `allowMultiple` chip for the same field is only ever added with a
+  // distinct value, so it never matches here. Comparison core lives in the
+  // module-level `findFilterMatch` (below the component, unit-tested in
+  // filters.test.ts) — this callback just binds it to the live `filters`.
+  const findMatchingFilter = useCallback(
+    (fieldKey: string, values: T[]) => findFilterMatch(filters, fieldKey, values),
+    [filters]
+  )
+
   const addFilter = useCallback(
     (fieldKey: string) => {
       const field = fieldsMap[fieldKey]
@@ -1819,6 +1841,11 @@ export function Filters<T = unknown>({
           field.defaultOperator ||
           (field.type === "multiselect" ? "is_any_of" : "is")
         const defaultValues: unknown[] = field.type === "text" ? [""] : []
+        if (findMatchingFilter(fieldKey, defaultValues as T[])) {
+          setAddFilterOpen(false)
+          setMenuSearchInput("")
+          return
+        }
         const newFilter = createFilter<T>(
           fieldKey,
           defaultOperator,
@@ -1830,7 +1857,7 @@ export function Filters<T = unknown>({
         setMenuSearchInput("")
       }
     },
-    [fieldsMap, filters, onChange]
+    [fieldsMap, filters, onChange, findMatchingFilter]
   )
 
   const selectableFields = useMemo(() => {
@@ -1933,6 +1960,16 @@ export function Filters<T = unknown>({
                   isActive={addFilterOpen}
                   onClose={() => setAddFilterOpen(false)}
                   onToggle={(value) => {
+                    // SOLVRO PATCH — duplicate-chip mouse race guard, see
+                    // findMatchingFilter above.
+                    if (
+                      findMatchingFilter(singleDirectField.key as string, [
+                        value,
+                      ])
+                    ) {
+                      setAddFilterOpen(false)
+                      return
+                    }
                     const newFilter = createFilter<T>(
                       singleDirectField.key as string,
                       singleDirectField.defaultOperator || "is",
@@ -2159,18 +2196,47 @@ export function Filters<T = unknown>({
                                           )
                                         }
                                       } else {
-                                        const newFilter = createFilter<T>(
+                                        // SOLVRO PATCH — duplicate-chip
+                                        // mouse race guard, see
+                                        // findMatchingFilter above: a raced
+                                        // double-activation of this first
+                                        // toggle (before `sessionFilter`
+                                        // exists) would otherwise create two
+                                        // separate filters with the same
+                                        // field+values. If one already
+                                        // exists, adopt it into the session
+                                        // instead of creating a duplicate.
+                                        const existing = findMatchingFilter(
                                           fieldKey,
-                                          field.defaultOperator || "is_any_of",
                                           nextValues
                                         )
-                                        onChange([...filters, newFilter])
-                                        setSessionFilterIds((prev) => ({
-                                          ...prev,
-                                          [fieldKey]: newFilter.id,
-                                        }))
+                                        if (existing) {
+                                          setSessionFilterIds((prev) => ({
+                                            ...prev,
+                                            [fieldKey]: existing.id,
+                                          }))
+                                        } else {
+                                          const newFilter = createFilter<T>(
+                                            fieldKey,
+                                            field.defaultOperator ||
+                                              "is_any_of",
+                                            nextValues
+                                          )
+                                          onChange([...filters, newFilter])
+                                          setSessionFilterIds((prev) => ({
+                                            ...prev,
+                                            [fieldKey]: newFilter.id,
+                                          }))
+                                        }
                                       }
                                     } else {
+                                      // SOLVRO PATCH — duplicate-chip mouse
+                                      // race guard, see findMatchingFilter
+                                      // above.
+                                      if (findMatchingFilter(fieldKey, [value])) {
+                                        setAddFilterOpen(false)
+                                        return
+                                      }
                                       const newFilter = createFilter<T>(
                                         fieldKey,
                                         field.defaultOperator || "is",
@@ -2248,6 +2314,28 @@ export function Filters<T = unknown>({
         })}
       </div>
     </FilterContext.Provider>
+  )
+}
+
+// SOLVRO PATCH — pure comparison core for the duplicate-chip idempotence
+// guard (`findMatchingFilter` inside the main component wraps this with the
+// live `filters` array; see that callback's doc comment for the mechanism).
+// Extracted to module scope so the guard's logic has a deterministic unit
+// test (filters.test.ts) independent of DOM/e2e timing. Element comparison
+// is `===`, so this only recognizes exact primitive-value duplicates —
+// correct for every current filter field (all string-valued); a future
+// consumer with object-valued filter values would need a deeper equality
+// check here.
+export function findFilterMatch<T = unknown>(
+  filters: Filter<T>[],
+  fieldKey: string,
+  values: T[]
+): Filter<T> | undefined {
+  return filters.find(
+    (filter) =>
+      filter.field === fieldKey &&
+      filter.values.length === values.length &&
+      filter.values.every((value, index) => value === values[index])
   )
 }
 

@@ -1,11 +1,24 @@
 import { useMemo, useState } from "react";
+import {
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from "@tanstack/react-table";
 import { useProjectContext } from "../ProjectDetail";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { Alert, AlertDescription } from "@/components/reui/alert";
+import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-grid";
+import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
+import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
+import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
 import {
   RiskFormModal,
   scoreClass,
   scoreLevel,
 } from "@/components/RiskFormModal";
+import { Skeleton } from "@/components/ui/skeleton";
 import { hasPermission, useAuth } from "@/lib/auth";
 import {
   type Risk,
@@ -35,6 +48,11 @@ const STATUS_TONE: Record<RiskStatus, string> = {
   MITIGATED: "bg-amber-100 text-amber-800",
   CLOSED: "bg-emerald-100 text-emerald-700",
 };
+
+// Workflow order for the DataGrid's Status column (accessorFn below) —
+// matches STATUS_LABEL's own key order, same "not a person column, numeric
+// workflow-order accessor" call as Tasks.tsx's status column.
+const STATUS_ORDER: RiskStatus[] = ["OPEN", "MITIGATED", "CLOSED"];
 
 const CATEGORIES: (RiskCategory | "ALL")[] = [
   "ALL",
@@ -101,9 +119,9 @@ export function ProjectRisks() {
 
   if (isError) {
     return (
-      <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-        Could not load risks: {(error as Error).message}
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>Could not load risks: {(error as Error).message}</AlertDescription>
+      </Alert>
     );
   }
 
@@ -189,34 +207,14 @@ export function ProjectRisks() {
           </div>
         ) : (
           <>
-            <div className="hidden overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest md:block">
-              <table className="w-full text-sm">
-                <thead className="bg-surface-container-low text-left font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
-                  <tr>
-                    <th className="px-3 py-2">Description</th>
-                    <th className="px-3 py-2">Category</th>
-                    <th className="w-24 px-3 py-2 text-center">Prob</th>
-                    <th className="w-24 px-3 py-2 text-center">Impact</th>
-                    <th className="w-28 px-3 py-2 text-center">Score</th>
-                    <th className="w-32 px-3 py-2">Status</th>
-                    {canEdit && <th className="w-20 px-3 py-2"></th>}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-outline-variant">
-                  {filtered.map((r) => (
-                    <RiskRow
-                      key={r.id}
-                      risk={r}
-                      canEdit={canEdit}
-                      onEdit={() => setEditing(r)}
-                      onDelete={() => setConfirmDelete(r)}
-                      onChange={(patch) =>
-                        updateRisk.mutate({ id: r.id, patch })
-                      }
-                    />
-                  ))}
-                </tbody>
-              </table>
+            <div className="hidden md:block">
+              <RisksDataGrid
+                risks={filtered}
+                canEdit={canEdit}
+                onEdit={(r) => setEditing(r)}
+                onDelete={(r) => setConfirmDelete(r)}
+                onChange={(id, patch) => updateRisk.mutate({ id, patch })}
+              />
             </div>
 
             <div className="space-y-2 md:hidden">
@@ -276,152 +274,305 @@ export function ProjectRisks() {
   );
 }
 
-function RiskRow({
-  risk,
+function RisksDataGrid({
+  risks,
   canEdit,
   onEdit,
   onDelete,
   onChange,
 }: {
-  risk: Risk;
+  risks: Risk[];
   canEdit: boolean;
-  onEdit: () => void;
-  onDelete: () => void;
-  onChange: (patch: { probability?: number; impact?: number; status?: RiskStatus }) => void;
+  onEdit: (risk: Risk) => void;
+  onDelete: (risk: Risk) => void;
+  onChange: (
+    id: number,
+    patch: { probability?: number; impact?: number; status?: RiskStatus },
+  ) => void;
 }) {
-  const score = risk.probability * risk.impact;
+  // No default TanStack sort — `risks` (the `filtered` prop from
+  // ProjectRisks) already arrives pre-sorted highest-risk-first (its own
+  // `.sort` call), same "let the incoming array order stand until a user
+  // clicks a header" call as CustomerDetail.tsx's ProjectsDataGrid.
+  const [sorting, setSorting] = useState<SortingState>([]);
+
+  const columns = useMemo<ColumnDef<Risk>[]>(() => {
+    const base: ColumnDef<Risk>[] = [
+      {
+        id: "description",
+        accessorKey: "description",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Description" />,
+        // Free-text field — no natural sort a user would reach for, same
+        // call as ServiceCatalogueManager's Description column.
+        enableSorting: false,
+        cell: ({ row }) => {
+          const risk = row.original;
+          return (
+            <div>
+              <button
+                type="button"
+                onClick={() => onEdit(risk)}
+                // Prose-overflow sweep (GH #57 convention): the pre-DataGrid
+                // table's `max-w-md` cell had no wrap-hardening, so a long
+                // unbroken description could stretch the table past its
+                // `overflow-x-auto` bound (docs/ISSUES.md deferred finding).
+                // `whitespace-pre-wrap` preserves operator-entered line
+                // breaks (this text comes from a `<textarea>`); `wrap-
+                // break-word` is Tailwind v4's renamed `break-words` (see
+                // TaskPanel.tsx's identical comment-body treatment).
+                className="block whitespace-pre-wrap wrap-break-word text-left text-sm font-medium text-on-surface hover:text-primary"
+              >
+                {risk.description}
+              </button>
+              {(risk.mitigationPlan || risk.contingencyPlan) && (
+                <div className="mt-1 space-y-0.5 text-[12px] text-on-surface-variant">
+                  {risk.mitigationPlan && (
+                    <p className="line-clamp-2">
+                      <span className="font-display font-bold uppercase tracking-wider">
+                        Mitigation:
+                      </span>{" "}
+                      {risk.mitigationPlan}
+                    </p>
+                  )}
+                  {risk.contingencyPlan && (
+                    <p className="line-clamp-2">
+                      <span className="font-display font-bold uppercase tracking-wider">
+                        Contingency:
+                      </span>{" "}
+                      {risk.contingencyPlan}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        },
+        meta: { cellClassName: "max-w-md align-top", skeleton: <Skeleton className="h-3.5 w-48" /> },
+      },
+      {
+        id: "category",
+        accessorFn: (row) => CATEGORY_LABEL[row.category],
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Category" />,
+        // Operator-facing English label, not a person name — "alphanumeric"
+        // (decision 7, reui-data-grid.md Checkpoint B) same as Admin.tsx's
+        // Role column.
+        sortingFn: "alphanumeric",
+        cell: ({ row }) => (
+          <span className="text-xs text-on-surface-variant">
+            {CATEGORY_LABEL[row.original.category]}
+          </span>
+        ),
+        meta: { skeleton: <Skeleton className="h-3.5 w-20" /> },
+      },
+      {
+        id: "probability",
+        accessorKey: "probability",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Prob" />,
+        // A 1-5 scale-select control, not a magnitude column a user scans
+        // for ordering — left unsortable so its header can stay centered
+        // (the vendored DataGridColumnHeader's sortable path only supports
+        // left/right alignment, not center — see gantt/data-grid-column-
+        // header.tsx's `alignEnd`), matching the pre-DataGrid table's own
+        // `text-center` treatment exactly.
+        enableSorting: false,
+        cell: ({ row }) => {
+          const risk = row.original;
+          return canEdit ? (
+            <select
+              value={risk.probability}
+              onChange={(e) => onChange(risk.id, { probability: Number(e.target.value) })}
+              className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
+            >
+              {SCALE.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="font-mono text-xs">{risk.probability}</span>
+          );
+        },
+        meta: {
+          headerClassName: "text-center",
+          cellClassName: "text-center",
+          skeleton: <Skeleton className="mx-auto h-6 w-10" />,
+        },
+      },
+      {
+        id: "impact",
+        accessorKey: "impact",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Impact" />,
+        // Same rationale as "probability" above.
+        enableSorting: false,
+        cell: ({ row }) => {
+          const risk = row.original;
+          return canEdit ? (
+            <select
+              value={risk.impact}
+              onChange={(e) => onChange(risk.id, { impact: Number(e.target.value) })}
+              className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
+            >
+              {SCALE.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span className="font-mono text-xs">{risk.impact}</span>
+          );
+        },
+        meta: {
+          headerClassName: "text-center",
+          cellClassName: "text-center",
+          skeleton: <Skeleton className="mx-auto h-6 w-10" />,
+        },
+      },
+      {
+        id: "score",
+        accessorFn: (row) => row.probability * row.impact,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Score" />,
+        // The one genuinely sort-worthy numeric column here (it's what the
+        // pre-DataGrid table's default order was already derived from) —
+        // sortable, right-aligned per the pilot's numeric-column convention
+        // (meta.headerClassName:"text-right", same as Admin.tsx's
+        // "projects" count column).
+        cell: ({ row }) => {
+          const risk = row.original;
+          const score = risk.probability * risk.impact;
+          return (
+            <div className="flex justify-end">
+              <div
+                className={[
+                  "flex items-center justify-center gap-1 rounded-sm border px-2 py-1 font-mono text-xs font-bold tabular-nums",
+                  scoreClass(score),
+                ].join(" ")}
+                title={`${risk.probability} × ${risk.impact} = ${score}`}
+              >
+                {score}
+                <span className="font-display text-[10px] font-bold uppercase tracking-wider">
+                  {scoreLevel(score)}
+                </span>
+              </div>
+            </div>
+          );
+        },
+        meta: { headerClassName: "text-right", skeleton: <Skeleton className="ml-auto h-6 w-16" /> },
+      },
+      {
+        id: "status",
+        accessorFn: (row) => STATUS_ORDER.indexOf(row.status),
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Status" />,
+        cell: ({ row }) => {
+          const risk = row.original;
+          return canEdit ? (
+            <select
+              value={risk.status}
+              onChange={(e) => onChange(risk.id, { status: e.target.value as RiskStatus })}
+              className={[
+                "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider",
+                STATUS_TONE[risk.status],
+              ].join(" ")}
+            >
+              {(Object.keys(STATUS_LABEL) as RiskStatus[]).map((s) => (
+                <option key={s} value={s}>
+                  {STATUS_LABEL[s]}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <span
+              className={[
+                "inline-block rounded-sm px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
+                STATUS_TONE[risk.status],
+              ].join(" ")}
+            >
+              {STATUS_LABEL[risk.status]}
+            </span>
+          );
+        },
+        meta: { skeleton: <Skeleton className="h-6 w-24 rounded-sm" /> },
+      },
+    ];
+    if (canEdit) {
+      base.push({
+        id: "actions",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Actions" />,
+        enableSorting: false,
+        cell: ({ row }) => {
+          const risk = row.original;
+          return (
+            <div className="flex items-center justify-end gap-1">
+              <button
+                type="button"
+                onClick={() => onEdit(risk)}
+                className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
+                aria-label="Edit risk"
+              >
+                <span className="material-symbols-outlined text-base">edit</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(risk)}
+                className="rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-error"
+                aria-label="Delete risk"
+              >
+                <span className="material-symbols-outlined text-base">delete</span>
+              </button>
+            </div>
+          );
+        },
+        meta: { headerClassName: "text-right", skeleton: <Skeleton className="ml-auto h-6 w-14" /> },
+      });
+    }
+    return base;
+  }, [canEdit, onEdit, onDelete, onChange]);
+
+  const table = useReactTable({
+    data: risks,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getRowId: (row) => String(row.id),
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    // Pagination stays OFF (pilot verdict — docs/plans/reui-data-grid.md
+    // Checkpoint B): no getPaginationRowModel, so the full sorted row model
+    // renders. `pageSize` here only sizes the loading-skeleton row count.
+    initialState: { pagination: { pageSize: 8 } },
+  });
+
   return (
-    <tr className="hover:bg-surface-container-low">
-      <td className="max-w-md px-3 py-2 align-top">
-        <button
-          type="button"
-          onClick={onEdit}
-          className="block text-left text-sm font-medium text-on-surface hover:text-primary"
-        >
-          {risk.description}
-        </button>
-        {(risk.mitigationPlan || risk.contingencyPlan) && (
-          <div className="mt-1 space-y-0.5 text-[12px] text-on-surface-variant">
-            {risk.mitigationPlan && (
-              <p className="line-clamp-2">
-                <span className="font-display font-bold uppercase tracking-wider">
-                  Mitigation:
-                </span>{" "}
-                {risk.mitigationPlan}
-              </p>
-            )}
-            {risk.contingencyPlan && (
-              <p className="line-clamp-2">
-                <span className="font-display font-bold uppercase tracking-wider">
-                  Contingency:
-                </span>{" "}
-                {risk.contingencyPlan}
-              </p>
-            )}
-          </div>
-        )}
-      </td>
-      <td className="px-3 py-2 align-top text-xs text-on-surface-variant">
-        {CATEGORY_LABEL[risk.category]}
-      </td>
-      <td className="px-3 py-2 align-top text-center">
-        {canEdit ? (
-          <select
-            value={risk.probability}
-            onChange={(e) => onChange({ probability: Number(e.target.value) })}
-            className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
-          >
-            {SCALE.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="font-mono text-xs">{risk.probability}</span>
-        )}
-      </td>
-      <td className="px-3 py-2 align-top text-center">
-        {canEdit ? (
-          <select
-            value={risk.impact}
-            onChange={(e) => onChange({ impact: Number(e.target.value) })}
-            className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
-          >
-            {SCALE.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span className="font-mono text-xs">{risk.impact}</span>
-        )}
-      </td>
-      <td className="px-3 py-2 align-top">
-        <div
-          className={[
-            "flex items-center justify-center gap-1 rounded-sm border px-2 py-1 font-mono text-xs font-bold tabular-nums",
-            scoreClass(score),
-          ].join(" ")}
-          title={`${risk.probability} × ${risk.impact} = ${score}`}
-        >
-          {score}
-          <span className="font-display text-[10px] font-bold uppercase tracking-wider">
-            {scoreLevel(score)}
-          </span>
-        </div>
-      </td>
-      <td className="px-3 py-2 align-top">
-        {canEdit ? (
-          <select
-            value={risk.status}
-            onChange={(e) => onChange({ status: e.target.value as RiskStatus })}
-            className={[
-              "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider",
-              STATUS_TONE[risk.status],
-            ].join(" ")}
-          >
-            {(Object.keys(STATUS_LABEL) as RiskStatus[]).map((s) => (
-              <option key={s} value={s}>
-                {STATUS_LABEL[s]}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <span
-            className={[
-              "inline-block rounded-sm px-2 py-0.5 font-display text-label-caps uppercase tracking-wider",
-              STATUS_TONE[risk.status],
-            ].join(" ")}
-          >
-            {STATUS_LABEL[risk.status]}
-          </span>
-        )}
-      </td>
-      {canEdit && (
-        <td className="px-3 py-2 align-top text-right">
-          <div className="flex items-center justify-end gap-1">
-            <button
-              type="button"
-              onClick={onEdit}
-              className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
-              aria-label="Edit risk"
-            >
-              <span className="material-symbols-outlined text-base">edit</span>
-            </button>
-            <button
-              type="button"
-              onClick={onDelete}
-              className="rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-error"
-              aria-label="Delete risk"
-            >
-              <span className="material-symbols-outlined text-base">delete</span>
-            </button>
-          </div>
-        </td>
-      )}
-    </tr>
+    <DataGrid
+      table={table}
+      recordCount={risks.length}
+      tableLayout={{
+        dense: true,
+        rowBorder: true,
+        headerBorder: true,
+        headerBackground: false,
+        // "auto" (not "fixed"): see Tasks.tsx / reui-data-grid.md Checkpoint
+        // B, decision 6 — "fixed" pins every column to TanStack's untouched
+        // 150px default instead of sizing to content.
+        width: "auto",
+      }}
+      tableClassNames={{
+        // The one piece tableLayout.headerBackground can't reproduce (its
+        // `bg-muted` resolves to the wrong token) — see Tasks.tsx / decision 2.
+        header: "bg-surface-container-low",
+      }}
+    >
+      {/* Hairline wrapper — DataGridContainer's own `border` prop is
+          accepted-and-ignored (Tasks.tsx / reui-data-grid.md Checkpoint B,
+          decision 2). Phase-wide: every DataGrid table wraps its
+          DataGridContainer this way. */}
+      <DataGridContainer className="rounded-sm border border-outline-variant bg-surface-container-lowest">
+        <DataGridScrollArea>
+          <DataGridTable />
+        </DataGridScrollArea>
+      </DataGridContainer>
+    </DataGrid>
   );
 }
 
@@ -443,7 +594,9 @@ function RiskCard({
         <button
           type="button"
           onClick={onEdit}
-          className="block flex-1 text-left text-sm font-medium text-on-surface hover:text-primary"
+          // Prose-overflow sweep (GH #57 convention) — same rationale as the
+          // desktop DataGrid's description cell above.
+          className="block flex-1 whitespace-pre-wrap wrap-break-word text-left text-sm font-medium text-on-surface hover:text-primary"
         >
           {risk.description}
         </button>

@@ -12,6 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import { useProjectContext } from "../ProjectDetail";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { dateToDay, dayFromIso } from "@/lib/dateField";
 import { type Task, useProjectTasks } from "@/lib/queries";
 
@@ -37,9 +38,9 @@ export function ProjectOverview() {
 
   if (isError) {
     return (
-      <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-        Could not load tasks: {(error as Error).message}
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>Could not load tasks: {(error as Error).message}</AlertDescription>
+      </Alert>
     );
   }
 

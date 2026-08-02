@@ -1,4 +1,4 @@
-import type { SortingFn } from "@tanstack/react-table";
+import type { Row, RowData } from "@tanstack/react-table";
 
 // Shared DataGrid sortingFn helper (reui-data-grid.md Checkpoint B, decision
 // 7): TanStack's sortingFn auto-detection samples `flatRows.slice(10)` — from
@@ -17,6 +17,18 @@ import type { SortingFn } from "@tanstack/react-table";
 // Tasks.tsx's/Admin.tsx's "alphanumeric" columns, a deliberate different
 // choice for non-person data where natural number ordering beats locale
 // collation — see those files' own column comments).
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export const personNameSortingFn: SortingFn<any> = (rowA, rowB, columnId) =>
-  (rowA.getValue(columnId) as string).localeCompare(rowB.getValue(columnId) as string);
+//
+// Generic over `TData` (not `SortingFn<any>`): every consumer's ColumnDef is
+// parameterized over its own row type (AdminUser, AdminRole, TaskWithProject,
+// ...). A plain generic function value structurally satisfies each of those
+// `sortingFn?: SortingFn<TData>` slots via TypeScript's ordinary generic-
+// function assignability (TData gets instantiated per call site), so no
+// `any` escape hatch and no per-consumer cast are needed.
+export const personNameSortingFn = <TData extends RowData>(
+  rowA: Row<TData>,
+  rowB: Row<TData>,
+  columnId: string,
+): number =>
+  (rowA.getValue(columnId) as string).localeCompare(
+    rowB.getValue(columnId) as string,
+  );

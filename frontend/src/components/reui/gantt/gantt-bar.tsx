@@ -290,7 +290,10 @@ function GanttBar<TData = unknown>({
     },
     className: cn(
       "group/gantt-bar-group text-foreground @container relative flex w-full min-w-0 cursor-pointer touch-none items-center gap-1.5 overflow-hidden rounded-sm px-1.5 py-0.5 text-start leading-normal select-none",
-      "focus-visible:ring-ring/50 outline-none focus-visible:ring-2",
+      // SOLVRO PATCH (focus-style unification tail) — DESIGN.md §4 canonical
+      // focus treatment: `focus-visible:border-primary focus-visible:ring-2
+      // focus-visible:ring-primary/30`. Replaced `focus-visible:ring-ring/50`.
+      "outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
       // the unfilled remainder has to be legible on its own - at /12 a bar
       // with a progress fill read as a floating segment with no basement
       "bg-(--gantt-event-color)/20 hover:bg-(--gantt-event-color)/30",

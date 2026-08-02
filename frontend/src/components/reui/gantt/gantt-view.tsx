@@ -2276,7 +2276,11 @@ function GanttView({
             data-slot="gantt-splitter"
             className={cn(
               "group/gantt-splitter bg-border hover:bg-primary/60 data-resizing:bg-primary relative z-30 w-px shrink-0 cursor-col-resize touch-none outline-none",
-              "focus-visible:ring-ring/50 focus-visible:ring-2",
+              // SOLVRO PATCH (focus-style unification tail) — DESIGN.md §4
+              // canonical focus treatment: `focus-visible:border-primary
+              // focus-visible:ring-2 focus-visible:ring-primary/30`. Replaced
+              // `focus-visible:ring-ring/50`.
+              "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
               "after:absolute after:inset-y-0 after:-start-1 after:-end-1"
             )}
             onPointerDown={beginSplit}
@@ -3692,7 +3696,9 @@ function GanttOffscreenChips({
                   data-slot="gantt-offscreen-chip"
                   data-side={chip.side}
                   aria-label={settings.i18n.labels.jumpToBar(chip.label)}
-                  className="bg-background text-muted-foreground hover:text-foreground pointer-events-auto absolute flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border shadow-xs"
+                  // SOLVRO PATCH (shadow-style unification tail) — DESIGN.md
+                  // §4: no shadows outside overlays. Dropped `shadow-xs`.
+                  className="bg-background text-muted-foreground hover:text-foreground pointer-events-auto absolute flex size-5 -translate-y-1/2 cursor-pointer items-center justify-center rounded-full border"
                   style={{
                     top: chip.top,
                     ...(chip.side === "start"

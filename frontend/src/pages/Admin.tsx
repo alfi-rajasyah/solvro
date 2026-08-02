@@ -55,6 +55,10 @@ const DOMAIN_PATTERN = /^(?=.{1,253}$)([a-z0-9]([a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,
 // avoids a fresh `[]` literal (and therefore a new TanStack row model) on
 // every render that a `users ?? []` inline fallback would produce.
 const EMPTY_USERS: AdminUser[] = [];
+// Same rationale as EMPTY_USERS above, for the Roles and Project Override
+// tabs' own DataGrids (T1 migration).
+const EMPTY_ROLES: AdminRole[] = [];
+const EMPTY_PROJECTS: AdminProject[] = [];
 
 export function Admin() {
   const [tab, setTab] = useState<Tab>("users");
@@ -447,10 +451,18 @@ function UsersTab() {
     <div className="space-y-4">
       {/* KPI strip */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <AdminKpi label="Users" value={rows.length} hint={`${activeCount} active · ${adminCount} admins`} icon="group" tone="primary" />
-        <AdminKpi label="Pending" value={pendingCount} hint="Needs role assignment" icon="hourglass_top" tone="amber" />
-        <AdminKpi label="Custom roles" value={customRoleCount} hint={`${(roles ?? []).length} total roles`} icon="shield_person" tone="emerald" />
-        <AdminKpi label="Inactive" value={rows.length - activeCount} hint="Cannot sign in" icon="block" tone="neutral" />
+        {/* Ledger fix: em-dash (not the pre-fetch computed zero) while
+            `isLoading` — `rows`/`activeCount`/etc. all read through the
+            EMPTY_USERS fallback (see `rows` above) so they compute to 0
+            before the first response lands, and rendering that 0 as a KPI
+            value reads as a real "zero users" flash. The em-dash is
+            unambiguously "not loaded yet"; the `rows` fallback wiring itself
+            is unchanged (still needed so every other computation below stays
+            render-safe). */}
+        <AdminKpi label="Users" value={isLoading ? "—" : rows.length} hint={`${activeCount} active · ${adminCount} admins`} icon="group" tone="primary" />
+        <AdminKpi label="Pending" value={isLoading ? "—" : pendingCount} hint="Needs role assignment" icon="hourglass_top" tone="amber" />
+        <AdminKpi label="Custom roles" value={isLoading ? "—" : customRoleCount} hint={`${(roles ?? []).length} total roles`} icon="shield_person" tone="emerald" />
+        <AdminKpi label="Inactive" value={isLoading ? "—" : rows.length - activeCount} hint="Cannot sign in" icon="block" tone="neutral" />
       </div>
       {error && (
         <div className="rounded-sm border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
@@ -617,7 +629,10 @@ function AdminKpi({
   tone,
 }: {
   label: string;
-  value: number;
+  // "—" while the tab's underlying query is still loading (ledger fix,
+  // Admin.tsx:439-444) — every call site passes the computed number once
+  // loaded, an em-dash literal until then.
+  value: number | string;
   hint?: string;
   icon: string;
   tone: "primary" | "emerald" | "amber" | "neutral";
@@ -705,6 +720,14 @@ function PermissionPicker({
 
 function RolesTab() {
   const { data: roles, isLoading, isError } = useAdminRoles();
+  // Loading-safe fallback (T1 DataGrid migration — same rationale as
+  // UsersTab's own `rows`, "fix round S2"): `useReactTable` below is a hook
+  // and must run on every render, so it can no longer sit after a blocking
+  // `if (isLoading) return ...` the way the pre-DataGrid table did. `rows`
+  // reads through this fallback instead of the possibly-undefined `roles`;
+  // the grid's own `isLoading`/`loadingMode="skeleton"` (see <DataGrid>
+  // below) is the loading UI now, engaging each column's `meta.skeleton`.
+  const rows = roles ?? EMPTY_ROLES;
   const createRole = useAdminCreateRole();
   const updatePerms = useAdminUpdateRolePermissions();
   const deleteRole = useAdminDeleteRole();
@@ -714,9 +737,200 @@ function RolesTab() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
   const [editPerms, setEditPerms] = useState<string[]>([]);
+  // No default sort — same rationale as the Users-tab pilot: rows render in
+  // the order useAdminRoles returns them, same as the pre-DataGrid table.
+  const [sorting, setSorting] = useState<SortingState>([]);
 
-  if (isLoading) return <p className="text-on-surface-variant">Loading roles…</p>;
-  if (isError || !roles) return <p className="text-error">Failed to load roles.</p>;
+  // `startEdit`/`saveEdit`/`handleDelete` are `function` declarations further
+  // down this component (hoisted), same forward-reference pattern as
+  // UsersTab's own mutation handlers — see that tab's comment.
+  //
+  // Not wrapped in useMemo, for the same reason as UsersTab's columns: cell
+  // renderers close over `editingId`/`editName`/`editPerms` and the mutation
+  // handlers, and this table has no resizing/pinning/visibility state for a
+  // stale columns identity to disturb.
+  const columns: ColumnDef<AdminRole>[] = [
+    {
+      id: "role",
+      accessorKey: "roleName",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Role" />,
+      // Role names are operator-entered, uppercase ASCII only (create/rename
+      // validates `[A-Z0-9_]+`) — same "alphanumeric" choice as this file's
+      // own Users-tab "role" column (decision 7's explicit-sortingFn rule
+      // still applies at this table's row count).
+      sortingFn: "alphanumeric",
+      cell: ({ row }) => {
+        const r = row.original;
+        const isEditing = editingId === r.id;
+        return (
+          <>
+            {isEditing ? (
+              <input
+                type="text"
+                value={editName}
+                onChange={(e) => setEditName(e.target.value)}
+                disabled={r.builtIn}
+                maxLength={50}
+                className="w-32 rounded-sm border border-outline-variant bg-surface px-2 py-1 font-mono text-sm uppercase focus:border-primary focus:outline-hidden disabled:opacity-60"
+                title={
+                  r.builtIn
+                    ? "This role is reserved and cannot be renamed"
+                    : undefined
+                }
+              />
+            ) : (
+              <span className="font-mono font-medium text-on-surface">
+                {r.roleName}
+              </span>
+            )}
+            {r.builtIn && (
+              <span className="ml-2 rounded-full bg-surface-container-high px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                Reserved
+              </span>
+            )}
+          </>
+        );
+      },
+      meta: {
+        // align-top (not the grid's default align-middle): editing this row
+        // can swap the Permissions cell for the multi-row PermissionPicker
+        // list, and every other cell in that row should stay pinned to the
+        // top instead of centering against that taller content — same as
+        // the pre-DataGrid table's own `align-top` on every `<td>`.
+        cellClassName: "align-top",
+        skeleton: <Skeleton className="h-3.5 w-24" />,
+      },
+    },
+    {
+      id: "permissions",
+      header: ({ column }) => (
+        <DataGridColumnHeader column={column} title="Permissions" />
+      ),
+      // Renders a chip list or the PermissionPicker editor, not a single
+      // sortable value — same "interactive control column" exemption as
+      // UsersTab's "provider"/"actions" columns.
+      enableSorting: false,
+      cell: ({ row }) => {
+        const r = row.original;
+        const isEditing = editingId === r.id;
+        return isEditing ? (
+          <PermissionPicker value={editPerms} onChange={setEditPerms} />
+        ) : r.permissions.length === 0 ? (
+          <span className="text-on-surface-variant/60">—</span>
+        ) : (
+          <div className="flex flex-wrap gap-1">
+            {r.permissions.map((p) => (
+              <span
+                key={p}
+                className={`rounded-sm px-1.5 py-0.5 font-mono text-[11px] ${
+                  p === "*"
+                    ? "bg-primary/15 text-primary"
+                    : "bg-surface-container-high text-on-surface"
+                }`}
+              >
+                {p === "*" ? "* full access" : p}
+              </span>
+            ))}
+          </div>
+        );
+      },
+      meta: {
+        cellClassName: "align-top text-on-surface-variant",
+        skeleton: <Skeleton className="h-6 w-40" />,
+      },
+    },
+    {
+      id: "users",
+      accessorFn: (row) => row.userCount,
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Users" />,
+      cell: ({ row }) => row.original.userCount,
+      meta: {
+        headerClassName: "text-right",
+        cellClassName:
+          "align-top text-right font-mono text-[13px] text-on-surface-variant",
+        skeleton: <Skeleton className="ml-auto h-3.5 w-6" />,
+      },
+    },
+    {
+      id: "actions",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Actions" />,
+      enableSorting: false,
+      cell: ({ row }) => {
+        const r = row.original;
+        const isEditing = editingId === r.id;
+        return (
+          <div className="flex items-center justify-end gap-1">
+            {isEditing ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => saveEdit(r)}
+                  disabled={updatePerms.isPending}
+                  className="rounded-sm bg-primary px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setEditingId(null)}
+                  className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
+                >
+                  Cancel
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => startEdit(r)}
+                  className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+                >
+                  Edit
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDelete(r)}
+                  disabled={r.builtIn || r.userCount > 0}
+                  className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
+                  title={
+                    r.builtIn
+                      ? "Reserved role"
+                      : r.userCount > 0
+                        ? "Reassign users first"
+                        : undefined
+                  }
+                >
+                  Delete
+                </button>
+              </>
+            )}
+          </div>
+        );
+      },
+      meta: {
+        headerClassName: "text-right",
+        cellClassName: "align-top",
+        skeleton: <Skeleton className="ml-auto h-6 w-32" />,
+      },
+    },
+  ];
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getRowId: (row) => String(row.id),
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    // Pagination stays OFF (Checkpoint B, binding for every DataGrid table
+    // this phase). `pageSize` here only sizes the loading-skeleton row count.
+    initialState: { pagination: { pageSize: 6 } },
+  });
+
+  // Same isError-only short-circuit as UsersTab: a fetch failure means
+  // there's nothing else on this tab worth rendering.
+  if (isError) return <p className="text-error">Failed to load roles.</p>;
 
   async function handleCreate(e: FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -835,132 +1049,41 @@ function RolesTab() {
         </div>
       </form>
 
-      <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
-            <tr>
-              <th className="px-3 py-2">Role</th>
-              <th className="px-3 py-2">Permissions</th>
-              <th className="px-3 py-2 text-right">Users</th>
-              <th className="px-3 py-2 text-right">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {roles.map((r) => {
-              const isEditing = editingId === r.id;
-              return (
-                <tr
-                  key={r.id}
-                  className="border-b border-outline-variant/60 last:border-0"
-                >
-                  <td className="px-3 py-2 align-top">
-                    {isEditing ? (
-                      <input
-                        type="text"
-                        value={editName}
-                        onChange={(e) => setEditName(e.target.value)}
-                        disabled={r.builtIn}
-                        maxLength={50}
-                        className="w-32 rounded-sm border border-outline-variant bg-surface px-2 py-1 font-mono text-sm uppercase focus:border-primary focus:outline-hidden disabled:opacity-60"
-                        title={
-                          r.builtIn
-                            ? "This role is reserved and cannot be renamed"
-                            : undefined
-                        }
-                      />
-                    ) : (
-                      <span className="font-mono font-medium text-on-surface">
-                        {r.roleName}
-                      </span>
-                    )}
-                    {r.builtIn && (
-                      <span className="ml-2 rounded-full bg-surface-container-high px-2 py-0.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                        Reserved
-                      </span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 align-top text-on-surface-variant">
-                    {isEditing ? (
-                      <PermissionPicker
-                        value={editPerms}
-                        onChange={setEditPerms}
-                      />
-                    ) : r.permissions.length === 0 ? (
-                      <span className="text-on-surface-variant/60">—</span>
-                    ) : (
-                      <div className="flex flex-wrap gap-1">
-                        {r.permissions.map((p) => (
-                          <span
-                            key={p}
-                            className={`rounded-sm px-1.5 py-0.5 font-mono text-[11px] ${
-                              p === "*"
-                                ? "bg-primary/15 text-primary"
-                                : "bg-surface-container-high text-on-surface"
-                            }`}
-                          >
-                            {p === "*" ? "* full access" : p}
-                          </span>
-                        ))}
-                      </div>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 align-top text-right font-mono text-[13px] text-on-surface-variant">
-                    {r.userCount}
-                  </td>
-                  <td className="px-3 py-2 align-top">
-                    <div className="flex items-center justify-end gap-1">
-                      {isEditing ? (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => saveEdit(r)}
-                            disabled={updatePerms.isPending}
-                            className="rounded-sm bg-primary px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-primary hover:bg-primary-container disabled:opacity-50"
-                          >
-                            Save
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setEditingId(null)}
-                            className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container"
-                          >
-                            Cancel
-                          </button>
-                        </>
-                      ) : (
-                        <>
-                          <button
-                            type="button"
-                            onClick={() => startEdit(r)}
-                            className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-                          >
-                            Edit
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(r)}
-                            disabled={r.builtIn || r.userCount > 0}
-                            className="rounded-sm px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50"
-                            title={
-                              r.builtIn
-                                ? "Reserved role"
-                                : r.userCount > 0
-                                  ? "Reassign users first"
-                                  : undefined
-                            }
-                          >
-                            Delete
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid
+        table={table}
+        recordCount={rows.length}
+        isLoading={isLoading}
+        loadingMode="skeleton"
+        emptyMessage="No roles found."
+        tableLayout={{
+          dense: true,
+          rowBorder: true,
+          headerBorder: true,
+          headerBackground: false,
+          // SOLVRO PATCH — see Tasks.tsx's DataGrid pilot (reui-data-grid.md
+          // Checkpoint B, decision 6): "auto" sizes columns to content
+          // instead of TanStack's untouched 150px "fixed" default.
+          width: "auto",
+        }}
+        tableClassNames={{
+          // SOLVRO PATCH — Checkpoint B decision 2: the grid's own
+          // `headerBackground` boolean resolves to the wrong token; pinned
+          // here instead, same as every other DataGrid table this phase.
+          header: "bg-surface-container-low",
+        }}
+      >
+        {/* SOLVRO PATCH — Level-1 hairline (DESIGN.md §4), same phase-wide
+            convention as every other DataGrid table. Also resolves the
+            ledger's tab-panel background-inconsistency item: this wrapper
+            now lands on the same `surface-container-lowest` as the Users
+            tab's grid instead of the old `bg-surface`, unifying all three
+            tabs' panel treatment. */}
+        <DataGridContainer className="rounded-sm border border-outline-variant bg-surface-container-lowest">
+          <DataGridScrollArea>
+            <DataGridTable />
+          </DataGridScrollArea>
+        </DataGridContainer>
+      </DataGrid>
     </div>
   );
 }
@@ -1398,9 +1521,18 @@ function SignInModal({
 
 function ProjectsTab() {
   const { data: projects, isLoading, isError } = useAdminProjects();
+  // Loading-safe fallback (T1 DataGrid migration — same rationale as
+  // RolesTab's own `rows` above / UsersTab's "fix round S2"): `useReactTable`
+  // is a hook and must run on every render, so it now sits above the
+  // isLoading check instead of after a blocking early return. The grid's own
+  // `isLoading`/`loadingMode="skeleton"` below is the loading UI, engaging
+  // each column's `meta.skeleton`.
+  const rows = projects ?? EMPTY_PROJECTS;
   const { data: users } = useAdminUsers();
   const reassign = useAdminReassignProject();
   const [error, setError] = useState<string | null>(null);
+  // No default sort — same rationale as the Users/Roles-tab pilots.
+  const [sorting, setSorting] = useState<SortingState>([]);
 
   // Any active user can be a project's TAM — no role-name gate (role names
   // no longer drive who's eligible). Admin's choice.
@@ -1409,9 +1541,141 @@ function ProjectsTab() {
     [users],
   );
 
-  if (isLoading) return <p className="text-on-surface-variant">Loading projects…</p>;
-  if (isError || !projects)
-    return <p className="text-error">Failed to load projects.</p>;
+  // `handleReassign` is a `function` declaration further down this component
+  // (hoisted) — same forward-reference pattern as RolesTab/UsersTab's own
+  // mutation handlers.
+  //
+  // Not wrapped in useMemo, for the same reason as the other two tabs'
+  // columns: the "reassign" cell closes over `tamCandidates` and
+  // `handleReassign`, and this table has no resizing/pinning/visibility
+  // state for a stale columns identity to disturb.
+  const columns: ColumnDef<AdminProject>[] = [
+    {
+      id: "project",
+      accessorKey: "name",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Project" />,
+      // Same underlying field as Tasks.tsx's/CustomerDetail.tsx's "project"
+      // column (Project.name) — mirrors their "alphanumeric" choice
+      // (decision 7) for natural number ordering, consistent across the app
+      // for the same data.
+      sortingFn: "alphanumeric",
+      cell: ({ row }) => (
+        <span className="font-medium text-on-surface">{row.original.name}</span>
+      ),
+      meta: { skeleton: <Skeleton className="h-3.5 w-32" /> },
+    },
+    {
+      id: "customer",
+      // "" fallback (not null) so the column's cell values stay string —
+      // required for the "alphanumeric" comparator, and sorts projects
+      // without a linked customer first ascending.
+      accessorFn: (row) => row.customer?.name ?? "",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Customer" />,
+      // Customer names are entity/company names, not person names — same
+      // "alphanumeric" bucket as the "project" column above, not
+      // personNameSortingFn (that's reserved for real usernames — see the
+      // "sa" column below and lib/tableSort.ts's own doc comment).
+      sortingFn: "alphanumeric",
+      cell: ({ row }) => (
+        <span className="text-on-surface-variant">
+          {row.original.customer?.name ?? "—"}
+        </span>
+      ),
+      meta: { skeleton: <Skeleton className="h-3.5 w-28" /> },
+    },
+    {
+      id: "sa",
+      // "" fallback for the same reason as CustomerDetail.tsx's own "sa"
+      // column — required for personNameSortingFn's localeCompare.
+      accessorFn: (row) => row.sa?.username ?? "",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="SA" />,
+      // A real username — same personNameSortingFn choice and rationale as
+      // CustomerDetail.tsx's "sa"/"tam" columns.
+      sortingFn: personNameSortingFn,
+      cell: ({ row }) => (
+        <span className="text-on-surface-variant">
+          {row.original.sa?.username ?? "—"}
+        </span>
+      ),
+      meta: { skeleton: <Skeleton className="h-3.5 w-20" /> },
+    },
+    {
+      id: "status",
+      accessorKey: "status",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Status" />,
+      // Operator-set uppercase ASCII enum (ProjectStatus) — same
+      // "alphanumeric" choice as this file's own Users-tab "role" column.
+      sortingFn: "alphanumeric",
+      cell: ({ row }) => (
+        <span className="rounded-sm bg-surface-container-low px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
+          {row.original.status}
+        </span>
+      ),
+      meta: { skeleton: <Skeleton className="h-4 w-20 rounded-sm" /> },
+    },
+    {
+      id: "tasks",
+      accessorFn: (row) => row._count.tasks,
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Tasks" />,
+      cell: ({ row }) => (
+        <span className="font-mono text-[13px] text-on-surface-variant">
+          {row.original._count.tasks}
+        </span>
+      ),
+      meta: {
+        headerClassName: "text-right",
+        cellClassName: "text-right",
+        skeleton: <Skeleton className="ml-auto h-3.5 w-6" />,
+      },
+    },
+    {
+      id: "reassign",
+      header: ({ column }) => (
+        <DataGridColumnHeader column={column} title="Current TAM → Reassign" />
+      ),
+      // An interactive <select>, not a single sortable value — same
+      // exemption as UsersTab's "role"/"actions" columns.
+      enableSorting: false,
+      cell: ({ row }) => {
+        const p = row.original;
+        return (
+          <select
+            value={p.tamId}
+            onChange={(e) => handleReassign(p, Number(e.target.value))}
+            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-[13px] text-on-surface focus:border-primary focus:outline-hidden"
+          >
+            {tamCandidates.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.username} ({u.role})
+              </option>
+            ))}
+            {/* If the current TAM isn't in the candidate list (inactive or wrong role), show them anyway */}
+            {!tamCandidates.some((u) => u.id === p.tamId) && (
+              <option value={p.tamId}>{p.tam.username} (current)</option>
+            )}
+          </select>
+        );
+      },
+      meta: { skeleton: <Skeleton className="h-7 w-40" /> },
+    },
+  ];
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getRowId: (row) => String(row.id),
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    // Pagination stays OFF (Checkpoint B, binding for every DataGrid table
+    // this phase). `pageSize` here only sizes the loading-skeleton row count.
+    initialState: { pagination: { pageSize: 8 } },
+  });
+
+  // Same isError-only short-circuit as UsersTab/RolesTab: a fetch failure
+  // means there's nothing else on this tab worth rendering.
+  if (isError) return <p className="text-error">Failed to load projects.</p>;
 
   async function handleReassign(p: AdminProject, newTamId: number) {
     if (newTamId === p.tamId) return;
@@ -1434,61 +1698,41 @@ function ProjectsTab() {
           {error}
         </div>
       )}
-      <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface">
-        <table className="w-full text-left text-sm">
-          <thead className="border-b border-outline-variant bg-surface-container-low font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
-            <tr>
-              <th className="px-3 py-2">Project</th>
-              <th className="px-3 py-2">Customer</th>
-              <th className="px-3 py-2">SA</th>
-              <th className="px-3 py-2">Status</th>
-              <th className="px-3 py-2 text-right">Tasks</th>
-              <th className="px-3 py-2">Current TAM → Reassign</th>
-            </tr>
-          </thead>
-          <tbody>
-            {projects.map((p) => (
-              <tr
-                key={p.id}
-                className="border-b border-outline-variant/60 last:border-0"
-              >
-                <td className="px-3 py-2 font-medium text-on-surface">{p.name}</td>
-                <td className="px-3 py-2 text-on-surface-variant">
-                  {p.customer?.name ?? "—"}
-                </td>
-                <td className="px-3 py-2 text-on-surface-variant">{p.sa?.username ?? "—"}</td>
-                <td className="px-3 py-2">
-                  <span className="rounded-sm bg-surface-container-low px-1.5 py-0.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
-                    {p.status}
-                  </span>
-                </td>
-                <td className="px-3 py-2 text-right font-mono text-[13px] text-on-surface-variant">
-                  {p._count.tasks}
-                </td>
-                <td className="px-3 py-2">
-                  <select
-                    value={p.tamId}
-                    onChange={(e) => handleReassign(p, Number(e.target.value))}
-                    className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-[13px] text-on-surface focus:border-primary focus:outline-hidden"
-                  >
-                    {tamCandidates.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.username} ({u.role})
-                      </option>
-                    ))}
-                    {/* If the current TAM isn't in the candidate list (inactive or wrong role), show them anyway */}
-                    {!tamCandidates.some((u) => u.id === p.tamId) && (
-                      <option value={p.tamId}>
-                        {p.tam.username} (current)
-                      </option>
-                    )}
-                  </select>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <DataGrid
+        table={table}
+        recordCount={rows.length}
+        isLoading={isLoading}
+        loadingMode="skeleton"
+        emptyMessage="No projects found."
+        tableLayout={{
+          dense: true,
+          rowBorder: true,
+          headerBorder: true,
+          headerBackground: false,
+          // SOLVRO PATCH — see Tasks.tsx's DataGrid pilot (reui-data-grid.md
+          // Checkpoint B, decision 6): "auto" sizes columns to content
+          // instead of TanStack's untouched 150px "fixed" default.
+          width: "auto",
+        }}
+        tableClassNames={{
+          // SOLVRO PATCH — Checkpoint B decision 2: the grid's own
+          // `headerBackground` boolean resolves to the wrong token; pinned
+          // here instead, same as every other DataGrid table this phase.
+          header: "bg-surface-container-low",
+        }}
+      >
+        {/* SOLVRO PATCH — Level-1 hairline (DESIGN.md §4), same phase-wide
+            convention as every other DataGrid table. Also resolves the
+            ledger's tab-panel background-inconsistency item: this wrapper
+            now lands on the same `surface-container-lowest` as the Users
+            (and now Roles) tab's grid instead of the old `bg-surface`,
+            unifying all three tabs' panel treatment. */}
+        <DataGridContainer className="rounded-sm border border-outline-variant bg-surface-container-lowest">
+          <DataGridScrollArea>
+            <DataGridTable />
+          </DataGridScrollArea>
+        </DataGridContainer>
+      </DataGrid>
     </div>
   );
 }
