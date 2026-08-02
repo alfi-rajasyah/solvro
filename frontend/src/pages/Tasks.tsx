@@ -10,6 +10,7 @@ import {
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { TaskStatusChip } from "@/components/StatusChip";
 import { dateToDay, dayFromIso, dayToDate } from "@/lib/dateField";
@@ -306,9 +307,9 @@ export function Tasks() {
       </div>
 
       {isError && (
-        <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-          Could not load tasks: {(error as Error).message}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>Could not load tasks: {(error as Error).message}</AlertDescription>
+        </Alert>
       )}
 
       {!isError && (

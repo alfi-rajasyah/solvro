@@ -38,6 +38,7 @@ import {
   KanbanItem,
   KanbanOverlay,
 } from "@/components/reui/kanban";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { hasPermission, useAuth } from "@/lib/auth";
 import {
@@ -430,9 +431,9 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
 
   if (isError) {
     return (
-      <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-        Could not load tasks: {(error as Error).message}
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>Could not load tasks: {(error as Error).message}</AlertDescription>
+      </Alert>
     );
   }
 

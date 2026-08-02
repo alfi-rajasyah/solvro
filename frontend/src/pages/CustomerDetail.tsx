@@ -8,6 +8,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { CustomerFormModal } from "@/components/CustomerFormModal";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-grid";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
@@ -83,9 +84,11 @@ export function CustomerDetail() {
   }
   if (isError || !customer) {
     return (
-      <div className="m-6 rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-        Could not load customer{error ? `: ${(error as Error).message}` : "."}
-      </div>
+      <Alert variant="destructive" className="m-6">
+        <AlertDescription>
+          Could not load customer{error ? `: ${(error as Error).message}` : "."}
+        </AlertDescription>
+      </Alert>
     );
   }
 
@@ -202,9 +205,9 @@ export function CustomerDetail() {
       </div>
 
       {actionError && (
-        <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-          {actionError}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>{actionError}</AlertDescription>
+        </Alert>
       )}
 
       <Tabs items={TAB_ITEMS} active={tab} onChange={handleTabChange} />

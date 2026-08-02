@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useProjectContext } from "../ProjectDetail";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ServiceMappingList } from "@/components/services/ServiceMappingList";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -70,9 +71,9 @@ export function ProjectServices() {
       )}
 
       {addAllError && (
-        <div className="rounded-sm border border-error/30 bg-error-container px-3 py-2 text-sm text-on-error-container">
-          {addAllError}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>{addAllError}</AlertDescription>
+        </Alert>
       )}
 
       <div className="md:min-h-0 md:flex-1 md:overflow-y-auto">

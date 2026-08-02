@@ -3,6 +3,7 @@ import { AssigneeAvatar } from "./AssigneeAvatar";
 import { ConfirmModal } from "./ConfirmModal";
 import { InlineDateRangeEditor } from "./InlineDateRangeEditor";
 import { LabelPicker } from "./LabelPicker";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { dayFromIso, dayToDate } from "@/lib/dateField";
@@ -581,12 +582,9 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
           </div>
 
           {error && (
-            <div
-              role="alert"
-              className="mt-4 rounded-sm border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container"
-            >
-              {error}
-            </div>
+            <Alert variant="destructive" className="mt-4">
+              <AlertDescription className="text-xs">{error}</AlertDescription>
+            </Alert>
           )}
 
           {/* Comments */}
@@ -655,9 +653,9 @@ function PanelComments({ taskId }: { taskId: number }) {
       )}
 
       {isError && (
-        <div className="rounded-sm border border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container">
-          Could not load comments: {(error as Error).message}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription className="text-xs">Could not load comments: {(error as Error).message}</AlertDescription>
+        </Alert>
       )}
 
       {comments && comments.length === 0 && (

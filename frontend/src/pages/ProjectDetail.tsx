@@ -9,6 +9,7 @@ import {
 } from "react-router-dom";
 import { RightSidebar } from "@/components/layout/RightSidebar";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { TaskPanel } from "@/components/TaskPanel";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { GanttExportProvider } from "@/lib/gantt/exportContext";
@@ -68,14 +69,16 @@ export function ProjectDetail() {
 
   if (isError || !project) {
     return (
-      <div className="rounded-lg border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-        {error instanceof Error
-          ? error.message
-          : "Project not found or you don't have access."}{" "}
-        <Link to="/projects" className="ml-2 font-bold underline">
-          Back to Projects
-        </Link>
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>
+          {error instanceof Error
+            ? error.message
+            : "Project not found or you don't have access."}{" "}
+          <Link to="/projects" className="ml-2 font-bold underline">
+            Back to Projects
+          </Link>
+        </AlertDescription>
+      </Alert>
     );
   }
 

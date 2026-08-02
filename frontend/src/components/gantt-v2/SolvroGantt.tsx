@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseISO } from "date-fns";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { dateToDay, formatDisplay } from "@/lib/dateField";
@@ -1051,18 +1052,18 @@ export function SolvroGantt(props: SolvroGanttProps) {
       )}
 
       {actionError && (
-        <div className="border-b border-error/30 bg-error-container px-3 py-2 text-xs text-on-error-container">
-          {actionError}
-        </div>
+        <Alert variant="destructive" className="m-3">
+          <AlertDescription className="text-xs">{actionError}</AlertDescription>
+        </Alert>
       )}
 
       {isLoading && (
         <div className="m-3 h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
       )}
       {isError && (
-        <div className="m-3 rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-          Could not load tasks: {(error as Error).message}
-        </div>
+        <Alert variant="destructive" className="m-3">
+          <AlertDescription>Could not load tasks: {(error as Error).message}</AlertDescription>
+        </Alert>
       )}
       {!isLoading && !isError && resources.length === 0 && (
         <div className="m-3 rounded-sm border border-dashed border-outline-variant p-12 text-center text-on-surface-variant">
