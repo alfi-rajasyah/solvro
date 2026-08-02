@@ -4,6 +4,7 @@ import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { EmptyState } from "@/components/EmptyState";
 import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { Timeline, TimelineIndicator, TimelineItem, TimelineSeparator } from "@/components/reui/timeline";
 import { TaskStatusChip } from "@/components/StatusChip";
 import { TaskFormModal } from "@/components/TaskFormModal";
@@ -79,9 +80,9 @@ export function ProjectTimeline() {
 
   if (isError) {
     return (
-      <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-        Could not load tasks: {(error as Error).message}
-      </div>
+      <Alert variant="destructive">
+        <AlertDescription>Could not load tasks: {(error as Error).message}</AlertDescription>
+      </Alert>
     );
   }
 
@@ -194,7 +195,15 @@ function TaskTimelineItem({
           <AssigneeAvatar user={task.assignedTo} size="xs" />
         </div>
         {task.description && (
-          <p className="mt-1 text-[12px] text-on-surface-variant">{task.description}</p>
+          // Prose-overflow sweep (GH #57 convention, docs/ISSUES.md deferred
+          // finding): this cell had neither wrap-hardening nor a clamp — a
+          // long unbroken description could stretch the timeline card.
+          // `whitespace-pre-wrap` preserves operator-entered line breaks;
+          // `wrap-break-word` is Tailwind v4's renamed `break-words` (see
+          // TaskPanel.tsx's identical comment-body treatment).
+          <p className="mt-1 whitespace-pre-wrap wrap-break-word text-[12px] text-on-surface-variant">
+            {task.description}
+          </p>
         )}
         {subtasks.length > 0 && (
           <ul className="mt-2 space-y-0.5 border-l border-outline-variant pl-3">

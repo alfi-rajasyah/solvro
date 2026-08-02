@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { dateToDay, dayFromIso } from "@/lib/dateField";
@@ -132,9 +133,9 @@ export function DailyReview() {
       {isLoading && <SkeletonRows />}
 
       {isError && (
-        <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-          Could not load projects: {(error as Error).message}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>Could not load projects: {(error as Error).message}</AlertDescription>
+        </Alert>
       )}
 
       {projects && myActive.length === 0 && (

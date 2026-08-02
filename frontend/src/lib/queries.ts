@@ -1,6 +1,7 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./api";
 import type { Role } from "./auth";
+import { dateToDay } from "./dateField";
 
 export type ProjectStatus =
   | "PLANNING"
@@ -301,9 +302,25 @@ export const queryKeys = {
 };
 
 export function useOverview() {
+  // The portfolio block's isOverdue/daysOverdue are badged against the
+  // CALLER's local calendar day (backend/src/lib/dateBoundary.ts) — sent on
+  // every request since the block is always present in the response. `today`
+  // is part of the query key (not just the URL): `dateToDay(new Date())` is
+  // recomputed on every render this hook runs, so the key naturally changes
+  // the next time this component re-renders after local midnight — without
+  // it in the key, that re-render would still hit the pre-midnight cache
+  // entry instead of triggering a refetch. (An idle, non-re-rendering tab
+  // keeps showing the old day's data regardless — this only fixes the key,
+  // not a background timer nobody asked for.)
+  const today = dateToDay(new Date())!;
   return useQuery({
-    queryKey: queryKeys.overview,
-    queryFn: ({ signal }) => apiRequest<OverviewResponse>("/overview", { signal }),
+    queryKey: [...queryKeys.overview, today],
+    queryFn: ({ signal }) =>
+      apiRequest<OverviewResponse>(`/overview?today=${today}`, { signal }),
+    // The day-boundary key change (above) shouldn't flash a loading
+    // skeleton on every render after midnight — keep showing the previous
+    // day's data while the new key's request resolves in the background.
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -394,13 +411,29 @@ export function useTasks(filter: TasksFilter = {}) {
   if (filter.assignedToId) params.set("assignedToId", String(filter.assignedToId));
   if (filter.labelId) params.set("labelId", String(filter.labelId));
   if (filter.customerId) params.set("customerId", String(filter.customerId));
-  if (filter.overdue) params.set("overdue", "true");
+  if (filter.overdue) {
+    params.set("overdue", "true");
+    // The server badges "overdue" against the CALLER's local calendar day,
+    // falling back to its own UTC day when `today` is absent — see
+    // backend/src/lib/dateBoundary.ts. Sent only when the overdue filter
+    // itself is active; `today` isn't a TasksFilter option callers set.
+    params.set("today", dateToDay(new Date())!);
+  }
   if (filter.topLevel) params.set("topLevel", "true");
   const qs = params.toString();
   return useQuery({
-    queryKey: queryKeys.tasks(filter),
+    // `qs` (not just `filter`) is part of the key: `today` lives only in
+    // `qs`, recomputed fresh each render this hook runs, so the key
+    // naturally changes the next time the component re-renders after local
+    // midnight — without it in the key, that re-render would still hit the
+    // pre-midnight cache entry for an unchanged `{overdue:true}` filter
+    // instead of refetching against the new day.
+    queryKey: [...queryKeys.tasks(filter), qs],
     queryFn: ({ signal }) =>
       apiRequest<TaskWithProject[]>(`/tasks${qs ? `?${qs}` : ""}`, { signal }),
+    // See useOverview()'s comment: avoids a skeleton flash on the render
+    // where the day-boundary key change lands.
+    placeholderData: (prev) => prev,
   });
 }
 
@@ -1428,9 +1461,14 @@ export interface ExecutiveReport {
 }
 
 export function useExecutiveReport() {
+  // Same client-day contract as useOverview() above — see that hook's
+  // comment for why `today` must be part of the query key, not just the URL,
+  // and for the placeholderData rationale below.
+  const today = dateToDay(new Date())!;
   return useQuery({
-    queryKey: queryKeys.executiveReport(),
+    queryKey: [...queryKeys.executiveReport(), today],
     queryFn: ({ signal }) =>
-      apiRequest<ExecutiveReport>("/reports/executive", { signal }),
+      apiRequest<ExecutiveReport>(`/reports/executive?today=${today}`, { signal }),
+    placeholderData: (prev) => prev,
   });
 }

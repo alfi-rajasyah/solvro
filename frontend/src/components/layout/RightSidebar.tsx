@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { useGanttExport } from "@/lib/gantt/exportContext";
 import type { ProjectDetail as ProjectDetailType } from "@/lib/queries";
@@ -202,12 +203,9 @@ export function RightSidebar({
               tab (use when downloads hang).
             </p>
             {exportError && (
-              <div
-                role="alert"
-                className="mt-2 rounded-sm border border-error/30 bg-error-container px-2 py-1.5 text-[12px] text-on-error-container"
-              >
-                {exportError}
-              </div>
+              <Alert variant="destructive" className="mt-2">
+                <AlertDescription className="text-xs">{exportError}</AlertDescription>
+              </Alert>
             )}
           </section>
         )}

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { CustomerFormModal } from "@/components/CustomerFormModal";
 import { EmptyState } from "@/components/EmptyState";
+import { Alert, AlertDescription } from "@/components/reui/alert";
 import { Frame } from "@/components/reui/frame";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -54,17 +55,17 @@ export function Customers() {
       </div>
 
       {deleteError && (
-        <div className="mb-4 rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-          {deleteError}
-        </div>
+        <Alert variant="destructive" className="mb-4">
+          <AlertDescription>{deleteError}</AlertDescription>
+        </Alert>
       )}
 
       {isLoading && <SkeletonGrid />}
 
       {isError && (
-        <div className="rounded-sm border border-error/30 bg-error-container px-4 py-3 text-sm text-on-error-container">
-          Could not load customers: {(error as Error).message}
-        </div>
+        <Alert variant="destructive">
+          <AlertDescription>Could not load customers: {(error as Error).message}</AlertDescription>
+        </Alert>
       )}
 
       {customers && customers.length === 0 && (

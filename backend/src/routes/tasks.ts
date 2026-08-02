@@ -6,6 +6,7 @@ import { requireAuth, requirePermission, type JwtPayload } from "../http/auth.js
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { ensureTaskVisible, projectVisibilityFilter } from "../lib/visibility.js";
+import { isValidDayString, overdueBoundary } from "../lib/dateBoundary.js";
 import {
   assertLabelsInProject,
   assertSectionInProject,
@@ -56,6 +57,12 @@ const tasksListQuerySchema = z.object({
     .union([z.literal("true"), z.literal("false")])
     .transform((v) => v === "true")
     .optional(),
+  // Caller's local calendar day ("yyyy-MM-dd"), used only when overdue=true
+  // — see lib/dateBoundary.ts for the full contract. Ignored otherwise.
+  today: z
+    .string()
+    .refine(isValidDayString, { message: "today must be a valid yyyy-MM-dd date" })
+    .optional(),
 });
 
 const createCommentSchema = z.object({
@@ -74,13 +81,12 @@ tasksRouter.use(requireAuth);
 
 // Cross-project list with filters
 tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) => {
-  const { status, priority, assignedToId, labelId, customerId, overdue, topLevel } =
+  const { status, priority, assignedToId, labelId, customerId, overdue, topLevel, today } =
     req.query as unknown as z.infer<typeof tasksListQuerySchema>;
 
   const where: Prisma.TaskWhereInput = {
     ...buildVisibilityWhere(req.user!),
   };
-  if (status) where.status = status;
   if (priority) where.priority = priority;
   if (assignedToId) where.assignedToId = assignedToId;
   if (labelId) where.labels = { some: { id: labelId } };
@@ -89,8 +95,19 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
   }
   if (topLevel) where.parentTaskId = null;
   if (overdue) {
-    where.dueDate = { lt: new Date() };
-    where.status = { not: "DONE" };
+    // Overdue = due before the CALLER's calendar day (param `today`),
+    // falling back to the server's UTC day; DONE always excluded. See
+    // lib/dateBoundary.ts for the full contract (shared with
+    // lib/portfolio.ts's isOverdue/daysOverdue).
+    where.dueDate = { lt: overdueBoundary(today) };
+    // Overdue is not Done: the not-DONE exclusion always applies, and an
+    // explicit ?status filter narrows by INTERSECTION rather than being
+    // silently overwritten — status=TODO&overdue=true returns overdue
+    // TODOs; status=DONE&overdue=true is a contradiction and returns
+    // nothing, by construction.
+    where.AND = status ? [{ status }, { status: { not: "DONE" } }] : [{ status: { not: "DONE" } }];
+  } else if (status) {
+    where.status = status;
   }
 
   const tasks = await prisma.task.findMany({

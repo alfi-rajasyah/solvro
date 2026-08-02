@@ -15,6 +15,38 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-08-02 — Backend tests start from a clean database; dead diagram CSS removed
+
+**`backend/test/globalSetup.ts`, `test/env.ts`** — the backend suite now truncates every table in the isolated `solvro_test` database before each run, killing the intermittent `taskOrdering.test.ts` failure caused by rows accumulating past the task-listing endpoint's cap across invocations. Truncation is hard-guarded to databases whose name ends in `_test` — invoked with the dev database's URL it fails loudly instead of wiping data. **`.github/workflows/ci.yml`** — the backend-tests job's ephemeral database is renamed `solvro_test` to satisfy that guard (the guard refused the old name, by design). **`e2e/tests/search.spec.ts`** — the failed-search test blocks service-worker registration: the built CI app registers a PWA worker whose fetches bypass Playwright's request mocking, so the mocked 500 never fired there.
+
+**`frontend/src/index.css`** — removed 179 lines of unused Network Diagram CSS (a feature decided never-to-build; zero consumers verified).
+
+### Changed — 2026-08-02 — Service Catalogue and project Risks tables on the data grid; long text wraps
+
+**`frontend/src/components/services/ServiceCatalogueManager.tsx`, `frontend/src/pages/views/ProjectRisks.tsx`** — the last two hand-rolled tables now render on the vendored data grid with the app's grid conventions; every edit/toggle/delete flow and the risks tab's score badges, status selects, and mobile card list behave exactly as before (risk rows keep their highest-score-first default order). **`ProjectRisks.tsx`, `ProjectTimeline.tsx`** — long risk and task descriptions now wrap inside their containers instead of stretching them, preserving manual line breaks.
+
+### Fixed — 2026-08-02 — ⌘K palette: toggle-close, failed-search message, and a scroll-lock collision
+
+**`frontend/src/components/layout/Shell.tsx`** — a second ⌘K press now closes the palette even though its own search input holds focus; the editable-target guard now applies only to the open direction. **`frontend/src/components/CommandPalette.tsx`** — a failed search renders "Could not load results. Try again." instead of the zero-hits copy, and reopening within the debounce window can no longer flash the previous session's rows. **New `frontend/src/hooks/useBodyScrollLock.ts`** (consumed by `Modal.tsx` + the palette) — a shared ref-counted body scroll lock: closing the palette above an open modal no longer unlocks page scroll behind it. All three fixes carry new e2e regression tests.
+
+### Fixed — 2026-08-02 — Focus/shadow stragglers unified; duplicate filter chips guarded
+
+**`frontend/src/components/ui/scroll-area.tsx`, `reui/autocomplete.tsx`, `reui/gantt/gantt-bar.tsx`, `reui/gantt/gantt-view.tsx`, `gantt-v2/SolvroBar.tsx`** — the last carriers of the old 3px focus ring and stray shadows now use the design system's 2px primary outline and shadow-free treatment. **`frontend/src/components/reui/filters.tsx`** — adding a filter is now idempotent at every append path: a raced double-activation can no longer create two identical chips (a shared guard checks field+values before appending; the multiselect flow adopts an existing chip instead of duplicating it). The guard's matching rules are locked by a new unit-test file, and a new e2e spec covers chip-count behavior on the Tasks toolbar.
+
+### Fixed — 2026-08-02 — Overdue follows the viewer's calendar day; the status filter is no longer discarded
+
+**`backend/src/routes/tasks.ts`, `routes/overview.ts`, `routes/reports.ts`, `lib/portfolio.ts`, new `lib/dateBoundary.ts`; `frontend/src/lib/queries.ts`** — "overdue" now means "due before the viewer's own calendar day": the frontend sends its local day (`today=yyyy-MM-dd`, validated) with overdue-filtered task queries and with the overview/executive roll-ups, and the backend compares against that day's UTC midnight (falling back to the server's UTC day for direct API callers). Previously the backend compared against the server's exact current instant — a task due later today read as overdue — and the portfolio roll-up used the server's local midnight, which shifted with the host timezone. A task due at a non-midnight instant now also counts a full day overdue instead of rounding down to zero, and query caches key on the day, so results pick up the new day on the next visit or refresh after midnight.
+
+**`backend/src/routes/tasks.ts`** — combining a status filter with `overdue=true` no longer silently discards the status: `status=TODO&overdue=true` returns overdue to-dos, and `status=DONE&overdue=true` returns nothing — Done tasks are never overdue. Both fixes are covered by three new backend test suites (41 tests) spanning timezone extremes and the day-boundary edges.
+
+### Changed — 2026-08-02 — Admin's Roles and Project Override tabs join the data grid; KPI strip stops flashing zeros
+
+**`frontend/src/pages/Admin.tsx`** — the Roles and Project Override tabs' hand-rolled tables now render on the vendored data grid with the same conventions as the Users tab (sortable columns, dense rows, loading skeletons instead of a blocking message), unifying all three tabs' panel styling. Every action flow — role rename/permissions editing, delete guards, TAM reassignment — behaves exactly as before. The KPI strip (Users, Pending, Custom roles, Inactive) shows a dash while data loads instead of asserting zeros. **`frontend/src/lib/tableSort.ts`** — the shared person-name sort helper is now properly generic instead of `any`-typed.
+
+### Changed — 2026-08-02 — Error callouts on the vendored Alert everywhere
+
+**24 callout sites across `frontend/src/pages/`, `pages/views/`, `components/`** (incl. the Gantt and Kanban engines' error banners) — the remaining ad-hoc error boxes now render on the vendored `Alert` (destructive variant), matching Login and the form modals: identical show/hide conditions and message text, spacing preserved. Chip/badge-style uses of the error token (risk-score badges, status pills, hover states) are deliberately unchanged — only callout boxes moved.
+
 ### Changed — 2026-08-01 — Admin users and customer-detail projects on the data grid; customer cards on Frame
 
 **`frontend/src/pages/Admin.tsx`** — the admin panel's user table now renders through the vendored data grid: sortable name/email/role/projects/status columns with locale-aware comparison on the person columns (a codepoint sort would have placed capitalized names first), unpaginated, denser rows. Every action cell — role changes, activate/deactivate, password reset, delete, including both confirmation flows — behaves exactly as before, and inactive users keep their dimmed appearance. The Roles and Project-Override tabs' small tables are unchanged.

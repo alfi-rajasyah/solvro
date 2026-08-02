@@ -1,6 +1,13 @@
 // Must be imported before anything that touches src/env.ts (which parses
-// process.env at import time). Points the whole test run at the disposable
-// Postgres container described in the task instructions.
+// process.env at import time). The DEFAULT, sanctioned way to run this
+// suite is against the isolated `solvro_test` database inside the existing
+// postgres container (per backend/CLAUDE.md) — never the dev DB:
+//   TEST_URL=$(docker compose exec backend printenv DATABASE_URL | tr -d '\r\n' | sed 's|/solvro?|/solvro_test?|') \
+//     && docker compose exec -e DATABASE_URL="$TEST_URL" backend npm test
+// globalSetup.ts truncates every table before the run and hard-fails if
+// DATABASE_URL doesn't resolve to a database name ending in "_test". The
+// fallback URL below (bare "solvro" db on a local, non-compose Postgres) is
+// only for ad hoc host-side runs outside Docker.
 process.env.NODE_ENV = "test";
 process.env.DATABASE_URL =
   process.env.DATABASE_URL ?? "postgresql://solvro:test@localhost:5433/solvro?schema=public";
