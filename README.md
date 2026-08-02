@@ -1,6 +1,6 @@
 # Solvro — Solution-to-Project Lifecycle Engine
 
-Solvro is a project management platform that bridges the gap between **Solution Design** and **Project Implementation**. It gives Technical Account Managers (TAMs) a single high-density workspace to run customer projects that originate from Solution Architect (SA) blueprints — replacing the usual spread of a task tracker, a notes doc, and a reporting spreadsheet.
+Solvro is a project management platform for **Technical Account Managers (TAMs)**. It gives TAMs a single high-density workspace to run customer projects — replacing the usual spread of a task tracker, a notes doc, and a reporting spreadsheet.
 
 ## Overview
 
@@ -30,7 +30,6 @@ Everything else — Kanban, Gantt, risks, portfolio roll-ups — exists to feed 
 
 ## Roadmap
 
-- **Secure Ingestion Port** — `POST /webhook/blueprint`: an API-key-authenticated webhook that receives SA blueprints and translates them into projects and tasks, with blueprint-generated tasks visually flagged as AI Breakdown cards.
 - **Utilization view** — iTop (ITSM) API integration for workload reporting.
 
 ## Architecture
