@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { isTaskOverdue } from "./TreeCells";
 
 /**
- * Gantt visual refresh, T2 — the Gantt tree's new "Due" column goes
+ * Gantt visual refresh, T2 — the Gantt tree's Dates column goes
  * `text-error` only when a task is both open (`status !== "DONE"`) and past
  * due, compared as CALENDAR DAYS (never an ISO-instant compare — frontend/
  * CLAUDE.md's date contract). `isTaskOverdue` is the pure predicate backing
- * that cell (TreeCells.tsx's `TaskDueDateCell`), split out so it's testable
+ * that cell (TreeCells.tsx's `TaskDatesCell`), split out so it's testable
  * without rendering — same convention as `lib/gantt/palette.test.ts` and
  * `kanban-v2/adapter.test.ts` (pure-function tests over pure JSX-adjacent
  * logic).

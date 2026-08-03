@@ -716,7 +716,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
       // T2 fix round: the persistence effect now writes the live v3 key
       // (SolvroGantt.tsx's TREE_WIDTH_STORAGE_KEY) — see test (l) for the
       // v2 → v3 migration this key rename introduced.
-      localStorage.getItem("solvro.gantt.treeWidth.v3"),
+      localStorage.getItem("solvro.gantt.treeWidth.v4"),
     );
     expect(persistedWidthAfterDrag).toBeTruthy();
     expect(Number(persistedWidthAfterDrag)).toBeGreaterThan(500);
@@ -747,7 +747,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     ).toBe(true);
 
     const persistedWidthAfterReset = await page.evaluate(() =>
-      localStorage.getItem("solvro.gantt.treeWidth.v3"),
+      localStorage.getItem("solvro.gantt.treeWidth.v4"),
     );
     expect(persistedWidthAfterReset).toBeTruthy();
     expect(Math.abs(Number(persistedWidthAfterReset) - paneBefore!.width)).toBeLessThanOrEqual(2);
@@ -763,7 +763,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     expect(await isTruncated(), "title should be fully visible again after re-widening").toBe(false);
 
     const persistedWidth = await page.evaluate(() =>
-      localStorage.getItem("solvro.gantt.treeWidth.v3"),
+      localStorage.getItem("solvro.gantt.treeWidth.v4"),
     );
     expect(persistedWidth).toBeTruthy();
     expect(Number(persistedWidth)).toBeGreaterThan(500);
@@ -834,22 +834,22 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
   });
 
   // Issue #118 follow-up, updated for T2's fix round (gantt visual refresh —
-  // Status/Due columns changed the name-column formula, forcing a new v3
+  // Status column (+ in-cell adornments) changed the name-column formula, forcing a new v3
   // key; see SolvroGantt.tsx's TREE_WIDTH_STORAGE_KEY block): pre-#118
   // persisted widths sized the name column as `stored − 80`; v3 sizes it as
   // `stored − 316`. A browser that only ever had the original v1 key (never
   // picked up the intermediate v2 one) migrates straight to v3 in one hop,
-  // compounding both historical offsets (v1→v2's +76, then v2→v3's +194 —
-  // the Status/Due columns plus the in-cell dot and "…" button adornments)
-  // into a single +270.
-  test("(l) legacy tree-width key migrates +270 into the v3 key", async ({
+  // compounding both historical offsets (v1→v2's +76, then v2→v3's +134 —
+  // the Status column plus the in-cell dot and "…" button adornments)
+  // into a single +210.
+  test("(l) legacy tree-width key migrates +210 into the v4 key", async ({
     page,
     seededProject,
   }) => {
     const { projectId } = seededProject;
     await page.addInitScript(() => {
-      // only seed the LEGACY (v1) key — the v3 key must come from the migration
-      if (localStorage.getItem("solvro.gantt.treeWidth.v3") === null) {
+      // only seed the LEGACY (v1) key — the v4 key must come from the migration
+      if (localStorage.getItem("solvro.gantt.treeWidth.v4") === null) {
         localStorage.setItem("solvro.gantt.treeWidth", "400");
       }
     });
@@ -857,16 +857,18 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
 
     const paneBox = await page.locator('[data-slot="gantt-tree-pane"]').boundingBox();
     expect(paneBox, "tree pane not found").toBeTruthy();
-    expect(Math.abs(paneBox!.width - 670), "pane should render at 400 + 270").toBeLessThanOrEqual(2);
+    expect(Math.abs(paneBox!.width - 610), "pane should render at 400 + 210").toBeLessThanOrEqual(2);
 
     await page.waitForTimeout(300);
     const stored = await page.evaluate(() => ({
+      v4: localStorage.getItem("solvro.gantt.treeWidth.v4"),
       v3: localStorage.getItem("solvro.gantt.treeWidth.v3"),
       v2: localStorage.getItem("solvro.gantt.treeWidth.v2"),
       legacy: localStorage.getItem("solvro.gantt.treeWidth"),
     }));
-    expect(Number(stored.v3), "migrated width should persist to the v3 key").toBe(670);
-    expect(stored.v2, "intermediate v2 key should stay untouched — v1 → v3 skips it").toBeNull();
+    expect(Number(stored.v4), "migrated width should persist to the v4 key").toBe(610);
+    expect(stored.v3, "intermediate v3 key should stay untouched — v1 → v4 skips it").toBeNull();
+    expect(stored.v2, "intermediate v2 key should stay untouched — v1 → v4 skips it").toBeNull();
     expect(stored.legacy, "legacy key should be left in place").toBe("400");
   });
 
