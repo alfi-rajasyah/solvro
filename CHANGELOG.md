@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-08-03 — Gantt tree "Due" column (redundant with the Dates range)
+
+**`frontend/src/components/gantt-v2/SolvroGantt.tsx`, `frontend/src/components/gantt-v2/TreeCells.tsx`** — the standalone Due column shipped earlier in this cycle duplicated the end of the editable Dates range; it is removed, and its overdue treatment (red + bold + screen-reader cue, hover-safe) now lives on the Dates cell itself. The tree pane's default/max widths shrink accordingly (558/834 → 498/774) under a new width storage key: widths persisted during the Due-column window migrate down one time (−60px) so the reclaimed space actually appears, and the older-key migrations adjust to match. The `isTaskOverdue` predicate and its tests are unchanged. **`e2e/tests/gantt-parity.spec.ts`** — width-migration expectations updated to the new key.
+
 ### Changed — 2026-08-03 — Gantt toolbar controls unified into segmented pill groups
 
 **`frontend/src/components/gantt-v2/SolvroGantt.tsx`** — the toolbar's remaining controls (Add Task/Section, Today + navigation + period title, Baseline pair, Color by, Export) now sit in segmented pill containers matching the Day/Week/Month/Quarter scale selector, replacing the individually outlined buttons. Behavior, disabled states, and keyboard focus are unchanged; the Baseline show/hide toggle additionally reports `aria-pressed`. Every group now renders at the same fixed height, so the toolbar reads as one consistent row instead of visibly mismatched card sizes.

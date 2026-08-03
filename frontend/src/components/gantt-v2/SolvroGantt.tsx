@@ -62,7 +62,6 @@ import { SolvroBar } from "./SolvroBar";
 import {
   SectionColorCell,
   TaskDatesCell,
-  TaskDueDateCell,
   TaskStatusCell,
   TaskStatusDot,
 } from "./TreeCells";
@@ -148,53 +147,56 @@ const LEGEND_CAP = 6;
 // needed, just wiring from here. min/max mirror that file's own
 // DEFAULT_TREE_PANEL (gantt-view.tsx:203-209); the default is deliberately
 // wider than the engine's 288 — see the issue #118 block below.
-// T2 fix round (gantt visual refresh) — BLOCKER fix: the Status/Due columns
-// changed the name-column formula from `stored − 156` to `stored − 316`
-// (see TREE_FIXED_COLUMNS_WIDTH below), so a v2-era stored width — even the
-// OLD 364 default, which every prior visitor already has cemented in
-// localStorage via the mount-time persistence effect below — now reads back
-// as a name column floored at its 100px minimum with Dates/color pushed
-// into horizontal scroll. A new v3 key + one-time migration (mirroring the
-// existing v1 → v2 migration further down) fixes existing users instead of
-// silently regressing them.
-const TREE_WIDTH_STORAGE_KEY = "solvro.gantt.treeWidth.v3";
+// Width-key history: every name-column formula change gets a NEW key plus a
+// one-time migration from the old ones (precedent set at #118's v1 → v2) —
+// a stored width read back under a different formula silently mis-sizes the
+// name column (the v2-era 364 default under the current formula would floor
+// it at its 100px minimum). Formulas: v2 sized the name column as
+// `stored − 156`; v3 as `stored − 316 − 34` while the short-lived "Due"
+// column existed; v4 is `stored − 256 − 34` after its 2026-08-03 removal.
+const TREE_WIDTH_STORAGE_KEY = "solvro.gantt.treeWidth.v4";
+// Due-column-era key (written only on 2026-08-03). Its values assume the
+// 316px fixed set, so they carry +60 relative to v4; read once by
+// readStoredTreeWidth's migration and otherwise left untouched — same
+// "leave old keys in place" convention the v2/v1 keys below follow.
+const TREE_WIDTH_V3_LEGACY_STORAGE_KEY = "solvro.gantt.treeWidth.v3";
 // Pre-v3 (T2) key. Its values assumed the v2 name-column formula
 // (`stored − 156`); read once by readStoredTreeWidth's migration and
-// otherwise left untouched — same "leave old keys in place" convention the
-// v1 key below already follows.
+// otherwise left untouched.
 const TREE_WIDTH_V2_LEGACY_STORAGE_KEY = "solvro.gantt.treeWidth.v2";
 // Pre-#118 key. Its values assumed the original (pre-v2) name-column
 // formula; read once by readStoredTreeWidth's migration and otherwise left
 // untouched.
 const TREE_WIDTH_LEGACY_STORAGE_KEY = "solvro.gantt.treeWidth";
-// The gantt-visual-refresh phase bumped this from 364 to 558: +160 for the
-// Status/Due columns joining the fixed set below, then +34 for the two
+// The gantt-visual-refresh phase bumped this from 364 to 498: +100 for the
+// Status column joining the fixed set below, then +34 for the two
 // adornments the phase put INSIDE the name cell (status dot ≈14px, hover
 // "…" actions button ≈20px — invisible but always in layout). Net: the
-// name column is 242px (558 − 316), of which 208px is text room — the same
-// 208px the old 364 default gave. A user's already-persisted
+// name column is 242px (498 − 256), of which 208px is text room — the same
+// 208px the old 364 default gave. (A short-lived 60px "Due" column pushed
+// this to 558 before its 2026-08-03 removal.) A user's already-persisted
 // `TREE_WIDTH_STORAGE_KEY` (or a value migrated up from an older key, see
 // readStoredTreeWidth) wins over this default regardless.
-const TREE_PANEL_DEFAULT_WIDTH = 558;
+const TREE_PANEL_DEFAULT_WIDTH = 498;
 const TREE_PANEL_MIN_WIDTH = 180;
-// The phase bumped this from 640 to 834 to keep the same 484px of MAX
-// name-column TEXT room (834 − 316 fixed columns − 34 in-cell adornments)
+// The phase bumped this from 640 to 774 to keep the same 484px of MAX
+// name-column TEXT room (774 − 256 fixed columns − 34 in-cell adornments)
 // that the pre-phase Dates/color-only layout gave (640 − 156 = 484), by
 // the same +34 fold as TREE_PANEL_DEFAULT_WIDTH above.
-const TREE_PANEL_MAX_WIDTH = 834;
+const TREE_PANEL_MAX_WIDTH = 774;
 // Issue #118 — the name column used to mirror the engine's 208px default and
 // absorb the splitter delta on top of it, which left the fixed "Dates"/color
 // columns to its right (gantt-view.tsx:1834-1863) clipped past the pane edge
 // at EVERY pane width. The name column is now the pane REMAINDER after those
 // fixed columns, and the default pane width is
-// 524 = 208 + 132 + 24 + 100 + 60 (208 = old title room; 132/24 = the
-// original Dates/color columns; 100/60 = T2's new Status/Due columns), so a
-// first-visit gantt keeps the old 208px title room AND shows the full
-// DD/MM – DD/MM range + status chip + due date + color swatch; each
+// 498 = 208 + 34 + 132 + 24 + 100 (208 = old title room; 34 = in-cell
+// dot/"…" adornments; 132/24 = the original Dates/color columns; 100 = the
+// Status column), so a first-visit gantt keeps the old 208px title room AND
+// shows the full DD/MM – DD/MM range + status chip + color swatch; each
 // splitter pixel still lands on the title 1:1 (F6's point, walkthrough
 // 2026-07-25). Two known residuals, both pre-existing and now slightly
 // wider in their trigger range since the fixed-column total grew from 156px
-// to 316px: below a (316 + 100 =) 416px pane the name column floors at its
+// to 256px: below a (256 + 100 =) 356px pane the name column floors at its
 // min and the fixed columns clip again (a deliberate user narrowing, not
 // the default — was 256px pre-T2), and on narrow desktop viewports the
 // engine renders the pane narrower than `treeWidth` without reporting it
@@ -202,24 +204,21 @@ const TREE_PANEL_MAX_WIDTH = 834;
 // still clip the columns there — docs/ISSUES.md.
 const TREE_DATES_COLUMN_WIDTH = 132;
 const TREE_COLOR_COLUMN_WIDTH = 24;
-// T2 (gantt visual refresh) — Height-style Status chip + Due-date columns.
-// 100px comfortably fits the widest chip label ("In progress") without
-// truncating; 60px fits the "DD MMM" due-date format (TreeCells.tsx's
-// TaskDueDateCell, same fmtDateDDMM the Dates column already uses) with a
-// little headroom. Both columns render at a FIXED width regardless of pane
-// width — gantt-view.tsx's tree-column-cell wrapper is `shrink-0`, so a
-// narrower pane makes the ROW scroll horizontally, not the column shrink
-// (see the residuals note above). The truncate/overflow-hidden guards in
-// TreeCells.tsx exist purely as defense against unusually long CONTENT
-// (e.g. a future locale with longer status words) overflowing that fixed
-// width, not against the pane narrowing.
+// Height-style Status chip column. 100px comfortably fits the widest chip
+// label ("In progress") without truncating. Renders at a FIXED width
+// regardless of pane width — gantt-view.tsx's tree-column-cell wrapper is
+// `shrink-0`, so a narrower pane makes the ROW scroll horizontally, not the
+// column shrink (see the residuals note above). The truncate/overflow-hidden
+// guards in TreeCells.tsx exist purely as defense against unusually long
+// CONTENT (e.g. a future locale with longer status words) overflowing that
+// fixed width, not against the pane narrowing. A separate "Due" column
+// shipped briefly and was removed 2026-08-03 as redundant with the Dates
+// range — the overdue treatment lives in the Dates cell now.
 const TREE_STATUS_COLUMN_WIDTH = 100;
-const TREE_DUE_COLUMN_WIDTH = 60;
 const TREE_FIXED_COLUMNS_WIDTH =
   TREE_DATES_COLUMN_WIDTH +
   TREE_COLOR_COLUMN_WIDTH +
-  TREE_STATUS_COLUMN_WIDTH +
-  TREE_DUE_COLUMN_WIDTH;
+  TREE_STATUS_COLUMN_WIDTH;
 const TREE_NAME_COLUMN_MIN_WIDTH = 100;
 
 function clampTreeWidth(width: number): number {
@@ -230,23 +229,29 @@ function readStoredTreeWidth(): number {
   const raw = localStorage.getItem(TREE_WIDTH_STORAGE_KEY);
   const parsed = raw ? Number(raw) : NaN;
   if (Number.isFinite(parsed)) return clampTreeWidth(parsed);
-  // One-time v2 → v3 migration (see the BLOCKER note on
-  // TREE_WIDTH_STORAGE_KEY above): the old (v2) formula sized the name
-  // column as `stored − 156`; the new (v3) one sizes its TEXT room as
-  // `stored − 316 − 34` (Status/Due fixed columns + the in-cell dot and "…"
-  // button). +194 keeps each user's persisted title text width exactly as
-  // it was (the 834 pane max permitting). The mount-time persistence effect
-  // writes the result to the v3 key, so this branch runs once per browser.
+  // One-time v3 → v4 migration: v3 values were written while the removed
+  // 60px "Due" column sat in the fixed set, so they carry +60 relative to
+  // the current formula — migrate down so the pane actually shrinks for
+  // anyone who opened the Gantt during the Due-column window. The
+  // mount-time persistence effect writes the result to the v4 key, so each
+  // legacy branch here runs once per browser.
+  const v3Raw = localStorage.getItem(TREE_WIDTH_V3_LEGACY_STORAGE_KEY);
+  const v3 = v3Raw ? Number(v3Raw) : NaN;
+  if (Number.isFinite(v3)) return clampTreeWidth(v3 - 60);
+  // One-time v2 → v4 migration (see the key-history note above): v2's
+  // formula sized the name column as `stored − 156`; v4 sizes its TEXT room
+  // as `stored − 256 − 34` (Status fixed column + the in-cell dot and "…"
+  // button). +134 keeps each user's persisted title text width exactly as
+  // it was (the 774 pane max permitting).
   const v2Raw = localStorage.getItem(TREE_WIDTH_V2_LEGACY_STORAGE_KEY);
   const v2 = v2Raw ? Number(v2Raw) : NaN;
-  if (Number.isFinite(v2)) return clampTreeWidth(v2 + 194);
-  // One-time v1 → v3 migration, for a browser that never picked up the v2
-  // key at all — compounds both historical offsets (the v1 → v2 step's own
-  // +76, then v2 → v3's +194 above) into a single +270 jump straight to v3,
-  // same end result as if the two migrations had run back to back.
+  if (Number.isFinite(v2)) return clampTreeWidth(v2 + 134);
+  // One-time v1 → v4 migration, for a browser that never picked up the v2
+  // key at all — compounds the historical offsets (v1 → v2's own +76, then
+  // +134 above) into a single +210 jump straight to v4.
   const legacyRaw = localStorage.getItem(TREE_WIDTH_LEGACY_STORAGE_KEY);
   const legacy = legacyRaw ? Number(legacyRaw) : NaN;
-  if (Number.isFinite(legacy)) return clampTreeWidth(legacy + 270);
+  if (Number.isFinite(legacy)) return clampTreeWidth(legacy + 210);
   return TREE_PANEL_DEFAULT_WIDTH;
 }
 
@@ -405,11 +410,11 @@ export function SolvroGantt(props: SolvroGanttProps) {
   useEffect(() => {
     localStorage.setItem(TREE_WIDTH_STORAGE_KEY, String(treeWidth));
   }, [treeWidth]);
-  // Pane-remainder sizing (issue #118): the four fixed columns (Status/Due/
-  // Dates/color) fit inside the pane wherever the pane is ≥ 416px and rendered at `treeWidth`
+  // Pane-remainder sizing (issue #118): the three fixed columns (Status/
+  // Dates/color) fit inside the pane wherever the pane is ≥ 356px and rendered at `treeWidth`
   // (residuals in the constants block above), and every pixel of splitter
   // drag still goes to the name column 1:1, so dragging reveals more of a
-  // truncated title without pushing the due date back out of view.
+  // truncated title without pushing the date range back out of view.
   const nameColumnWidth = Math.max(
     TREE_NAME_COLUMN_MIN_WIDTH,
     treeWidth - TREE_FIXED_COLUMNS_WIDTH,
@@ -750,7 +755,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
 
   // T2 fix round (gantt visual refresh) — hoisted once per render (the day
   // string is identical for every row in a single render pass), rather than
-  // recomputed once per row inside TaskDueDateCell. Same pattern as
+  // recomputed once per row inside TaskDatesCell. Same pattern as
   // `pages/views/ProjectTimeline.tsx`'s own `todayDay` hoist.
   const todayDay = dateToDay(new Date());
 
@@ -761,12 +766,11 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // section groups (excludes the "(No section)" pseudo-group, matching
   // GanttListRow's `row.sectionId === null` guard on its color button).
   //
-  // T2 (gantt visual refresh) — "status" and "due" are new, same task-node
-  // guard as "dates" (blank on section/pseudo-group rows). Placed BEFORE the
-  // pre-existing "dates"/"color" columns — closer to the name, matching the
-  // Height reference's at-a-glance status/due-date placement — while
-  // leaving "dates"'s own full range + inline editor and the color swatch
-  // untouched, per this task's brief.
+  // "status" uses the same task-node guard as "dates" (blank on section/
+  // pseudo-group rows), placed BEFORE the pre-existing "dates"/"color"
+  // columns — closer to the name, matching the Height reference. "dates"
+  // keeps its full range + inline editor and additionally carries the
+  // overdue treatment (red + bold + sr-only cue) via `todayDay`.
   const columns = useMemo<GanttColumn[]>(() => {
     const sectionColors = resolveSectionColors(sections);
     return [
@@ -783,19 +787,6 @@ export function SolvroGantt(props: SolvroGanttProps) {
         },
       },
       {
-        id: "due",
-        title: "Due",
-        width: TREE_DUE_COLUMN_WIDTH,
-        align: "end",
-        render: (ctx) => {
-          const taskId = parseTaskId(ctx.resource.id);
-          if (taskId === null) return null;
-          const task = taskById.get(taskId);
-          if (!task) return null;
-          return <TaskDueDateCell task={task} todayDay={todayDay} />;
-        },
-      },
-      {
         id: "dates",
         title: "Dates",
         width: TREE_DATES_COLUMN_WIDTH,
@@ -805,7 +796,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
           if (taskId === null) return null;
           const task = taskById.get(taskId);
           if (!task) return null;
-          return <TaskDatesCell task={task} canEdit={canEdit} onSave={handleUpdateDates} />;
+          return (
+            <TaskDatesCell
+              task={task}
+              canEdit={canEdit}
+              onSave={handleUpdateDates}
+              todayDay={todayDay}
+            />
+          );
         },
       },
       {
@@ -1403,7 +1401,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
               const label = resource.id === sectionNodeId(null) ? "(No section)" : resource.title;
               // T2 (gantt visual refresh) — colored status dot before the
               // name, task rows only (`parseTaskId` returns null for
-              // section/pseudo-group ids, same guard the "status"/"due"
+              // section/pseudo-group ids, same guard the "status"/"dates"
               // columns above use — dot stays blank on section rows).
               // Subtasks share the same `task-<id>` id shape as top-level
               // tasks, so they get the dot too, per this task's brief.
@@ -1469,7 +1467,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
             // for EVERY row, including section/pseudo-group rows
             // (gantt-view.tsx:2607) — returning `null` there is what keeps
             // those rows menu-free (gantt-view.tsx:2789's `if (!menu) return
-            // rowNode`), same `parseTaskId` guard the status/due columns and
+            // rowNode`), same `parseTaskId` guard the status/dates columns and
             // the status dot above already use. Passed as `undefined`
             // (rather than a function that internally checks `canEdit`)
             // when the user can't edit — same gating shape as

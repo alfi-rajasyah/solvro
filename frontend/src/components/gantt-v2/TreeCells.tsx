@@ -2,7 +2,7 @@ import { useState } from "react";
 import { InlineDateRangeEditor } from "@/components/InlineDateRangeEditor";
 import { TaskStatusChip } from "@/components/StatusChip";
 import { dayFromIso, dayToDate } from "@/lib/dateField";
-import { fmtDateDDMM, fmtDateRangeDDMM } from "@/lib/gantt/geometry";
+import { fmtDateRangeDDMM } from "@/lib/gantt/geometry";
 import { SECTION_COLOR_PRESETS } from "@/lib/gantt/palette";
 import type { Task, TaskStatus } from "@/lib/queries";
 import { cn } from "@/lib/utils";
@@ -27,11 +27,20 @@ interface TaskDatesCellProps {
   task: Task;
   canEdit: boolean;
   onSave: (taskId: number, startISO: string | null, dueISO: string | null) => void;
+  todayDay: string | null;
 }
 
-/** Tree-pane "Dates" column cell for task rows (GanttListRow.tsx:240-270 parity). */
-export function TaskDatesCell({ task, canEdit, onSave }: TaskDatesCellProps) {
+/**
+ * Tree-pane "Dates" column cell for task rows: the editable start–due range.
+ * Also carries the overdue treatment (red + `font-semibold` + an `sr-only`
+ * "(overdue)" cue — never color alone, per the a11y precedent in
+ * `pages/views/ProjectTimeline.tsx`): a briefly-shipped separate "Due"
+ * column was removed 2026-08-03 as redundant with this range. `todayDay`
+ * is hoisted by the caller (once per render, not per row).
+ */
+export function TaskDatesCell({ task, canEdit, onSave, todayDay }: TaskDatesCellProps) {
   const [editing, setEditing] = useState(false);
+  const overdue = isTaskOverdue(task.status, task.dueDate, todayDay);
   return (
     <div className="relative flex w-full min-w-0 items-center justify-end">
       <button
@@ -42,12 +51,16 @@ export function TaskDatesCell({ task, canEdit, onSave }: TaskDatesCellProps) {
           setEditing(true);
         }}
         className={cn(
-          "w-full truncate text-right font-mono text-[11px] text-on-surface-variant",
-          canEdit ? "hover:text-primary" : "cursor-default",
+          "w-full truncate text-right font-mono text-[11px]",
+          overdue ? "font-semibold text-error" : "text-on-surface-variant",
+          // Overdue red must survive hover — hover:text-primary would flip
+          // the signal to green exactly while the TAM points at it.
+          canEdit ? (overdue ? "hover:text-error/80" : "hover:text-primary") : "cursor-default",
         )}
         title={canEdit ? "Click to edit dates" : undefined}
       >
         {fmtDateRangeDDMM(isoToDate(task.startDate), isoToDate(task.dueDate))}
+        {overdue && <span className="sr-only"> (overdue)</span>}
       </button>
       {editing && canEdit && (
         <InlineDateRangeEditor
@@ -123,8 +136,9 @@ export function SectionColorCell({ sectionId, color, canEdit, onPick }: SectionC
   );
 }
 
-// Gantt visual refresh, T2 (Height-style tree columns) — status dot + Status
-// chip + Due-date cells. Same taskById-lookup pattern the columns above use:
+// Height-style tree columns — status dot + Status chip cells (a separate
+// Due-date cell shipped briefly and was removed 2026-08-03; the Dates cell
+// above carries the overdue treatment). Same taskById-lookup pattern:
 // the resource node itself carries no status/dueDate (adapter.ts's
 // buildResources is deliberately domain-agnostic — see adapter.ts's
 // GanttResource usage), so every cell here receives the full looked-up
@@ -179,7 +193,7 @@ export function TaskStatusCell({ task }: { task: Task }) {
 }
 
 /**
- * Pure predicate backing `TaskDueDateCell`'s `text-error` treatment —
+ * Pure predicate backing the Dates column's `text-error` treatment —
  * exported so it's independently unit-testable (this repo's frontend test
  * convention is pure-function `.test.ts` files over pure logic, not
  * component-render tests — see `lib/gantt/palette.test.ts`,
@@ -202,36 +216,4 @@ export function isTaskOverdue(
 ): boolean {
   const dueDay = dayFromIso(dueDateIso);
   return status !== "DONE" && dueDay !== null && todayDay !== null && dueDay < todayDay;
-}
-
-/**
- * Tree-pane "Due" column cell for task rows — due date only (the existing
- * "Dates" column above keeps its full start–due range + inline editor
- * untouched). `todayDay` is hoisted by the caller (SolvroGantt.tsx, once per
- * render, not once per row — same pattern `pages/views/ProjectTimeline.tsx`
- * already uses for its own `todayDay`), not recomputed here.
- *
- * Overdue is never signalled by color alone (a11y): the text also goes
- * `font-semibold` and an `sr-only` "(overdue)" span is appended so screen
- * readers get the same signal sighted users get from the red text — same
- * principle `pages/views/ProjectTimeline.tsx:181-184`'s visible " · OVERDUE"
- * suffix uses, adapted to `sr-only` since this column has no room for
- * visible extra text. No `title` attribute — redundant with the sr-only
- * text (and less reliable: a tooltip only surfaces on hover, not to a
- * screen reader).
- */
-export function TaskDueDateCell({ task, todayDay }: { task: Task; todayDay: string | null }) {
-  const dueDay = dayFromIso(task.dueDate);
-  const overdue = isTaskOverdue(task.status, task.dueDate, todayDay);
-  return (
-    <span
-      className={cn(
-        "block w-full min-w-0 truncate text-right font-mono text-[11px]",
-        overdue ? "font-semibold text-error" : "text-on-surface-variant",
-      )}
-    >
-      {dueDay ? fmtDateDDMM(dayToDate(dueDay)!) : "—"}
-      {overdue && <span className="sr-only"> (overdue)</span>}
-    </span>
-  );
 }
