@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-08-03 — Project Overview: Status breakdown / Top open risks panels overflowed the viewport
+
+**`frontend/src/pages/views/ProjectOverview.tsx`** — the Overview's right-hand panel column used an implicit grid column, which sizes to its content's minimum width; a long non-wrapping risk description therefore pushed the Status breakdown and Top open risks panels past the page edge instead of truncating. Both the panel-row grid and its nested column now declare `grid-cols-1` (`minmax(0,1fr)` tracks), so the panels stay inside the layout and long risk text ellipsizes as intended.
+
 ### Removed — 2026-08-03 — Gantt tree "Due" column (redundant with the Dates range)
 
 **`frontend/src/components/gantt-v2/SolvroGantt.tsx`, `frontend/src/components/gantt-v2/TreeCells.tsx`** — the standalone Due column shipped earlier in this cycle duplicated the end of the editable Dates range; it is removed, and its overdue treatment (red + bold + screen-reader cue, hover-safe) now lives on the Dates cell itself. The tree pane's default/max widths shrink accordingly (558/834 → 498/774) under a new width storage key: widths persisted during the Due-column window migrate down one time (−60px) so the reclaimed space actually appears, and the older-key migrations adjust to match. The `isTaskOverdue` predicate and its tests are unchanged. **`e2e/tests/gantt-parity.spec.ts`** — width-migration expectations updated to the new key.
