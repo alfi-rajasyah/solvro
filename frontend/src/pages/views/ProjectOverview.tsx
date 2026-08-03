@@ -146,9 +146,9 @@ export function ProjectOverview() {
       </section>
 
       {/* Detail panels — the TAM's morning glance */}
-      <div className="grid items-start gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
         <NeedsAttention tasks={tasks ?? []} projectId={project.id} />
-        <div className="grid gap-4">
+        <div className="grid grid-cols-1 gap-4">
           <StatusBreakdown tasks={tasks ?? []} />
           <TopRisks projectId={project.id} />
         </div>
