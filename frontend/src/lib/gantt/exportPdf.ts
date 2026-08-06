@@ -266,24 +266,20 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
   const autoTableMod = await import("jspdf-autotable");
   const autoTable = autoTableMod.default;
 
-  // A4 landscape in points: 842 × 595.
-  const pdf = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
-  const pageW = pdf.internal.pageSize.getWidth();
-  const pageH = pdf.internal.pageSize.getHeight();
+  // ────────── Sheet geometry ──────────
   const margin = 24;
   const headerSpace = 28;
-  const usableW = pageW - margin * 2;
-  const usableH = pageH - margin * 2 - headerSpace;
+  // Layout: a label column for task names on the left, then the date grid.
+  const labelColW = 160;
+  const axisH = 22;
+  const idealDayColW = 18;
+  const minDayColW = 11;
+  const idealWeekColW = 34; // width budget per 7-day block
+  const minWeekColW = 20;
+  const idealRowH = 18;
+  const minRowH = 11;
 
-  const onSurfaceRgb = hexToRgb(THEME_HEX.onSurface);
-  const onSurfaceVariantRgb = hexToRgb(THEME_HEX.onSurfaceVariant);
-  const outlineRgb = hexToRgb(THEME_HEX.outline);
-  const outlineVariantRgb = hexToRgb(THEME_HEX.outlineVariant);
-  const surfaceContainerLowRgb = hexToRgb(THEME_HEX.surfaceContainerLow);
-  const surfaceContainerRgb = hexToRgb(THEME_HEX.surfaceContainer);
-  const primaryRgb = hexToRgb(THEME_HEX.primary);
-
-  // ────────── Build day list and basic geometry ──────────
+  // ────────── Build day list ──────────
   const days: Date[] = [];
   let cur = startOfDay(exportStart);
   const endDay = startOfDay(exportEnd);
@@ -291,13 +287,7 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
     days.push(new Date(cur));
     cur = addDays(cur, 1);
   }
-  const today = startOfDay(new Date());
-  const holidayDates = new Set(holidays.map((h) => h.date));
-
-  // Layout: a label column for task names on the left, then the date grid.
-  const labelColW = 160;
-  const axisH = 22;
-  const chartAreaW = usableW - labelColW;
+  const totalDays = days.length;
 
   // F3-consistent axis grain: sub-columns are DAYS (with day numbers) when
   // the exported range is narrow enough to stay readable; beyond that they
@@ -311,13 +301,96 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
   // under this, so day-grain is the common case in practice; week-grain
   // exists for projects whose task range genuinely spans months.
   const WEEK_GRAIN_THRESHOLD_DAYS = 60;
-  const totalDays = days.length;
   const grain: "day" | "week" = totalDays > WEEK_GRAIN_THRESHOLD_DAYS ? "week" : "day";
 
-  const idealDayColW = 18;
-  const minDayColW = 11;
-  const idealWeekColW = 34; // width budget per 7-day block
-  const minWeekColW = 20;
+  // ────────── Label column: wrap, don't truncate ──────────
+  // Row names used to be cut to one measured-fit line ("Setup and Config
+  // Amazon Elastic Contai…"). They now wrap inside the same fixed-width
+  // column and the row grows to hold the extra lines — the column width is
+  // deliberately NOT stretched to the longest name, which would eat chart
+  // width for one outlier row. MAX_LABEL_LINES caps a pathological title so a
+  // single row cannot swallow the page; the last kept line still ellipsizes.
+  // Measured on a throwaway document because the real one cannot be created
+  // until the wrapped heights below decide the page size — jsPDF text metrics
+  // depend only on the font and size, not on the page.
+  const LABEL_FONT_SIZE = 8;
+  const LABEL_LINE_H = 9.5;
+  const LABEL_PAD_Y = 4;
+  const MAX_LABEL_LINES = 4;
+
+  const labelIndent = (row: Row) => row.depth * 10;
+  const labelWidthFor = (row: Row) => labelColW - 8 - labelIndent(row);
+
+  function wrapLabel(doc: JsPDFInstance, row: Row): string[] {
+    doc.setFont("helvetica", row.kind === "section" ? "bold" : "normal");
+    doc.setFontSize(LABEL_FONT_SIZE);
+    const maxW = labelWidthFor(row);
+    const lines = doc.splitTextToSize(row.name, maxW) as string[];
+    if (lines.length <= MAX_LABEL_LINES) return lines.length > 0 ? lines : [""];
+    const kept = lines.slice(0, MAX_LABEL_LINES);
+    kept[MAX_LABEL_LINES - 1] = fitText(
+      doc,
+      lines.slice(MAX_LABEL_LINES - 1).join(" "),
+      maxW,
+    );
+    return kept;
+  }
+
+  const measureDoc = new jsPDF({ unit: "pt", format: "a4" });
+  const labelLines = rows.map((row) => wrapLabel(measureDoc, row));
+  const wrappedRowH = labelLines.map((lines) =>
+    Math.max(idealRowH, lines.length * LABEL_LINE_H + LABEL_PAD_Y * 2),
+  );
+  const wrappedTotalH = wrappedRowH.reduce((a, b) => a + b, 0);
+
+  // ────────── Page size follows the chart ──────────
+  // The chart sheet was a fixed A4 landscape regardless of project size, so a
+  // long project was squeezed onto it — rows collapsed to the 11pt floor and
+  // the date grid split across pages. The sheet is now cut to the chart's own
+  // ideal size: every row at its wrapped-label height (>= `idealRowH`), the
+  // whole date range at the ideal column width, on ONE page. A4 landscape
+  // stays the floor so a small project still reads as a normal sheet, and
+  // PDF_MAX_PT is the PDF format's own 200-inch user-space ceiling — a chart
+  // past that ceiling falls back to the squeeze-then-paginate math below,
+  // unchanged. The task table on the final page keeps its own A4 landscape
+  // sheet.
+  const A4_LANDSCAPE: [number, number] = [842, 595];
+  const PDF_MAX_PT = 14400;
+  const wantChartW =
+    grain === "day"
+      ? totalDays * idealDayColW
+      : Math.ceil(totalDays / 7) * idealWeekColW;
+  const pageW = Math.min(
+    PDF_MAX_PT,
+    Math.max(A4_LANDSCAPE[0], margin * 2 + labelColW + wantChartW),
+  );
+  const pageH = Math.min(
+    PDF_MAX_PT,
+    Math.max(A4_LANDSCAPE[1], margin * 2 + headerSpace + axisH + wrappedTotalH),
+  );
+
+  // The orientation must agree with the computed dimensions: jsPDF swaps
+  // width and height when the named orientation contradicts them, which would
+  // lay a tall, narrow chart (many rows, few days) on its side.
+  const pdf = new jsPDF({
+    orientation: pageW >= pageH ? "landscape" : "portrait",
+    unit: "pt",
+    format: [pageW, pageH],
+  });
+  const usableW = pageW - margin * 2;
+  const usableH = pageH - margin * 2 - headerSpace;
+
+  const onSurfaceRgb = hexToRgb(THEME_HEX.onSurface);
+  const onSurfaceVariantRgb = hexToRgb(THEME_HEX.onSurfaceVariant);
+  const outlineRgb = hexToRgb(THEME_HEX.outline);
+  const outlineVariantRgb = hexToRgb(THEME_HEX.outlineVariant);
+  const surfaceContainerLowRgb = hexToRgb(THEME_HEX.surfaceContainerLow);
+  const surfaceContainerRgb = hexToRgb(THEME_HEX.surfaceContainer);
+  const primaryRgb = hexToRgb(THEME_HEX.primary);
+
+  const today = startOfDay(new Date());
+  const holidayDates = new Set(holidays.map((h) => h.date));
+  const chartAreaW = usableW - labelColW;
 
   // `colW` is always px(pt)-per-DAY regardless of grain — bar/milestone/
   // connector geometry stays day-precise either way; grain only changes
@@ -359,16 +432,38 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
     }
   }
 
-  // Vertical: scale row height so all rows fit on one page; clamp to a
-  // sane minimum / maximum.
+  // Vertical: rows keep their own wrapped-label heights, because the page was
+  // cut to hold exactly that. `wrapLabels` only turns false when the row count
+  // pushed the sheet past PDF_MAX_PT and the labels no longer fit — then every
+  // row falls back to one uniform squeezed height with a single truncated
+  // label line, which is what this export did before wrapping existed.
   const visualRows = rows; // includes section header rows for context
   const rowsHeightAvail = usableH - axisH;
-  const idealRowH = 18;
-  const minRowH = 11;
-  let rowH = idealRowH;
-  if (visualRows.length * idealRowH > rowsHeightAvail) {
-    rowH = Math.max(minRowH, rowsHeightAvail / visualRows.length);
+  const wrapLabels = wrappedTotalH <= rowsHeightAvail;
+  const squeezedRowH = Math.max(
+    minRowH,
+    Math.min(idealRowH, rowsHeightAvail / Math.max(1, visualRows.length)),
+  );
+  const rowHeights = wrapLabels
+    ? wrappedRowH
+    : visualRows.map(() => squeezedRowH);
+  const rowTops: number[] = [];
+  let rowTopAcc = 0;
+  for (const h of rowHeights) {
+    rowTops.push(rowTopAcc);
+    rowTopAcc += h;
   }
+  const totalRowsH = rowTopAcc;
+  // Bars keep one constant height across rows — a taller wrapped row adds
+  // label space, not a fatter bar. Derived from `idealRowH` so an unwrapped
+  // export is pixel-identical to the pre-wrap padding math.
+  const barH = Math.max(
+    3,
+    Math.min(
+      idealRowH - 2 * Math.max(2, idealRowH * 0.18),
+      squeezedRowH - 2 * Math.max(2, squeezedRowH * 0.18),
+    ),
+  );
 
   function drawHeader(pageIdx: number): void {
     pdf.setTextColor(onSurfaceRgb[0], onSurfaceRgb[1], onSurfaceRgb[2]);
@@ -395,7 +490,7 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
 
     const chartLeft = margin + labelColW;
     const chartTop = margin + headerSpace + axisH;
-    const chartBottom = chartTop + visualRows.length * rowH;
+    const chartBottom = chartTop + totalRowsH;
     const pageDaysW = pageDays.length * colW;
     const pageFromMs = pageDays[0].getTime();
     const pageToMs = pageDays[pageDays.length - 1].getTime();
@@ -490,11 +585,11 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
       if (holidayDates.has(iso)) {
         const [r, g, b] = hexToRgb(HOLIDAY_HEX);
         pdf.setFillColor(r, g, b);
-        pdf.rect(cx, chartTop, colW, visualRows.length * rowH, "F");
+        pdf.rect(cx, chartTop, colW, totalRowsH, "F");
       } else if (dow === 0 || dow === 6) {
         const [r, g, b] = hexToRgb(WEEKEND_HEX);
         pdf.setFillColor(r, g, b);
-        pdf.rect(cx, chartTop, colW, visualRows.length * rowH, "F");
+        pdf.rect(cx, chartTop, colW, totalRowsH, "F");
       }
     }
 
@@ -512,31 +607,41 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
 
     for (let r = 0; r < visualRows.length; r++) {
       const row = visualRows[r];
-      const ry = chartTop + r * rowH;
+      const ry = chartTop + rowTops[r];
+      const rh = rowHeights[r];
 
       if (row.kind === "section") {
         // Header band: subtler surface-container-low tint (was a raw slate
         // literal pre-F4).
         pdf.setFillColor(surfaceContainerLowRgb[0], surfaceContainerLowRgb[1], surfaceContainerLowRgb[2]);
-        pdf.rect(margin, ry, labelColW + pageDaysW, rowH, "F");
+        pdf.rect(margin, ry, labelColW + pageDaysW, rh, "F");
       }
 
-      // Label cell — measured-fit truncation (fitText) at an x-offset by
-      // depth, replacing the old literal-space-prefix + char-count cutoff.
-      const labelFontSize = rowH < 14 ? 7 : 8;
+      // Label cell — wrapped to the column width (`labelLines`, measured once
+      // up front) and centered as a block in the row, at an x-offset by depth.
+      // The squeezed fallback has no room for a second line, so it truncates to
+      // one measured-fit line instead.
+      const labelFontSize = wrapLabels ? LABEL_FONT_SIZE : rh < 14 ? 7 : 8;
       pdf.setFontSize(labelFontSize);
       pdf.setTextColor(onSurfaceRgb[0], onSurfaceRgb[1], onSurfaceRgb[2]);
       pdf.setFont("helvetica", row.kind === "section" ? "bold" : "normal");
-      const indentPx = row.depth * 10;
-      const labelMaxW = labelColW - 8 - indentPx;
-      const drawLabel = fitText(pdf, row.name, labelMaxW);
-      pdf.text(drawLabel, margin + 4 + indentPx, ry + rowH / 2 + 2.5);
+      const indentPx = labelIndent(row);
+      const labelMaxW = labelWidthFor(row);
+      const drawLines = wrapLabels ? labelLines[r] : [fitText(pdf, row.name, labelMaxW)];
+      const blockTop = ry + (rh - drawLines.length * LABEL_LINE_H) / 2;
+      for (let li = 0; li < drawLines.length; li++) {
+        pdf.text(
+          drawLines[li],
+          margin + 4 + indentPx,
+          blockTop + LABEL_LINE_H * (0.75 + li),
+        );
+      }
 
       // Row separator (bottom) + vertical separator between label col and grid
       pdf.setDrawColor(outlineVariantRgb[0], outlineVariantRgb[1], outlineVariantRgb[2]);
       pdf.setLineWidth(0.3);
-      pdf.line(margin, ry + rowH, chartLeft + pageDaysW, ry + rowH);
-      pdf.line(chartLeft, ry, chartLeft, ry + rowH);
+      pdf.line(margin, ry + rh, chartLeft + pageDaysW, ry + rh);
+      pdf.line(chartLeft, ry, chartLeft, ry + rh);
 
       if (row.kind === "section") {
         // Slim rollup pill (~3pt), spanning the section's children date
@@ -558,7 +663,7 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
             const pw = Math.max(1, (endIdx - startIdx + 1) * colW - 2);
             const [pr, pg, pb] = hexToRgb(row.sectionColor ?? THEME_HEX.outline);
             pdf.setFillColor(pr, pg, pb);
-            fillRoundedRect(pdf, px, ry + rowH / 2 - 1.5, pw, 3, 1.5);
+            fillRoundedRect(pdf, px, ry + rh / 2 - 1.5, pw, 3, 1.5);
           }
         }
         continue;
@@ -578,10 +683,9 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
         const dayMs = startOfDay(row.end).getTime();
         if (dayMs >= pageFromMs && dayMs <= pageToMs) {
           const idx = (dayMs - pageFromMs) / DAY_MS;
-          const padY = Math.max(2, rowH * 0.18);
-          const dr = Math.min(5, Math.max(3, rowH * 0.25));
+          const dr = Math.min(5, Math.max(3, squeezedRowH * 0.25));
           const cx = chartLeft + idx * colW + 6;
-          const cy = ry + rowH / 2;
+          const cy = ry + rh / 2;
           // Primary green, not the resolved Color-by hex — parity with
           // SolvroBar.tsx's milestone branch, which hardcodes `bg-primary`
           // regardless of colorBy mode (an explicit "not section color"
@@ -598,13 +702,13 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
           // (e.g. IN_PROGRESS blue). Print legibility wins over literal
           // fidelity for this one spot; see task-f4-report.md.
           pdf.setFont("helvetica", "normal");
-          pdf.setFontSize(rowH < 14 ? 6.5 : 7.5);
+          pdf.setFontSize(squeezedRowH < 14 ? 6.5 : 7.5);
           pdf.setTextColor(onSurfaceRgb[0], onSurfaceRgb[1], onSurfaceRgb[2]);
           const labelX = cx + dr + 4;
           const labelMaxW = Math.max(0, chartLeft + pageDaysW - labelX - 2);
           pdf.text(fitText(pdf, row.name, labelMaxW), labelX, cy + 2.5);
 
-          drawnRect = { x: cx - dr, y: ry + padY, width: dr * 2, height: rowH - padY * 2 };
+          drawnRect = { x: cx - dr, y: cy - barH / 2, width: dr * 2, height: barH };
         }
       } else if (row.start && row.end) {
         const startMs = startOfDay(row.start).getTime();
@@ -616,9 +720,10 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
           const endIdx = (clampedEndMs - pageFromMs) / DAY_MS;
           const bx = chartLeft + startIdx * colW + 1;
           const bw = Math.max(1, (endIdx - startIdx + 1) * colW - 2);
-          const padY = Math.max(2, rowH * 0.18);
-          const by = ry + padY;
-          const bh = rowH - padY * 2;
+          // Constant bar height, vertically centered — a row made taller by a
+          // wrapped label gets more label room, not a fatter bar.
+          const bh = barH;
+          const by = ry + (rh - bh) / 2;
           const startsOnPage = startMs >= pageFromMs;
 
           const status = row.status ?? "TODO";
@@ -660,7 +765,7 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
           // on the page where the bar starts, matching the pre-F4 file's
           // own no-duplicate-across-pages guard.
           if (startsOnPage) {
-            const labelSize = rowH < 14 ? 6.5 : 7.5;
+            const labelSize = squeezedRowH < 14 ? 6.5 : 7.5;
             pdf.setFont("helvetica", "normal");
             pdf.setFontSize(labelSize);
             const insidePad = 6;
@@ -707,12 +812,15 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
     // Outer chart border
     pdf.setDrawColor(outlineRgb[0], outlineRgb[1], outlineRgb[2]);
     pdf.setLineWidth(0.4);
-    pdf.rect(chartLeft, chartTop, pageDaysW, visualRows.length * rowH);
-    pdf.rect(margin, chartTop, labelColW, visualRows.length * rowH);
+    pdf.rect(chartLeft, chartTop, pageDaysW, totalRowsH);
+    pdf.rect(margin, chartTop, labelColW, totalRowsH);
   }
 
   // ────────── Final page: task table ──────────
-  pdf.addPage();
+  // Its own A4 landscape sheet — the table is 6 narrow columns and gains
+  // nothing from the chart sheet's width, which can now be several times A4.
+  // jsPDF keeps this format for any further page autoTable adds itself.
+  pdf.addPage(A4_LANDSCAPE, "landscape");
   pdf.setFont("helvetica", "bold");
   pdf.setFontSize(13);
   pdf.setTextColor(onSurfaceRgb[0], onSurfaceRgb[1], onSurfaceRgb[2]);
