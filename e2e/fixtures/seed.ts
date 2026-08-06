@@ -152,6 +152,37 @@ export async function seedFixture(base: string): Promise<SeededFixture> {
   return { token, userId, projectId: proj.id, customerId: custId, customerName, alpha, beta, gamma, delta, subA, subB };
 }
 
+export interface CreateTaskInput {
+  title: string;
+  parentTaskId?: number | null;
+  sectionId?: number | null;
+  status?: string;
+  startDate?: string | null;
+  dueDate?: string | null;
+  isMilestone?: boolean;
+}
+
+/**
+ * Creates one extra task in an already-seeded project. Specs that need their
+ * own throwaway rows (rather than mutating the shared fixture's
+ * alpha/beta/gamma/delta) use this instead of hand-rolling the same POST —
+ * date-picker.spec.ts and gantt-parity.spec.ts each still carry a private copy
+ * that predates this helper and can fold into it independently.
+ */
+export async function createTask(
+  base: string,
+  token: string,
+  projectId: number,
+  input: CreateTaskInput,
+): Promise<SeededTask> {
+  const res = await fetch(`${base}/api/projects/${projectId}/tasks`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return json<SeededTask>(res);
+}
+
 export async function getTasks(base: string, token: string, projectId: number): Promise<SeededTask[]> {
   const res = await fetch(`${base}/api/projects/${projectId}/tasks`, {
     headers: { Authorization: `Bearer ${token}` },
