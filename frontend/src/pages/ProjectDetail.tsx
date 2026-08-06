@@ -56,6 +56,21 @@ export function ProjectDetail() {
     );
   }
 
+  // Re-targets the panel at another task in the same project — the panel's
+  // subtask rows and its parent breadcrumb both route through here. `replace`
+  // matches closeTaskPanel: walking parent → subtask → parent shouldn't stack
+  // history entries the browser Back button then has to unwind one by one.
+  function openTaskPanel(taskId: number) {
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("task", String(taskId));
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
   const canEdit = hasPermission(user, "project:write");
 
   if (isLoading) {
@@ -179,6 +194,7 @@ export function ProjectDetail() {
           key={openTaskId}
           projectId={project.id}
           taskId={openTaskId}
+          onOpenTask={openTaskPanel}
           onClose={closeTaskPanel}
         />
       )}

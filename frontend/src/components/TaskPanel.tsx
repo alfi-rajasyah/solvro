@@ -65,6 +65,8 @@ function fmtShort(iso: string | null): string {
 interface TaskPanelProps {
   projectId: number;
   taskId: number;
+  /** Re-target the panel at another task — subtask rows and the parent breadcrumb. */
+  onOpenTask: (id: number) => void;
   onClose: () => void;
 }
 
@@ -72,8 +74,13 @@ interface TaskPanelProps {
  * Right-anchored task detail panel, deep-linked via `?task=<id>`. Replaces
  * TaskFormModal's edit mode everywhere it's opened from a card/row click —
  * TaskFormModal itself is kept around for CREATE only.
+ *
+ * A subtask row opens the same panel targeted at the subtask (mirroring
+ * ProjectList's SubtaskRow), which is what makes every subtask field editable
+ * from here. The breadcrumb is the way back: ProjectDetail keys the panel on
+ * the task id, so a re-target is a remount with no in-panel history.
  */
-export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
+export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelProps) {
   const { user } = useAuth();
   const canEdit = hasPermission(user, "task:write");
 
@@ -93,6 +100,14 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
     .sort((a, b) => a.position - b.position || a.id - b.id);
   const subtasksDone = subtasks.filter((s) => s.status === "DONE").length;
 
+  // Max depth is 1 (backend/src/lib/taskOrdering.ts's assertValidParent), so a
+  // task with a parent can never have subtasks of its own — `isSubtask` is what
+  // hides the whole Subtasks block below rather than offering an "Add subtask"
+  // form whose create call the backend would reject with max_depth_exceeded.
+  const parentId = task?.parentTaskId ?? null;
+  const isSubtask = parentId !== null;
+  const parentTask = parentId === null ? null : ((tasks ?? []).find((t) => t.id === parentId) ?? null);
+
   const [menuOpen, setMenuOpen] = useState(false);
   const [statusMenuOpen, setStatusMenuOpen] = useState(false);
   const [editingTitle, setEditingTitle] = useState(false);
@@ -101,10 +116,20 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
   const [editingAssignee, setEditingAssignee] = useState(false);
   const [editingSection, setEditingSection] = useState(false);
   const [newSubtask, setNewSubtask] = useState("");
+  const [editingSubtaskId, setEditingSubtaskId] = useState<number | null>(null);
+  const [subtaskTitleDraft, setSubtaskTitleDraft] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const panelRef = useRef<HTMLDivElement | null>(null);
+  // One rename edit settles exactly once. Enter, blur, and Escape can each end
+  // the same edit — and whether closing the input ALSO re-fires onBlur (the
+  // focused element is being unmounted) differs by engine; Chromium/React 18.3
+  // does not, others do. Rather than depend on that, every path marks the edit
+  // settled and a second path arriving late is a no-op. Reset per edit, not per
+  // panel: a panel-wide flag left set by one row silently ate the next row's
+  // rename.
+  const renameSettledRef = useRef(false);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -119,6 +144,7 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
     setEditingDates(false);
     setEditingAssignee(false);
     setEditingSection(false);
+    setEditingSubtaskId(null);
     setMenuOpen(false);
     setStatusMenuOpen(false);
     setError(null);
@@ -187,13 +213,48 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
     updateTask.mutate({ id: s.id, patch: { status: s.status === "DONE" ? "TODO" : "DONE" } });
   }
 
+  function startSubtaskRename(s: Task) {
+    renameSettledRef.current = false;
+    setSubtaskTitleDraft(s.title);
+    setEditingSubtaskId(s.id);
+  }
+
+  function cancelSubtaskRename() {
+    renameSettledRef.current = true;
+    setEditingSubtaskId(null);
+  }
+
+  function commitSubtaskRename(e?: FormEvent) {
+    e?.preventDefault();
+    if (renameSettledRef.current) return;
+    renameSettledRef.current = true;
+    const id = editingSubtaskId;
+    setEditingSubtaskId(null);
+    const trimmed = subtaskTitleDraft.trim();
+    if (id === null || !trimmed) return;
+    const current = subtasks.find((s) => s.id === id);
+    if (!current || current.title === trimmed) return;
+    setError(null);
+    updateTask.mutate(
+      { id, patch: { title: trimmed } },
+      {
+        onError: (err) => {
+          setError(err instanceof ApiError ? err.message : "Rename failed.");
+        },
+      },
+    );
+  }
+
   async function handleDelete() {
     if (!task) return;
     setError(null);
     try {
       await deleteTask.mutateAsync(task.id);
       setConfirmDelete(false);
-      onClose();
+      // Deleting a subtask returns to its parent rather than closing outright —
+      // the user reached this panel from the parent's subtask list.
+      if (parentId !== null) onOpenTask(parentId);
+      else onClose();
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Delete failed.");
       setConfirmDelete(false);
@@ -293,6 +354,20 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
+          {/* Parent breadcrumb — the only way back out of a subtask. */}
+          {parentTask && (
+            <button
+              type="button"
+              onClick={() => onOpenTask(parentTask.id)}
+              className="mb-1 flex max-w-full items-center gap-0.5 rounded-sm text-[11px] text-on-surface-variant hover:text-primary outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring"
+            >
+              <span className="material-symbols-outlined text-[13px]" aria-hidden="true">
+                arrow_back
+              </span>
+              <span className="truncate">{parentTask.title}</span>
+            </button>
+          )}
+
           {/* Title + subtitle */}
           {editingTitle ? (
             <form onSubmit={handleTitleSubmit}>
@@ -479,107 +554,152 @@ export function TaskPanel({ projectId, taskId, onClose }: TaskPanelProps) {
             />
           </div>
 
-          {/* Subtasks */}
-          <div className="mt-4">
-            <p className="mb-1.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-              Subtasks {subtasks.length > 0 && `${subtasksDone}/${subtasks.length}`}
-            </p>
-            <Sortable
-              value={subtasks}
-              // No-op: `subtasks` is derived from the tasks query, not local
-              // state. `onValueCommit` below fires the single PATCH, and
-              // `useUpdateTask`'s onMutate optimistically re-packs the query
-              // cache (reorderTasksLocally) — the derived array picks up the
-              // new order on the resulting re-render, no local mirror needed.
-              onValueChange={() => {}}
-              getItemValue={(s) => String(s.id)}
-              onValueCommit={(_value, meta) => {
-                const moved = meta.previousValue[meta.activeIndex];
-                if (!moved) return;
-                updateTask.mutate({ id: moved.id, patch: { position: meta.overIndex } });
-              }}
-              render={<div className="space-y-0.5" />}
-            >
-              {subtasks.map((s) => (
-                <SortableItem
-                  key={s.id}
-                  value={String(s.id)}
-                  // No `disabled` here: the handle is the only thing that
-                  // carries dnd-kit's `listeners` (handle-only activation —
-                  // see the comment on the handle below), and it's only
-                  // rendered at all when `canEdit`, so activation is already
-                  // blocked for read-only users. Passing `disabled={!canEdit}`
-                  // instead dimmed the whole row via the vendor's own
-                  // `disabled && "opacity-50"` (sortable.tsx) — a regression
-                  // vs. the old markup, which only dimmed the arrows.
-                  render={
-                    <div className="flex items-center gap-2 rounded-sm px-1 py-1 text-[13px]" />
-                  }
-                >
-                  <button
-                    type="button"
-                    disabled={!canEdit}
-                    onClick={() => toggleSubtask(s)}
-                    aria-label={s.status === "DONE" ? "Mark not done" : "Mark done"}
-                    className={[
-                      "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
-                      s.status === "DONE"
-                        ? "border-emerald-500 bg-emerald-500 text-white"
-                        : "border-outline-variant hover:border-primary",
-                      canEdit ? "cursor-pointer" : "cursor-default",
-                    ].join(" ")}
-                  >
-                    {s.status === "DONE" && (
-                      <span className="material-symbols-outlined text-[11px] leading-none">
-                        check
-                      </span>
-                    )}
-                  </button>
-                  <span
-                    className={
-                      s.status === "DONE"
-                        ? "flex-1 truncate text-on-surface-variant line-through"
-                        : "flex-1 truncate text-on-surface"
+          {/* Subtasks — hidden entirely on a subtask (max depth is 1). */}
+          {!isSubtask && (
+            <div className="mt-4">
+              <p className="mb-1.5 font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                Subtasks {subtasks.length > 0 && `${subtasksDone}/${subtasks.length}`}
+              </p>
+              <Sortable
+                value={subtasks}
+                // No-op: `subtasks` is derived from the tasks query, not local
+                // state. `onValueCommit` below fires the single PATCH, and
+                // `useUpdateTask`'s onMutate optimistically re-packs the query
+                // cache (reorderTasksLocally) — the derived array picks up the
+                // new order on the resulting re-render, no local mirror needed.
+                onValueChange={() => {}}
+                getItemValue={(s) => String(s.id)}
+                onValueCommit={(_value, meta) => {
+                  const moved = meta.previousValue[meta.activeIndex];
+                  if (!moved) return;
+                  updateTask.mutate({ id: moved.id, patch: { position: meta.overIndex } });
+                }}
+                render={<div className="space-y-0.5" />}
+              >
+                {subtasks.map((s) => (
+                  <SortableItem
+                    key={s.id}
+                    value={String(s.id)}
+                    // No `disabled` here: the handle is the only thing that
+                    // carries dnd-kit's `listeners` (handle-only activation —
+                    // see the comment on the handle below), and it's only
+                    // rendered at all when `canEdit`, so activation is already
+                    // blocked for read-only users. Passing `disabled={!canEdit}`
+                    // instead dimmed the whole row via the vendor's own
+                    // `disabled && "opacity-50"` (sortable.tsx) — a regression
+                    // vs. the old markup, which only dimmed the arrows.
+                    render={
+                      <div className="group/subtask flex items-center gap-2 rounded-sm px-1 py-1 text-[13px]" />
                     }
                   >
-                    {s.title}
-                  </span>
-                  {canEdit && (
-                    <SortableItemHandle
-                      // `cursor={false}` opts out of the vendored component's
-                      // own (unconditional, `!important`) grab-cursor class —
-                      // we own the cursor entirely below via a plain class,
-                      // unconditional here since this whole handle only
-                      // renders when `canEdit` is true.
-                      cursor={false}
-                      render={
-                        <button
-                          type="button"
-                          aria-label="Reorder subtask"
-                          className="material-symbols-outlined shrink-0 touch-none rounded-sm text-sm text-on-surface-variant/60 cursor-grab active:cursor-grabbing outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring"
-                        />
-                      }
+                    <button
+                      type="button"
+                      disabled={!canEdit}
+                      onClick={() => toggleSubtask(s)}
+                      aria-label={s.status === "DONE" ? "Mark not done" : "Mark done"}
+                      className={[
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+                        s.status === "DONE"
+                          ? "border-emerald-500 bg-emerald-500 text-white"
+                          : "border-outline-variant hover:border-primary",
+                        canEdit ? "cursor-pointer" : "cursor-default",
+                      ].join(" ")}
                     >
-                      drag_indicator
-                    </SortableItemHandle>
-                  )}
-                </SortableItem>
-              ))}
-            </Sortable>
-            {canEdit && (
-              <form onSubmit={handleAddSubtask} className="mt-1.5 flex items-center gap-1.5">
-                <span className="material-symbols-outlined text-[13px] text-primary">add</span>
-                <input
-                  type="text"
-                  value={newSubtask}
-                  onChange={(e) => setNewSubtask(e.target.value)}
-                  placeholder="Add subtask"
-                  maxLength={200}
-                  className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden"
-                />
-              </form>
-            )}
-          </div>
+                      {s.status === "DONE" && (
+                        <span className="material-symbols-outlined text-[11px] leading-none">
+                          check
+                        </span>
+                      )}
+                    </button>
+                    {editingSubtaskId === s.id ? (
+                      <form onSubmit={commitSubtaskRename} className="min-w-0 flex-1">
+                        <input
+                          autoFocus
+                          type="text"
+                          value={subtaskTitleDraft}
+                          onChange={(e) => setSubtaskTitleDraft(e.target.value)}
+                          onBlur={() => commitSubtaskRename()}
+                          onKeyDown={(e) => {
+                            if (e.key !== "Escape") return;
+                            // Stop the panel-level Escape listener (document
+                            // keydown, above) from closing the whole panel —
+                            // here Escape means "cancel this rename" only.
+                            e.stopPropagation();
+                            cancelSubtaskRename();
+                          }}
+                          maxLength={200}
+                          aria-label="Subtask title"
+                          className="w-full border-none bg-transparent text-[13px] text-on-surface outline-hidden focus:outline-hidden"
+                        />
+                      </form>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => onOpenTask(s.id)}
+                        title={s.title}
+                        className={[
+                          "min-w-0 flex-1 truncate rounded-sm text-left hover:text-primary outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring",
+                          s.status === "DONE"
+                            ? "text-on-surface-variant line-through"
+                            : "text-on-surface",
+                        ].join(" ")}
+                      >
+                        {s.title}
+                      </button>
+                    )}
+                    {canEdit && editingSubtaskId !== s.id && (
+                      // A single direct button, not the Gantt tree's "…" row menu
+                      // (ui/context-menu.tsx): rename is the only action this row
+                      // needs — delete and every other field live in the subtask's
+                      // own panel, one click away via the title button above.
+                      // Always visible below `md:` — a touch device has no hover
+                      // to reveal it with.
+                      <button
+                        type="button"
+                        onClick={() => startSubtaskRename(s)}
+                        aria-label={`Rename ${s.title}`}
+                        className="material-symbols-outlined -m-1 shrink-0 rounded-sm p-1 text-sm text-on-surface-variant/60 hover:text-primary outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring md:opacity-0 md:group-hover/subtask:opacity-100 md:focus-visible:opacity-100"
+                      >
+                        edit
+                      </button>
+                    )}
+                    {canEdit && (
+                      <SortableItemHandle
+                        // `cursor={false}` opts out of the vendored component's
+                        // own (unconditional, `!important`) grab-cursor class —
+                        // we own the cursor entirely below via a plain class,
+                        // unconditional here since this whole handle only
+                        // renders when `canEdit` is true.
+                        cursor={false}
+                        render={
+                          <button
+                            type="button"
+                            aria-label="Reorder subtask"
+                            className="material-symbols-outlined shrink-0 touch-none rounded-sm text-sm text-on-surface-variant/60 cursor-grab active:cursor-grabbing outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring"
+                          />
+                        }
+                      >
+                        drag_indicator
+                      </SortableItemHandle>
+                    )}
+                  </SortableItem>
+                ))}
+              </Sortable>
+              {canEdit && (
+                <form onSubmit={handleAddSubtask} className="mt-1.5 flex items-center gap-1.5">
+                  <span className="material-symbols-outlined text-[13px] text-primary">add</span>
+                  <input
+                    type="text"
+                    value={newSubtask}
+                    onChange={(e) => setNewSubtask(e.target.value)}
+                    placeholder="Add subtask"
+                    maxLength={200}
+                    className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden"
+                  />
+                </form>
+              )}
+            </div>
+          )}
 
           {error && (
             <Alert variant="destructive" className="mt-4">
