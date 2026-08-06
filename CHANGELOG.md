@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-08-07 — Task side panel: subtasks could be added but never edited
+
+**`frontend/src/components/TaskPanel.tsx`, `frontend/src/pages/ProjectDetail.tsx`** — a subtask row in the task side panel rendered its title as static text, so the panel offered no way to rename a subtask, delete one, or reach any of its other fields; the only writes available were the done toggle, drag-reorder, and the Add-subtask form. Subtask titles are now buttons that open that subtask in the same panel, where every field is editable — matching the List view, which already routed subtask clicks there — and a hover-revealed rename control edits the title in place without leaving the parent. A subtask's panel shows a breadcrumb back to its parent, deleting a subtask returns to the parent instead of closing the panel, and the Subtasks block is hidden on a subtask entirely, since the maximum nesting depth is one and an Add-subtask form there could only produce a rejected request. **`e2e/tests/subtask-edit.spec.ts`** — new spec covering inline rename, cancel-without-saving, a cancelled rename not swallowing the next one, subtask delete returning to the parent, breadcrumb navigation, and the absence of the Add-subtask form on a subtask. **`e2e/fixtures/seed.ts`** — exports a shared `createTask` helper for specs that need throwaway tasks beyond the seeded fixture.
+
 ### Fixed — 2026-08-03 — Project Overview: Status breakdown / Top open risks panels overflowed the viewport
 
 **`frontend/src/pages/views/ProjectOverview.tsx`** — the Overview's right-hand panel column used an implicit grid column, which sizes to its content's minimum width; a long non-wrapping risk description therefore pushed the Status breakdown and Top open risks panels past the page edge instead of truncating. Both the panel-row grid and its nested column now declare `grid-cols-1` (`minmax(0,1fr)` tracks), so the panels stay inside the layout and long risk text ellipsizes as intended.
