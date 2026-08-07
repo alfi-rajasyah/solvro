@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-08-07 — Two end-to-end tests failed for reasons unrelated to the behavior they cover
+
+**`e2e/tests/date-picker.spec.ts`** — the Jakarta-timezone date-picker regression pins the Gantt tree's date label after picking day 5 and day 6 of the browser's current month, and expected that label to read exactly `05 <Mon> – 06 <Mon>`. From the 7th of a month onward that range is in the past, so the Dates cell appends its screen-reader `(overdue)` cue and the assertion failed — the test passed only during the first six days of any month. The expectation now derives whether the cue is present from the same browser-side clock the app itself reads, so it stays exact on either side of the date.
+
+**`e2e/tests/kanban-dnd.spec.ts`** — the subtask-reorder case found the displaced row by accessible name (`/Sub one/`). Once subtask rows gained an editable title button and a rename control, three elements in one row carried that name and the query became ambiguous. The row is now matched by its sortable-item marker, which is the element the drag transform is applied to.
+
 ### Fixed — 2026-08-07 — Gantt PDF export used a fixed A4 sheet, squeezing large schedules and cutting task names
 
 **`frontend/src/lib/gantt/exportPdf.ts`** — the chart page was always A4 landscape (842 × 595 pt) no matter how big the schedule was, so a project with many tasks had its rows compressed toward the 11 pt minimum row height and a long date range was split across pages. The chart sheet is now cut to the chart itself: the page height is the sum of the real row heights, the page width is the whole exported date range at the normal column width, and the schedule lands on a single page. A4 landscape remains the minimum so a small project still exports as an ordinary sheet, the PDF format's own 200-inch page ceiling is respected, and a schedule beyond that ceiling falls back to the previous compress-then-paginate behavior. The task table on the final page keeps its own A4 landscape sheet, since it gains nothing from the wider chart page.
