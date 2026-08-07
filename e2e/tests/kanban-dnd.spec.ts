@@ -256,7 +256,12 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await subTwoHandle.focus();
     await page.keyboard.press("Space");
     await expect(status).not.toBeEmpty();
-    const subOneRow = panel.getByRole("button", { name: /Sub one/ });
+    // The sortable row itself — the element dnd-kit puts the drag transform
+    // on. Matched by `data-slot`, not by role+name: the row, its title
+    // button and its "Rename Sub one" button all expose an accessible name
+    // containing "Sub one", so a `getByRole("button", { name: /Sub one/ })`
+    // resolves to three elements and trips strict mode.
+    const subOneRow = panel.locator('[data-slot="sortable-item"]', { hasText: "Sub one" });
     await expect(async () => {
       await page.keyboard.press("ArrowUp");
       // Displacement = non-zero translate-Y. During a drag EVERY row gets a

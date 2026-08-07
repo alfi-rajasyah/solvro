@@ -824,8 +824,24 @@ test.describe("date pickers — Jakarta timezone regression (UTC-midnight day co
       );
       await treeRow.scrollIntoViewIfNeeded();
       const abbrev = monthName.slice(0, 3);
+      // The Dates cell appends an `sr-only` " (overdue)" cue whenever an open
+      // task's due day is strictly before today (TreeCells.tsx's
+      // `isTaskOverdue`, fed by `dateToDay(new Date())`). Day 6 of the
+      // browser's own current month is past for most of every month, so the
+      // cue's presence is DERIVED from the same Jakarta-forced clock rather
+      // than assumed absent — a hardcoded no-cue expectation passed until the
+      // 6th and then failed for the rest of the month. Same portability rule
+      // as the rest of this block: the "today" comparison happens in the
+      // BROWSER, never against a Node-side `new Date()`.
+      const overdue = await page.evaluate(
+        ({ y, m, d }) => {
+          const now = new Date();
+          return new Date(y, m, d) < new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        },
+        { y: Number(year), m: monthIndex, d: 6 },
+      );
       await expect(treeRow.getByTitle("Click to edit dates")).toHaveText(
-        `05 ${abbrev} – 06 ${abbrev}`,
+        `05 ${abbrev} – 06 ${abbrev}${overdue ? " (overdue)" : ""}`,
       );
     }
 
