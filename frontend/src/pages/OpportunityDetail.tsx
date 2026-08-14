@@ -13,7 +13,8 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { OpportunityFormModal } from "@/components/OpportunityFormModal";
-import { canDragDeal, needsTerminalConfirm } from "@/components/pipeline/boardLogic";
+import { canDeleteDeal, canDragDeal, needsTerminalConfirm } from "@/components/pipeline/boardLogic";
+import { probabilityTone } from "@/components/pipeline/kpi";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import {
   Timeline,
@@ -22,7 +23,7 @@ import {
   TimelineSeparator,
 } from "@/components/reui/timeline";
 import { StageChip } from "@/components/StageChip";
-import { Chip, type Tone } from "@/components/StatusChip";
+import { Chip } from "@/components/StatusChip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -30,7 +31,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ApiError } from "@/lib/api";
-import { hasPermission, useAuth, type AuthUser } from "@/lib/auth";
+import { useAuth } from "@/lib/auth";
 import {
   formatIDR,
   formatPipelineDate,
@@ -60,29 +61,6 @@ import {
 // count so a stage-menu selection always lands at the bottom of the target
 // stage (the board's own drop-at-end default for a non-drag stage change).
 const APPEND_TO_STAGE = 1_000_000;
-
-// Mirrors backend's `assertCanWriteOpportunity(user, "delete", ...)`
-// (backend/src/lib/pipelineAccess.ts): pipeline:delete_all (or the "*"
-// wildcard, handled inside hasPermission) always passes; otherwise the
-// caller needs pipeline:delete_own AND to be the deal's own PIC. Kept local
-// (not imported from boardLogic.ts) — that module only exports the drag/
-// edit gate, and it's off-limits for this task (parallel fix agent).
-function canDeleteDeal(user: AuthUser | null | undefined, deal: Pick<Opportunity, "picId">): boolean {
-  return (
-    hasPermission(user, "pipeline:delete_all") ||
-    (hasPermission(user, "pipeline:delete_own") && deal.picId === user?.id)
-  );
-}
-
-// Win-probability tone bands — duplicated from OpportunityCard.tsx's private
-// (unexported) `probabilityTone` rather than importing it: that file is a
-// "board file" per this task's dispatch brief (owned by the parallel fix
-// agent this task must not touch).
-function winProbabilityTone(p: number): Tone {
-  if (p >= 70) return "emerald";
-  if (p >= 40) return "amber";
-  return "rose";
-}
 
 // Mirrors Velora's `getDocIcon` (../VeloraApp
 // app/opportunities/[id]/detail-content.tsx) — same URL-substring
@@ -241,7 +219,11 @@ export function OpportunityDetail() {
           </div>
 
           <div className="flex shrink-0 items-center gap-3">
-            <span className="text-data-mono text-lg text-primary">{formatIDR(deal.dealValue)}</span>
+            {/* `font-mono`, not `text-data-mono` (N4): `text-data-mono`
+                carries its own fixed 13px font-size token, which conflicts
+                with `text-lg` here — `font-mono` applies only the
+                monospace font family. */}
+            <span className="font-mono text-lg text-primary">{formatIDR(deal.dealValue)}</span>
             {canEditDeal && (
               <button
                 type="button"
@@ -369,7 +351,7 @@ function StageMenu({
           <button
             type="button"
             aria-label="Change stage"
-            className="inline-flex items-center gap-1 rounded-full outline-hidden hover:opacity-80"
+            className="inline-flex items-center gap-1 rounded-full outline-hidden hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             <StageChip stage={stage} />
             <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
@@ -438,7 +420,7 @@ function MetaGrid({ deal }: { deal: Opportunity }) {
           </span>
         </MetaItem>
         <MetaItem icon="show_chart" label="Win probability">
-          <Chip tone={winProbabilityTone(deal.winProbability)}>
+          <Chip tone={probabilityTone(deal.winProbability)}>
             {formatWinProbability(deal.winProbability)}
           </Chip>
         </MetaItem>
@@ -557,7 +539,7 @@ function ActivitySection({
           rows={3}
           maxLength={2000}
           placeholder="Add a note…"
-          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden"
+          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
         />
         <div className="flex items-center justify-between gap-2">
           {addActivity.isError ? (
@@ -658,13 +640,13 @@ function LinksSection({
             value={label}
             onChange={(e) => setLabel(e.target.value)}
             placeholder="Label (e.g. Proposal)"
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden"
+            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
           />
           <input
             value={url}
             onChange={(e) => setUrl(e.target.value)}
             placeholder="https://…"
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden"
+            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
           />
           {formError && <p className="text-[12px] text-error">{formError}</p>}
           <div className="flex justify-end gap-2">
@@ -750,6 +732,16 @@ function LinkRow({
   const [url, setUrl] = useState(link.url);
   const [error, setError] = useState<string | null>(null);
 
+  // `updateLink` is one shared mutation instance passed down to every
+  // `LinkRow` (LinksSection creates it once) — its own `.isPending` is
+  // global across every row's Save button, so saving link A would
+  // incorrectly disable link B's Save button too while A is in flight
+  // (both rows can independently be in `editing` state at once). Scope
+  // "is THIS row's save in flight" by also checking the mutation's own
+  // `.variables` — the acting link id from the most recent `.mutate()`
+  // call — against this row's `link.id`.
+  const isSaving = updateLink.isPending && updateLink.variables?.id === link.id;
+
   function startEdit() {
     setLabel(link.label);
     setUrl(link.url);
@@ -781,12 +773,12 @@ function LinkRow({
         <input
           value={label}
           onChange={(e) => setLabel(e.target.value)}
-          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
         />
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
         />
         {error && <p className="text-[12px] text-error">{error}</p>}
         <div className="flex justify-end gap-2">
@@ -800,10 +792,10 @@ function LinkRow({
           <button
             type="button"
             onClick={handleSave}
-            disabled={updateLink.isPending}
+            disabled={isSaving}
             className="rounded-sm bg-primary px-3 py-1 font-display text-[12px] font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
           >
-            {updateLink.isPending ? "Saving…" : "Save"}
+            {isSaving ? "Saving…" : "Save"}
           </button>
         </div>
       </li>

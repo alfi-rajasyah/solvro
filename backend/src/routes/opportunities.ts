@@ -118,21 +118,58 @@ function normalizeStageLiteral(raw: string): PipelineStage | undefined {
 // gracefully into an "invalid" result entry, not 400 the whole batch. Every
 // field is optional/nullable here; the real required-field, stage-literal,
 // and numeric-range checks run by hand in the row loop below so each row
-// can be judged independently.
+// can be judged independently. String bounds DO live here though (finding
+// B1) — they mirror createOpportunitySchema's limits exactly (title/
+// customerName .max(200), productSolution .max(500), leadSource .max(200))
+// plus activityLog at .max(2000), parity with opportunityItems.ts's
+// createActivitySchema note limit. An over-length field is reported back as
+// a per-row "invalid" reason (see importRowFailureReason below) — never
+// silently truncated, since an unbounded import used to create deals whose
+// every subsequent UI edit would 400 against the stricter update schema.
 const importRowSchema = z
   .object({
-    title: z.string().optional().nullable(),
-    customerName: z.string().optional().nullable(),
+    title: z.string().max(200).optional().nullable(),
+    customerName: z.string().max(200).optional().nullable(),
     dealValue: z.number().optional().nullable(),
     stage: z.string().optional().nullable(),
     picId: z.number().int().positive().optional().nullable(),
     deadline: z.string().optional().nullable(),
-    productSolution: z.string().optional().nullable(),
+    productSolution: z.string().max(500).optional().nullable(),
     winProbability: z.number().optional().nullable(),
-    leadSource: z.string().optional().nullable(),
-    activityLog: z.string().optional().nullable(),
+    leadSource: z.string().max(200).optional().nullable(),
+    activityLog: z.string().max(2000).optional().nullable(),
   })
   .passthrough();
+
+// Human-readable labels for the length-bounded fields above, keyed by the
+// zod issue's single-segment path — used to turn a `too_big` failure into
+// the specific reason B1 asks for ("Title exceeds 200 characters") instead
+// of the generic "Malformed row data" fallback.
+const IMPORT_ROW_LENGTH_LABELS: Record<string, { label: string; max: number }> = {
+  title: { label: "Title", max: 200 },
+  customerName: { label: "Customer name", max: 200 },
+  productSolution: { label: "Product/solution", max: 500 },
+  leadSource: { label: "Lead source", max: 200 },
+  activityLog: { label: "Activity log", max: 2000 },
+};
+
+/**
+ * Turns an `importRowSchema.safeParse` failure into a per-row reason. If
+ * every issue is a recognized over-length field, the reason names the
+ * field(s) and their limit; any other failure shape (wrong type, unknown
+ * shape, etc.) keeps the pre-existing generic fallback rather than guessing.
+ */
+function importRowFailureReason(error: z.ZodError): string {
+  const overLength = error.issues
+    .filter((issue) => issue.code === "too_big" && issue.path.length === 1)
+    .map((issue) => IMPORT_ROW_LENGTH_LABELS[String(issue.path[0])])
+    .filter((meta): meta is { label: string; max: number } => meta !== undefined);
+
+  if (overLength.length === error.issues.length && overLength.length > 0) {
+    return overLength.map((meta) => `${meta.label} exceeds ${meta.max} characters`).join("; ");
+  }
+  return "Malformed row data";
+}
 
 // The envelope IS strictly validated (and 400s the whole call on failure) —
 // unlike a single row, "rows isn't an array" or "rows is empty" isn't a
@@ -403,7 +440,7 @@ opportunitiesRouter.post(
         const parsed = importRowSchema.safeParse(rows[i]);
         if (!parsed.success) {
           invalidCount++;
-          results.push({ row: rowNum, status: "invalid", reason: "Malformed row data" });
+          results.push({ row: rowNum, status: "invalid", reason: importRowFailureReason(parsed.error) });
           continue;
         }
         const raw = parsed.data;
@@ -524,9 +561,15 @@ opportunitiesRouter.post(
     } catch (err) {
       // A whole-call failure (e.g. the initial existing-opportunities fetch
       // itself throwing) — per-row failures never reach this catch, they're
-      // handled inline as "invalid" results above. Best-effort log write:
-      // if the DB is unreachable this insert will fail too, and the
-      // original error is what the caller needs to see either way.
+      // handled inline as "invalid" results above. `PipelineImportLog.
+      // errorMessage` is readable by any pipeline:view holder (GET
+      // /opportunities/imports), so the raw error never lands there — it
+      // could leak stack traces or other internal detail (finding N7). The
+      // real error goes to the shared logger only; the persisted row gets a
+      // generic, safe message. Best-effort log write: if the DB is
+      // unreachable this insert will fail too, and the original error is
+      // what the caller needs to see either way.
+      logger.error({ err }, "opportunity import failed before completion");
       await prisma.pipelineImportLog
         .create({
           data: {
@@ -536,7 +579,7 @@ opportunitiesRouter.post(
             skipCount,
             invalidCount,
             status: "ERROR",
-            errorMessage: err instanceof Error ? err.message : "Unknown error",
+            errorMessage: "Import failed before completion",
           },
         })
         .catch((logErr: unknown) => {
@@ -652,10 +695,19 @@ opportunitiesRouter.post(
   },
 );
 
+// Wrapped in a transaction so the delete and the sibling re-pack are atomic
+// (finding S4): without closeGapInStage, a deleted middle-of-stage row left
+// its stage's stageOrder sequence with a hole (e.g. 0, 2 after deleting the
+// row at 1), and the count()-based "append at the bottom" logic both POST
+// "/" and POST "/import" use would then hand that same slot to the next
+// created/imported row, colliding with the sibling still sitting there.
 opportunitiesRouter.delete("/:id", validate("params", idParamSchema), async (req, res) => {
   const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
   const current = await findOpportunityOr404(id);
   assertCanWriteOpportunity(req.user!, "delete", current);
-  await prisma.opportunity.delete({ where: { id } });
+  await prisma.$transaction(async (tx) => {
+    await tx.opportunity.delete({ where: { id } });
+    await closeGapInStage(tx, current.stage, id);
+  });
   res.status(204).end();
 });

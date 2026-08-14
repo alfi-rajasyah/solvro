@@ -12,9 +12,25 @@
 // wonAt) is already on that structural type, and `Opportunity` satisfies it
 // structurally (adapter.ts's own doc comment), so the board container can
 // pass its query data straight through with no cast.
+import type { Tone } from "@/components/StatusChip";
 import { dateToDay, dayToDate } from "@/lib/dateField";
 import { TERMINAL_STAGES, type PipelineStage } from "@/lib/pipelineFormat";
 import { PIPELINE_STAGES, type PipelineBoardDeal } from "./adapter";
+
+/**
+ * Win-probability tone bands — mirrors Velora's `getProbabilityColor`
+ * (../VeloraApp components/kanban/card.tsx: >=70 green, >=40 yellow, else
+ * red) semantics, remapped onto the house chip tones instead of raw
+ * Tailwind green-100/yellow-100/red-100. Single source of truth for every
+ * Pipeline surface that renders a win% chip (OpportunityCard.tsx,
+ * PipelineList.tsx, OpportunityDetail.tsx) — those three previously each
+ * declared an identical, unexported copy (finding S10).
+ */
+export function probabilityTone(p: number): Tone {
+  if (p >= 70) return "emerald";
+  if (p >= 40) return "amber";
+  return "rose";
+}
 
 type Deal = Pick<PipelineBoardDeal, "dealValue" | "stage" | "picId" | "deadline" | "wonAt">;
 

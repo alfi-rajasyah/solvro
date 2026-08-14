@@ -39,22 +39,14 @@ import { Alert, AlertDescription } from "@/components/reui/alert";
 import { formatIDRCompact } from "@/lib/pipelineFormat";
 import { useOpportunities } from "@/lib/queries";
 
-const CURRENT_YEAR = new Date().getFullYear();
-
-const QUARTER_LABELS: Record<QuarterId, string> = {
-  Q1: `Q1 · Jan–Mar ${CURRENT_YEAR}`,
-  Q2: `Q2 · Apr–Jun ${CURRENT_YEAR}`,
-  Q3: `Q3 · Jul–Sep ${CURRENT_YEAR}`,
-  Q4: `Q4 · Oct–Dec ${CURRENT_YEAR}`,
-  OTHER: "No date",
-};
-
 // Per-quarter accent = the four chip tones in order (PRD §2.4: "blue /
 // emerald / amber / violet"), same tone→class pairs `StatusChip.tsx`'s
-// `Chip` component uses — inlined locally rather than imported since that
-// component's `Tone` type isn't exported and this is a header treatment,
-// not a `Chip` instance (same "copy, don't extract" precedent
-// PipelineKpiBar.tsx's `FUNNEL_FILL` documents).
+// `Chip` component uses. `Tone` (StatusChip.tsx) is exported today, but this
+// table isn't keyed by `Tone` — it's keyed by `QuarterId` and pairs a
+// header+label class per quarter, a different shape than Chip's
+// `Record<Tone, string>` — so importing `Tone` wouldn't let this reuse
+// Chip's table directly; it stays inlined locally, same "copy, don't
+// extract" precedent PipelineKpiBar.tsx's `FUNNEL_FILL` documents.
 const QUARTER_ACCENT: Record<QuarterId, { header: string; label: string }> = {
   Q1: { header: "bg-primary/10 dark:bg-primary/20", label: "text-primary" },
   Q2: { header: "bg-chip-emerald-bg", label: "text-chip-emerald-text" },
@@ -66,6 +58,21 @@ const QUARTER_ACCENT: Record<QuarterId, { header: string; label: string }> = {
 export function PipelineQuarter() {
   const navigate = useNavigate();
   const { data: deals, isLoading, isError, error } = useOpportunities();
+
+  // Computed per-render, not module scope — a year rollover while the tab
+  // stays mounted picks up the new year immediately rather than needing a
+  // full page reload to re-evaluate a load-time module constant.
+  const currentYear = new Date().getFullYear();
+  // "Other" holds both no-date deals AND deals whose request date falls
+  // outside `currentYear` (getQuarterId/quarterLogic.ts) — "No date" alone
+  // undersold the second case.
+  const quarterLabels: Record<QuarterId, string> = {
+    Q1: `Q1 · Jan–Mar ${currentYear}`,
+    Q2: `Q2 · Apr–Jun ${currentYear}`,
+    Q3: `Q3 · Jul–Sep ${currentYear}`,
+    Q4: `Q4 · Oct–Dec ${currentYear}`,
+    OTHER: "Other",
+  };
 
   if (isLoading) {
     return (
@@ -96,7 +103,7 @@ export function PipelineQuarter() {
     return <EmptyQuarterState />;
   }
 
-  const columns = groupByQuarter(allDeals, CURRENT_YEAR);
+  const columns = groupByQuarter(allDeals, currentYear);
 
   return (
     <div className="flex gap-4 overflow-x-auto pb-2">
@@ -108,7 +115,7 @@ export function PipelineQuarter() {
         return (
           <div key={id} className="flex w-[85vw] shrink-0 flex-col sm:w-72">
             <div className={`rounded-t-xl px-3 py-2 ${accent.header}`}>
-              <div className={`text-label-caps ${accent.label}`}>{QUARTER_LABELS[id]}</div>
+              <div className={`text-label-caps ${accent.label}`}>{quarterLabels[id]}</div>
               <div className="mt-1 flex items-center gap-2 text-xs text-on-surface-variant">
                 <span>
                   {columnDeals.length} {columnDeals.length === 1 ? "deal" : "deals"}

@@ -210,6 +210,53 @@ describe("PATCH /opportunities/:id — edit_own / edit_all gate", () => {
   });
 });
 
+describe("DELETE /opportunities/:id — closes the stage-order gap it leaves (S4)", () => {
+  it("re-packs the stage densely after deleting a middle sibling, so the next create/import lands last", async () => {
+    const sa = await createSaLikeUser();
+    // WAITING_RESPONSE: untouched by any earlier test in this file.
+    const first = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
+    const middle = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
+    const last = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
+    const firstId = first.body.id as string;
+    const middleId = middle.body.id as string;
+    const lastId = last.body.id as string;
+    // Appended at the bottom in creation order: first=0, middle=1, last=2.
+    expect((await getOpportunity(sa.token, firstId)).body.stageOrder).toBe(0);
+    expect((await getOpportunity(sa.token, middleId)).body.stageOrder).toBe(1);
+    expect((await getOpportunity(sa.token, lastId)).body.stageOrder).toBe(2);
+
+    const deleted = await deleteOpportunity(sa.token, middleId);
+    expect(deleted.status).toBe(204);
+
+    // Without the gap-close, `last` would still sit at stageOrder 2 (a hole
+    // at 1) and a naive count()-based append would hand the next row that
+    // same slot 2, colliding with `last`.
+    expect((await getOpportunity(sa.token, firstId)).body.stageOrder).toBe(0);
+    expect((await getOpportunity(sa.token, lastId)).body.stageOrder).toBe(1);
+
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
+    expect(created.status).toBe(201);
+    expect(created.body.stageOrder).toBe(2);
+
+    const imported = await request(app)
+      .post("/opportunities/import")
+      .set("Authorization", `Bearer ${sa.token}`)
+      .send({
+        rows: [
+          {
+            title: "ImpTest S4 Gap",
+            customerName: "ImpTest S4 Gap Co",
+            stage: "waiting_response",
+          },
+        ],
+      });
+    expect(imported.status).toBe(200);
+    expect(imported.body.validCount).toBe(1);
+    const importedId = imported.body.results[0].id as string;
+    expect((await getOpportunity(sa.token, importedId)).body.stageOrder).toBe(3);
+  });
+});
+
 describe("DELETE /opportunities/:id — delete_own / delete_all gate", () => {
   it("lets a delete_own holder delete their own deal", async () => {
     const sa = await createSaLikeUser();

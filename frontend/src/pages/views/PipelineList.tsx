@@ -43,7 +43,7 @@
 //   (open, edit)") — edit lives on the detail page's own Edit button
 //   (OpportunityDetail.tsx), out of this task's scope.
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import {
   getCoreRowModel,
   getSortedRowModel,
@@ -52,7 +52,7 @@ import {
   type SortingState,
 } from "@tanstack/react-table";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
-import { isDealOverdue } from "@/components/pipeline/kpi";
+import { isDealOverdue, probabilityTone } from "@/components/pipeline/kpi";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-grid";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
@@ -70,17 +70,6 @@ import { personNameSortingFn } from "@/lib/tableSort";
 // constant") — same convention as Tasks.tsx's `EMPTY_TASKS`, avoiding a new
 // array identity on every render while the query is loading/undefined.
 const EMPTY_DEALS: Opportunity[] = [];
-
-// Win-probability tone bands — same thresholds as OpportunityCard.tsx's
-// (unexported, module-local) `probabilityTone`: >=70 emerald, >=40 amber,
-// else rose, mirroring Velora's `getProbabilityColor`. Duplicated rather
-// than imported since OpportunityCard.tsx doesn't export it and this task
-// is scoped to a new file only.
-function probabilityTone(p: number): "emerald" | "amber" | "rose" {
-  if (p >= 70) return "emerald";
-  if (p >= 40) return "amber";
-  return "rose";
-}
 
 export function PipelineList() {
   const { data: deals, isLoading, isError, error } = useOpportunities();
@@ -117,7 +106,20 @@ function PipelineListGrid({ deals, isLoading }: { deals: Opportunity[]; isLoadin
         enableSorting: false,
         cell: ({ row }) => (
           <div className="min-w-0">
-            <p className="truncate font-medium text-on-surface">{row.original.title}</p>
+            {/* Title as a real `<Link>` — keyboard/screen-reader route to
+                the detail page (`onRowClick` below fires on a row click,
+                but a data-grid row isn't natively Tab-reachable).
+                `stopPropagation` keeps the click from also bubbling to
+                `onRowClick` and double-navigating; the row click stays the
+                mouse affordance. Unobtrusive styling — same ink color as
+                before, `hover:text-primary` only as the extra affordance. */}
+            <Link
+              to={`/pipeline/${row.original.id}`}
+              onClick={(e) => e.stopPropagation()}
+              className="block truncate rounded-sm font-medium text-on-surface hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              {row.original.title}
+            </Link>
             <p className="truncate text-xs text-on-surface-variant">{row.original.customerName}</p>
           </div>
         ),

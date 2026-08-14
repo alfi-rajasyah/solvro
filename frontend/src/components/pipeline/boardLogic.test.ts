@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AuthUser } from "@/lib/auth";
-import { canDragDeal, needsTerminalConfirm } from "./boardLogic";
+import { canDeleteDeal, canDragDeal, needsTerminalConfirm } from "./boardLogic";
 
 function user(overrides: Partial<AuthUser> = {}): AuthUser {
   return {
@@ -36,6 +36,34 @@ describe("canDragDeal", () => {
   it("denies for a null/undefined user", () => {
     expect(canDragDeal(null, { picId: 1 })).toBe(false);
     expect(canDragDeal(undefined, { picId: 1 })).toBe(false);
+  });
+});
+
+describe("canDeleteDeal", () => {
+  it("denies a user with no pipeline permissions", () => {
+    expect(canDeleteDeal(user({ permissions: [] }), { picId: 1 })).toBe(false);
+  });
+
+  it("allows delete_all regardless of ownership", () => {
+    expect(canDeleteDeal(user({ id: 1, permissions: ["pipeline:delete_all"] }), { picId: 2 })).toBe(
+      true,
+    );
+  });
+
+  it("allows delete_own only when the deal's picId matches the user", () => {
+    const u = user({ id: 1, permissions: ["pipeline:delete_own"] });
+    expect(canDeleteDeal(u, { picId: 1 })).toBe(true);
+    expect(canDeleteDeal(u, { picId: 2 })).toBe(false);
+    expect(canDeleteDeal(u, { picId: null })).toBe(false);
+  });
+
+  it("the '*' wildcard allows everything, same as the backend's hasPermission", () => {
+    expect(canDeleteDeal(user({ id: 1, permissions: ["*"] }), { picId: 999 })).toBe(true);
+  });
+
+  it("denies for a null/undefined user", () => {
+    expect(canDeleteDeal(null, { picId: 1 })).toBe(false);
+    expect(canDeleteDeal(undefined, { picId: 1 })).toBe(false);
   });
 });
 

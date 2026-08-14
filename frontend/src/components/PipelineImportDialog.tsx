@@ -12,12 +12,20 @@
 //
 // Errors render inline via `reui/alert.tsx` — Solvro has no toast system
 // (frontend/CLAUDE.md / PRD §2.11).
-import { useCallback, useRef, useState, type ChangeEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "react";
 import { Modal } from "./Modal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import {
+  extractDataRows,
+  IMPORT_ROW_CAP,
+  IMPORTABLE_STAGES,
+  parseImportRow,
+  TEMPLATE_HEADERS,
+  type ParsedRow,
+} from "@/components/pipeline/importParse";
 import { Chip } from "@/components/StatusChip";
 import { ApiError } from "@/lib/api";
-import { formatIDR, STAGE_ORDER, type PipelineStage } from "@/lib/pipelineFormat";
+import { formatIDR, type PipelineStage } from "@/lib/pipelineFormat";
 import {
   useImportOpportunities,
   useUsers,
@@ -30,80 +38,7 @@ interface Props {
   onClose: () => void;
 }
 
-// Stages the import template accepts — mirrors the reference's
-// `VALID_STAGES` (../VeloraApp components/import-excel-dialog.tsx) and
-// backend/src/routes/opportunities.ts's own rule that HOLD is reached only
-// through the board's move flow, never on create (and by extension, import).
-const IMPORTABLE_STAGES: PipelineStage[] = STAGE_ORDER.filter((s) => s !== "HOLD");
-
-// Mirrors backend/src/routes/opportunities.ts's `IMPORT_ROW_CAP` — the
-// server 400s the whole call above this, so the dialog caps what it sends
-// in one request rather than letting a large workbook silently fail.
-const IMPORT_ROW_CAP = 500;
-
-const TEMPLATE_HEADERS = [
-  "Title",
-  "Company",
-  "Deal Value",
-  "Stage",
-  "PIC",
-  "Deadline",
-  "Product / Solution",
-  "Win Probability",
-  "Lead Source",
-  "Activity Log",
-];
-
 type Step = "upload" | "preview" | "done";
-
-interface ParsedRow {
-  rowNum: number;
-  title: string;
-  customerName: string;
-  dealValue: number;
-  // Uppercased candidate stage token — may not be a valid PipelineStage;
-  // `status`/`errors` below are what gates whether it's ever submitted.
-  stage: string;
-  picName: string;
-  picId: number | null;
-  deadline: string | null; // "yyyy-MM-dd" day string, never an ISO instant
-  productSolution: string;
-  winProbability: number;
-  leadSource: string;
-  activityLog: string;
-  status: "valid" | "invalid";
-  errors: string[];
-}
-
-/**
- * Cell value -> "yyyy-MM-dd" day string. Handles both a "DD/MM/YYYY" string
- * (the template's own format) and an Excel serial date number, matching the
- * reference's `parseExcelDate` — Excel serials carry no timezone of their
- * own, so the UTC-getter math below is exact, not a TZ-drift shortcut.
- */
-function parseExcelDate(val: unknown): string | null {
-  if (val === null || val === undefined || val === "") return null;
-  if (typeof val === "string") {
-    const trimmed = val.trim();
-    const parts = trimmed.split("/");
-    if (parts.length === 3) {
-      const [d, m, y] = parts;
-      if (y.length === 4) return `${y}-${m.padStart(2, "0")}-${d.padStart(2, "0")}`;
-    }
-    if (trimmed.includes("-")) return trimmed.split("T")[0];
-    return null;
-  }
-  if (typeof val === "number") {
-    const ms = Math.round((val - 25569) * 86400 * 1000);
-    const d = new Date(ms);
-    if (Number.isNaN(d.getTime())) return null;
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, "0");
-    const day = String(d.getUTCDate()).padStart(2, "0");
-    return `${y}-${m}-${day}`;
-  }
-  return null;
-}
 
 /** Generates and downloads the import template workbook, client-side. */
 function downloadTemplate() {
@@ -133,7 +68,7 @@ function downloadTemplate() {
       "* Optional: seeds the deal's first activity note",
     ];
 
-    const ws = XLSX.utils.aoa_to_sheet([TEMPLATE_HEADERS, example, note]);
+    const ws = XLSX.utils.aoa_to_sheet([[...TEMPLATE_HEADERS], example, note]);
     ws["!cols"] = [
       { wch: 30 },
       { wch: 25 },
@@ -155,8 +90,17 @@ function downloadTemplate() {
 
 export function PipelineImportDialog({ open, onClose }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
-  const { data: users } = useUsers();
+  // N6: PIC matching (`picByUsername` in `handleFile` below) silently comes
+  // up empty for every row if the file gets picked/parsed before this query
+  // resolves — surfaced + gated on below rather than left implicit.
+  const { data: users, isLoading: usersLoading, isError: usersError } = useUsers();
   const importMutation = useImportOpportunities();
+
+  // S5: focused on every step transition so a screen reader announces the
+  // new step (upload/preview/done) — only one of the three step containers
+  // below is ever mounted at a time, so one ref/effect pair covers all
+  // three.
+  const stepRef = useRef<HTMLDivElement>(null);
 
   const [step, setStep] = useState<Step>("upload");
   const [fileName, setFileName] = useState("");
@@ -172,6 +116,10 @@ export function PipelineImportDialog({ open, onClose }: Props) {
   // `submittedRows[i]` since the server iterates `rows` in call order.
   const [submittedRows, setSubmittedRows] = useState<ParsedRow[]>([]);
   const [submitError, setSubmitError] = useState<string | null>(null);
+
+  useEffect(() => {
+    stepRef.current?.focus();
+  }, [step]);
 
   const reset = useCallback(() => {
     setStep("upload");
@@ -210,71 +158,8 @@ export function PipelineImportDialog({ open, onClose }: Props) {
       const picByUsername = new Map<string, number>();
       for (const u of users ?? []) picByUsername.set(u.username.toLowerCase(), u.id);
 
-      // Skip the header row and any note row (starts with "*", same
-      // convention the template itself writes its hints with).
-      const dataRows = raw.slice(1).filter((r) => {
-        const hasData = r.some((cell) => String(cell).trim() !== "");
-        const isNote = String(r[0] ?? "").trim().startsWith("*");
-        return hasData && !isNote;
-      });
-
-      const parsed: ParsedRow[] = dataRows.map((r, idx) => {
-        const errors: string[] = [];
-        const title = String(r[0] ?? "").trim();
-        const customerName = String(r[1] ?? "").trim();
-        const dealValueRaw = r[2];
-        const stageRaw = String(r[3] ?? "")
-          .trim()
-          .toLowerCase()
-          .replace(/ /g, "_");
-        const picNameRaw = String(r[4] ?? "").trim();
-        const deadlineRaw = r[5];
-        const productSolution = String(r[6] ?? "").trim();
-        const winProbRaw = r[7];
-        const leadSource = String(r[8] ?? "").trim();
-        const activityLog = String(r[9] ?? "").trim();
-
-        if (!title) errors.push("Title is required.");
-        if (!customerName) errors.push("Company is required.");
-
-        const dealValue = Number.parseFloat(String(dealValueRaw).replace(/[^0-9.]/g, ""));
-        if (!Number.isFinite(dealValue) || dealValue < 0) {
-          errors.push("Deal Value must be a number.");
-        }
-
-        const stageUpper = stageRaw.toUpperCase();
-        if (!IMPORTABLE_STAGES.includes(stageUpper as PipelineStage)) {
-          errors.push(
-            `Invalid stage "${String(r[3] ?? "")}" — use one of: ${IMPORTABLE_STAGES.map((s) => s.toLowerCase()).join(", ")}.`,
-          );
-        }
-
-        const winProbParsed = Number.parseInt(String(winProbRaw), 10);
-        const winProbability = Number.isFinite(winProbParsed) ? winProbParsed : 50;
-        if (String(winProbRaw).trim() !== "" && (winProbability < 0 || winProbability > 100)) {
-          errors.push("Win Probability must be between 0 and 100.");
-        }
-
-        const deadline = parseExcelDate(deadlineRaw);
-        const picId = picNameRaw ? (picByUsername.get(picNameRaw.toLowerCase()) ?? null) : null;
-
-        return {
-          rowNum: idx + 2,
-          title,
-          customerName,
-          dealValue: Number.isFinite(dealValue) ? dealValue : 0,
-          stage: stageUpper,
-          picName: picNameRaw,
-          picId,
-          deadline,
-          productSolution,
-          winProbability,
-          leadSource,
-          activityLog,
-          status: errors.length > 0 ? "invalid" : "valid",
-          errors,
-        };
-      });
+      const dataRows = extractDataRows(raw);
+      const parsed: ParsedRow[] = dataRows.map((r, idx) => parseImportRow(r, idx, picByUsername));
 
       setRows(parsed);
       setStep("preview");
@@ -282,6 +167,11 @@ export function PipelineImportDialog({ open, onClose }: Props) {
       setParseError("Could not read the file. Make sure it's a valid .xlsx or .csv export.");
     } finally {
       setParsing(false);
+      // N4: without this, re-picking the SAME file (e.g. fixed externally
+      // and re-uploaded under the same name) doesn't fire another `change`
+      // event — the input's value is unchanged from the browser's
+      // perspective, so nothing re-triggers `handleFile`.
+      if (fileRef.current) fileRef.current.value = "";
     }
   }
 
@@ -375,7 +265,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
       }
     >
       {step === "upload" && (
-        <div className="space-y-4">
+        <div ref={stepRef} tabIndex={-1} className="space-y-4 focus:outline-hidden">
           <div className="rounded-lg border border-dashed border-outline-variant bg-surface-container-low p-4">
             <p className="mb-1 text-sm font-semibold text-on-surface">Don't have a template yet?</p>
             <p className="mb-3 text-xs text-on-surface-variant">
@@ -406,17 +296,46 @@ export function PipelineImportDialog({ open, onClose }: Props) {
             </div>
           </div>
 
+          {/* N6: PIC matching depends on `users` being loaded — block the
+              picker until the query resolves (success OR error) rather than
+              letting a parse race ahead with an empty picByUsername map. */}
+          {usersLoading && (
+            <p role="status" aria-live="polite" className="text-xs text-on-surface-variant">
+              Loading team members for PIC matching…
+            </p>
+          )}
+          {usersError && (
+            <Alert variant="warning">
+              <AlertDescription>
+                Couldn't load team members — PIC name matching will be skipped for this import.
+              </AlertDescription>
+            </Alert>
+          )}
+
           <div
             role="button"
-            tabIndex={0}
-            onClick={() => fileRef.current?.click()}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") fileRef.current?.click();
+            aria-disabled={usersLoading}
+            tabIndex={usersLoading ? -1 : 0}
+            onClick={() => {
+              if (usersLoading) return;
+              fileRef.current?.click();
             }}
-            className="cursor-pointer rounded-lg border-2 border-dashed border-outline-variant p-8 text-center transition-colors hover:border-primary"
+            onKeyDown={(e) => {
+              if (usersLoading) return;
+              if (e.key === "Enter" || e.key === " ") {
+                // N5: without this, Space also scrolls the modal body (the
+                // browser's default action for Space on a non-native,
+                // focusable element) on top of opening the file picker.
+                e.preventDefault();
+                fileRef.current?.click();
+              }
+            }}
+            className={`rounded-lg border-2 border-dashed border-outline-variant p-8 text-center transition-colors ${
+              usersLoading ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-primary"
+            }`}
           >
             {parsing ? (
-              <div className="flex flex-col items-center gap-2">
+              <div role="status" aria-live="polite" className="flex flex-col items-center gap-2">
                 <span className="material-symbols-outlined animate-spin text-3xl text-primary" aria-hidden="true">
                   progress_activity
                 </span>
@@ -438,6 +357,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
             type="file"
             accept=".xlsx,.csv"
             className="hidden"
+            disabled={usersLoading}
             onChange={handleFile}
           />
 
@@ -450,10 +370,16 @@ export function PipelineImportDialog({ open, onClose }: Props) {
       )}
 
       {step === "preview" && (
-        <div className="space-y-4">
+        <div ref={stepRef} tabIndex={-1} className="space-y-4 focus:outline-hidden">
           <div className="flex flex-wrap items-center gap-3">
-            <Chip tone="emerald">{validCount} valid</Chip>
-            {invalidCount > 0 && <Chip tone="rose">{invalidCount} invalid</Chip>}
+            {/* S5: live region covers just the summary chips, not the
+                "Change file" button — a screen reader shouldn't re-announce
+                the button's own (unchanging) label every time the chip
+                counts update. */}
+            <div role="status" aria-live="polite" className="flex flex-wrap items-center gap-3">
+              <Chip tone="emerald">{validCount} valid</Chip>
+              {invalidCount > 0 && <Chip tone="rose">{invalidCount} invalid</Chip>}
+            </div>
             <button
               type="button"
               onClick={handleChangeFile}
@@ -545,11 +471,17 @@ export function PipelineImportDialog({ open, onClose }: Props) {
       )}
 
       {step === "done" && result && (
-        <div className="space-y-4">
+        <div ref={stepRef} tabIndex={-1} className="space-y-4 focus:outline-hidden">
           <div className="flex flex-wrap justify-center gap-6 py-2 text-center">
             <div>
               <p className="text-2xl font-bold text-on-surface">{result.totalRows}</p>
-              <p className="mt-0.5 text-xs text-on-surface-variant">Total rows</p>
+              {/* S3: relabeled from "Total rows" — `result.totalRows` is the
+                  count of rows POSTed to the server (client-valid rows only,
+                  capped at IMPORT_ROW_CAP), not every row in the workbook.
+                  The old "Total rows" label read as "every row we saw", which
+                  silently hid however many rows `invalidCount` (below) never
+                  made it past the client-side preview at all. */}
+              <p className="mt-0.5 text-xs text-on-surface-variant">Rows submitted</p>
             </div>
             <div>
               <p className="text-2xl font-bold text-primary">{result.validCount}</p>
@@ -562,6 +494,19 @@ export function PipelineImportDialog({ open, onClose }: Props) {
             <div>
               <p className="text-2xl font-bold text-error">{result.invalidCount}</p>
               <p className="mt-0.5 text-xs text-on-surface-variant">Invalid</p>
+            </div>
+            <div>
+              {/* S3: `invalidCount` here is the OUTER component-scope value
+                  (rows.filter(status === "invalid").length) computed from the
+                  preview's full parsed set, which is still around unchanged —
+                  NOT `result.invalidCount` (that one only counts rows the
+                  SERVER rejected among the ones actually submitted). These
+                  rows never left the browser, so the server's response has
+                  no record of them at all; this tile is the only place they
+                  stay visible instead of silently vanishing between the
+                  preview and done steps. */}
+              <p className="text-2xl font-bold text-on-surface-variant">{invalidCount}</p>
+              <p className="mt-0.5 text-xs text-on-surface-variant">Rejected before upload</p>
             </div>
           </div>
 
@@ -579,12 +524,22 @@ export function PipelineImportDialog({ open, onClose }: Props) {
                 </thead>
                 <tbody>
                   {result.results.map((r, i) => {
-                    {/* `row` is 1-based into the rows this dialog submitted —
-                        cross-reference it to show what the user recognizes. */}
+                    // `r.row` is 1-based into the rows THIS DIALOG SUBMITTED
+                    // (client-valid rows only) — used here purely to look up
+                    // `submittedRows[r.row - 1]`, never rendered directly.
                     const submitted = submittedRows[r.row - 1];
                     return (
                       <tr key={`${r.row}-${i}`}>
-                        <td className="px-3 py-2 text-on-surface-variant">{r.row}</td>
+                        {/* S3: the workbook row number (matches the preview
+                            step's own "#" column), not `r.row` — `r.row` is
+                            an index into the submitted subset, so on a
+                            workbook where earlier rows were rejected
+                            client-side, it would relabel e.g. workbook row 4
+                            as "#1" here, disagreeing with what the preview
+                            step showed for that same row. */}
+                        <td className="px-3 py-2 text-on-surface-variant">
+                          {submitted?.rowNum ?? r.row}
+                        </td>
                         <td className="max-w-[150px] truncate px-3 py-2 text-on-surface">
                           {submitted?.title || "—"}
                         </td>

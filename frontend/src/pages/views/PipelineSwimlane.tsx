@@ -80,7 +80,7 @@
 // applies (see `data-grid-scroll-area.tsx` / `data-grid.tsx`'s
 // `headerSticky: "sticky top-0 z-15 ..."` default) — the house precedent
 // this task's dispatch brief asked to check for.
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { isDealOverdue } from "@/components/pipeline/kpi";
 import {
@@ -136,7 +136,13 @@ export function PipelineSwimlane() {
     return <EmptySwimlaneState />;
   }
 
-  const lanes = groupIntoLanes(allDeals);
+  // DROP deals never appear in a lane's stage cells (DROP isn't one of
+  // SWIMLANE_STAGES), but groupIntoLanes itself doesn't filter by stage — a
+  // DROP deal for a PIC would otherwise still land in that lane's
+  // `deals` array and skew `laneSummary`'s active-deal count/total (see
+  // swimlaneLogic.ts's `laneSummary` doc comment). Filtering here, before
+  // grouping, is what actually keeps DROP out of every lane.
+  const lanes = groupIntoLanes(allDeals.filter((d) => d.stage !== "DROP"));
   const columnTotals = stageSummaries(lanes);
 
   return (
@@ -151,35 +157,47 @@ export function PipelineSwimlane() {
           gridTemplateColumns: `${LANE_COLUMN_WIDTH} repeat(${SWIMLANE_STAGES.length}, minmax(${STAGE_COLUMN_MIN_WIDTH}, 1fr))`,
         }}
       >
-        {/* Corner cell — sticky on both axes, sits above every other sticky cell. */}
-        <div className="sticky left-0 top-0 z-20 border-b border-r border-outline-variant bg-surface-container" />
+        {/* Header row — wrapped in `role="row"` (`display: contents` keeps
+            its children direct grid participants, so CSS Grid auto-
+            placement is unaffected) so the outer `role="table"` owns actual
+            rows, per ARIA's table/row/cell nesting requirement — previously
+            the corner cell and column headers landed straight under
+            `role="table"` with no row grouping at all. */}
+        <div role="row" className="contents">
+          {/* Corner cell — sticky on both axes, sits above every other sticky cell. */}
+          <div className="sticky left-0 top-0 z-20 border-b border-r border-outline-variant bg-surface-container" />
 
-        {/* Column (stage) headers — sticky top only. */}
-        {SWIMLANE_STAGES.map((stage) => {
-          const summary = columnTotals.find((s) => s.stage === stage);
-          const count = summary?.count ?? 0;
-          const total = summary?.total ?? 0;
-          return (
-            <div
-              key={stage}
-              role="columnheader"
-              className="sticky top-0 z-10 flex flex-col items-center gap-1 border-b border-outline-variant bg-surface-container px-2 py-2"
-            >
-              <StageChip stage={stage} />
-              <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant">
-                <span>
-                  {count} {count === 1 ? "deal" : "deals"}
-                </span>
-                <span>·</span>
-                <span className="text-data-mono">{formatIDRCompact(total)}</span>
+          {/* Column (stage) headers — sticky top only. */}
+          {SWIMLANE_STAGES.map((stage) => {
+            const summary = columnTotals.find((s) => s.stage === stage);
+            const count = summary?.count ?? 0;
+            const total = summary?.total ?? 0;
+            return (
+              <div
+                key={stage}
+                role="columnheader"
+                className="sticky top-0 z-10 flex flex-col items-center gap-1 border-b border-outline-variant bg-surface-container px-2 py-2"
+              >
+                <StageChip stage={stage} />
+                <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant">
+                  <span>
+                    {count} {count === 1 ? "deal" : "deals"}
+                  </span>
+                  <span>·</span>
+                  {/* `font-mono`, not `text-data-mono` (same N4 finding
+                      SwimlaneCard below already fixed): `text-data-mono`
+                      carries its own fixed 13px font-size token, which
+                      conflicts with this `text-[11px]` row. */}
+                  <span className="font-mono">{formatIDRCompact(total)}</span>
+                </div>
               </div>
-            </div>
-          );
-        })}
+            );
+          })}
+        </div>
 
-        {/* Lane (PIC) rows — each row is a React Fragment so the lane-header
-            cell and its stage cells all land as direct children of the grid
-            container, which is what CSS Grid's row auto-placement needs. */}
+        {/* Lane (PIC) rows — each is its own `role="row"` wrapper (see the
+            header row's comment above for why `display: contents` is what
+            keeps this ARIA-only wrapper invisible to CSS Grid). */}
         {lanes.map((lane) => {
           const summary = laneSummary(lane);
           return (
@@ -199,7 +217,7 @@ function LaneRow({
   summary: { count: number; total: number };
 }) {
   return (
-    <>
+    <div role="row" className="contents">
       {/* Lane header — sticky left only. */}
       <div
         role="rowheader"
@@ -214,7 +232,9 @@ function LaneRow({
             {summary.count} active {summary.count === 1 ? "deal" : "deals"}
           </span>
           <span>·</span>
-          <span className="text-data-mono">{formatIDRCompact(summary.total)}</span>
+          {/* `font-mono`, not `text-data-mono` — same N4 finding as the
+              column-header total above. */}
+          <span className="font-mono">{formatIDRCompact(summary.total)}</span>
         </div>
       </div>
 
@@ -237,7 +257,7 @@ function LaneRow({
           </div>
         );
       })}
-    </>
+    </div>
   );
 }
 
@@ -253,7 +273,20 @@ function SwimlaneCard({ deal }: { deal: SwimlaneDeal }) {
         overdue ? "border-l-2 border-l-chip-rose-text border-outline-variant" : "border-outline-variant",
       ].join(" ")}
     >
-      <p className="line-clamp-1 text-xs font-medium text-on-surface">{deal.title}</p>
+      {/* Title as a real `<Link>` — keyboard/screen-reader route to the
+          detail page (a bare `onClick` div, above, isn't reachable via Tab).
+          `stopPropagation` keeps the click from also bubbling to the card's
+          own `onClick` and double-navigating; the card click stays the
+          mouse affordance. Unobtrusive styling — same ink color as before,
+          `hover:text-primary` only as an extra affordance the parent card's
+          own `hover:border-primary` doesn't provide for keyboard focus. */}
+      <Link
+        to={`/pipeline/${deal.id}`}
+        onClick={(e) => e.stopPropagation()}
+        className="line-clamp-1 rounded-sm text-xs font-medium text-on-surface hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/30"
+      >
+        {deal.title}
+      </Link>
       {/* `font-mono`, not `text-data-mono` (same N4 finding OpportunityCard.tsx/
           SolvroPipelineKanban.tsx already fixed): `text-data-mono` carries its
           own fixed 13px font-size token, which conflicts with the explicit

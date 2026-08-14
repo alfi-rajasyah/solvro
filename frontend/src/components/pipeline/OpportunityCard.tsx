@@ -7,21 +7,13 @@
 //
 // No StageChip here by design (PRD §2.3: the column already says the
 // stage) — `dispatch brief point 2` confirms this explicitly.
+import { Link } from "react-router-dom";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { KanbanItemHandle } from "@/components/reui/kanban";
 import { Chip } from "@/components/StatusChip";
 import { formatIDRCompact, formatPipelineDate, formatWinProbability, STAGE_LABELS } from "@/lib/pipelineFormat";
 import type { Opportunity } from "@/lib/queries";
-import { isDealOverdue } from "./kpi";
-
-// Win-probability tone bands — mirrors Velora's `getProbabilityColor`
-// (card.tsx: >=70 green, >=40 yellow, else red) semantics, remapped onto
-// the house chip tones instead of raw Tailwind green-100/yellow-100/red-100.
-function probabilityTone(p: number): "emerald" | "amber" | "rose" {
-  if (p >= 70) return "emerald";
-  if (p >= 40) return "amber";
-  return "rose";
-}
+import { isDealOverdue, probabilityTone } from "./kpi";
 
 export interface OpportunityCardProps {
   deal: Opportunity;
@@ -75,9 +67,21 @@ export function OpportunityCard({ deal, canDrag, dragging = false, onClick }: Op
               <span className="material-symbols-outlined text-[16px]">drag_indicator</span>
             </KanbanItemHandle>
           )}
-          <p className="line-clamp-2 min-w-0 text-sm font-semibold leading-tight text-on-surface">
+          {/* Title as a real `<Link>` — keyboard/screen-reader route to the
+              detail page (the card's own `onClick`, below, isn't reachable
+              via Tab). `stopPropagation` keeps the click from also bubbling
+              to the card's `handleClick` and double-navigating; the card
+              click stays the mouse affordance. Unobtrusive styling — same
+              ink color as before, `hover:text-primary` only as an extra
+              affordance the card's own `hover:border-primary` doesn't
+              provide for keyboard focus. */}
+          <Link
+            to={`/pipeline/${deal.id}`}
+            onClick={(e) => e.stopPropagation()}
+            className="line-clamp-2 min-w-0 rounded-sm text-sm font-semibold leading-tight text-on-surface hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/30"
+          >
             {deal.title}
-          </p>
+          </Link>
         </div>
         <div className="shrink-0">
           <Chip tone={probabilityTone(deal.winProbability)}>{formatWinProbability(deal.winProbability)}</Chip>

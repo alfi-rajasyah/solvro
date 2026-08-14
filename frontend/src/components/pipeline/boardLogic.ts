@@ -39,3 +39,24 @@ export function canDragDeal(
 export function needsTerminalConfirm(targetStage: PipelineStage, sourceContainer: string): boolean {
   return TERMINAL_STAGES.includes(targetStage) && sourceContainer !== targetStage;
 }
+
+/**
+ * Delete-permission gate for a single deal — mirrors the backend's
+ * `assertCanWriteOpportunity(user, "delete", ...)`
+ * (backend/src/lib/pipelineAccess.ts): `pipeline:delete_all` (or the `"*"`
+ * wildcard, handled inside `hasPermission`) always allows; otherwise the
+ * caller needs `pipeline:delete_own` AND to be the deal's own PIC. Same
+ * proactive-UI-gate caveat as `canDragDeal` above (server remains the
+ * authority). Colocated with `canDragDeal` (finding S10) rather than
+ * OpportunityDetail.tsx's own private copy — both are pure permission
+ * gates over the same `Pick<PipelineBoardDeal, "picId">` shape.
+ */
+export function canDeleteDeal(
+  user: AuthUser | null | undefined,
+  deal: Pick<PipelineBoardDeal, "picId">,
+): boolean {
+  return (
+    hasPermission(user, "pipeline:delete_all") ||
+    (hasPermission(user, "pipeline:delete_own") && deal.picId === user?.id)
+  );
+}

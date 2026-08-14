@@ -207,6 +207,91 @@ describe("POST /opportunities/import — invalid rows", () => {
     const created = await prisma.opportunity.findUnique({ where: { id } });
     expect(created?.stage).toBe("DELIVER_PROPOSAL");
   });
+
+  it("reports an invalid calendar day deadline as invalid instead of 500ing", async () => {
+    const importer = await createImporter();
+    const res = await importRows(importer.token, [
+      {
+        title: "ImpTest Bad Deadline",
+        customerName: "ImpTest Bad Deadline Co",
+        stage: "assessment",
+        deadline: "2026-02-30",
+      },
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.body.invalidCount).toBe(1);
+    expect(res.body.results[0].status).toBe("invalid");
+    expect(res.body.results[0].reason).toMatch(/Deadline must be a valid yyyy-MM-dd date/);
+  });
+
+  it("reports an unknown picId as invalid with a clean reason instead of a raw FK error", async () => {
+    const importer = await createImporter();
+    const res = await importRows(importer.token, [
+      {
+        title: "ImpTest Unknown Pic",
+        customerName: "ImpTest Unknown Pic Co",
+        stage: "assessment",
+        picId: 999999,
+      },
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.body.invalidCount).toBe(1);
+    expect(res.body.results[0].status).toBe("invalid");
+    expect(res.body.results[0].reason).toMatch(/PIC with id 999999 not found/);
+  });
+
+  it("reports a negative dealValue and an out-of-range winProbability as invalid", async () => {
+    const importer = await createImporter();
+    const res = await importRows(importer.token, [
+      { title: "ImpTest Neg Value", customerName: "ImpTest Neg Value Co", stage: "assessment", dealValue: -5 },
+      {
+        title: "ImpTest High Prob",
+        customerName: "ImpTest High Prob Co",
+        stage: "assessment",
+        winProbability: 150,
+      },
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.body.invalidCount).toBe(2);
+    expect(res.body.results[0].status).toBe("invalid");
+    expect(res.body.results[0].reason).toMatch(/Deal value must be a non-negative number/);
+    expect(res.body.results[1].status).toBe("invalid");
+    expect(res.body.results[1].reason).toMatch(/Win probability must be an integer between 0 and 100/);
+  });
+
+  it("reports an over-length title as invalid instead of truncating (B1)", async () => {
+    const importer = await createImporter();
+    const longTitle = "A".repeat(201);
+    const res = await importRows(importer.token, [
+      { title: longTitle, customerName: "ImpTest Long Title Co", stage: "assessment" },
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.body.invalidCount).toBe(1);
+    expect(res.body.results[0].status).toBe("invalid");
+    expect(res.body.results[0].reason).toBe("Title exceeds 200 characters");
+
+    const stored = await prisma.opportunity.findFirst({ where: { customerName: "ImpTest Long Title Co" } });
+    expect(stored).toBeNull();
+  });
+});
+
+describe("POST /opportunities/import — deadline round-trip", () => {
+  it("round-trips a valid deadline through import as an exact yyyy-MM-dd day", async () => {
+    const importer = await createImporter();
+    const res = await importRows(importer.token, [
+      {
+        title: "ImpTest Deadline Deal",
+        customerName: "ImpTest Deadline Co",
+        stage: "assessment",
+        deadline: "2026-09-15",
+      },
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.body.validCount).toBe(1);
+    const id = res.body.results[0].id as string;
+    const created = await prisma.opportunity.findUnique({ where: { id } });
+    expect(created?.deadline?.toISOString().slice(0, 10)).toBe("2026-09-15");
+  });
 });
 
 describe("POST /opportunities/import — duplicate skip", () => {
@@ -284,6 +369,26 @@ describe("POST /opportunities/import — PipelineImportLog", () => {
     expect(body[0].userId).toBe(importer.userId);
     expect(body[0].totalRows).toBe(1);
     expect(body[0].user).toMatchObject({ id: importer.userId });
+  });
+
+  it("GET /opportunities/imports caps the response at 100 rows even when more exist", async () => {
+    const importer = await createImporter();
+    // Cheap rows straight via prisma — no need to exercise the import
+    // endpoint 101 times just to pad the log table.
+    await prisma.pipelineImportLog.createMany({
+      data: Array.from({ length: 101 }, () => ({
+        userId: importer.userId,
+        totalRows: 1,
+        validCount: 1,
+        skipCount: 0,
+        invalidCount: 0,
+        status: "OK" as const,
+      })),
+    });
+
+    const res = await getImportHistory(importer.token);
+    expect(res.status).toBe(200);
+    expect(res.body).toHaveLength(100);
   });
 });
 

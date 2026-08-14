@@ -55,9 +55,19 @@ export function Pipeline() {
 
   function handleViewChange(next: ViewMode) {
     setView(next);
-    if (next === "kanban") searchParams.delete("view");
-    else searchParams.set("view", next);
-    setSearchParams(searchParams, { replace: true });
+    // Functional form — mutates the updater's own draft `URLSearchParams`
+    // rather than the `searchParams` instance this render closed over
+    // (React Router warns that a stale/mutated instance from `useState`
+    // shouldn't be written back directly; the callback form always
+    // operates on the current one).
+    setSearchParams(
+      (prev) => {
+        if (next === "kanban") prev.delete("view");
+        else prev.set("view", next);
+        return prev;
+      },
+      { replace: true },
+    );
   }
 
   // Hoisted KPI bar (PRD §2.4: "shared toolbar and KPI bar stay mounted
@@ -72,9 +82,15 @@ export function Pipeline() {
   // Funnel-strip scroll-to-column (PRD §2.3's mockup) only makes sense
   // against the Kanban view's columns — List/Swimlane/Quarter have no
   // per-PipelineStage column to scroll to. `kanbanRef` is populated only
-  // while SolvroPipelineKanban is actually mounted (forwardRef); on every
-  // other view it's `null`, so `kanbanRef.current?.scrollToStage(...)`
-  // below is a silent no-op with no extra view-mode branching required.
+  // while SolvroPipelineKanban is actually mounted (forwardRef), so
+  // `kanbanRef.current?.scrollToStage(...)` below would be a silent no-op
+  // on every other view regardless — but `onFunnelStageClick` is still
+  // gated to `view === "kanban"` (below) rather than relying on that no-op:
+  // `PipelineKpiBar`'s own `FunnelStrip` uses whether the prop is present
+  // (not whether it does anything) to decide `cursor-pointer` vs
+  // `cursor-default` and its "scroll to column" aria-label — leaving it
+  // wired on every view would keep advertising a working affordance on
+  // views where it's actually inert.
   const kanbanRef = useRef<SolvroPipelineKanbanHandle>(null);
 
   const [createOpen, setCreateOpen] = useState(false);
@@ -150,7 +166,9 @@ export function Pipeline() {
       ) : (
         <PipelineKpiBar
           deals={deals ?? []}
-          onFunnelStageClick={(stage) => kanbanRef.current?.scrollToStage(stage)}
+          onFunnelStageClick={
+            view === "kanban" ? (stage) => kanbanRef.current?.scrollToStage(stage) : undefined
+          }
         />
       )}
 

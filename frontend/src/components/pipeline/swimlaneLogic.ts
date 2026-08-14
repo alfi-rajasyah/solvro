@@ -112,10 +112,15 @@ export interface LaneSummary {
  * mirrors the reference's `activeOpps` (`row.opps.filter(o => o.stage !==
  * "won")`, used for both the PIC row's "N deals" count and its value sum).
  * Reuses this codebase's own `isActiveDeal` (kpi.ts) rather than
- * re-deriving a second "what counts as active" predicate — its DROP
- * exclusion is a no-op here since DROP deals never reach a lane (DROP isn't
- * one of `SWIMLANE_STAGES`, so the caller never passes one into a lane in
- * the first place).
+ * re-deriving a second "what counts as active" predicate. Its DROP
+ * exclusion is NOT a no-op here: `groupIntoLanes` buckets by `picId` alone
+ * and does not filter by stage, so a DROP deal would still land in its
+ * lane's `deals` array (it just never renders, since DROP isn't one of
+ * `SWIMLANE_STAGES` and so is never matched by `dealsInCell`). It's the
+ * caller (PipelineSwimlane.tsx filtering DROP out of `allDeals` before
+ * calling `groupIntoLanes`) that actually keeps DROP out of every lane
+ * today — `isActiveDeal`'s DROP exclusion here is a second, independent
+ * safety net for this summary specifically, not a redundant check.
  */
 export function laneSummary(lane: SwimlaneLane): LaneSummary {
   const active = lane.deals.filter(isActiveDeal);

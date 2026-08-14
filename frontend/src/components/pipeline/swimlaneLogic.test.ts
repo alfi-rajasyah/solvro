@@ -140,6 +140,25 @@ describe("laneSummary", () => {
 
     expect(laneSummary(lane)).toEqual({ count: 0, total: 0 });
   });
+
+  // A DROP deal never reaches a lane in practice today (PipelineSwimlane.tsx
+  // filters it out of `allDeals` before calling `groupIntoLanes`), but
+  // `groupIntoLanes` itself doesn't filter by stage — this exercises
+  // `laneSummary`'s own `isActiveDeal` exclusion as the independent safety
+  // net its doc comment describes, in case a DROP deal ever did land here.
+  it("excludes DROP deals from the count and value sum, same as WON", () => {
+    const lane = {
+      picId: 1,
+      picName: "Amir",
+      pic: { id: 1, username: "Amir" },
+      deals: [
+        deal({ id: "1", stage: "RFP", dealValue: 100 }),
+        deal({ id: "2", stage: "DROP", dealValue: 999 }),
+      ],
+    };
+
+    expect(laneSummary(lane)).toEqual({ count: 1, total: 100 });
+  });
 });
 
 describe("stageSummaries", () => {

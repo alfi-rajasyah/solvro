@@ -106,14 +106,32 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
           patch: {
             title: title.trim(),
             customerName: customerName.trim(),
-            dealValue: dealValueNum,
+            // Edit mode: an emptied field means "clear it", not "leave
+            // unchanged" — the PATCH must send the explicit zero/empty
+            // value (both accepted by updateOpportunitySchema, backend/src/
+            // routes/opportunities.ts) rather than `undefined`, which the
+            // route treats as "key not present, keep the existing value"
+            // (`if (body.dealValue !== undefined) …` etc.). Create mode has
+            // no existing value to accidentally clear, so it keeps sending
+            // `undefined` for an empty field below (falls back to the
+            // schema's create-time default) — see the `else` branch.
+            dealValue: dealValueNum ?? 0,
             picId: picId === "" ? null : Number(picId),
             requestDate,
             deadline,
             description: description.trim() || null,
-            productSolution: productSolution.trim() || undefined,
+            productSolution: productSolution.trim(),
             leadSource: leadSource.trim() || null,
-            winProbability: winProbabilityNum,
+            // S6: an emptied field must still send an explicit value (see
+            // the comment above), but `?? 0` was the wrong one to reach for
+            // here — 0 is dealValue's create-path default (N3, mirrored by
+            // the import parser's own blank-Deal-Value-is-0 rule), NOT
+            // winProbability's. winProbability's create-path/schema default
+            // is 50 (this form's own initial `useState("50")`, and
+            // importParse.ts's blank-cell default) — so clearing the field
+            // in edit mode must fall back to 50, matching create parity,
+            // rather than silently zeroing out a deal's win probability.
+            winProbability: winProbabilityNum ?? 50,
             // No `stage` here by design — updateOpportunitySchema is
             // `.strict()` and rejects it with a 400; stage changes go
             // through the board's move flow (POST /:id/move), not this

@@ -1529,7 +1529,19 @@ export interface OpportunityLink {
 }
 
 export const pipelineKeys = {
-  list: ["pipeline", "opportunities"] as const,
+  // The deliberate invalidate-EVERYTHING-pipeline-related root — every other
+  // key below is a literal array-prefix extension of this one, so
+  // `invalidateQueries({ queryKey: pipelineKeys.root })` (TanStack's default
+  // prefix match) hits the list, every detail/activities/links query, and
+  // the import log all at once. Kept as its own key (review finding N1/N2)
+  // rather than reusing `list` for this — `list` used to BE this array
+  // verbatim, which meant every mutation that invalidated "just the list"
+  // was silently invalidating the entire pipeline cache by prefix-match
+  // accident, not by design. Nothing currently needs the everything-at-once
+  // hammer (each mutation below invalidates precisely what it touches), but
+  // it stays available/documented for a future case that does.
+  root: ["pipeline", "opportunities"] as const,
+  list: ["pipeline", "opportunities", "list"] as const,
   detail: (id: string) => ["pipeline", "opportunities", id] as const,
   activities: (id: string) => ["pipeline", "opportunities", id, "activities"] as const,
   links: (id: string) => ["pipeline", "opportunities", id, "links"] as const,
@@ -1626,8 +1638,18 @@ export function useDeleteOpportunity() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => apiRequest<void>(`/opportunities/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
+    // Explicit per-resource invalidation (list + this id's own detail/
+    // activities/links), not just the list — since the N1/N2 key-hygiene
+    // fix above, `pipelineKeys.list` is a sibling of those keys, not a
+    // shared prefix, so it no longer catches them by accident. Without this,
+    // a stale cached detail/activities/links entry for the just-deleted id
+    // could still be served (e.g. on a browser-back navigation) until it
+    // aged out of the cache on its own.
+    onSuccess: (_data, id) => {
       qc.invalidateQueries({ queryKey: pipelineKeys.list });
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.activities(id) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.links(id) });
     },
   });
 }
@@ -1811,8 +1833,22 @@ export function useMoveOpportunity() {
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev) qc.setQueryData(pipelineKeys.list, ctx.prev);
     },
-    onSettled: () => {
+    // Explicitly invalidates this deal's own detail + activities queries,
+    // not just the list — and since the N1/N2 key-hygiene fix
+    // (`pipelineKeys.list` above), this is no longer redundant with
+    // invalidating the list: `list` is a sibling key now, not a shared
+    // array-prefix of `detail`/`activities`, so it doesn't catch them by
+    // accident the way it used to. A move is reachable from
+    // OpportunityDetail's StageMenu (not only the board drag), and the
+    // server logs an OpportunityActivity on a real stage change (POST
+    // /:id/move, backend/src/routes/opportunities.ts) — without these two
+    // explicit calls, a detail-page stage change wouldn't refresh its own
+    // wonAt/preHoldStage or activity feed until something else happened to
+    // invalidate them.
+    onSettled: (_data, _err, { id }) => {
       qc.invalidateQueries({ queryKey: pipelineKeys.list });
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(id) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.activities(id) });
     },
   });
 }
@@ -1872,8 +1908,15 @@ export function useImportOpportunities() {
         method: "POST",
         body: { rows },
       }),
+    // list (new opportunities land on the board) + imports (the admin
+    // Pipeline tab's import-history log, `usePipelineImports()`, gets a new
+    // row every call) — both explicit since the N1/N2 key-hygiene fix:
+    // `pipelineKeys.list` no longer shares an array-prefix with
+    // `pipelineKeys.imports`, so invalidating just the list would silently
+    // stop refreshing the import log after every import.
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: pipelineKeys.list });
+      qc.invalidateQueries({ queryKey: pipelineKeys.imports });
     },
   });
 }

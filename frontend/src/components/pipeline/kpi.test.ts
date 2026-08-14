@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PipelineStage } from "@/lib/pipelineFormat";
-import { computePipelineKpis, daysUntilDeadline, isDealOverdue } from "./kpi";
+import { computePipelineKpis, daysUntilDeadline, isDealOverdue, probabilityTone } from "./kpi";
 import type { PipelineBoardDeal } from "./adapter";
 
 type Deal = Pick<PipelineBoardDeal, "dealValue" | "stage" | "picId" | "deadline" | "wonAt">;
@@ -43,6 +43,26 @@ describe("daysUntilDeadline / isDealOverdue", () => {
   });
 });
 
+describe("probabilityTone", () => {
+  // Single source of truth for OpportunityCard.tsx/PipelineList.tsx/
+  // OpportunityDetail.tsx's win% chip (finding S10) — previously three
+  // identical, untested, unexported copies.
+  it("is emerald at and above 70", () => {
+    expect(probabilityTone(70)).toBe("emerald");
+    expect(probabilityTone(100)).toBe("emerald");
+  });
+
+  it("is amber from 40 up to (not including) 70", () => {
+    expect(probabilityTone(40)).toBe("amber");
+    expect(probabilityTone(69)).toBe("amber");
+  });
+
+  it("is rose below 40", () => {
+    expect(probabilityTone(39)).toBe("rose");
+    expect(probabilityTone(0)).toBe("rose");
+  });
+});
+
 describe("computePipelineKpis", () => {
   it("sums deal value across active (non-WON/DROP) deals only, for Total Pipeline", () => {
     const kpis = computePipelineKpis(
@@ -78,10 +98,15 @@ describe("computePipelineKpis", () => {
   it("reads Won this month from wonAt, not updated_at/anything else", () => {
     const kpis = computePipelineKpis(
       [
-        deal({ stage: "WON", dealValue: 1_000, wonAt: "2026-08-01T00:00:00.000Z" }),
+        // Noon UTC, not month-midnight — a UTC calendar-day boundary
+        // fixture (e.g. "2026-08-01T00:00:00.000Z") shifts to the prior
+        // local calendar day (and month) west of UTC, flaking `isSameMonth`
+        // under e.g. TZ=America/Los_Angeles. Noon UTC stays within the same
+        // calendar day (and month) in every real-world UTC offset.
+        deal({ stage: "WON", dealValue: 1_000, wonAt: "2026-08-05T12:00:00.000Z" }),
         deal({ stage: "WON", dealValue: 2_000, wonAt: "2026-08-13T23:00:00.000Z" }),
         // Won last month — excluded even though it's still in WON.
-        deal({ stage: "WON", dealValue: 5_000, wonAt: "2026-07-30T00:00:00.000Z" }),
+        deal({ stage: "WON", dealValue: 5_000, wonAt: "2026-07-15T12:00:00.000Z" }),
         // WON with no wonAt (shouldn't happen post-M1, but must not throw/count).
         deal({ stage: "WON", dealValue: 7_000, wonAt: null }),
       ],
