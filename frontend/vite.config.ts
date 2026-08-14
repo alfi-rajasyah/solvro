@@ -44,6 +44,10 @@ export default defineConfig({
         // App shell precache — index.html + built assets (JS/CSS/fonts/icons).
         globPatterns: ["**/*.{js,css,html,png,svg,ico,webmanifest}"],
         navigateFallback: "/index.html",
+        // Keep API/proxy paths out of the SPA-shell fallback — without this,
+        // a /pipeline-api/... navigation (e.g. a future file download link)
+        // would be served cached index.html instead of reaching the proxy.
+        navigateFallbackDenylist: [/^\/api\//, /^\/pipeline-api\//],
         runtimeCaching: [
           {
             // API responses carry auth state and must always be fresh —
@@ -87,6 +91,15 @@ export default defineConfig({
         target: process.env.VITE_API_PROXY_TARGET ?? "http://localhost:3000",
         changeOrigin: true,
         rewrite: (p) => p.replace(/^\/api/, ""),
+      },
+      // Forward /pipeline-api/* to Velora (the Pipeline module). Velora's own
+      // routes live under /api, so strip /pipeline-api and prepend /api. In
+      // dockerised dev, VITE_PIPELINE_PROXY_TARGET points at the velora-app
+      // service (http://velora-app:3000) via the docker network.
+      "/pipeline-api": {
+        target: process.env.VITE_PIPELINE_PROXY_TARGET ?? "http://localhost:3001",
+        changeOrigin: true,
+        rewrite: (p) => p.replace(/^\/pipeline-api/, "/api"),
       },
     },
   },
