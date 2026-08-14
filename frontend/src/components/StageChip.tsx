@@ -1,15 +1,5 @@
+import { Chip, type Tone } from "@/components/StatusChip";
 import { STAGE_LABELS, type PipelineStage } from "@/lib/pipelineFormat";
-
-type Tone = "emerald" | "amber" | "rose" | "violet" | "blue" | "gray";
-
-const TONE_CLASS: Record<Tone, string> = {
-  emerald: "bg-chip-emerald-bg text-chip-emerald-text",
-  amber: "bg-chip-amber-bg text-chip-amber-text",
-  rose: "bg-chip-rose-bg text-chip-rose-text",
-  violet: "bg-chip-violet-bg text-chip-violet-text",
-  blue: "bg-primary/10 text-primary dark:bg-primary/20",
-  gray: "bg-surface-container-high text-on-surface-variant",
-};
 
 // PRD §2.2 "Stage chip tones" table: `poc` and `technical_clarification`
 // share `rfp`'s "in-motion" blue tone row; `hold` gets its own amber row
@@ -35,18 +25,15 @@ export function pipelineStageLabel(stage: PipelineStage): string {
   return STAGE_LABELS[stage];
 }
 
-const CHIP_BASE =
-  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-display text-[11px] font-semibold leading-[18px]";
-
 export function StageChip({ stage }: { stage: PipelineStage }) {
   return (
-    <span className={`${CHIP_BASE} ${TONE_CLASS[STAGE_TONE[stage]]}`}>
+    <Chip tone={STAGE_TONE[stage]}>
       {stage === "HOLD" ? (
         <span className="material-symbols-outlined text-[13px]" aria-hidden="true">
           pause_circle
         </span>
       ) : null}
       {STAGE_LABELS[stage]}
-    </span>
+    </Chip>
   );
 }

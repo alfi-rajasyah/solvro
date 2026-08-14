@@ -8,6 +8,7 @@ import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { isValidDayString, utcMidnightOfDayString } from "../lib/dateBoundary.js";
 import { assertCanWriteOpportunity, PIC_SELECT } from "../lib/pipelineAccess.js";
+import { logger } from "../logger.js";
 
 // Pipeline module (native port of Velora — docs/plans/pipeline-native-port-plan.md).
 // CRUD + the single stage-transition writer for Opportunity. Deal visibility
@@ -72,12 +73,95 @@ const moveOpportunitySchema = z.object({
   stageOrder: z.number().int().min(0),
 });
 
+// --- POST /import ----------------------------------------------------------
+//
+// Bulk-create rows the client already parsed from a spreadsheet (M4.18's
+// import dialog, adapted from VeloraApp's Import Excel feature). Field names
+// are camelCase on this wire contract (house convention, matching
+// createOpportunitySchema above) even though the reference oracle
+// (../VeloraApp/app/api/opportunities/import/route.ts and its companion
+// components/import-excel-dialog.tsx) uses snake_case.
+//
+// No cap in the oracle route — it trusts the client to have already
+// filtered to "valid" rows before POSTing. This endpoint doesn't extend
+// that trust (a spreadsheet-driven API should never 500 on a malformed
+// batch), so it re-validates every row server-side and caps the batch at a
+// sane size the oracle never bothered to define.
+const IMPORT_ROW_CAP = 500;
+
+// The reference client (import-excel-dialog.tsx) normalizes a cell's stage
+// text the same way before comparing against VALID_STAGES: trim, lowercase,
+// spaces -> underscores — so "Deliver Proposal", "DELIVER_PROPOSAL", and
+// " deliver_proposal " all resolve to the same literal. Mirrored here.
+//
+// Deliberately only 8 entries, not all 9 PipelineStage values: the oracle's
+// own VALID_STAGES list excludes "hold" — HOLD is reachable only via
+// POST /:id/move from an existing stage (see the schema comment on
+// Opportunity.preHoldStage), never a row's starting stage, so it isn't a
+// valid import target either.
+const IMPORT_STAGE_MAP: Record<string, PipelineStage> = {
+  assessment: PipelineStage.ASSESSMENT,
+  rfp: PipelineStage.RFP,
+  poc: PipelineStage.POC,
+  technical_clarification: PipelineStage.TECHNICAL_CLARIFICATION,
+  deliver_proposal: PipelineStage.DELIVER_PROPOSAL,
+  waiting_response: PipelineStage.WAITING_RESPONSE,
+  won: PipelineStage.WON,
+  drop: PipelineStage.DROP,
+};
+
+function normalizeStageLiteral(raw: string): PipelineStage | undefined {
+  return IMPORT_STAGE_MAP[raw.trim().toLowerCase().replace(/ /g, "_")];
+}
+
+// Deliberately permissive (not `.strict()`): a malformed row should fail
+// gracefully into an "invalid" result entry, not 400 the whole batch. Every
+// field is optional/nullable here; the real required-field, stage-literal,
+// and numeric-range checks run by hand in the row loop below so each row
+// can be judged independently.
+const importRowSchema = z
+  .object({
+    title: z.string().optional().nullable(),
+    customerName: z.string().optional().nullable(),
+    dealValue: z.number().optional().nullable(),
+    stage: z.string().optional().nullable(),
+    picId: z.number().int().positive().optional().nullable(),
+    deadline: z.string().optional().nullable(),
+    productSolution: z.string().optional().nullable(),
+    winProbability: z.number().optional().nullable(),
+    leadSource: z.string().optional().nullable(),
+    activityLog: z.string().optional().nullable(),
+  })
+  .passthrough();
+
+// The envelope IS strictly validated (and 400s the whole call on failure) —
+// unlike a single row, "rows isn't an array" or "rows is empty" isn't a
+// row-level concern to report back individually. Mirrors the oracle's own
+// "No data to import" 400 for an empty/missing array.
+const importBodySchema = z
+  .object({
+    rows: z
+      .array(z.unknown())
+      .min(1, "No data to import")
+      .max(IMPORT_ROW_CAP, `Cannot import more than ${IMPORT_ROW_CAP} rows in a single call`),
+  })
+  .strict();
+
+type ImportRowStatus = "valid" | "skipped" | "invalid";
+
+interface ImportRowResult {
+  row: number; // 1-based index within this call's `rows` array
+  status: ImportRowStatus;
+  reason?: string;
+  id?: string; // opportunity id — only present when status is "valid"
+}
+
 const STAGE_LABELS: Record<PipelineStage, string> = {
   ASSESSMENT: "Assessment",
   RFP: "RFP",
   POC: "PoC",
   TECHNICAL_CLARIFICATION: "Technical Clarification",
-  DELIVER_PROPOSAL: "Deliver Proposal",
+  DELIVER_PROPOSAL: "Delivered Proposal",
   WAITING_RESPONSE: "Waiting Response",
   WON: "Won",
   DROP: "Drop",
@@ -185,6 +269,25 @@ opportunitiesRouter.get("/", requirePermission("pipeline:view"), async (_req, re
   res.json(opportunities.map((o) => serializeOpportunity(o as OpportunityWithPic)));
 });
 
+// Import history for the Admin > Pipeline tab (M4.19). Lives on this
+// router (rather than routes/admin.ts) to keep that spine file untouched —
+// the consuming UI is admin-only regardless of which router serves it, so
+// the gate is still meaningfully restrictive in practice even though the
+// permission checked here is the same pipeline:view every board reader
+// already holds.
+//
+// Registered ahead of GET "/:id" — Express matches routes in registration
+// order, and "/:id" would otherwise swallow "/imports" as id="imports" and
+// 400 on the uuid check.
+opportunitiesRouter.get("/imports", requirePermission("pipeline:view"), async (_req, res) => {
+  const logs = await prisma.pipelineImportLog.findMany({
+    orderBy: { createdAt: "desc" },
+    take: 100,
+    include: { user: { select: PIC_SELECT } },
+  });
+  res.json(logs);
+});
+
 opportunitiesRouter.get(
   "/:id",
   requirePermission("pipeline:view"),
@@ -259,6 +362,188 @@ opportunitiesRouter.post(
     });
 
     res.status(201).json(serializeOpportunity(created));
+  },
+);
+
+// Bulk import (M4.18's dialog). All-or-nothing PER ROW, not per batch: one
+// row's failure (bad stage, missing title, unknown PIC, a duplicate) never
+// aborts the rest — it's reported back in `results` with a reason instead.
+// Each valid row is created inside its own transaction (same
+// count-then-create ordering the single-create route above uses), awaited
+// sequentially so each row's stageOrder count reflects every row already
+// inserted ahead of it in this same call.
+opportunitiesRouter.post(
+  "/import",
+  requirePermission("pipeline:create"),
+  validate("body", importBodySchema),
+  async (req, res) => {
+    const { rows } = req.body as z.infer<typeof importBodySchema>;
+    const userId = req.user!.sub;
+
+    const results: ImportRowResult[] = [];
+    let validCount = 0;
+    let skipCount = 0;
+    let invalidCount = 0;
+
+    try {
+      // Dedupe key is `${title}||${customerName}` (case-insensitive,
+      // trimmed) against every existing opportunity — mirrors the oracle's
+      // `LOWER(title)||LOWER(customer_name)` set built once up front. Newly
+      // imported rows are added to this same set as they're inserted, so a
+      // duplicate WITHIN this batch is skipped too, same as the oracle.
+      const existing = await prisma.opportunity.findMany({
+        select: { title: true, customerName: true },
+      });
+      const seen = new Set(
+        existing.map((o) => `${o.title.trim().toLowerCase()}||${o.customerName.trim().toLowerCase()}`),
+      );
+
+      for (let i = 0; i < rows.length; i++) {
+        const rowNum = i + 1;
+        const parsed = importRowSchema.safeParse(rows[i]);
+        if (!parsed.success) {
+          invalidCount++;
+          results.push({ row: rowNum, status: "invalid", reason: "Malformed row data" });
+          continue;
+        }
+        const raw = parsed.data;
+
+        const title = (raw.title ?? "").trim();
+        const customerName = (raw.customerName ?? "").trim();
+        const stageRaw = (raw.stage ?? "").trim();
+
+        const reasons: string[] = [];
+        if (!title) reasons.push("Title is required");
+        if (!customerName) reasons.push("Customer name is required");
+
+        const stage = stageRaw ? normalizeStageLiteral(stageRaw) : undefined;
+        if (!stage) {
+          reasons.push(
+            `Invalid stage "${raw.stage ?? ""}" — must be one of: ${Object.keys(IMPORT_STAGE_MAP).join(", ")}`,
+          );
+        }
+
+        const dealValueRaw = raw.dealValue ?? 0;
+        if (typeof dealValueRaw !== "number" || Number.isNaN(dealValueRaw) || dealValueRaw < 0) {
+          reasons.push("Deal value must be a non-negative number");
+        }
+
+        const winProbabilityRaw = raw.winProbability ?? 50;
+        if (
+          typeof winProbabilityRaw !== "number" ||
+          !Number.isInteger(winProbabilityRaw) ||
+          winProbabilityRaw < 0 ||
+          winProbabilityRaw > 100
+        ) {
+          reasons.push("Win probability must be an integer between 0 and 100");
+        }
+
+        const deadlineRaw = raw.deadline?.trim() || null;
+        if (deadlineRaw && !isValidDayString(deadlineRaw)) {
+          reasons.push("Deadline must be a valid yyyy-MM-dd date");
+        }
+
+        // Resolved eagerly (rather than left to a Prisma FK error on
+        // create) so an unknown picId reports back a clean per-row reason
+        // instead of a raw P2025 that would otherwise need catching.
+        let picId: number | null = null;
+        if (raw.picId !== undefined && raw.picId !== null) {
+          const pic = await prisma.user.findUnique({ where: { id: raw.picId }, select: { id: true } });
+          if (!pic) {
+            reasons.push(`PIC with id ${raw.picId} not found`);
+          } else {
+            picId = raw.picId;
+          }
+        }
+
+        // `|| !stage` is logically redundant (an undefined stage already
+        // pushed a reason above, so reasons.length > 0 already holds) but
+        // lets TS narrow `stage` from `PipelineStage | undefined` to
+        // `PipelineStage` for every use below this point.
+        if (reasons.length > 0 || !stage) {
+          invalidCount++;
+          results.push({ row: rowNum, status: "invalid", reason: reasons.join("; ") });
+          continue;
+        }
+
+        const dupKey = `${title.toLowerCase()}||${customerName.toLowerCase()}`;
+        if (seen.has(dupKey)) {
+          skipCount++;
+          results.push({
+            row: rowNum,
+            status: "skipped",
+            reason: "Duplicate of an existing opportunity (same title + customer)",
+          });
+          continue;
+        }
+
+        const activityLog = raw.activityLog?.trim() || null;
+
+        const created = await prisma.$transaction(async (tx) => {
+          // Same bottom-append ordering POST "/" uses (finding S6): next
+          // stageOrder is the current sibling count in that stage.
+          const stageOrder = await tx.opportunity.count({ where: { stage } });
+          const data: Prisma.OpportunityCreateInput = {
+            title,
+            customerName,
+            stage,
+            dealValue: toDealValue(dealValueRaw),
+            productSolution: raw.productSolution?.trim() ?? "",
+            leadSource: raw.leadSource?.trim() || null,
+            winProbability: winProbabilityRaw,
+            stageOrder,
+          };
+          if (picId !== null) data.pic = { connect: { id: picId } };
+          if (deadlineRaw) data.deadline = utcMidnightOfDayString(deadlineRaw);
+          // Same wonAt bookkeeping POST "/" applies when created directly
+          // into WON (finding S2) — an import row landing straight in Won
+          // is the same real flow as the per-column "+" create.
+          if (stage === PipelineStage.WON) data.wonAt = new Date();
+
+          const opportunity = await tx.opportunity.create({ data });
+
+          if (activityLog) {
+            await tx.opportunityActivity.create({
+              data: { opportunityId: opportunity.id, userId, note: activityLog },
+            });
+          }
+
+          return opportunity;
+        });
+
+        seen.add(dupKey);
+        validCount++;
+        results.push({ row: rowNum, status: "valid", id: created.id });
+      }
+
+      await prisma.pipelineImportLog.create({
+        data: { userId, totalRows: rows.length, validCount, skipCount, invalidCount, status: "OK" },
+      });
+
+      res.json({ totalRows: rows.length, validCount, skipCount, invalidCount, results });
+    } catch (err) {
+      // A whole-call failure (e.g. the initial existing-opportunities fetch
+      // itself throwing) — per-row failures never reach this catch, they're
+      // handled inline as "invalid" results above. Best-effort log write:
+      // if the DB is unreachable this insert will fail too, and the
+      // original error is what the caller needs to see either way.
+      await prisma.pipelineImportLog
+        .create({
+          data: {
+            userId,
+            totalRows: rows.length,
+            validCount,
+            skipCount,
+            invalidCount,
+            status: "ERROR",
+            errorMessage: err instanceof Error ? err.message : "Unknown error",
+          },
+        })
+        .catch((logErr: unknown) => {
+          logger.error({ err: logErr }, "failed to write PipelineImportLog after import failure");
+        });
+      throw err;
+    }
   },
 );
 

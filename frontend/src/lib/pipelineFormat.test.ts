@@ -2,9 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   formatIDR,
   formatIDRCompact,
+  formatPipelineDate,
   formatWinProbability,
   STAGE_LABELS,
   STAGE_ORDER,
+  TERMINAL_STAGES,
   type PipelineStage,
 } from "./pipelineFormat";
 
@@ -101,7 +103,7 @@ describe("STAGE_LABELS / STAGE_ORDER completeness", () => {
     RFP: "RFP",
     POC: "PoC",
     TECHNICAL_CLARIFICATION: "Technical Clarification",
-    DELIVER_PROPOSAL: "Deliver Proposal",
+    DELIVER_PROPOSAL: "Delivered Proposal",
     WAITING_RESPONSE: "Waiting Response",
     WON: "Won",
     DROP: "Drop",
@@ -129,5 +131,33 @@ describe("STAGE_LABELS / STAGE_ORDER completeness", () => {
 
   it("keeps STAGE_LABELS and STAGE_ORDER in sync (every ordered stage has a label, and vice versa)", () => {
     expect(new Set(STAGE_ORDER)).toEqual(new Set(Object.keys(STAGE_LABELS)));
+  });
+});
+
+describe("TERMINAL_STAGES", () => {
+  it("is exactly WON and DROP, the single source of truth for both boardLogic.ts and kpi.ts", () => {
+    expect(TERMINAL_STAGES).toEqual(["WON", "DROP"]);
+  });
+});
+
+describe("formatPipelineDate", () => {
+  it("renders a short Indonesian-locale date", () => {
+    expect(formatPipelineDate("2026-06-30")).toBe("30 Jun 2026");
+  });
+
+  it("renders a single-digit day with no leading zero", () => {
+    expect(formatPipelineDate("2026-01-05")).toBe("5 Jan 2026");
+  });
+
+  it("parses at local midnight (not UTC) so the calendar day never walks back a day", () => {
+    // Regression guard for the `new Date(day)` trap this module's doc
+    // comment calls out: parsed as UTC midnight, "2026-01-01" would render
+    // as "31 Des 2025" in any timezone west of UTC. `dayToDate` avoids that
+    // by construction, so this assertion holds in every host timezone.
+    expect(formatPipelineDate("2026-01-01")).toBe("1 Jan 2026");
+  });
+
+  it("returns an empty string for an unparsable day", () => {
+    expect(formatPipelineDate("not-a-date")).toBe("");
   });
 });
