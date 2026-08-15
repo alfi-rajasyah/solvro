@@ -67,8 +67,20 @@ export function isDealOverdue(deadline: string | null, today: Date = new Date())
   return daysUntilDeadline(deadline, today) < 0;
 }
 
+// UTC calendar month, not local (finding N4): unifies "won this month" with
+// `components/pipeline/analytics.ts`'s `computeMonthlyTrend` (Executive
+// dashboard's "created vs. won" trend chart), which already buckets
+// `wonAt`/`createdAt` by UTC month via a direct ISO-string slice. Before
+// this fix, this KPI — surfaced on BOTH `PipelineKpiBar.tsx`'s board strip
+// and `PipelineOverviewPanel.tsx`'s Overview fold-in, the third of the
+// three surfaces that all render some flavor of "won this month" — read
+// the HOST's local month instead, so a deal won in the last/first few
+// hours of a calendar month could count toward "this month" on the KPI
+// tiles but not on the Executive trend chart (or vice versa), depending on
+// the viewer's timezone. All three surfaces now agree on the same UTC
+// month boundary.
 function isSameMonth(a: Date, b: Date): boolean {
-  return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth();
+  return a.getUTCFullYear() === b.getUTCFullYear() && a.getUTCMonth() === b.getUTCMonth();
 }
 
 export interface FunnelBucket {

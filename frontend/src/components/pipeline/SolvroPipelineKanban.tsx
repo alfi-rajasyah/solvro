@@ -39,7 +39,8 @@
 import { forwardRef, useCallback, useImperativeHandle, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { Alert, AlertDescription } from "@/components/reui/alert";
+import { HandoffProjectModal } from "@/components/DealCard";
+import { Alert, AlertAction, AlertDescription } from "@/components/reui/alert";
 import {
   Kanban,
   KanbanBoard,
@@ -49,7 +50,7 @@ import {
   KanbanOverlay,
   type KanbanCommitMeta,
 } from "@/components/reui/kanban";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import { formatIDRCompact, STAGE_LABELS, type PipelineStage } from "@/lib/pipelineFormat";
 import { useMoveOpportunity, useOpportunities, type Opportunity } from "@/lib/queries";
 import { PIPELINE_STAGES, projectToColumns } from "./adapter";
@@ -108,6 +109,16 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
     // drag on a different card), not specifically this confirm dialog's own
     // pending `mutateAsync` call.
     const [isConfirming, setIsConfirming] = useState(false);
+
+    // Post-won handoff offer (PRD §2.10, M5.24) — mirrors
+    // OpportunityDetail.tsx's own `justWonOffer`/`handoffOpen` pair, scoped
+    // per-deal here since the board can win any card, not just "the" one.
+    // `justWonDeal` drives the transient inline Alert; `handoffDeal` drives
+    // the modal — kept separate so dismissing the banner (clearing
+    // `justWonDeal`) never closes an already-open modal, and so opening the
+    // modal clears the banner (see the Alert's own action button below).
+    const [justWonDeal, setJustWonDeal] = useState<Opportunity | null>(null);
+    const [handoffDeal, setHandoffDeal] = useState<Opportunity | null>(null);
 
     const columnRefs = useRef<Partial<Record<PipelineStage, HTMLDivElement | null>>>({});
 
@@ -199,11 +210,26 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
       const { payload } = pendingMove;
       setIsConfirming(true);
       try {
-        await moveOpportunity.mutateAsync({
+        const updated = await moveOpportunity.mutateAsync({
           id: payload.opportunityId,
           stage: payload.stage,
           stageOrder: payload.stageOrder,
         });
+        // Same gate as OpportunityDetail.tsx's stage-menu equivalent:
+        // project:write AND deal-edit rights (`canDragDeal` — the same
+        // check the backend's POST /:id/handoff makes via
+        // assertCanWriteOpportunity(user, "edit", deal), so a project:write
+        // holder who isn't this deal's PIC and lacks pipeline:edit_all
+        // would 403 on submit) — plus no pre-existing link (a WON deal
+        // can't re-enter WON, but stays defensive rather than assumed).
+        if (
+          payload.stage === "WON" &&
+          !updated.projectId &&
+          hasPermission(user, "project:write") &&
+          canDragDeal(user, updated)
+        ) {
+          setJustWonDeal(updated);
+        }
       } catch {
         // Surfaced via the isError Alert below; nothing else to do here.
       } finally {
@@ -259,6 +285,35 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
             <AlertDescription>
               Could not move the opportunity: {(moveOpportunity.error as Error).message}
             </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Non-blocking inline offer, not a modal ambush (PRD §2.10) —
+            mirrors OpportunityDetail.tsx's own post-won Alert. */}
+        {justWonDeal && (
+          <Alert variant="success">
+            <AlertDescription>
+              "{justWonDeal.title}" won — create the delivery project?
+            </AlertDescription>
+            <AlertAction>
+              <button
+                type="button"
+                onClick={() => {
+                  setHandoffDeal(justWonDeal);
+                  setJustWonDeal(null);
+                }}
+                className="rounded-sm bg-primary px-3 py-1 font-display text-[12px] font-bold text-on-primary hover:bg-primary-container"
+              >
+                Create project
+              </button>
+              <button
+                type="button"
+                onClick={() => setJustWonDeal(null)}
+                className="rounded-sm px-2.5 py-1 text-[12px] font-semibold text-on-surface-variant hover:bg-surface-container"
+              >
+                Dismiss
+              </button>
+            </AlertAction>
           </Alert>
         )}
 
@@ -375,6 +430,12 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
             busy={isConfirming}
           />
         )}
+
+        <HandoffProjectModal
+          open={handoffDeal !== null}
+          onClose={() => setHandoffDeal(null)}
+          deal={handoffDeal}
+        />
       </div>
     );
   },

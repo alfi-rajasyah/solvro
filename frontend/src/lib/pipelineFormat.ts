@@ -62,6 +62,37 @@ export const STAGE_ORDER: PipelineStage[] = [
 export const TERMINAL_STAGES: readonly PipelineStage[] = ["WON", "DROP"];
 
 /**
+ * Single source of truth for the "how far along the funnel" alpha ramp
+ * every Pipeline funnel-style visualization draws on the shared `primary`
+ * accent token — `PipelineKpiBar.tsx`'s `FunnelStrip`,
+ * `PipelineOverviewPanel.tsx`'s `StageDistribution`, and
+ * `PipelineAnalyticsSection.tsx`'s conversion-funnel chart each previously
+ * hand-declared an identical copy of these same seven numbers (finding
+ * N2). `DROP`/`HOLD` carry a `0` placeholder only so this Record stays
+ * total over `PipelineStage` — neither stage renders via this alpha ramp at
+ * all: all three call sites give DROP/HOLD their own dedicated rose/amber
+ * tone instead of a `primary` alpha step, matching `StageChip`'s treatment
+ * of those two stages everywhere else in the app. Tailwind-class consumers
+ * (PipelineKpiBar.tsx, PipelineOverviewPanel.tsx) can't derive their class
+ * strings from this at runtime — Tailwind's content scanner only detects
+ * literal `bg-primary/NN` substrings, not string-interpolated ones — so
+ * those two sites keep a small local `alpha -> literal class` lookup keyed
+ * off these same numbers instead. This Record is the one place the
+ * *numbers* themselves live.
+ */
+export const STAGE_ALPHA: Record<PipelineStage, number> = {
+  ASSESSMENT: 0.2,
+  RFP: 0.35,
+  POC: 0.5,
+  TECHNICAL_CLARIFICATION: 0.65,
+  DELIVER_PROPOSAL: 0.8,
+  WAITING_RESPONSE: 0.9,
+  WON: 1,
+  DROP: 0,
+  HOLD: 0,
+};
+
+/**
  * Full Indonesian Rupiah rendering for detail surfaces (e.g. the opportunity
  * detail page). Matches Velora's `formatCurrency` (../VeloraApp
  * lib/utils.ts) verbatim: `Intl.NumberFormat("id-ID", { style: "currency",

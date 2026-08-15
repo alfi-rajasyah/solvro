@@ -3,12 +3,20 @@ import { z } from "zod";
 import { PipelineStage } from "@prisma/client";
 import type { Opportunity, Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, requirePermission } from "../http/auth.js";
+import { hasPermission, requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { isValidDayString, utcMidnightOfDayString } from "../lib/dateBoundary.js";
 import { assertCanWriteOpportunity, PIC_SELECT } from "../lib/pipelineAccess.js";
 import { logger } from "../logger.js";
+// Anti-drift seam (finding S6): the handoff body is byte-for-byte the same
+// shape as a plain project create, so this reuses routes/projects.ts's own
+// `createProjectSchema` (which already composes `wipLimitsSchema`) instead
+// of a hand-duplicated copy — the two schemas had already drifted apart
+// once (this file's own `.strict()`-vs-not history) before being caught by
+// review. `wipLimitsSchema` isn't imported directly here — it only ever
+// appears nested inside `createProjectSchema`.
+import { createProjectSchema } from "./projects.js";
 
 // Pipeline module (native port of Velora — docs/plans/pipeline-native-port-plan.md).
 // CRUD + the single stage-transition writer for Opportunity. Deal visibility
@@ -711,3 +719,116 @@ opportunitiesRouter.delete("/:id", validate("params", idParamSchema), async (req
   });
   res.status(204).end();
 });
+
+// --- POST /:id/handoff ------------------------------------------------------
+//
+// Won-deal -> Solvro project handoff, ONE server transaction. Native-port
+// simplification over the PRD's §2.10/§4.4 "frontend-orchestrated" flow
+// (POST /projects then PATCH the deal's solvro_project_id from the browser,
+// with a compensating "unlink" if the second call failed): with Pipeline
+// now living inside this same backend and database, there's no second
+// service to coordinate with, so the whole handoff — create the project,
+// link the deal, log the activity — is one atomic unit. Either it all
+// happens or none of it does; the PRD's compensating unlink has nothing
+// left to compensate for.
+//
+// No unlink endpoint in v1 (deliberate): the only way `Opportunity.projectId`
+// gets set is this route, and it only ever sets it once (see the
+// already_linked guard below), so there's no "undo a bad automatic link"
+// case to build for. If a link ever needs reversing by hand, that's an
+// admin DB operation until a real product need for a route surfaces.
+
+opportunitiesRouter.post(
+  "/:id/handoff",
+  validate("params", idParamSchema),
+  validate("body", createProjectSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const body = req.body as z.infer<typeof createProjectSchema>;
+    const current = await findOpportunityOr404(id);
+
+    // Two gates compose here — the act both edits the deal (linking it) AND
+    // creates a project. Deal-edit gate first, matching PATCH/:id and
+    // /move's check order (a caller who can't touch this deal at all gets
+    // that 403 before anything else); project:write checked explicitly
+    // second since assertCanWriteOpportunity only ever covers the
+    // pipeline:* half.
+    assertCanWriteOpportunity(req.user!, "edit", current);
+    if (!hasPermission(req.user!, "project:write")) {
+      throw new HttpError(403, "forbidden", "Missing permission: project:write");
+    }
+
+    if (current.stage !== PipelineStage.WON) {
+      throw new HttpError(409, "not_won", "Only a deal in stage WON can be handed off to a project");
+    }
+    if (current.projectId !== null) {
+      throw new HttpError(409, "already_linked", "This deal is already linked to a project");
+    }
+
+    // Same default POST /projects applies when the body omits tamId: the
+    // caller becomes the project's TAM.
+    const tamId = body.tamId ?? req.user!.sub;
+
+    const { project, opportunity } = await prisma.$transaction(async (tx) => {
+      // Field-for-field mirror of POST /projects's `prisma.project.create`
+      // call (routes/projects.ts) — that handler's only side effect beyond
+      // the create itself is the tamId default applied above; it does no
+      // baseline locking, section bootstrapping, or any other setup to
+      // replicate here.
+      const project = await tx.project.create({
+        data: {
+          name: body.name,
+          description: body.description,
+          saId: body.saId,
+          tamId,
+          customerId: body.customerId,
+          status: body.status ?? "PLANNING",
+          wipLimits: body.wipLimits ?? undefined,
+          excludeFromPortfolio: body.excludeFromPortfolio ?? false,
+        },
+      });
+
+      // Conditional update, not a plain `.update`: closes the race where
+      // two handoff calls for the same deal both pass the pre-transaction
+      // not_won/already_linked checks above before either commits. If
+      // another request won that race, this updates 0 rows and throwing
+      // here rolls back the whole transaction — including the project just
+      // created above — so no orphaned, unlinked project is left behind.
+      const linked = await tx.opportunity.updateMany({
+        where: { id, projectId: null, stage: PipelineStage.WON },
+        data: { projectId: project.id },
+      });
+      if (linked.count === 0) {
+        // The pre-transaction not_won/already_linked checks above raced
+        // with another request that committed in between (finding N7):
+        // re-read the row inside this same transaction to report which
+        // guard actually lost the race, rather than always assuming
+        // already_linked — a concurrent move OUT of WON is just as
+        // possible as a concurrent handoff by another caller, and the two
+        // deserve their own distinct 409 codes same as the eager checks do.
+        const latest = await tx.opportunity.findUniqueOrThrow({ where: { id } });
+        if (latest.stage !== PipelineStage.WON) {
+          throw new HttpError(409, "not_won", "Only a deal in stage WON can be handed off to a project");
+        }
+        throw new HttpError(409, "already_linked", "This deal was handed off by another request");
+      }
+
+      await tx.opportunityActivity.create({
+        data: {
+          opportunityId: id,
+          userId: req.user!.sub,
+          note: `Handed off to project "${project.name}"`,
+        },
+      });
+
+      const opportunity = await tx.opportunity.findUniqueOrThrow({
+        where: { id },
+        include: { pic: { select: PIC_SELECT } },
+      });
+
+      return { project, opportunity };
+    });
+
+    res.status(201).json({ project, opportunity: serializeOpportunity(opportunity as OpportunityWithPic) });
+  },
+);

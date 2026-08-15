@@ -12,10 +12,11 @@ import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { HandoffProjectModal } from "@/components/DealCard";
 import { OpportunityFormModal } from "@/components/OpportunityFormModal";
 import { canDeleteDeal, canDragDeal, needsTerminalConfirm } from "@/components/pipeline/boardLogic";
 import { probabilityTone } from "@/components/pipeline/kpi";
-import { Alert, AlertDescription } from "@/components/reui/alert";
+import { Alert, AlertAction, AlertDescription } from "@/components/reui/alert";
 import {
   Timeline,
   TimelineIndicator,
@@ -31,7 +32,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ApiError } from "@/lib/api";
-import { useAuth } from "@/lib/auth";
+import { hasPermission, useAuth } from "@/lib/auth";
 import {
   formatIDR,
   formatPipelineDate,
@@ -125,6 +126,14 @@ export function OpportunityDetail() {
   const [pendingStage, setPendingStage] = useState<PipelineStage | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  // Post-won handoff offer (PRD §2.10, M5.24): a transient nudge shown
+  // right after THIS SESSION's own move into WON succeeds — separate from
+  // the persistent "Create project" button below, which covers the case
+  // where this banner was dismissed or the deal was already WON on load
+  // (see that button's own `stage === "WON" && !projectId` gate — the offer
+  // must not evaporate just because this one-shot banner was closed).
+  const [justWonOffer, setJustWonOffer] = useState(false);
+  const [handoffOpen, setHandoffOpen] = useState(false);
 
   if (isLoading) {
     return (
@@ -172,12 +181,26 @@ export function OpportunityDetail() {
   // mutation's own onError already rolled back any optimistic write).
   async function handleConfirmStage() {
     if (!deal || !pendingStage) return;
+    const targetStage = pendingStage;
     try {
       await moveOpportunity.mutateAsync({
         id: deal.id,
-        stage: pendingStage,
+        stage: targetStage,
         stageOrder: APPEND_TO_STAGE,
       });
+      // Only a REAL entry into WON offers the handoff — reordering an
+      // already-WON deal never reaches here (handleSelectStage's own
+      // `stage === deal.stage` guard above short-circuits a same-stage
+      // pick before pendingStage is ever set). Same two-part gate as the
+      // persistent button below: project:write AND deal-edit rights
+      // (`canEditDeal`) — the backend's POST /:id/handoff checks
+      // `assertCanWriteOpportunity(user, "edit", deal)` in addition to
+      // project:write, so a project:write holder who isn't this deal's own
+      // PIC and lacks pipeline:edit_all would 403 on submit; no point
+      // nudging toward a form that's guaranteed to fail.
+      if (targetStage === "WON" && hasPermission(user, "project:write") && canEditDeal) {
+        setJustWonOffer(true);
+      }
     } catch {
       // Surfaced via the isError Alert below.
     } finally {
@@ -224,6 +247,38 @@ export function OpportunityDetail() {
                 with `text-lg` here — `font-mono` applies only the
                 monospace font family. */}
             <span className="font-mono text-lg text-primary">{formatIDR(deal.dealValue)}</span>
+            {/* Persistent handoff affordance (PRD §2.10) — deliberately NOT
+                gated on the transient `justWonOffer` banner below: it must
+                stay available for as long as `stage === "WON" && !projectId`
+                holds, including a fresh page load on an already-WON deal or
+                after the banner's own Dismiss. Already-linked WON deals get
+                a plain link to the project instead — no permission gate on
+                that one, since following a link isn't a write. Gated on
+                `project:write` AND `canEditDeal` — see handleConfirmStage's
+                matching gate above for why both are needed (the backend's
+                POST /:id/handoff enforces both). */}
+            {deal.stage === "WON" && deal.projectId && (
+              <Link
+                to={`/projects/${deal.projectId}`}
+                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+              >
+                <span className="material-symbols-outlined text-base">business_center</span>
+                View project
+              </Link>
+            )}
+            {deal.stage === "WON" &&
+              !deal.projectId &&
+              hasPermission(user, "project:write") &&
+              canEditDeal && (
+              <button
+                type="button"
+                onClick={() => setHandoffOpen(true)}
+                className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-primary hover:bg-primary/10"
+              >
+                <span className="material-symbols-outlined text-base">rocket_launch</span>
+                Create project
+              </button>
+            )}
             {canEditDeal && (
               <button
                 type="button"
@@ -260,6 +315,35 @@ export function OpportunityDetail() {
           <AlertDescription>
             Could not delete this opportunity: {(deleteOpportunity.error as Error).message}
           </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Non-blocking inline offer, not a modal ambush (PRD §2.10) — only
+          for as long as this deal has no linked project yet; a second stage
+          change on an already-linked deal (extremely unlikely — WON is
+          terminal, see STAGE_MENU) wouldn't re-show a stale offer. */}
+      {justWonOffer && !deal.projectId && (
+        <Alert variant="success">
+          <AlertDescription>Deal won — create the delivery project?</AlertDescription>
+          <AlertAction>
+            <button
+              type="button"
+              onClick={() => {
+                setHandoffOpen(true);
+                setJustWonOffer(false);
+              }}
+              className="rounded-sm bg-primary px-3 py-1 font-display text-[12px] font-bold text-on-primary hover:bg-primary-container"
+            >
+              Create project
+            </button>
+            <button
+              type="button"
+              onClick={() => setJustWonOffer(false)}
+              className="rounded-sm px-2.5 py-1 text-[12px] font-semibold text-on-surface-variant hover:bg-surface-container"
+            >
+              Dismiss
+            </button>
+          </AlertAction>
         </Alert>
       )}
 
@@ -323,6 +407,8 @@ export function OpportunityDetail() {
       />
 
       <OpportunityFormModal open={editOpen} onClose={() => setEditOpen(false)} opportunity={deal} />
+
+      <HandoffProjectModal open={handoffOpen} onClose={() => setHandoffOpen(false)} deal={deal} />
     </div>
   );
 }

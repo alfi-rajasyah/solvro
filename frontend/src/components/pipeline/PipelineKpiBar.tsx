@@ -5,7 +5,7 @@
 // label-caps header, mono value) — that component isn't exported, so this is
 // a parallel (not an import), same "copy, don't extract" precedent
 // kanban-v2's own files document.
-import { formatIDRCompact, STAGE_LABELS, type PipelineStage } from "@/lib/pipelineFormat";
+import { formatIDRCompact, STAGE_ALPHA, STAGE_LABELS, type PipelineStage } from "@/lib/pipelineFormat";
 import type { Opportunity } from "@/lib/queries";
 import { computePipelineKpis, type FunnelBucket } from "./kpi";
 
@@ -115,14 +115,30 @@ function KpiTile({ label, value, hint, icon, tone }: KpiTileProps) {
 // use for HOLD everywhere else instead of implying progress. DROP is
 // excluded from the funnel entirely (PRD §2.3) — its entry exists only so
 // this Record is total over `PipelineStage`.
+//
+// The ramp NUMBERS come from `STAGE_ALPHA` (lib/pipelineFormat.ts, finding
+// N2) — this table only translates them into the matching Tailwind class,
+// kept as literal `bg-primary/NN` strings (not string-interpolated) so
+// Tailwind's content scanner can still find each one as a literal
+// substring in this file.
+const ALPHA_TO_BG_PRIMARY_CLASS: Record<number, string> = {
+  [STAGE_ALPHA.ASSESSMENT]: "bg-primary/20",
+  [STAGE_ALPHA.RFP]: "bg-primary/35",
+  [STAGE_ALPHA.POC]: "bg-primary/50",
+  [STAGE_ALPHA.TECHNICAL_CLARIFICATION]: "bg-primary/65",
+  [STAGE_ALPHA.DELIVER_PROPOSAL]: "bg-primary/80",
+  [STAGE_ALPHA.WAITING_RESPONSE]: "bg-primary/90",
+  [STAGE_ALPHA.WON]: "bg-primary",
+};
+
 const FUNNEL_FILL: Record<PipelineStage, string> = {
-  ASSESSMENT: "bg-primary/20",
-  RFP: "bg-primary/35",
-  POC: "bg-primary/50",
-  TECHNICAL_CLARIFICATION: "bg-primary/65",
-  DELIVER_PROPOSAL: "bg-primary/80",
-  WAITING_RESPONSE: "bg-primary/90",
-  WON: "bg-primary",
+  ASSESSMENT: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.ASSESSMENT],
+  RFP: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.RFP],
+  POC: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.POC],
+  TECHNICAL_CLARIFICATION: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.TECHNICAL_CLARIFICATION],
+  DELIVER_PROPOSAL: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.DELIVER_PROPOSAL],
+  WAITING_RESPONSE: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.WAITING_RESPONSE],
+  WON: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.WON],
   DROP: "bg-chip-rose-text",
   HOLD: "bg-chip-amber-text",
 };

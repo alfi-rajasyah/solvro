@@ -448,15 +448,35 @@ export interface CreateProjectInput {
   excludeFromPortfolio?: boolean;
 }
 
+// The bare row `prisma.project.create` returns (backend/src/routes/
+// projects.ts's POST "/" — and POST /opportunities/:id/handoff below, which
+// mirrors that same `prisma.project.create` call verbatim) — no `sa`/`tam`/
+// `customer`/`_count`, unlike `ProjectSummary`, which only reflects GET
+// /projects's own `include`. `ProjectSummary` was mistyped here (finding
+// N5): nothing currently reads more than `.id` off this result, so it
+// never surfaced as a runtime bug, but a caller trusting the type to read
+// e.g. `.tam.username` off a freshly-created project would silently get
+// `undefined` with no type error to catch it.
+export type CreatedProject = Omit<ProjectSummary, "sa" | "tam" | "customer" | "_count">;
+
 export function useCreateProject() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: CreateProjectInput) =>
-      apiRequest<ProjectSummary>("/projects", { method: "POST", body: input }),
+      apiRequest<CreatedProject>("/projects", { method: "POST", body: input }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["projects"] });
       qc.invalidateQueries({ queryKey: queryKeys.overview });
       qc.invalidateQueries({ queryKey: queryKeys.customers });
+      // A brand-new project always changes the executive portfolio
+      // roll-up too (finding S1, pre-existing gap) — every project counts
+      // toward it by default (`excludeFromPortfolio` starts `false` unless
+      // the create form opts out), so a create needs this invalidation the
+      // same way `useUpdateProject` below already invalidates it on an
+      // `excludeFromPortfolio` flip. Without this, a newly created project
+      // wouldn't show up on the Executive dashboard until *something else*
+      // happened to invalidate `executiveReport`.
+      qc.invalidateQueries({ queryKey: queryKeys.executiveReport() });
     },
   });
 }
@@ -1849,6 +1869,62 @@ export function useMoveOpportunity() {
       qc.invalidateQueries({ queryKey: pipelineKeys.list });
       qc.invalidateQueries({ queryKey: pipelineKeys.detail(id) });
       qc.invalidateQueries({ queryKey: pipelineKeys.activities(id) });
+    },
+  });
+}
+
+// Won-deal handoff (PRD §2.10, M5.24) — `POST /opportunities/:id/handoff`.
+// Body is the SAME shape as `POST /projects` (`CreateProjectInput` above;
+// the backend's own handoff schema actually mirrors plain project
+// creation's tamId leniency too — an omitted tamId defaults to the caller
+// — but `HandoffProjectModal` (DealCard.tsx) requires an explicit pick
+// anyway: the caller completing a handoff is typically the SA, not the
+// intended TAM, so that default would misassign ownership more often than
+// not. That's a calling-form choice, not re-typed here). The native port
+// does the whole
+// project-create + `Opportunity.projectId` link in one backend transaction
+// (CLAUDE.md's native-port guardrail: no compensating unlink), so there's
+// nothing to roll back client-side on failure — this mutation is plain
+// (no onMutate optimism), matching useCreateProject's own shape above.
+// `project` is `CreatedProject` (finding N5), not `ProjectSummary` — this
+// route's own `prisma.project.create` call (backend/src/routes/
+// opportunities.ts's POST /:id/handoff) mirrors POST /projects's, with the
+// exact same no-`include` shape; see `CreatedProject`'s doc comment above.
+export interface HandoffOpportunityResult {
+  project: CreatedProject;
+  opportunity: Opportunity;
+}
+
+export function useHandoffOpportunity(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateProjectInput) =>
+      apiRequest<HandoffOpportunityResult>(`/opportunities/${id}/handoff`, {
+        method: "POST",
+        body: input,
+      }),
+    onSuccess: () => {
+      // `pipelineKeys.root` (not just `list`/`detail(id)`): the deal's
+      // `projectId` link is new state every pipeline surface showing this
+      // deal should pick up. `["projects"]` is the same prefix-match key
+      // `useCreateProject` above invalidates — matches `queryKeys.projects`'s
+      // `["projects", filter]` shape by array prefix, catching every
+      // customer-filtered projects-list cache entry, not just the
+      // unfiltered one.
+      qc.invalidateQueries({ queryKey: pipelineKeys.root });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      // A handoff is ALSO a project create in every way that matters to
+      // these three caches (finding S1) — `useCreateProject` above
+      // invalidates all three for the exact same reason (new/changed
+      // project membership reshapes Overview's counts, the Customers list's
+      // `_count.projects`, and the Executive roll-up), and this mutation
+      // creates a project too, via the same backend `prisma.project.create`
+      // call. Without these, the new delivery project wouldn't appear on
+      // any of those three surfaces until something unrelated happened to
+      // invalidate them first.
+      qc.invalidateQueries({ queryKey: queryKeys.overview });
+      qc.invalidateQueries({ queryKey: queryKeys.customers });
+      qc.invalidateQueries({ queryKey: queryKeys.executiveReport() });
     },
   });
 }
