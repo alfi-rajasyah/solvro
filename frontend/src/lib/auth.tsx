@@ -41,6 +41,12 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   { value: "project:write", label: "Manage projects", hint: "Create/edit projects, risks, sections, baselines." },
   { value: "task:read", label: "View tasks", hint: "See tasks and subtasks." },
   { value: "task:write", label: "Manage tasks", hint: "Create, edit, move, and delete tasks." },
+  { value: "pipeline:view", label: "View pipeline", hint: "See the Pipeline board, opportunity details, and Pipeline analytics." },
+  { value: "pipeline:create", label: "Create opportunities", hint: "Add new opportunities to the Pipeline board." },
+  { value: "pipeline:edit_own", label: "Edit own opportunities", hint: "Edit and change the stage of opportunities you're the PIC for." },
+  { value: "pipeline:edit_all", label: "Edit all opportunities", hint: "Edit and change the stage of any opportunity, not just your own." },
+  { value: "pipeline:delete_own", label: "Delete own opportunities", hint: "Delete opportunities you're the PIC for." },
+  { value: "pipeline:delete_all", label: "Delete all opportunities", hint: "Delete any opportunity, not just your own." },
   { value: "report:executive", label: "Executive dashboard", hint: "See the org-wide Executive portfolio dashboard (all projects across all TAMs) and overdue-projects monitoring. Read-only." },
 ];
 

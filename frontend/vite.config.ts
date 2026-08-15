@@ -44,6 +44,10 @@ export default defineConfig({
         // App shell precache — index.html + built assets (JS/CSS/fonts/icons).
         globPatterns: ["**/*.{js,css,html,png,svg,ico,webmanifest}"],
         navigateFallback: "/index.html",
+        // Navigations under /api/ must reach the network, never the cached
+        // app shell — the NavigationRoute is registered before the NetworkOnly
+        // runtime route, so without this denylist it wins for navigations.
+        navigateFallbackDenylist: [/^\/api\//],
         runtimeCaching: [
           {
             // API responses carry auth state and must always be fresh —
