@@ -6,13 +6,16 @@ import {
   type ColumnDef,
   type SortingState,
 } from "@tanstack/react-table";
+import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { Modal } from "@/components/Modal";
+import { Chip } from "@/components/StatusChip";
 import { Tabs } from "@/components/Tabs";
 import { ApiError } from "@/lib/api";
 import {
   type AdminProject,
   type AdminRole,
   type AdminUser,
+  type PipelineImportLogEntry,
   useAdminCreateRole,
   useAdminCreateUser,
   useAdminDeleteRole,
@@ -26,6 +29,7 @@ import {
   useAdminUpdateRolePermissions,
   useAdminUsers,
   useAuthSettings,
+  usePipelineImports,
   useUpdateAuthSettings,
 } from "@/lib/queries";
 import type { Role } from "@/lib/auth";
@@ -38,13 +42,14 @@ import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type Tab = "users" | "roles" | "signin" | "projects";
+type Tab = "users" | "roles" | "signin" | "projects" | "pipeline";
 
 const TAB_ITEMS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: "users", label: "Users" },
   { key: "roles", label: "Roles" },
   { key: "signin", label: "Sign-in" },
   { key: "projects", label: "Project Override" },
+  { key: "pipeline", label: "Pipeline" },
 ];
 
 // Domain regex matches the backend validator (PATCH /admin/settings/auth).
@@ -59,6 +64,9 @@ const EMPTY_USERS: AdminUser[] = [];
 // tabs' own DataGrids (T1 migration).
 const EMPTY_ROLES: AdminRole[] = [];
 const EMPTY_PROJECTS: AdminProject[] = [];
+// Same rationale as EMPTY_USERS above, for the Pipeline tab's own DataGrid
+// (M4.19).
+const EMPTY_IMPORTS: PipelineImportLogEntry[] = [];
 
 export function Admin() {
   const [tab, setTab] = useState<Tab>("users");
@@ -81,6 +89,7 @@ export function Admin() {
         {tab === "roles" && <RolesTab />}
         {tab === "signin" && <SignInTab />}
         {tab === "projects" && <ProjectsTab />}
+        {tab === "pipeline" && <PipelineTab />}
       </div>
     </div>
   );
@@ -1727,6 +1736,233 @@ function ProjectsTab() {
             now lands on the same `surface-container-lowest` as the Users
             (and now Roles) tab's grid instead of the old `bg-surface`,
             unifying all three tabs' panel treatment. */}
+        <DataGridContainer className="rounded-sm border border-outline-variant bg-surface-container-lowest">
+          <DataGridScrollArea>
+            <DataGridTable />
+          </DataGridScrollArea>
+        </DataGridContainer>
+      </DataGrid>
+    </div>
+  );
+}
+
+// ---- Pipeline tab (import history, M4.19) ---------------------------------
+//
+// Read-only history of every Excel/CSV import run against the Pipeline board
+// (PRD §2.9) — `PipelineImportDialog.tsx` is the write side. Its data source,
+// GET /opportunities/imports, is gated on `pipeline:view` rather than an
+// admin-only permission: it deliberately lives on the opportunities router
+// (backend/src/routes/opportunities.ts) so the spine `routes/admin.ts` stays
+// untouched. This tab is still admin-only in practice because the whole
+// `/admin` route is behind `AdminGuard` — the permission check on the
+// endpoint itself is a secondary, meaningfully-restrictive gate, not the
+// only one.
+
+function PipelineTab() {
+  const { data: imports, isLoading, isError } = usePipelineImports();
+  // Loading-safe fallback — same rationale as UsersTab/RolesTab/ProjectsTab's
+  // own `rows` above.
+  const rows = imports ?? EMPTY_IMPORTS;
+  // No default sort — same rationale as the other three tabs' pilots. The
+  // backend already orders by createdAt desc (take 100), so the unsorted
+  // table reads newest-run-first without any client-side sort applied.
+  const [sorting, setSorting] = useState<SortingState>([]);
+
+  // Not wrapped in useMemo, for the same reason as the other three tabs'
+  // columns: this table has no resizing/pinning/visibility state for a
+  // stale columns identity to disturb, and there are no handlers to close
+  // over here at all (this tab is read-only, unlike Users/Roles/Projects).
+  const columns: ColumnDef<PipelineImportLogEntry>[] = [
+    {
+      id: "when",
+      // Numeric accessor for correct chronological sort — no explicit
+      // sortingFn needed (decision 7's ≤10-row auto-detect gap is a
+      // string-column problem; TanStack's number auto-detect is reliable).
+      accessorFn: (row) => new Date(row.createdAt).getTime(),
+      header: ({ column }) => <DataGridColumnHeader column={column} title="When" />,
+      // House datetime rendering for this admin surface — same
+      // `new Date(...).toLocaleString()` this file already uses for the
+      // Sign-in tab's "Last updated" stamp (SignInTab, above).
+      cell: ({ row }) => (
+        <span className="font-mono text-xs text-on-surface-variant">
+          {new Date(row.original.createdAt).toLocaleString()}
+        </span>
+      ),
+      meta: { skeleton: <Skeleton className="h-3.5 w-32" /> },
+    },
+    {
+      id: "who",
+      // "" fallback so the sort comparator always sees a string — same
+      // convention as ProjectsTab's "sa" column and CustomerDetail.tsx's own
+      // SA/TAM columns.
+      accessorFn: (row) => row.user?.username ?? "",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Imported by" />,
+      // Person-name column — explicit sortingFn per lib/tableSort.ts's own
+      // rationale, same choice as PipelineList.tsx's "pic" column.
+      sortingFn: personNameSortingFn,
+      cell: ({ row }) => {
+        const user = row.original.user;
+        if (!user) return <span className="text-on-surface-variant/60">—</span>;
+        return (
+          <span className="flex min-w-0 items-center gap-1.5">
+            <AssigneeAvatar user={user} size="xs" />
+            <span className="truncate text-on-surface">{user.username}</span>
+          </span>
+        );
+      },
+      meta: { skeleton: <Skeleton className="h-5 w-24" /> },
+    },
+    {
+      id: "totalRows",
+      accessorKey: "totalRows",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Total" />,
+      cell: ({ row }) => (
+        <span className="font-mono text-[13px] tabular-nums text-on-surface">
+          {row.original.totalRows}
+        </span>
+      ),
+      meta: {
+        headerClassName: "text-right",
+        cellClassName: "text-right",
+        skeleton: <Skeleton className="ml-auto h-3.5 w-8" />,
+      },
+    },
+    {
+      id: "validCount",
+      accessorKey: "validCount",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Imported" />,
+      // text-primary — same meaning-color as PipelineImportDialog's own
+      // "done" step summary (validCount there is also text-primary).
+      cell: ({ row }) => (
+        <span className="font-mono text-[13px] tabular-nums text-primary">
+          {row.original.validCount}
+        </span>
+      ),
+      meta: {
+        headerClassName: "text-right",
+        cellClassName: "text-right",
+        skeleton: <Skeleton className="ml-auto h-3.5 w-8" />,
+      },
+    },
+    {
+      id: "skipCount",
+      accessorKey: "skipCount",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Skipped" />,
+      // text-warning — same meaning-color as PipelineImportDialog's own
+      // "done" step summary (skipCount there is also text-warning).
+      cell: ({ row }) => (
+        <span className="font-mono text-[13px] tabular-nums text-warning">
+          {row.original.skipCount}
+        </span>
+      ),
+      meta: {
+        headerClassName: "text-right",
+        cellClassName: "text-right",
+        skeleton: <Skeleton className="ml-auto h-3.5 w-8" />,
+      },
+    },
+    {
+      id: "invalidCount",
+      accessorKey: "invalidCount",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Invalid" />,
+      // text-error — same meaning-color as PipelineImportDialog's own "done"
+      // step summary (invalidCount there is also text-error).
+      cell: ({ row }) => (
+        <span className="font-mono text-[13px] tabular-nums text-error">
+          {row.original.invalidCount}
+        </span>
+      ),
+      meta: {
+        headerClassName: "text-right",
+        cellClassName: "text-right",
+        skeleton: <Skeleton className="ml-auto h-3.5 w-8" />,
+      },
+    },
+    {
+      id: "status",
+      // Numeric accessor (OK=1/ERROR=0) — same "sort enum by outcome"
+      // convention as UsersTab's own "status" column (active ? 1 : 0).
+      accessorFn: (row) => (row.status === "OK" ? 1 : 0),
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Status" />,
+      // Shared Chip (StatusChip.tsx) per the dispatch brief: OK → emerald,
+      // ERROR → rose.
+      cell: ({ row }) => (
+        <Chip tone={row.original.status === "OK" ? "emerald" : "rose"}>
+          {row.original.status}
+        </Chip>
+      ),
+      meta: { skeleton: <Skeleton className="h-4 w-14 rounded-full" /> },
+    },
+    {
+      id: "error",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Error" />,
+      // Free-text detail column, not a meaningful sort key — same
+      // "interactive/non-primitive column" exemption as RolesTab's
+      // "permissions" column and ProjectsTab's "reassign" column.
+      enableSorting: false,
+      cell: ({ row }) => {
+        const msg = row.original.errorMessage;
+        if (!msg) return <span className="text-on-surface-variant/60">—</span>;
+        // Truncated in the grid; full text on hover via `title` per the
+        // dispatch brief.
+        return (
+          <span className="block max-w-[280px] truncate text-error" title={msg}>
+            {msg}
+          </span>
+        );
+      },
+      meta: { skeleton: <Skeleton className="h-3.5 w-40" /> },
+    },
+  ];
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getRowId: (row) => row.id,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    // Pagination stays OFF (Checkpoint B, binding for every DataGrid table
+    // this phase). `pageSize` here only sizes the loading-skeleton row count.
+    initialState: { pagination: { pageSize: 8 } },
+  });
+
+  // Same isError-only short-circuit as the other three tabs: a fetch failure
+  // means there's nothing else on this tab worth rendering.
+  if (isError) return <p className="text-error">Failed to load import history.</p>;
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-on-surface-variant">
+        Every Excel/CSV import run against the Pipeline board, newest first.
+        Read-only — imports themselves happen from the board's Import button.
+      </p>
+      <DataGrid
+        table={table}
+        recordCount={rows.length}
+        isLoading={isLoading}
+        loadingMode="skeleton"
+        emptyMessage="No import runs yet."
+        tableLayout={{
+          dense: true,
+          rowBorder: true,
+          headerBorder: true,
+          headerBackground: false,
+          // SOLVRO PATCH — see Tasks.tsx's DataGrid pilot (reui-data-grid.md
+          // Checkpoint B, decision 6): "auto" sizes columns to content
+          // instead of TanStack's untouched 150px "fixed" default.
+          width: "auto",
+        }}
+        tableClassNames={{
+          // SOLVRO PATCH — Checkpoint B decision 2: the grid's own
+          // `headerBackground` boolean resolves to the wrong token; pinned
+          // here instead, same as every other DataGrid table this phase.
+          header: "bg-surface-container-low",
+        }}
+      >
+        {/* SOLVRO PATCH — Level-1 hairline (DESIGN.md §4), same phase-wide
+            convention as every other DataGrid table on this page. */}
         <DataGridContainer className="rounded-sm border border-outline-variant bg-surface-container-lowest">
           <DataGridScrollArea>
             <DataGridTable />

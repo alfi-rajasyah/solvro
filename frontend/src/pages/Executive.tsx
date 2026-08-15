@@ -6,8 +6,10 @@ import {
   PortfolioCalendar,
   sortPortfolioRows,
 } from "@/components/portfolio/PortfolioCalendar";
+import { PipelineAnalyticsSection } from "@/components/pipeline/PipelineAnalyticsSection";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ProjectStatusChip } from "@/components/StatusChip";
+import { hasPermission, useAuth } from "@/lib/auth";
 import { type PortfolioProjectRow, useExecutiveReport } from "@/lib/queries";
 
 // Executive dashboard — org-wide portfolio roll-up. Two blocks: an
@@ -49,16 +51,26 @@ function ExecutiveBody({
 }: {
   data: { projects: PortfolioProjectRow[]; generatedAt: string };
 }) {
+  const { user } = useAuth();
   const { projects, generatedAt } = data;
   const overdue = projects.filter((p) => p.isOverdue);
+  // PRD §2.7: "Both fold-ins render only for users holding pipeline:view —
+  // a TAM without it sees today's pages unchanged and their browser never
+  // calls [the pipeline API]." Gated here (mount boundary), not inside
+  // PipelineAnalyticsSection, so a user lacking the permission never mounts
+  // the component that calls useOpportunities() in the first place.
+  const canViewPipeline = hasPermission(user, "pipeline:view");
 
   if (projects.length === 0) {
     return (
-      <EmptyState
-        icon="query_stats"
-        title="No projects yet"
-        message="Once projects exist across the org, they'll show up here as a portfolio roll-up."
-      />
+      <div className="space-y-8">
+        <EmptyState
+          icon="query_stats"
+          title="No projects yet"
+          message="Once projects exist across the org, they'll show up here as a portfolio roll-up."
+        />
+        {canViewPipeline && <PipelineAnalyticsSection />}
+      </div>
     );
   }
 
@@ -74,6 +86,7 @@ function ExecutiveBody({
 
       <OverdueProjectsSection projects={overdue} />
       <PortfolioTimelinesSection projects={projects} />
+      {canViewPipeline && <PipelineAnalyticsSection />}
     </div>
   );
 }

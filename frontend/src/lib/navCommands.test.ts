@@ -42,9 +42,16 @@ describe("filterNavCommands", () => {
       "/projects",
       "/customers",
       "/daily-review",
+      "/pipeline",
       "/executive",
       "/settings",
       "/admin",
     ]);
+  });
+
+  it("hides Pipeline without pipeline:view and shows it with the permission", () => {
+    expect(filterNavCommands(none, "").map((c) => c.label)).not.toContain("Pipeline");
+    const pipelineOnly = (p: string) => p === "pipeline:view";
+    expect(filterNavCommands(pipelineOnly, "").map((c) => c.label)).toContain("Pipeline");
   });
 });
