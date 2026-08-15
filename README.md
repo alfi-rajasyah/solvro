@@ -1,16 +1,14 @@
 # Solvro — Solution-to-Project Lifecycle Engine
 
-Solvro is a project management platform for **Technical Account Managers (TAMs)**. It gives TAMs a single high-density workspace to run customer projects — replacing the usual spread of a task tracker, a notes doc, and a reporting spreadsheet.
+Solvro is a project management platform for **Technical Account Managers (TAMs)** and **Solution Architects (SAs)**. It covers the full solution-to-project lifecycle in one high-density workspace — replacing a task tracker, a notes doc, and a standalone opportunity tracker.
 
 ## Overview
 
-The core loop Solvro is built around:
+The lifecycle Solvro is built around:
 
-1. A TAM logs **daily review notes** per project (internal or customer-facing).
-2. Solvro generates a **structured markdown export** per project — health, schedule variance vs. baseline, phase breakdown, task signals, open risks, and the last 14 days of customer-facing notes.
-3. The TAM drops that packet into their AI tool of choice and sends the summary to the customer.
-
-Everything else — Kanban, Gantt, risks, portfolio roll-ups — exists to feed that loop with accurate data.
+1. An SA tracks an **opportunity** through the sales pipeline — nine stages from Assessment to Won (or Drop/Hold) on a drag-and-drop board.
+2. A **won deal hands off** in one step: Solvro creates the delivery project from the deal, pre-filled and linked both ways.
+3. A TAM runs the delivery — Kanban, Gantt, risks, **daily review notes** per project (internal or customer-facing) — with portfolio and pipeline roll-ups for leadership.
 
 ## Features
 
@@ -18,8 +16,11 @@ Everything else — Kanban, Gantt, risks, portfolio roll-ups — exists to feed 
 - **Kanban board** — drag-and-drop task management (dnd-kit) with per-column WIP limits.
 - **Gantt chart** — hand-rolled, dependency arrows (hard/soft), milestones, unlimited subtask nesting, baseline lock for planned-vs-actual deviation, and Excel/PDF export.
 - **Timeline view** — phase-level linear visualization, distinct from the task-level Gantt.
-- **Daily Review** — dated project notes with `INTERNAL` / `CUSTOMER_FACING` visibility; internal notes never leak into exports.
-- **Reports** — one-click export packet per project (copy to clipboard or `.md` download), designed to be pasted into an external AI for customer summaries.
+- **Pipeline board** (`/pipeline`) — nine-stage opportunity Kanban with permission-gated drag, Won/Drop confirmations, per-column value sums, and a KPI bar; plus sortable List, PIC-by-stage Swimlane, and request-date Quarter views behind one switcher.
+- **Opportunity detail** — stage menu, reference links, an activity timeline with notes, and edit/delete gated by ownership; a won deal offers "Create project" on the spot.
+- **Excel/CSV import** — three-step dialog (template download, per-row validation preview, per-row results) with an Admin tab listing every import run.
+- **Pipeline analytics** — an Overview panel plus Executive fold-ins: conversion funnel, PIC leaderboard and performance table, 12-month trend, and a workload heatmap with per-PIC drill-down.
+- **Daily Review** — dated project notes with `INTERNAL` / `CUSTOMER_FACING` visibility; internal notes never leave the app.
 - **Executive dashboard** — org-wide portfolio roll-up, gated behind its own permission.
 - **Risk register** — project-scoped risks with category, probability × impact scoring, and mitigation status.
 - **Customers & services** — customer directory with service assignments at both the customer and project level.
@@ -50,7 +51,7 @@ The frontend never calls the backend directly — it always requests same-origin
 
 | Layer | Technology |
 |---|---|
-| Frontend | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query, React Router, dnd-kit, Recharts |
+| Frontend | React 18, TypeScript, Vite, Tailwind CSS, TanStack Query, React Router, dnd-kit, Recharts, xlsx (lazy-loaded, import dialog only) |
 | Backend | Node.js 20, Express, TypeScript, Prisma ORM, Zod validation, JWT + Google OAuth, pino |
 | Database | PostgreSQL 15 |
 | Testing | Vitest (backend), Playwright (e2e, desktop + mobile viewports) |
@@ -108,8 +109,8 @@ cd e2e && npm test            # Playwright (desktop + mobile projects)
 | Path | Contents |
 |---|---|
 | `backend/` | Express API, Prisma schema & migrations, seed and admin scripts |
-| `frontend/` | React SPA, Tailwind theme, hand-rolled Gantt, export layer |
-| `e2e/` | Playwright suite (auth, Kanban drag-and-drop, PWA, smoke) |
+| `frontend/` | React SPA, Tailwind theme, hand-rolled Gantt, Pipeline board & analytics |
+| `e2e/` | Playwright suite (auth, Kanban & Pipeline drag-and-drop, forms, import, PWA, smoke) |
 | `ci/` | CI compose stack used by GitHub Actions |
 | `setup.sh` | One-shot production installer / updater |
 | `CHANGELOG.md` | Running record of changes |

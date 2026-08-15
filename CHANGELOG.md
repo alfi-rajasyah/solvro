@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-08-15 — README describes the two-role product
+
+**`README.md`** — the readme now presents Solvro as the TAM + SA platform it is: the solution-to-project lifecycle in the overview, the Pipeline module (board, views, detail, import, analytics, handoff) in the feature list, `xlsx` in the stack table, and the Pipeline e2e specs in the repository layout. The long-removed Reports export packet finally left the feature list and the overview loop.
+
 ### Added — 2026-08-15 — Pipeline end-to-end tests and the one-time Velora data migration
 
 **`e2e/tests/pipeline-board.spec.ts`, `e2e/tests/pipeline-form.spec.ts`** — Playwright coverage for the whole Pipeline surface: board render (KPI bar, all nine stage columns, per-column value sums), cross-stage drag-and-drop with reload persistence, the Won confirmation dialog (cancel and confirm paths, including the resulting activity entry), view switching with `?view=` URL persistence, keyboard navigation from any card to its detail page, create/edit through the form modal, detail-page notes and links, the full three-step Excel/CSV import flow (template download included), and permission gating of the create/import affordances for view-only users.
