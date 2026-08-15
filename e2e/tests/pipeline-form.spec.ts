@@ -146,7 +146,10 @@ test.describe("Pipeline opportunity form — desktop", () => {
     await loginViaUi(page);
     await openPipeline(page);
 
-    await page.getByRole("button", { name: "New opportunity" }).click();
+    // .first(): on an EMPTY board (the CI stack's fresh DB) the board's
+    // empty-state renders its own "New opportunity" CTA alongside the page
+    // header's — both open the same modal, and strict mode otherwise fails.
+    await page.getByRole("button", { name: "New opportunity" }).first().click();
     const dialog = page.getByRole("dialog", { name: "New opportunity" });
     await expect(dialog).toBeVisible();
 
@@ -180,7 +183,10 @@ test.describe("Pipeline opportunity form — desktop", () => {
     await loginViaUi(page);
     await openPipeline(page);
 
-    await page.getByRole("button", { name: "New opportunity" }).click();
+    // .first(): on an EMPTY board (the CI stack's fresh DB) the board's
+    // empty-state renders its own "New opportunity" CTA alongside the page
+    // header's — both open the same modal, and strict mode otherwise fails.
+    await page.getByRole("button", { name: "New opportunity" }).first().click();
     const dialog = page.getByRole("dialog", { name: "New opportunity" });
     await expect(dialog).toBeVisible();
 
