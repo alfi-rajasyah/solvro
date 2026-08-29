@@ -10,13 +10,18 @@ import {
   TaskStatus,
 } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, requirePermission } from "../http/auth.js";
+import { hasPermission, requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import {
   ensureProjectVisible,
   projectVisibilityFilter,
 } from "../lib/visibility.js";
+import {
+  isValidDayString,
+  utcMidnightOf,
+  utcMidnightOfDayString,
+} from "../lib/dateBoundary.js";
 import {
   assertLabelsInProject,
   assertSectionInProject,
@@ -503,14 +508,33 @@ projectsRouter.post(
 // Project-scoped Daily Review notes.
 // INTERNAL is the default visibility; CUSTOMER_FACING is opt-in per note
 // and is the only visibility any customer-facing output may ever surface.
+// Plain calendar day ("yyyy-MM-dd", no time/zone) — noteDate/reviewDate are
+// `@db.Date` columns for exactly this reason. Same house day-string helper
+// routes/tasks.ts and routes/opportunities.ts use (lib/dateBoundary.ts).
+const dayStringSchema = z
+  .string()
+  .refine(isValidDayString, { message: "Must be a valid yyyy-MM-dd date" });
+
 const noteListQuerySchema = z.object({
   visibility: z.nativeEnum(NoteVisibility).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
+  from: dayStringSchema.optional(),
+  to: dayStringSchema.optional(),
 });
 
 const createNoteSchema = z.object({
   body: z.string().min(1).max(4000),
   visibility: z.nativeEnum(NoteVisibility).optional(),
+  noteDate: dayStringSchema.optional(),
+});
+
+const updateNoteSchema = z.object({
+  body: z.string().min(1).max(4000),
+});
+
+const noteIdParamSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  noteId: z.coerce.number().int().positive(),
 });
 
 projectsRouter.get(
@@ -519,15 +543,32 @@ projectsRouter.get(
   validate("query", noteListQuerySchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
-    const { visibility, limit } = req.query as unknown as z.infer<
+    const { visibility, limit, from, to } = req.query as unknown as z.infer<
       typeof noteListQuerySchema
     >;
     await ensureProjectVisible(req.user!, id);
 
+    const where: Prisma.ProjectNoteWhereInput = { projectId: id };
+    if (visibility) where.visibility = visibility;
+    if (from || to) {
+      where.noteDate = {
+        ...(from && { gte: utcMidnightOfDayString(from) }),
+        ...(to && { lte: utcMidnightOfDayString(to) }),
+      };
+    }
+
+    // An explicit `limit` always wins. Otherwise: a from/to window means the
+    // caller asked for a bounded range on purpose (e.g. the 14-day Project
+    // Overview block) — don't truncate it with the unwindowed default; only
+    // apply the default 50 cap when there's no window to bound the result.
+    const take = limit ?? (from || to ? undefined : 50);
+
     const notes = await prisma.projectNote.findMany({
-      where: { projectId: id, ...(visibility && { visibility }) },
-      orderBy: { createdAt: "desc" },
-      take: limit ?? 50,
+      where,
+      // noteDate desc keeps a from/to window view stable regardless of
+      // when each note was actually written.
+      orderBy: [{ noteDate: "desc" }, { id: "desc" }],
+      take,
       include: { author: { select: { id: true, username: true } } },
     });
     res.json(notes);
@@ -548,12 +589,140 @@ projectsRouter.post(
       data: {
         projectId: id,
         authorId: req.user!.sub,
+        noteDate: body.noteDate
+          ? utcMidnightOfDayString(body.noteDate)
+          : utcMidnightOf(Date.now()),
         body: body.body,
         visibility: body.visibility ?? "INTERNAL",
       },
       include: { author: { select: { id: true, username: true } } },
     });
     res.status(201).json(note);
+  },
+);
+
+projectsRouter.patch(
+  "/:id/notes/:noteId",
+  requirePermission("project:write"),
+  validate("params", noteIdParamSchema),
+  validate("body", updateNoteSchema),
+  async (req, res) => {
+    const { id, noteId } = req.params as unknown as z.infer<typeof noteIdParamSchema>;
+    const body = req.body as z.infer<typeof updateNoteSchema>;
+    await ensureProjectVisible(req.user!, id);
+
+    const note = await prisma.projectNote.findFirst({
+      where: { id: noteId, projectId: id },
+    });
+    if (!note) throw new HttpError(404, "note_not_found", "Note not found");
+    if (note.authorId !== req.user!.sub) {
+      throw new HttpError(403, "not_note_author", "Only the author may edit this note");
+    }
+
+    const updated = await prisma.projectNote.update({
+      where: { id: noteId },
+      data: { body: body.body },
+      include: { author: { select: { id: true, username: true } } },
+    });
+    res.json(updated);
+  },
+);
+
+projectsRouter.delete(
+  "/:id/notes/:noteId",
+  requirePermission("project:write"),
+  validate("params", noteIdParamSchema),
+  async (req, res) => {
+    const { id, noteId } = req.params as unknown as z.infer<typeof noteIdParamSchema>;
+    await ensureProjectVisible(req.user!, id);
+
+    const note = await prisma.projectNote.findFirst({
+      where: { id: noteId, projectId: id },
+    });
+    if (!note) throw new HttpError(404, "note_not_found", "Note not found");
+    if (note.authorId !== req.user!.sub && !hasPermission(req.user!, "*")) {
+      throw new HttpError(
+        403,
+        "not_note_author",
+        "Only the author or an admin may delete this note",
+      );
+    }
+
+    await prisma.projectNote.delete({ where: { id: noteId } });
+    res.status(204).send();
+  },
+);
+
+// Project-scoped daily reviews — one row per (project, user, day), marking
+// that the caller looked at the project that day. Upsert semantics: POSTing
+// an already-reviewed day is a no-op that returns the existing row with 200
+// instead of a duplicate-key error.
+const createReviewSchema = z.object({
+  reviewDate: dayStringSchema,
+});
+
+const reviewDateParamSchema = z.object({
+  id: z.coerce.number().int().positive(),
+  reviewDate: dayStringSchema,
+});
+
+projectsRouter.post(
+  "/:id/reviews",
+  requirePermission("project:write"),
+  validate("params", idParamSchema),
+  validate("body", createReviewSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const { reviewDate } = req.body as z.infer<typeof createReviewSchema>;
+    await ensureProjectVisible(req.user!, id);
+
+    const reviewDateValue = utcMidnightOfDayString(reviewDate);
+    const existing = await prisma.projectReview.findUnique({
+      where: {
+        projectId_userId_reviewDate: {
+          projectId: id,
+          userId: req.user!.sub,
+          reviewDate: reviewDateValue,
+        },
+      },
+    });
+    if (existing) {
+      res.status(200).json(existing);
+      return;
+    }
+
+    const review = await prisma.projectReview.create({
+      data: {
+        projectId: id,
+        userId: req.user!.sub,
+        reviewDate: reviewDateValue,
+      },
+    });
+    res.status(201).json(review);
+  },
+);
+
+projectsRouter.delete(
+  "/:id/reviews/:reviewDate",
+  requirePermission("project:write"),
+  validate("params", reviewDateParamSchema),
+  async (req, res) => {
+    const { id, reviewDate } = req.params as unknown as z.infer<
+      typeof reviewDateParamSchema
+    >;
+    await ensureProjectVisible(req.user!, id);
+
+    // Idempotent by design: the UI unmarks optimistically, so a double
+    // click or a stale card re-sending the same delete must not surface an
+    // error — 204 whether or not a row existed to remove.
+    await prisma.projectReview.deleteMany({
+      where: {
+        projectId: id,
+        userId: req.user!.sub,
+        reviewDate: utcMidnightOfDayString(reviewDate),
+      },
+    });
+    res.status(204).send();
   },
 );
 

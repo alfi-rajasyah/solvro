@@ -9,22 +9,29 @@ import {
 } from "@tanstack/react-table";
 import { CustomerFormModal } from "@/components/CustomerFormModal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import { Badge } from "@/components/reui/badge";
 import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-grid";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
 import { EmptyState } from "@/components/EmptyState";
 import { ServiceMappingList } from "@/components/services/ServiceMappingList";
-import { ProjectStatusChip } from "@/components/StatusChip";
+import { Chip, ProjectStatusChip } from "@/components/StatusChip";
 import { Tabs } from "@/components/Tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { dayFromIso } from "@/lib/dateField";
+import { formatWeekRange, weekKeyOf } from "@/lib/isoWeek";
 import {
   type CustomerDetail as CustomerDetailType,
   type ProjectStatus,
   type ProjectSummary,
+  type WeeklyHealth,
+  type WeeklyStatus,
+  type WeeklyUpdate,
   useCustomer,
+  useCustomerWeeklyUpdates,
   useDeleteCustomer,
   useUpdateCustomerServices,
 } from "@/lib/queries";
@@ -152,6 +159,10 @@ export function CustomerDetail() {
                   <span>SA: {customer.solutionArchitect}</span>
                 </div>
               )}
+              <div className="flex items-center gap-2">
+                <span className="material-symbols-outlined text-base">support_agent</span>
+                <span>TAM: {customer.tam ? customer.tam.username : "—"}</span>
+              </div>
             </div>
             {canMutate && (
               <div className="mt-3 flex items-center gap-1 border-t border-outline-variant pt-2">
@@ -326,6 +337,10 @@ function OverviewTab({
           Customer org chart not yet captured. The Organization Structure tab will show
           roles and reporting lines once the model is in place.
         </p>
+      </ResourceSection>
+
+      <ResourceSection icon="calendar_month" title="Weekly updates">
+        <WeeklyUpdatesList customerId={customer.id} />
       </ResourceSection>
 
       <div>
@@ -547,6 +562,107 @@ function ResourceSection({
       {children}
     </section>
   );
+}
+
+function WeeklyUpdatesList({ customerId }: { customerId: number }) {
+  // Explicit 52 (the backend's max — a year of weeks): the hook's default of
+  // 12 silently truncated this list to the last ~3 months (phase review
+  // finding N8).
+  const { data: updates, isLoading, isError, error } = useCustomerWeeklyUpdates(
+    customerId,
+    52,
+  );
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 2 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-16 animate-pulse rounded-sm bg-surface-container-low"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (isError) {
+    return (
+      <Alert variant="destructive">
+        <AlertDescription>
+          Could not load weekly updates{error ? `: ${(error as Error).message}` : "."}
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  if (!updates || updates.length === 0) {
+    return <p className="text-[13px] text-on-surface-variant">No weekly updates yet.</p>;
+  }
+
+  return (
+    <>
+      <ul className="divide-y divide-outline-variant/60">
+        {updates.map((update) => (
+          <WeeklyUpdateRow key={update.id} update={update} />
+        ))}
+      </ul>
+      {updates.length === 52 && (
+        <p className="mt-2 text-[11px] text-on-surface-variant">
+          Showing the last 52 weeks.
+        </p>
+      )}
+    </>
+  );
+}
+
+function WeeklyUpdateRow({ update }: { update: WeeklyUpdate }) {
+  const weekKey = weekKeyOf(dayFromIso(update.weekStart)!);
+  const isDone = update.status === "DONE";
+  return (
+    <li className="py-3 first:pt-0 last:pb-0">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
+            {weekKey}
+          </span>
+          <span className="text-[12px] text-on-surface-variant">
+            {formatWeekRange(weekKey)}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          {healthChip(update.health)}
+          {statusBadge(update.status)}
+        </div>
+      </div>
+      <p
+        className={[
+          "whitespace-pre-wrap text-sm",
+          isDone ? "text-on-surface" : "text-on-surface-variant",
+        ].join(" ")}
+      >
+        {update.body}
+      </p>
+      <p className="mt-1.5 text-[11px] text-on-surface-variant">
+        by {update.author.username} · updated{" "}
+        {new Date(update.updatedAt).toLocaleDateString()}
+        {update.doneAt && ` · done ${new Date(update.doneAt).toLocaleString()}`}
+      </p>
+    </li>
+  );
+}
+
+function healthChip(health: WeeklyHealth | null) {
+  if (health === "GREEN") return <Chip tone="emerald">Green</Chip>;
+  if (health === "AMBER") return <Chip tone="amber">Amber</Chip>;
+  if (health === "RED") return <Chip tone="rose">Red</Chip>;
+  return <Chip tone="gray">No health</Chip>;
+}
+
+function statusBadge(status: WeeklyStatus) {
+  if (status === "DONE") return <Badge variant="success-light">Done</Badge>;
+  if (status === "DRAFT") return <Badge variant="warning-light">Draft</Badge>;
+  return <Badge variant="outline">Not started</Badge>;
 }
 
 function ProfileCompletionCard({
