@@ -24,13 +24,15 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
   const [name, setName] = useState("");
   const [accountManager, setAccountManager] = useState("");
   const [solutionArchitect, setSolutionArchitect] = useState("");
+  const [tam, setTam] = useState("");
   const [description, setDescription] = useState("");
   const [error, setError] = useState<string | null>(null);
 
   // Solution Architect dropdown lists all users — role names no longer
   // gate eligibility. Account Manager is a free-text field — AMs may
   // not have user accounts in this system at all (external sales
-  // contacts, etc.).
+  // contacts, etc.). TAM shares the same options list (`useUsers()` — no
+  // `active` flag on `UserSummary` today, so there's nothing to filter).
   const solutionArchitectOptions = useMemo(
     () => users ?? [],
     [users],
@@ -43,11 +45,13 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
       setName(customer.name);
       setAccountManager(customer.accountManager ?? "");
       setSolutionArchitect(customer.solutionArchitect ?? "");
+      setTam(customer.tamId != null ? String(customer.tamId) : "");
       setDescription(customer.description ?? "");
     } else {
       setName("");
       setAccountManager("");
       setSolutionArchitect("");
+      setTam("");
       setDescription("");
     }
   }, [open, customer]);
@@ -67,6 +71,9 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
       name: name.trim(),
       accountManager: accountManager.trim() || undefined,
       solutionArchitect: solutionArchitect.trim() || undefined,
+      // Always sent (never omitted) so clearing the select back to
+      // "— none —" actually unassigns the TAM instead of being dropped.
+      tamId: tam ? Number(tam) : null,
       description: description.trim(),
     };
     try {
@@ -121,7 +128,7 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
           />
         </Field>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Field label="Account Manager">
             <input
               type="text"
@@ -148,6 +155,20 @@ export function CustomerFormModal({ open, onClose, customer }: Props) {
                 !solutionArchitectOptions.some((u) => u.username === solutionArchitect) && (
                   <option value={solutionArchitect}>{solutionArchitect} (current)</option>
                 )}
+            </select>
+          </Field>
+          <Field label="TAM">
+            <select
+              value={tam}
+              onChange={(e) => setTam(e.target.value)}
+              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            >
+              <option value="">— none —</option>
+              {solutionArchitectOptions.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.username}
+                </option>
+              ))}
             </select>
           </Field>
         </div>

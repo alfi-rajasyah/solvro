@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-08-29 — Customer TAM on the form, weekly updates on the customer page, note feed on the project overview
+
+**`frontend/src/components/CustomerFormModal.tsx`** — the customer form gains a "TAM" select (any user; "— none —" to clear), saved as the customer's assigned TAM. The account-manager / solution-architect row now holds three fields and stacks on narrow screens.
+
+**`frontend/src/pages/CustomerDetail.tsx`** — the header shows the assigned TAM, and a new "Weekly updates" section lists the customer's per-week status updates newest first: week label and date range, health chip (Green / Amber / Red), Draft or Done badge, the update text, the author, and when it was marked done. Draft updates render muted; done ones at full strength.
+
+**`frontend/src/pages/views/ProjectOverview.tsx`** — a new "Notes" panel shows the last 14 calendar days of daily notes for the project (day, author, text), read-only, with a "Log a note" link to the Daily Review page. The 14-day window is computed in UTC from day strings, never from local clock arithmetic.
+
 ### Added — 2026-08-29 — Daily Review v2 frontend data layer: one-request page load, note/review/weekly-update editing, week navigation
 
 **`frontend/src/lib/queries.ts`** — the frontend catches up with the redesigned Daily Review page: a single `GET /daily-review` request backs the whole page (one week-keyed cache entry, kept visible across Previous/Next week navigation); notes can be added, edited, and deleted in place; marking or unmarking a project "reviewed" is instant; operations notes (issues attached to a customer rather than a project) get the same add/edit/delete, including their title; and a customer's weekly status update can be saved as Draft or Done. Each of these edits updates the page's cache immediately and rolls back if the request fails; changing a task's or a risk's status from the Daily Review attention lists also refreshes the page. Customers carry their assigned TAM through the same types the customer form already used.
