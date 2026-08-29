@@ -1,7 +1,8 @@
 import { useMutation, useQueries, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "./api";
-import type { Role } from "./auth";
-import { dateToDay } from "./dateField";
+import { useAuth, type Role } from "./auth";
+import { dateToDay, dayFromIso, isoFromDay } from "./dateField";
+import { parseWeekKey } from "./isoWeek";
 import type { PipelineStage } from "./pipelineFormat";
 
 export type ProjectStatus =
@@ -47,6 +48,10 @@ export interface CustomerSummary {
   solutionArchitect: string | null;
   description: string;
   createdAt: string;
+  // TAM ownership (Decision 8, daily-review-v2-spec.md §3) — gated by
+  // `project:write`, the same permission the customer form already requires.
+  tamId: number | null;
+  tam: { id: number; username: string } | null;
   _count: { projects: number };
 }
 
@@ -240,9 +245,19 @@ export interface ProjectNote {
   authorId: number;
   body: string;
   visibility: NoteVisibility;
+  // The calendar day the note is logically ABOUT — distinct from
+  // `createdAt` (the row's creation instant). Stored as @db.Date on the
+  // backend but it ARRIVES as an ISO instant ("yyyy-MM-ddT00:00:00.000Z"),
+  // never as a bare day string: always read it via `dayFromIso` before
+  // comparing it to a "yyyy-MM-dd" day (see the Daily Review types below).
+  noteDate: string;
   createdAt: string;
+  updatedAt: string;
   author: { id: number; username: string };
 }
+
+export type WeeklyHealth = "GREEN" | "AMBER" | "RED";
+export type WeeklyStatus = "NOT_STARTED" | "DRAFT" | "DONE";
 
 export type RiskCategory =
   | "EXTERNAL"
@@ -281,6 +296,99 @@ export interface ProjectsFilter {
   customerId?: number;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// Daily Review v2 — mirrors backend/src/routes/dailyReview.ts's response
+// shape 1:1 (docs/plans/daily-review-v2-spec.md §5.1). Date fields
+// (`noteDate`, `weekStart`, `dueDate`, `doneAt`, `updatedAt`, `createdAt`,
+// `reviewDate`) all arrive as ISO strings — the backend's `@db.Date` columns
+// serialise as `T00:00:00.000Z` instants; read the calendar day via
+// `dayFromIso`/`.slice(0, 10)` (dateField.ts), never `new Date(x) < today`.
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface DailyReviewNote {
+  id: number;
+  noteDate: string;
+  body: string;
+  author: { id: number; username: string };
+  updatedAt: string;
+}
+
+export interface DailyReviewOpsNote extends DailyReviewNote {
+  // Typed manually (required, 1-120 chars, trimmed) — replaces the earlier
+  // service-select field (user decision 2026-08-29, Decision 4).
+  title: string;
+}
+
+export interface WeeklyUpdate {
+  id: number;
+  weekStart: string;
+  body: string;
+  health: WeeklyHealth | null;
+  status: WeeklyStatus;
+  doneAt: string | null;
+  author: { id: number; username: string };
+  updatedAt: string;
+}
+
+export interface DailyReviewProject {
+  id: number;
+  name: string;
+  status: ProjectStatus;
+  customerId: number | null;
+  baselineLockedAt: string | null;
+  phase: string;
+  progress: { done: number; total: number };
+  slipDays: number | null;
+  // The backend filters to `dueDate !== null` before building this list
+  // (routes/dailyReview.ts) — always present here, unlike Task.dueDate
+  // elsewhere in this file.
+  overdueTasks: { id: number; title: string; dueDate: string; status: TaskStatus }[];
+  openRisks: {
+    id: number;
+    description: string;
+    probability: number;
+    impact: number;
+    status: RiskStatus;
+  }[];
+  notes: DailyReviewNote[];
+  reviews: { reviewDate: string; createdAt: string }[];
+}
+
+export interface DailyReviewCustomer {
+  id: number;
+  name: string;
+  tam: { id: number; username: string } | null;
+  projects: DailyReviewProject[];
+  operationsNotes: DailyReviewOpsNote[];
+  weeklyUpdate: WeeklyUpdate | null;
+}
+
+export interface DailyReviewResponse {
+  week: { key: string; start: string; days: string[] };
+  today: string;
+  coverage: Record<string, { withNote: number; total: number }>;
+  customers: DailyReviewCustomer[];
+  unassignedProjects: DailyReviewProject[];
+}
+
+// The bare row `POST /projects/:id/reviews` returns (backend/src/routes/
+// projects.ts) — distinct from DailyReviewProject's own `reviews` entries
+// (which only carry reviewDate/createdAt).
+export interface ProjectReviewRecord {
+  id: number;
+  projectId: number;
+  userId: number;
+  reviewDate: string;
+  createdAt: string;
+}
+
+export interface ProjectNotesWindow {
+  visibility?: NoteVisibility;
+  limit?: number;
+  from?: string;
+  to?: string;
+}
+
 export const queryKeys = {
   overview: ["overview"] as const,
   users: ["users"] as const,
@@ -290,15 +398,43 @@ export const queryKeys = {
   projectLabels: (id: number) => ["projects", id, "labels"] as const,
   projectSections: (id: number) => ["projects", id, "sections"] as const,
   projectRisks: (id: number) => ["projects", id, "risks"] as const,
-  projectNotes: (id: number, visibility?: NoteVisibility) =>
-    ["projects", id, "notes", visibility ?? "all"] as const,
+  // `window` (visibility/limit/from/to) is appended to the key so each
+  // filtered view caches independently. Mutations invalidate the whole
+  // `["projects", id, "notes"]` PREFIX (see useAddProjectNote etc. below)
+  // rather than this full key, so a note write refreshes every bucket, not
+  // just the one a caller happens to be viewing.
+  projectNotes: (id: number, window: ProjectNotesWindow = {}) =>
+    [
+      "projects",
+      id,
+      "notes",
+      window.visibility ?? "all",
+      window.limit ?? null,
+      window.from ?? null,
+      window.to ?? null,
+    ] as const,
   projectDependencies: (id: number) => ["projects", id, "dependencies"] as const,
   customers: ["customers"] as const,
   customer: (id: number) => ["customers", id] as const,
+  // `limit` is appended so different callers (a short "recent 3" strip vs.
+  // the full history list) never share a cache entry. Mutations invalidate
+  // the bare `["customers", id, "weekly-updates"]` PREFIX (see
+  // useSaveWeeklyUpdate below), not this full key, for the same reason
+  // `projectNotes` above documents.
+  customerWeeklyUpdates: (id: number, limit?: number) =>
+    ["customers", id, "weekly-updates", limit ?? null] as const,
   tasks: (filter?: TasksFilter) => ["tasks", filter ?? {}] as const,
   comments: (taskId: number) => ["tasks", taskId, "comments"] as const,
   search: (q: string) => ["search", q] as const,
   executiveReport: () => ["executive-report"] as const,
+  // `today` is folded into the key by the caller (see useDailyReview) —
+  // same day-boundary rationale as useOverview/useExecutiveReport below.
+  dailyReview: (week: string, today: string) => ["daily-review", week, today] as const,
+  // The bare prefix every `dailyReview(...)` key extends — the
+  // invalidate-everything-daily-review-related root every mutation below
+  // uses (same shape as `pipelineKeys.root`), rather than ~20 repeated
+  // `["daily-review"]` array literals that could each silently drift.
+  dailyReviewRoot: ["daily-review"] as const,
 };
 
 export function useOverview() {
@@ -513,6 +649,10 @@ export interface CustomerInput {
   accountManager?: string;
   solutionArchitect?: string;
   description: string;
+  // TAM ownership gate is `project:write` (Decision 8) — the same
+  // permission this form already requires to submit; there's no
+  // `customer:write`. Nullable to support unassigning.
+  tamId?: number | null;
 }
 
 export function useCreateCustomer() {
@@ -520,7 +660,12 @@ export function useCreateCustomer() {
   return useMutation({
     mutationFn: (input: CustomerInput) =>
       apiRequest<CustomerSummary>("/customers", { method: "POST", body: input }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: queryKeys.customers }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.customers });
+      // A new customer's `tamId` can put it straight into the Daily
+      // Review page's customer scope (Decision 14).
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+    },
   });
 }
 
@@ -532,6 +677,9 @@ export function useUpdateCustomer(id: number) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.customers });
       qc.invalidateQueries({ queryKey: queryKeys.customer(id) });
+      // Reassigning `tamId` can add or remove this customer from the Daily
+      // Review page's customer scope (Decision 14).
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
     },
   });
 }
@@ -790,6 +938,10 @@ export function useUpdateTask(projectId: number) {
       qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: queryKeys.overview });
+      // The Daily Review page's attention lists let a TAM change a task's
+      // status inline (daily-review-v2-spec.md §6.3) — keep that cache in
+      // sync too.
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
     },
   });
 }
@@ -803,6 +955,9 @@ export function useDeleteTask(projectId: number) {
       qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: queryKeys.overview });
+      // Same rationale as useUpdateTask above — a deleted task can drop out
+      // of the Daily Review page's overdue-tasks attention list.
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
     },
   });
 }
@@ -1033,6 +1188,9 @@ export function useUpdateRisk(projectId: number) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.projectRisks(projectId) });
+      // Same rationale as useUpdateTask above — open risks are
+      // inline-editable from the Daily Review page's attention lists too.
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
     },
   });
 }
@@ -1044,23 +1202,169 @@ export function useDeleteRisk(projectId: number) {
       apiRequest<void>(`/risks/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.projectRisks(projectId) });
+      // Same rationale as useUpdateRisk above — a deleted risk can drop out
+      // of the Daily Review page's open-risks attention list.
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
     },
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Daily Review v2 — the page's one-request payload, plus every mutation it
+// drives (daily-review-v2-spec.md §6.1). Every "inline edit" mutation below
+// (note add/edit/delete, mark/unmark reviewed, customer-note add/edit/
+// delete) follows the house optimistic pattern (frontend/CLAUDE.md):
+// `onMutate` cancels in-flight `["daily-review"]` queries, snapshots every
+// cached one, and writes the optimistic change into each via
+// `setQueriesData` (a project can appear in exactly one of
+// `customers[].projects`/`unassignedProjects`, and the caller may have
+// several week-keyed `["daily-review", week, today]` entries cached at
+// once — Prev/Next navigation, `placeholderData` — so every one of them
+// needs the same write, not just "the current" query). `onError` restores
+// the snapshot; `onSettled` invalidates so the server's authoritative
+// response lands. Weekly-update save is the one plain (non-optimistic)
+// mutation in this group — see its own comment below.
+// ─────────────────────────────────────────────────────────────────────────
+
+// Monotonically decreasing temporary ids for optimistically-added notes,
+// swapped out for the server's real (positive, autoincrement) id once
+// onSettled's invalidation refetches. Negative so a temp id can never
+// collide with a real one.
+let nextTempNoteId = -1;
+function tempNoteId(): number {
+  return nextTempNoteId--;
+}
+
+/** Maps `updater` over the ONE project with `projectId`, wherever it lives
+ * (`customers[].projects` or `unassignedProjects` — a project is in
+ * exactly one). Every other project/customer is returned unchanged. */
+function updateDailyReviewProject(
+  data: DailyReviewResponse,
+  projectId: number,
+  updater: (p: DailyReviewProject) => DailyReviewProject,
+): DailyReviewResponse {
+  return {
+    ...data,
+    customers: data.customers.map((c) => ({
+      ...c,
+      projects: c.projects.map((p) => (p.id === projectId ? updater(p) : p)),
+    })),
+    unassignedProjects: data.unassignedProjects.map((p) =>
+      p.id === projectId ? updater(p) : p,
+    ),
+  };
+}
+
+/** Maps `updater` over the one customer with `customerId`. */
+function updateDailyReviewCustomer(
+  data: DailyReviewResponse,
+  customerId: number,
+  updater: (c: DailyReviewCustomer) => DailyReviewCustomer,
+): DailyReviewResponse {
+  return {
+    ...data,
+    customers: data.customers.map((c) => (c.id === customerId ? updater(c) : c)),
+  };
+}
+
+/**
+ * (noteDate, id) comparator matching the server's own note ordering
+ * (`orderBy: [{ noteDate: "asc" }, { id: "asc" }]`), extended for
+ * optimistically-added notes: `tempNoteId()` hands out DECREASING negative
+ * ids (-1, -2, -3, ...) in call order, so a plain ascending `id` compare
+ * would sort a brand-new temp note BEFORE an older one — and before every
+ * real, positive-id note — on the same day, which is backwards both ways.
+ * Real (positive) ids always sort before temp (negative) ones; within each
+ * group, ascending `noteDate` then the group's own chronological order:
+ * ascending id for reals, DESCENDING id for temps, since a later
+ * `tempNoteId()` call returns a smaller (more negative) number.
+ */
+function compareNotesByDayThenId(
+  a: { noteDate: string; id: number },
+  b: { noteDate: string; id: number },
+): number {
+  const dayCompare = a.noteDate.localeCompare(b.noteDate);
+  if (dayCompare !== 0) return dayCompare;
+  const aTemp = a.id < 0;
+  const bTemp = b.id < 0;
+  if (aTemp !== bTemp) return aTemp ? 1 : -1;
+  return aTemp ? b.id - a.id : a.id - b.id;
+}
+
+/**
+ * Finds the calendar day (`dayFromIso`) of an already-cached project note
+ * by scanning every `["daily-review"]` snapshot — used by the update/
+ * delete note mutations below, whose own mutation input carries only
+ * `noteId` (not a day), to skip the optimistic write on a cached week that
+ * can't possibly contain this note. Undefined when the note isn't found in
+ * any snapshot, in which case the caller skips the guard rather than
+ * risk dropping a legitimate edit.
+ */
+function findProjectNoteDay(
+  snapshots: [unknown, DailyReviewResponse | undefined][],
+  projectId: number,
+  noteId: number,
+): string | undefined {
+  for (const [, data] of snapshots) {
+    if (!data) continue;
+    const projects = [...data.customers.flatMap((c) => c.projects), ...data.unassignedProjects];
+    const note = projects.find((p) => p.id === projectId)?.notes.find((n) => n.id === noteId);
+    if (note) return dayFromIso(note.noteDate) ?? undefined;
+  }
+  return undefined;
+}
+
+/** Same as `findProjectNoteDay`, for a customer's operations notes. */
+function findCustomerNoteDay(
+  snapshots: [unknown, DailyReviewResponse | undefined][],
+  customerId: number,
+  noteId: number,
+): string | undefined {
+  for (const [, data] of snapshots) {
+    if (!data) continue;
+    const note = data.customers
+      .find((c) => c.id === customerId)
+      ?.operationsNotes.find((n) => n.id === noteId);
+    if (note) return dayFromIso(note.noteDate) ?? undefined;
+  }
+  return undefined;
+}
+
+export function useDailyReview(week: string) {
+  // `today` is the browser's local calendar day — same day-boundary
+  // rationale as useOverview/useExecutiveReport above: it's part of the
+  // query key (not just the URL) so a render after local midnight
+  // naturally gets a fresh key instead of serving yesterday's cached
+  // payload. `placeholderData` keeps the previous week's page showing while
+  // Prev/Next week's request is in flight, instead of flashing a skeleton.
+  const today = dateToDay(new Date())!;
+  return useQuery({
+    queryKey: queryKeys.dailyReview(week, today),
+    queryFn: ({ signal }) =>
+      apiRequest<DailyReviewResponse>(
+        `/daily-review?week=${encodeURIComponent(week)}&today=${encodeURIComponent(today)}`,
+        { signal },
+      ),
+    enabled: parseWeekKey(week) !== null,
+    placeholderData: (prev) => prev,
   });
 }
 
 export function useProjectNotes(
   id: number | null,
-  opts: { visibility?: NoteVisibility; limit?: number } = {},
+  opts: { visibility?: NoteVisibility; limit?: number; from?: string; to?: string } = {},
 ) {
-  const { visibility, limit } = opts;
+  const { visibility, limit, from, to } = opts;
   return useQuery({
     queryKey: id
-      ? queryKeys.projectNotes(id, visibility)
+      ? queryKeys.projectNotes(id, { visibility, limit, from, to })
       : ["projects", "noop", "notes"],
     queryFn: ({ signal }) => {
       const params = new URLSearchParams();
       if (visibility) params.set("visibility", visibility);
       if (limit) params.set("limit", String(limit));
+      if (from) params.set("from", from);
+      if (to) params.set("to", to);
       const qs = params.toString();
       return apiRequest<ProjectNote[]>(
         `/projects/${id}/notes${qs ? `?${qs}` : ""}`,
@@ -1071,23 +1375,390 @@ export function useProjectNotes(
   });
 }
 
+// The Internal/Customer-facing toggle is gone from the UI (Decision 1,
+// daily-review-v2-spec.md §3) — every note the UI writes gets the API's
+// INTERNAL default, so `visibility` is deliberately absent here and never
+// sent by this mutation. `noteDate` is a plain "yyyy-MM-dd" day string (the
+// DateField/day-strip contract) — the API stores and returns every
+// `@db.Date` field (`noteDate`, `reviewDate`, ...) as an ISO instant
+// (`T00:00:00.000Z`), so every optimistic write below converts at the
+// boundary via `isoFromDay`/`dayFromIso`, never comparing a bare day string
+// to an ISO instant directly.
 export interface CreateNoteInput {
   body: string;
-  visibility?: NoteVisibility;
+  noteDate: string;
 }
 
 export function useAddProjectNote(projectId: number) {
   const qc = useQueryClient();
+  const { user } = useAuth();
   return useMutation({
     mutationFn: (input: CreateNoteInput) =>
       apiRequest<ProjectNote>(`/projects/${projectId}/notes`, {
         method: "POST",
         body: input,
       }),
-    onSuccess: () => {
-      // Invalidate every visibility-bucketed key for this project.
+    onMutate: async (input) => {
+      await qc.cancelQueries({ queryKey: queryKeys.dailyReviewRoot });
+      const previous = qc.getQueriesData<DailyReviewResponse>({
+        queryKey: queryKeys.dailyReviewRoot,
+      });
+      const optimisticNote: DailyReviewNote = {
+        id: tempNoteId(),
+        noteDate: isoFromDay(input.noteDate)!,
+        body: input.body,
+        author: user ? { id: user.id, username: user.username } : { id: 0, username: "" },
+        updatedAt: new Date().toISOString(),
+      };
+      qc.setQueriesData<DailyReviewResponse>({ queryKey: queryKeys.dailyReviewRoot }, (old) => {
+        if (!old) return old;
+        // Skip a cached week that can't contain this day — every cached
+        // `["daily-review", week, today]` entry gets the same updater
+        // (Prev/Next navigation + placeholderData can keep several around
+        // at once), and without this a note dated in the open week would
+        // also get written into an unrelated cached week's project.
+        if (!old.week.days.includes(input.noteDate)) return old;
+        return updateDailyReviewProject(old, projectId, (p) => ({
+          ...p,
+          notes: [...p.notes, optimisticNote].sort(compareNotesByDayThenId),
+        }));
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      // Every visibility/window-bucketed key for this project (see
+      // queryKeys.projectNotes's doc) — not just the "all, unwindowed" one.
       qc.invalidateQueries({ queryKey: ["projects", projectId, "notes"] });
     },
+  });
+}
+
+export interface UpdateProjectNoteInput {
+  noteId: number;
+  body: string;
+}
+
+export function useUpdateProjectNote(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ noteId, body }: UpdateProjectNoteInput) =>
+      apiRequest<ProjectNote>(`/projects/${projectId}/notes/${noteId}`, {
+        method: "PATCH",
+        body: { body },
+      }),
+    onMutate: async ({ noteId, body }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.dailyReviewRoot });
+      const previous = qc.getQueriesData<DailyReviewResponse>({
+        queryKey: queryKeys.dailyReviewRoot,
+      });
+      const day = findProjectNoteDay(previous, projectId, noteId);
+      qc.setQueriesData<DailyReviewResponse>({ queryKey: queryKeys.dailyReviewRoot }, (old) => {
+        if (!old) return old;
+        if (day !== undefined && !old.week.days.includes(day)) return old;
+        return updateDailyReviewProject(old, projectId, (p) => ({
+          ...p,
+          notes: p.notes.map((n) =>
+            n.id === noteId ? { ...n, body, updatedAt: new Date().toISOString() } : n,
+          ),
+        }));
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      qc.invalidateQueries({ queryKey: ["projects", projectId, "notes"] });
+    },
+  });
+}
+
+export function useDeleteProjectNote(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ noteId }: { noteId: number }) =>
+      apiRequest<void>(`/projects/${projectId}/notes/${noteId}`, { method: "DELETE" }),
+    onMutate: async ({ noteId }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.dailyReviewRoot });
+      const previous = qc.getQueriesData<DailyReviewResponse>({
+        queryKey: queryKeys.dailyReviewRoot,
+      });
+      const day = findProjectNoteDay(previous, projectId, noteId);
+      qc.setQueriesData<DailyReviewResponse>({ queryKey: queryKeys.dailyReviewRoot }, (old) => {
+        if (!old) return old;
+        if (day !== undefined && !old.week.days.includes(day)) return old;
+        return updateDailyReviewProject(old, projectId, (p) => ({
+          ...p,
+          notes: p.notes.filter((n) => n.id !== noteId),
+        }));
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      qc.invalidateQueries({ queryKey: ["projects", projectId, "notes"] });
+    },
+  });
+}
+
+export function useMarkProjectReviewed(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reviewDate }: { reviewDate: string }) =>
+      apiRequest<ProjectReviewRecord>(`/projects/${projectId}/reviews`, {
+        method: "POST",
+        body: { reviewDate },
+      }),
+    onMutate: async ({ reviewDate }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.dailyReviewRoot });
+      const previous = qc.getQueriesData<DailyReviewResponse>({
+        queryKey: queryKeys.dailyReviewRoot,
+      });
+      const reviewDateIso = isoFromDay(reviewDate)!;
+      qc.setQueriesData<DailyReviewResponse>({ queryKey: queryKeys.dailyReviewRoot }, (old) => {
+        if (!old) return old;
+        if (!old.week.days.includes(reviewDate)) return old;
+        return updateDailyReviewProject(old, projectId, (p) => {
+          // Mirrors the server's upsert semantics (POST is idempotent).
+          if (p.reviews.some((r) => dayFromIso(r.reviewDate) === reviewDate)) return p;
+          return {
+            ...p,
+            reviews: [
+              ...p.reviews,
+              { reviewDate: reviewDateIso, createdAt: new Date().toISOString() },
+            ],
+          };
+        });
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+    },
+  });
+}
+
+export function useUnmarkProjectReviewed(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ reviewDate }: { reviewDate: string }) =>
+      apiRequest<void>(`/projects/${projectId}/reviews/${reviewDate}`, { method: "DELETE" }),
+    onMutate: async ({ reviewDate }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.dailyReviewRoot });
+      const previous = qc.getQueriesData<DailyReviewResponse>({
+        queryKey: queryKeys.dailyReviewRoot,
+      });
+      qc.setQueriesData<DailyReviewResponse>({ queryKey: queryKeys.dailyReviewRoot }, (old) => {
+        if (!old) return old;
+        if (!old.week.days.includes(reviewDate)) return old;
+        return updateDailyReviewProject(old, projectId, (p) => ({
+          ...p,
+          reviews: p.reviews.filter((r) => dayFromIso(r.reviewDate) !== reviewDate),
+        }));
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+    },
+  });
+}
+
+// ---- Customer (operations) notes -------------------------------------------
+// Same author-only edit / wildcard-delete rule as ProjectNote (Decision 9).
+// Optimistic for consistency with project notes above — same updater shape,
+// applied to `operationsNotes` via updateDailyReviewCustomer instead of
+// updateDailyReviewProject.
+
+export interface CreateCustomerNoteInput {
+  body: string;
+  noteDate: string;
+  title: string;
+}
+
+export function useAddCustomerNote(customerId: number) {
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  return useMutation({
+    mutationFn: (input: CreateCustomerNoteInput) =>
+      apiRequest<DailyReviewOpsNote>(`/customers/${customerId}/notes`, {
+        method: "POST",
+        body: input,
+      }),
+    onMutate: async (input) => {
+      await qc.cancelQueries({ queryKey: queryKeys.dailyReviewRoot });
+      const previous = qc.getQueriesData<DailyReviewResponse>({
+        queryKey: queryKeys.dailyReviewRoot,
+      });
+      const optimisticNote: DailyReviewOpsNote = {
+        id: tempNoteId(),
+        noteDate: isoFromDay(input.noteDate)!,
+        body: input.body,
+        author: user ? { id: user.id, username: user.username } : { id: 0, username: "" },
+        updatedAt: new Date().toISOString(),
+        title: input.title,
+      };
+      qc.setQueriesData<DailyReviewResponse>({ queryKey: queryKeys.dailyReviewRoot }, (old) => {
+        if (!old) return old;
+        if (!old.week.days.includes(input.noteDate)) return old;
+        return updateDailyReviewCustomer(old, customerId, (c) => ({
+          ...c,
+          operationsNotes: [...c.operationsNotes, optimisticNote].sort(compareNotesByDayThenId),
+        }));
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+    },
+  });
+}
+
+export interface UpdateCustomerNoteInput {
+  noteId: number;
+  body?: string;
+  title?: string;
+}
+
+export function useUpdateCustomerNote(customerId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ noteId, ...patch }: UpdateCustomerNoteInput) =>
+      apiRequest<DailyReviewOpsNote>(`/customers/${customerId}/notes/${noteId}`, {
+        method: "PATCH",
+        body: patch,
+      }),
+    onMutate: async ({ noteId, body, title }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.dailyReviewRoot });
+      const previous = qc.getQueriesData<DailyReviewResponse>({
+        queryKey: queryKeys.dailyReviewRoot,
+      });
+      const day = findCustomerNoteDay(previous, customerId, noteId);
+      qc.setQueriesData<DailyReviewResponse>({ queryKey: queryKeys.dailyReviewRoot }, (old) => {
+        if (!old) return old;
+        if (day !== undefined && !old.week.days.includes(day)) return old;
+        return updateDailyReviewCustomer(old, customerId, (c) => ({
+          ...c,
+          operationsNotes: c.operationsNotes.map((n) => {
+            if (n.id !== noteId) return n;
+            return {
+              ...n,
+              ...(body !== undefined && { body }),
+              ...(title !== undefined && { title }),
+              updatedAt: new Date().toISOString(),
+            };
+          }),
+        }));
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+    },
+  });
+}
+
+export function useDeleteCustomerNote(customerId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ noteId }: { noteId: number }) =>
+      apiRequest<void>(`/customers/${customerId}/notes/${noteId}`, { method: "DELETE" }),
+    onMutate: async ({ noteId }) => {
+      await qc.cancelQueries({ queryKey: queryKeys.dailyReviewRoot });
+      const previous = qc.getQueriesData<DailyReviewResponse>({
+        queryKey: queryKeys.dailyReviewRoot,
+      });
+      const day = findCustomerNoteDay(previous, customerId, noteId);
+      qc.setQueriesData<DailyReviewResponse>({ queryKey: queryKeys.dailyReviewRoot }, (old) => {
+        if (!old) return old;
+        if (day !== undefined && !old.week.days.includes(day)) return old;
+        return updateDailyReviewCustomer(old, customerId, (c) => ({
+          ...c,
+          operationsNotes: c.operationsNotes.filter((n) => n.id !== noteId),
+        }));
+      });
+      return { previous };
+    },
+    onError: (_err, _vars, ctx) => {
+      ctx?.previous.forEach(([key, data]) => qc.setQueryData(key, data));
+    },
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+    },
+  });
+}
+
+// ---- Weekly updates (per customer, Decision 2) -----------------------------
+
+// `health` is REQUIRED here (nullable, never optional/omittable): the
+// backend treats an omitted `health` key as "leave the stored value
+// unchanged", so this hook must always send it explicitly — `null` to
+// clear it, never `undefined`. TypeScript enforces this at the call site;
+// don't loosen it to `health?:`.
+export interface SaveWeeklyUpdateInput {
+  weekStart: string;
+  body: string;
+  health: WeeklyHealth | null;
+  status: WeeklyStatus;
+}
+
+// Plain mutation, no onMutate optimism (spec §6.1): the textarea already
+// holds its own draft state until Save, so there's nothing new to render
+// optimistically that isn't already on screen — unlike the inline-edit
+// mutations above. Saving an already-DONE update keeps its original
+// `doneAt` server-side; nothing to special-case here.
+export function useSaveWeeklyUpdate(customerId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ weekStart, ...body }: SaveWeeklyUpdateInput) =>
+      apiRequest<WeeklyUpdate>(`/customers/${customerId}/weekly-updates/${weekStart}`, {
+        method: "PUT",
+        body,
+      }),
+    onSettled: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      // The bare PREFIX (not queryKeys.customerWeeklyUpdates(customerId),
+      // which now bakes a specific `limit` into the key) — so a save
+      // refreshes every limit-bucketed cache entry for this customer, not
+      // just the unlimited one.
+      qc.invalidateQueries({ queryKey: ["customers", customerId, "weekly-updates"] });
+    },
+  });
+}
+
+export function useCustomerWeeklyUpdates(customerId: number | null, limit?: number) {
+  return useQuery({
+    queryKey: customerId
+      ? queryKeys.customerWeeklyUpdates(customerId, limit)
+      : ["customers", "noop", "weekly-updates"],
+    queryFn: ({ signal }) => {
+      const qs = limit ? `?limit=${limit}` : "";
+      return apiRequest<WeeklyUpdate[]>(
+        `/customers/${customerId}/weekly-updates${qs}`,
+        { signal },
+      );
+    },
+    enabled: customerId !== null,
   });
 }
 

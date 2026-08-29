@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-08-29 — Daily Review v2 frontend data layer: one-request page load, note/review/weekly-update editing, week navigation
+
+**`frontend/src/lib/queries.ts`** — the frontend catches up with the redesigned Daily Review page: a single `GET /daily-review` request backs the whole page (one week-keyed cache entry, kept visible across Previous/Next week navigation); notes can be added, edited, and deleted in place; marking or unmarking a project "reviewed" is instant; operations notes (issues attached to a customer rather than a project) get the same add/edit/delete, including their title; and a customer's weekly status update can be saved as Draft or Done. Each of these edits updates the page's cache immediately and rolls back if the request fails; changing a task's or a risk's status from the Daily Review attention lists also refreshes the page. Customers carry their assigned TAM through the same types the customer form already used.
+
+**`frontend/src/lib/isoWeek.ts`** — ISO-8601 week arithmetic in pure UTC, mirroring the backend module for every shared case, plus the week-navigation and header-label helpers the page needs (shift a week key forward/back, format a week as "24 – 30 Aug"). 26 unit tests; the frontend suite runs under UTC and Asia/Jakarta.
+
+**`frontend/src/lib/weeklyDraft.ts`** — drafts a customer's weekly update text from that week's project and operations notes, grouped by day, so a TAM starts from a filled-in draft instead of a blank textarea. 11 unit tests.
+
 ### Added — 2026-08-29 — `GET /daily-review`: one payload for the Daily Review page
 
 **`backend/src/routes/dailyReview.ts`, `backend/src/app.ts`** — the redesigned Daily Review page loads from one request instead of three per project card. `GET /daily-review?week=2026-W35&today=2026-08-28` returns, for the requesting user's scope, the customers they cover (each with its active projects, its operations notes, and its weekly update for that week), the active projects that have no customer, and a seven-day grid of how many customers got a note on each day. Per project it computes the current phase, progress, schedule slip against the locked baseline, the overdue tasks (judged against the caller's calendar day), the open risks, the week's notes, and the caller's own "reviewed" marks. Scope follows the existing project-visibility rules: a TAM sees their own active projects and the customers assigned to them; users with `project:view-all` (or the admin wildcard) see every active project and every customer that has a TAM. A malformed or non-existent ISO week (`2025-W53`) is rejected with 400. A fixed number of batched database calls per request, regardless of how many projects or customers are on the page. 23 tests.
