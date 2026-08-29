@@ -15,6 +15,16 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-08-29 — Daily Review: collapsible customer groups and week views
+
+**`frontend/src/components/daily-review/CustomerGroup.tsx`, `WeekNotesEditor.tsx`** — each customer's group header is now one toggle that shows the project count, TAM, how many projects are reviewed today, the weekly-update status, and health, whether the group is open or closed; a group still starts closed once every project is reviewed and the weekly update is done, and a manual click wins from then on. Each project's and operations card's week view opens showing only today's row, with a "Show week · N notes" toggle for the other six days; a click on the day strip opens the week and jumps to that day.
+
+### Changed — 2026-08-29 — Daily Review v2: a weekly, per-customer review page
+
+**`frontend/src/pages/DailyReview.tsx`** (rewritten), **`frontend/src/components/daily-review/`** (new) — the Daily Review page is now a weekly, per-customer surface instead of a same-day, write-only form. A seven-day strip and Previous/Next week navigation (URL-addressable: `?week=2026-W35`) sit above five stat tiles (customers reviewed, notes this week, weekly updates done, overdue tasks, open risks). Projects are grouped under their customer; each project card has an explicit, timestamped "Mark reviewed" action, overdue-task and open-risk lists with inline status changes, and a full week of notes — add, edit, and delete your own, backfill a past day, several notes per day. Each customer also gets an operations card for issues that belong to no project (each with a short title) and a weekly update block that can be drafted from the week's notes in one click, saved as a draft, and marked done with a Green/Amber/Red health. A customer group whose projects are all reviewed and whose weekly update is done collapses to one summary row. Projects with no customer sit in their own section with a prompt to assign one. The Internal/Customer-facing toggle is gone from the page: every note it writes is internal, as before. The page loads from one request instead of three per project.
+
+**`frontend/src/lib/dailyReviewStats.ts`** (new) — the pure helpers behind the page: the five stat-tile counts, the group auto-collapse rule, and the day/date label formatters. 22 unit tests.
+
 ### Added — 2026-08-29 — Customer TAM on the form, weekly updates on the customer page, note feed on the project overview
 
 **`frontend/src/components/CustomerFormModal.tsx`** — the customer form gains a "TAM" select (any user; "— none —" to clear), saved as the customer's assigned TAM. The account-manager / solution-architect row now holds three fields and stacks on narrow screens.
