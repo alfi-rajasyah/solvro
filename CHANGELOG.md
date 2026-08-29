@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-08-29 — Project notes get a date, a window, and edit/delete; explicit "reviewed" marks
+
+**`backend/src/routes/projects.ts`** — `POST /projects/:id/notes` accepts an optional `noteDate` (calendar day; defaults to today in UTC), so a note can be backfilled onto the day it belongs to; `GET /projects/:id/notes` accepts `from`/`to` day bounds and now orders by note day. New `PATCH` and `DELETE /projects/:id/notes/:noteId`: only the author may edit; the author or an admin-wildcard user may delete. The Internal/Customer-facing field is still accepted and still defaults to `INTERNAL` — the UI simply stops sending it. New `POST /projects/:id/reviews` (`{ reviewDate }`, idempotent per user, project and day) and `DELETE /projects/:id/reviews/:reviewDate` record that a user reviewed a project on a given day, independent of whether they wrote a note. 18 tests.
+
 ### Added — 2026-08-29 — Daily Review v2 data model: customer TAM, dated notes, operations notes, weekly updates, review marks
 
 **`backend/prisma/schema.prisma`, `backend/prisma/migrations/20260829034734_daily_review_v2/`** — the data behind the reworked Daily Review: a customer can now have a designated TAM (`Customer.tamId`, cleared if that user is deleted); project notes carry a calendar day (`ProjectNote.noteDate`, backfilled from each existing note's creation date in UTC) and an `updatedAt` so they can be edited; new `CustomerNote` rows hold operations notes — issues that belong to a customer but to no project — with a required title; new `WeeklyUpdate` rows hold one status update per customer per ISO week (body, Green/Amber/Red health, Not started → Draft → Done); and new `ProjectReview` rows record that a user reviewed a project on a given day. The note-visibility column and its `INTERNAL` default are unchanged — only the schema comment now says the Internal/Customer-facing control is gone from the UI.
