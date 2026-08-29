@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-08-29 — Daily Review v2 data model: customer TAM, dated notes, operations notes, weekly updates, review marks
+
+**`backend/prisma/schema.prisma`, `backend/prisma/migrations/20260829034734_daily_review_v2/`** — the data behind the reworked Daily Review: a customer can now have a designated TAM (`Customer.tamId`, cleared if that user is deleted); project notes carry a calendar day (`ProjectNote.noteDate`, backfilled from each existing note's creation date in UTC) and an `updatedAt` so they can be edited; new `CustomerNote` rows hold operations notes — issues that belong to a customer but to no project — with a required title; new `WeeklyUpdate` rows hold one status update per customer per ISO week (body, Green/Amber/Red health, Not started → Draft → Done); and new `ProjectReview` rows record that a user reviewed a project on a given day. The note-visibility column and its `INTERNAL` default are unchanged — only the schema comment now says the Internal/Customer-facing control is gone from the UI.
+
+**`backend/src/lib/isoWeek.ts`** — ISO-8601 week arithmetic in pure UTC (`parseWeekKey`, `weekKeyOf`, `isMonday`) for the week-keyed Daily Review; handles 53-week years (`2026-W53` exists, `2025-W53` does not). 15 unit tests.
+
 ### Changed — 2026-08-15 — README describes the two-role product
 
 **`README.md`** — the readme now presents Solvro as the TAM + SA platform it is: the solution-to-project lifecycle in the overview, the Pipeline module (board, views, detail, import, analytics, handoff) in the feature list, `xlsx` in the stack table, and the Pipeline e2e specs in the repository layout. The long-removed Reports export packet finally left the feature list and the overview loop.
