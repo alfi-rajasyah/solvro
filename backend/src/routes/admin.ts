@@ -221,6 +221,13 @@ adminRouter.delete(
             projectBaselinesLocked: true,
             assignedTasks: true,
             comments: true,
+            // CustomerNote.author and WeeklyUpdate.author are RESTRICT FKs,
+            // same as ProjectNote.author (projectNotes) — without these,
+            // deleting an author 500s on a raw P2003 instead of the
+            // friendly 400 below.
+            projectNotes: true,
+            customerNotes: true,
+            weeklyUpdates: true,
           },
         },
       },
@@ -238,6 +245,12 @@ adminRouter.delete(
       blockers.push(`${target._count.assignedTasks} assigned task(s)`);
     if (target._count.comments > 0)
       blockers.push(`${target._count.comments} comment(s)`);
+    if (target._count.projectNotes > 0)
+      blockers.push(`${target._count.projectNotes} daily note(s)`);
+    if (target._count.customerNotes > 0)
+      blockers.push(`${target._count.customerNotes} customer note(s)`);
+    if (target._count.weeklyUpdates > 0)
+      blockers.push(`${target._count.weeklyUpdates} weekly update(s)`);
 
     if (blockers.length > 0) {
       throw new HttpError(

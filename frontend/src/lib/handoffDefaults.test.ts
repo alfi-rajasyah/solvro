@@ -9,6 +9,8 @@ function makeCustomer(overrides: Partial<CustomerSummary> & Pick<CustomerSummary
     solutionArchitect: null,
     description: "",
     createdAt: "2026-08-01T00:00:00.000Z",
+    tamId: null,
+    tam: null,
     _count: { projects: 0 },
     ...overrides,
   };

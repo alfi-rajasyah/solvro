@@ -18,7 +18,7 @@ import { Alert, AlertDescription } from "@/components/reui/alert";
 import { scoreClass, scoreLevel } from "@/components/RiskFormModal";
 import { Chip } from "@/components/StatusChip";
 import { dateToDay, dayFromIso } from "@/lib/dateField";
-import { type Task, useProjectRisks, useProjectTasks } from "@/lib/queries";
+import { type Task, useProjectNotes, useProjectRisks, useProjectTasks } from "@/lib/queries";
 
 export function ProjectOverview() {
   const { project } = useProjectContext();
@@ -161,6 +161,7 @@ export function ProjectOverview() {
         <div className="grid grid-cols-1 gap-4">
           <StatusBreakdown tasks={tasks ?? []} />
           <TopRisks projectId={project.id} />
+          <ProjectNotesPanel projectId={project.id} />
         </div>
       </div>
     </div>
@@ -329,6 +330,66 @@ function TopRisks({ projectId }: { projectId: number }) {
       )}
     </section>
   );
+}
+
+function ProjectNotesPanel({ projectId }: { projectId: number }) {
+  // Last 14 calendar days, inclusive of today — computed in UTC from the day
+  // string (`daysBefore`) rather than a local `Date#setDate`, which can walk
+  // a day off across a DST transition (same rationale as isoWeek.ts's
+  // UTC-only arithmetic).
+  const windowTo = dateToDay(new Date())!;
+  const windowFrom = daysBefore(windowTo, 13);
+  const { data: notes, isLoading, isError } = useProjectNotes(projectId, {
+    from: windowFrom,
+    to: windowTo,
+  });
+
+  return (
+    <section className={PANEL_CLASS}>
+      <header className="mb-3 flex items-center justify-between">
+        <h3 className={PANEL_HEADING}>Notes</h3>
+        <Link
+          to="/daily-review"
+          className="text-xs font-semibold text-primary hover:underline"
+        >
+          Log a note
+        </Link>
+      </header>
+      {isLoading ? (
+        <div className="h-16 animate-pulse rounded-sm bg-surface-container-low" />
+      ) : isError ? (
+        <p className="text-xs text-on-surface-variant">Could not load notes.</p>
+      ) : !notes || notes.length === 0 ? (
+        <PanelEmpty icon="edit_note" text="No notes in the last 14 days." />
+      ) : (
+        <ul className="space-y-3">
+          {notes.map((note) => (
+            <li key={note.id} className="text-sm">
+              <div className="mb-0.5 flex flex-wrap items-baseline gap-2">
+                <span className="font-mono text-xs text-on-surface-variant">
+                  {fmtDateShort(dayFromIso(note.noteDate)!)}
+                </span>
+                <span className="text-xs text-on-surface-variant">
+                  {note.author.username}
+                </span>
+              </div>
+              <p className="whitespace-pre-wrap text-on-surface">{note.body}</p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+// UTC day-string arithmetic — `day` minus `n` days, computed via UTC-getters
+// on a UTC-midnight parse of the day string (never local `setDate`, whose
+// local-timezone rollover can land on the wrong calendar day at a DST
+// transition). Mirrors isoWeek.ts's UTC-only day math.
+function daysBefore(day: string, n: number): string {
+  const d = new Date(`${day}T00:00:00.000Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
 }
 
 function PanelEmpty({ icon, text }: { icon: string; text: string }) {

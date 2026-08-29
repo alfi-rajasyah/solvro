@@ -15,6 +15,56 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-08-29 — Daily Review: collapsible customer groups and week views
+
+**`frontend/src/components/daily-review/CustomerGroup.tsx`, `WeekNotesEditor.tsx`** — each customer's group header is now one toggle that shows the project count, TAM, how many projects are reviewed today, the weekly-update status, and health, whether the group is open or closed; a group still starts closed once every project is reviewed and the weekly update is done, and a manual click wins from then on. Each project's and operations card's week view opens showing only today's row, with a "Show week · N notes" toggle for the other six days; a click on the day strip opens the week and jumps to that day.
+
+### Added — 2026-08-29 — End-to-end coverage for the Daily Review page
+
+**`e2e/tests/daily-review.spec.ts`** — one Playwright flow, run on desktop and mobile: write a daily note (⌘↵) and an operations note, mark the project reviewed, resolve an overdue task from its card, draft the customer's weekly update from the week's notes, set its health and mark it done (the customer group collapses), then confirm the update appears on the customer page and the note on the project overview, and that week navigation round-trips through `?week=`. Stat-tile assertions are delta-based, because the fixture admin sees every active project in the shared database. **`frontend/src/components/daily-review/StatsBar.tsx`** gains five `data-testid` attributes for the tiles (attribute-only).
+
+### Changed — 2026-08-29 — Daily Review v2: a weekly, per-customer review page
+
+**`frontend/src/pages/DailyReview.tsx`** (rewritten), **`frontend/src/components/daily-review/`** (new) — the Daily Review page is now a weekly, per-customer surface instead of a same-day, write-only form. A seven-day strip and Previous/Next week navigation (URL-addressable: `?week=2026-W35`) sit above five stat tiles (customers reviewed, notes this week, weekly updates done, overdue tasks, open risks). Projects are grouped under their customer; each project card has an explicit, timestamped "Mark reviewed" action, overdue-task and open-risk lists with inline status changes, and a full week of notes — add, edit, and delete your own, backfill a past day, several notes per day. Each customer also gets an operations card for issues that belong to no project (each with a short title) and a weekly update block that can be drafted from the week's notes in one click, saved as a draft, and marked done with a Green/Amber/Red health. A customer group whose projects are all reviewed and whose weekly update is done collapses to one summary row. Projects with no customer sit in their own section with a prompt to assign one. The Internal/Customer-facing toggle is gone from the page: every note it writes is internal, as before. The page loads from one request instead of three per project.
+
+**`frontend/src/lib/dailyReviewStats.ts`** (new) — the pure helpers behind the page: the five stat-tile counts, the group auto-collapse rule, and the day/date label formatters. 22 unit tests.
+
+### Added — 2026-08-29 — Customer TAM on the form, weekly updates on the customer page, note feed on the project overview
+
+**`frontend/src/components/CustomerFormModal.tsx`** — the customer form gains a "TAM" select (any user; "— none —" to clear), saved as the customer's assigned TAM. The account-manager / solution-architect row now holds three fields and stacks on narrow screens.
+
+**`frontend/src/pages/CustomerDetail.tsx`** — the header shows the assigned TAM, and a new "Weekly updates" section lists the customer's per-week status updates newest first: week label and date range, health chip (Green / Amber / Red), Draft or Done badge, the update text, the author, and when it was marked done. Draft updates render muted; done ones at full strength.
+
+**`frontend/src/pages/views/ProjectOverview.tsx`** — a new "Notes" panel shows the last 14 calendar days of daily notes for the project (day, author, text), read-only, with a "Log a note" link to the Daily Review page. The 14-day window is computed in UTC from day strings, never from local clock arithmetic.
+
+### Added — 2026-08-29 — Daily Review v2 frontend data layer: one-request page load, note/review/weekly-update editing, week navigation
+
+**`frontend/src/lib/queries.ts`** — the frontend catches up with the redesigned Daily Review page: a single `GET /daily-review` request backs the whole page (one week-keyed cache entry, kept visible across Previous/Next week navigation); notes can be added, edited, and deleted in place; marking or unmarking a project "reviewed" is instant; operations notes (issues attached to a customer rather than a project) get the same add/edit/delete, including their title; and a customer's weekly status update can be saved as Draft or Done. Each of these edits updates the page's cache immediately and rolls back if the request fails; changing a task's or a risk's status from the Daily Review attention lists also refreshes the page. Customers carry their assigned TAM through the same types the customer form already used.
+
+**`frontend/src/lib/isoWeek.ts`** — ISO-8601 week arithmetic in pure UTC, mirroring the backend module for every shared case, plus the week-navigation and header-label helpers the page needs (shift a week key forward/back, format a week as "24 – 30 Aug"). 26 unit tests; the frontend suite runs under UTC and Asia/Jakarta.
+
+**`frontend/src/lib/weeklyDraft.ts`** — drafts a customer's weekly update text from that week's project and operations notes, grouped by day, so a TAM starts from a filled-in draft instead of a blank textarea. 11 unit tests.
+
+### Added — 2026-08-29 — `GET /daily-review`: one payload for the Daily Review page
+
+**`backend/src/routes/dailyReview.ts`, `backend/src/app.ts`** — the redesigned Daily Review page loads from one request instead of three per project card. `GET /daily-review?week=2026-W35&today=2026-08-28` returns, for the requesting user's scope, the customers they cover (each with its active projects, its operations notes, and its weekly update for that week), the active projects that have no customer, and a seven-day grid of how many customers got a note on each day. Per project it computes the current phase, progress, schedule slip against the locked baseline, the overdue tasks (judged against the caller's calendar day), the open risks, the week's notes, and the caller's own "reviewed" marks. Scope follows the existing project-visibility rules: a TAM sees their own active projects and the customers assigned to them; users with `project:view-all` (or the admin wildcard) see every active project and every customer that has a TAM. A malformed or non-existent ISO week (`2025-W53`) is rejected with 400. A fixed number of batched database calls per request, regardless of how many projects or customers are on the page. 23 tests.
+
+### Added — 2026-08-29 — Project notes get a date, a window, and edit/delete; explicit "reviewed" marks
+
+**`backend/src/routes/projects.ts`** — `POST /projects/:id/notes` accepts an optional `noteDate` (calendar day; defaults to today in UTC), so a note can be backfilled onto the day it belongs to; `GET /projects/:id/notes` accepts `from`/`to` day bounds and now orders by note day. New `PATCH` and `DELETE /projects/:id/notes/:noteId`: only the author may edit; the author or an admin-wildcard user may delete. The Internal/Customer-facing field is still accepted and still defaults to `INTERNAL` — the UI simply stops sending it. New `POST /projects/:id/reviews` (`{ reviewDate }`, idempotent per user, project and day) and `DELETE /projects/:id/reviews/:reviewDate` record that a user reviewed a project on a given day, independent of whether they wrote a note. 18 tests.
+
+### Added — 2026-08-29 — Customer TAM, operations notes, and weekly updates
+
+**`backend/src/routes/customers.ts`** — a customer can be assigned a TAM (`tamId` on create/update; an unknown user is rejected with 400; customer list and detail responses include the assigned TAM). Operations notes — issues that belong to a customer but to no project — live at `GET/POST /customers/:id/notes` and `PATCH/DELETE /customers/:id/notes/:noteId`: a required title (1–120 characters), body, and calendar day; author-only editing, author-or-admin deletion. Weekly status updates live at `GET /customers/:id/weekly-updates` and `PUT /customers/:id/weekly-updates/:weekStart` (the Monday of an ISO week; one row per customer per week): body, health Green/Amber/Red, status Not started → Draft → Done — Done requires a body and a health value and stamps `doneAt`, which clears when the update is reopened. All writes require `project:write`, the same gate as the customer form; reading operations notes and weekly updates requires `project:read`, so a newly signed-in account that has no role yet cannot see them. Saving an already-done update keeps its original done time, and a save that leaves out the health value keeps the stored one. 24 tests.
+
+**`backend/src/routes/admin.ts`** — deleting a user now also refuses (with the existing `user_in_use` message) when that user authored project notes, operations notes, or weekly updates, instead of failing with a database foreign-key error.
+
+### Added — 2026-08-29 — Daily Review v2 data model: customer TAM, dated notes, operations notes, weekly updates, review marks
+
+**`backend/prisma/schema.prisma`, `backend/prisma/migrations/20260829034734_daily_review_v2/`** — the data behind the reworked Daily Review: a customer can now have a designated TAM (`Customer.tamId`, cleared if that user is deleted); project notes carry a calendar day (`ProjectNote.noteDate`, backfilled from each existing note's creation date in UTC) and an `updatedAt` so they can be edited; new `CustomerNote` rows hold operations notes — issues that belong to a customer but to no project — with a required title; new `WeeklyUpdate` rows hold one status update per customer per ISO week (body, Green/Amber/Red health, Not started → Draft → Done); and new `ProjectReview` rows record that a user reviewed a project on a given day. The note-visibility column and its `INTERNAL` default are unchanged — only the schema comment now says the Internal/Customer-facing control is gone from the UI.
+
+**`backend/src/lib/isoWeek.ts`** — ISO-8601 week arithmetic in pure UTC (`parseWeekKey`, `weekKeyOf`, `isMonday`) for the week-keyed Daily Review; handles 53-week years (`2026-W53` exists, `2025-W53` does not). 15 unit tests.
+
 ### Changed — 2026-08-15 — README describes the two-role product
 
 **`README.md`** — the readme now presents Solvro as the TAM + SA platform it is: the solution-to-project lifecycle in the overview, the Pipeline module (board, views, detail, import, analytics, handoff) in the feature list, `xlsx` in the stack table, and the Pipeline e2e specs in the repository layout. The long-removed Reports export packet finally left the feature list and the overview loop.
