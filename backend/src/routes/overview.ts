@@ -39,7 +39,7 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
     AND: [projectScope(user), { excludeFromPortfolio: false }],
   };
 
-  const [projectCount, projectsByStatus, taskGroups, recentProjects, recentTasks, portfolio] =
+  const [projectCount, projectsByStatus, taskGroups, portfolio] =
     await Promise.all([
       prisma.project.count({ where: scope }),
       prisma.project.groupBy({
@@ -51,25 +51,6 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
         by: ["status"],
         where: { project: scope },
         _count: { _all: true },
-      }),
-      prisma.project.findMany({
-        where: scope,
-        orderBy: { updatedAt: "desc" },
-        take: 5,
-        include: {
-          tam: { select: { id: true, username: true } },
-          sa: { select: { id: true, username: true } },
-          _count: { select: { tasks: true } },
-        },
-      }),
-      prisma.task.findMany({
-        where: { project: scope },
-        orderBy: { id: "desc" },
-        take: 5,
-        include: {
-          project: { select: { id: true, name: true } },
-          assignedTo: { select: { id: true, username: true } },
-        },
       }),
       computePortfolioRows(scope, today),
     ]);
@@ -85,8 +66,6 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
     projectCount,
     projectStatusCounts,
     taskCounts,
-    recentProjects,
-    recentTasks,
     portfolio,
   });
 });

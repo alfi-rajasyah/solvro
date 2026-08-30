@@ -1,9 +1,18 @@
-// Project card (spec §6.3 pins 4/5/8): header (name, status, schedule
-// chip, reviewed badge/mark-reviewed button), metrics row (phase,
-// progress), attention row (overdue tasks / open risks with inline status
-// selects), and the Mon..Sun note editor. `unassigned` adds the
+// Project card (spec §6.3 pins 4/5/8): header (collapse toggle, name,
+// status, schedule chip, reviewed badge/mark-reviewed button), metrics row
+// (phase, progress), attention row (overdue tasks / open risks with inline
+// status selects), and the Mon..Sun note editor. `unassigned` adds the
 // "no customer" banner (pin 8) — the weekly-update block itself is never
 // rendered here; it's per-customer, owned by CustomerGroup.
+//
+// Two independent folds, both default-expanded and manual-only (nothing is
+// persisted; state resets with the page): the header chevron folds the
+// whole body (metrics + attention + notes) to the header row, which then
+// carries the overdue/open-risk counts; the attention row's own
+// "Hide lists"/"Show lists" folds just the two lists to a one-line count
+// summary. A day-strip focus request aimed at this card (isFirstCard) must
+// reach the note editor even when the body is folded — it force-expands
+// the body with the same dismissed-token bookkeeping CustomerGroup uses.
 import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 import { ConfirmModal } from "@/components/ConfirmModal";
@@ -87,6 +96,22 @@ export function ProjectCard({
 
   const [confirmUnmark, setConfirmUnmark] = useState(false);
 
+  const [manualBodyExpanded, setManualBodyExpanded] = useState(true);
+  const [dismissedFocusToken, setDismissedFocusToken] = useState<number | null>(null);
+  const forceExpand = isFirstCard && focusRequest !== null && focusRequest.token !== dismissedFocusToken;
+  const bodyExpanded = forceExpand || manualBodyExpanded;
+  const [attentionExpanded, setAttentionExpanded] = useState(true);
+  const bodyId = `project-body-${project.id}`;
+  const attentionId = `project-attention-${project.id}`;
+
+  function toggleBody() {
+    const next = !bodyExpanded;
+    setManualBodyExpanded(next);
+    // Folding while a day-strip force-expand is in effect must dismiss that
+    // token, or `forceExpand` would immediately re-open the body.
+    if (!next && focusRequest) setDismissedFocusToken(focusRequest.token);
+  }
+
   const pct =
     project.progress.total === 0 ? 0 : Math.round((project.progress.done / project.progress.total) * 100);
   const schedule = scheduleChip(project);
@@ -110,7 +135,23 @@ export function ProjectCard({
         </div>
       )}
 
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-outline-variant px-4 py-3">
+      <header
+        className={`flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 ${
+          bodyExpanded ? "border-b border-outline-variant" : ""
+        }`}
+      >
+        <button
+          type="button"
+          onClick={toggleBody}
+          aria-expanded={bodyExpanded}
+          aria-controls={bodyId}
+          aria-label={bodyExpanded ? "Collapse project" : "Expand project"}
+          className="flex h-6 w-6 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+        >
+          <span className="material-symbols-outlined text-lg" aria-hidden="true">
+            {bodyExpanded ? "expand_less" : "expand_more"}
+          </span>
+        </button>
         <span className="rounded-sm bg-surface-container-high px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
           Project
         </span>
@@ -127,6 +168,12 @@ export function ProjectCard({
         >
           {schedule.label}
         </span>
+        {!bodyExpanded && hasAttention && (
+          <span className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <AttentionCount label="Overdue" count={project.overdueTasks.length} tone="bad" />
+            <AttentionCount label="Open risks" count={project.openRisks.length} tone="warn" />
+          </span>
+        )}
         <div className="ml-auto">
           {reviewToday ? (
             <button
@@ -165,119 +212,143 @@ export function ProjectCard({
         confirmTone="warning"
       />
 
-      <div className="flex flex-wrap gap-x-6 gap-y-2 border-b border-outline-variant px-4 py-2.5">
-        <Metric label="Phase" value={project.phase} />
-        <Metric label="Progress" value={`${pct}%`} sub={`${project.progress.done}/${project.progress.total}`} />
-      </div>
-
-      <div className="border-b border-outline-variant px-4 py-3">
-        {hasAttention ? (
-          <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <AttentionColumn label="Overdue" count={project.overdueTasks.length} tone="bad">
-              {project.overdueTasks.map((t) => {
-                // Inline status changes here round-trip (no optimistic
-                // write on this page) — show a pending state on the row
-                // rather than letting the select silently snap back.
-                const pending = updateTask.isPending && updateTask.variables?.id === t.id;
-                return (
-                  <li key={t.id} className={`flex items-center gap-2 ${pending ? "opacity-60" : ""}`}>
-                    <span className="min-w-0 flex-1 truncate text-sm text-on-surface">{t.title}</span>
-                    {t.dueDate && (
-                      <span className="shrink-0 font-mono text-[11px] text-chip-rose-text">
-                        due {dueDateLabel(t.dueDate)}
-                      </span>
-                    )}
-                    <Select
-                      value={t.status}
-                      onValueChange={(v) => updateTask.mutate({ id: t.id, patch: { status: v as TaskStatus } })}
-                      disabled={pending}
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="w-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                        aria-label="Task status"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent align="end">
-                        {TASK_STATUS_OPTIONS.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </li>
-                );
-              })}
-            </AttentionColumn>
-            <AttentionColumn label="Open risks" count={project.openRisks.length} tone="warn">
-              {project.openRisks.map((r) => {
-                const score = r.probability * r.impact;
-                const pending = updateRisk.isPending && updateRisk.variables?.id === r.id;
-                return (
-                  <li key={r.id} className={`flex items-center gap-2 ${pending ? "opacity-60" : ""}`}>
-                    <span className="min-w-0 flex-1 truncate text-sm text-on-surface">{r.description}</span>
-                    <span
-                      className={`shrink-0 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] font-bold ${scoreClass(score)}`}
-                      title={`${r.probability} × ${r.impact} = ${score}`}
-                    >
-                      {scoreLevel(score)}
-                    </span>
-                    <Select
-                      value={r.status}
-                      onValueChange={(v) => updateRisk.mutate({ id: r.id, patch: { status: v as RiskStatus } })}
-                      disabled={pending}
-                    >
-                      <SelectTrigger
-                        size="sm"
-                        className="w-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-                        aria-label="Risk status"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent align="end">
-                        {RISK_STATUS_OPTIONS.map((o) => (
-                          <SelectItem key={o.value} value={o.value}>
-                            {o.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </li>
-                );
-              })}
-            </AttentionColumn>
+      {bodyExpanded && (
+        <div id={bodyId}>
+          <div className="flex flex-wrap gap-x-6 gap-y-2 border-b border-outline-variant px-4 py-2.5">
+            <Metric label="Phase" value={project.phase} />
+            <Metric label="Progress" value={`${pct}%`} sub={`${project.progress.done}/${project.progress.total}`} />
           </div>
-        ) : (
-          <p className="text-sm text-on-surface-variant">Nothing overdue · no open risks</p>
-        )}
-      </div>
 
-      <div className="px-4 py-3">
-        <WeekNotesEditor
-          // Keyed by the displayed week's Monday so switching weeks
-          // remounts the editor fresh, instead of carrying its
-          // collapsed/expanded (and in-progress edit) state across weeks.
-          key={days[0]}
-          days={days}
-          today={today}
-          notes={project.notes}
-          currentUserId={currentUserId}
-          canDeleteAny={canDeleteAny}
-          placeholder='What happened on this project today? Nothing? Use "Mark reviewed".'
-          ariaLabel={`Note for ${project.name}`}
-          rowsId={`week-rows-project-${project.id}`}
-          onAdd={(day, body) => addNote.mutate({ body, noteDate: day })}
-          onUpdate={(noteId, body) => updateNote.mutate({ noteId, body })}
-          onDelete={(noteId) => deleteNote.mutate({ noteId })}
-          addPending={addNote.isPending}
-          updatePending={updateNote.isPending}
-          deletePending={deleteNote.isPending}
-          focusDay={isFirstCard ? focusRequest?.day : undefined}
-          focusToken={isFirstCard ? focusRequest?.token : undefined}
-        />
-      </div>
+          <div className="relative border-b border-outline-variant px-4 py-3">
+            {hasAttention ? (
+              <>
+                <button
+                  type="button"
+                  onClick={() => setAttentionExpanded((v) => !v)}
+                  aria-expanded={attentionExpanded}
+                  aria-controls={attentionId}
+                  className="absolute right-4 top-3 text-[11px] font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                >
+                  {attentionExpanded ? "Hide lists" : "Show lists"}
+                </button>
+                <div id={attentionId}>
+                  {attentionExpanded ? (
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <AttentionColumn label="Overdue" count={project.overdueTasks.length} tone="bad">
+                        {project.overdueTasks.map((t) => {
+                          // Inline status changes here round-trip (no optimistic
+                          // write on this page) — show a pending state on the row
+                          // rather than letting the select silently snap back.
+                          const pending = updateTask.isPending && updateTask.variables?.id === t.id;
+                          return (
+                            <li key={t.id} className={`flex items-center gap-2 ${pending ? "opacity-60" : ""}`}>
+                              <span className="min-w-0 flex-1 truncate text-sm text-on-surface">{t.title}</span>
+                              {t.dueDate && (
+                                <span className="shrink-0 font-mono text-[11px] text-chip-rose-text">
+                                  due {dueDateLabel(t.dueDate)}
+                                </span>
+                              )}
+                              <Select
+                                value={t.status}
+                                onValueChange={(v) => updateTask.mutate({ id: t.id, patch: { status: v as TaskStatus } })}
+                                disabled={pending}
+                              >
+                                <SelectTrigger
+                                  size="sm"
+                                  className="w-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                  aria-label="Task status"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                  {TASK_STATUS_OPTIONS.map((o) => (
+                                    <SelectItem key={o.value} value={o.value}>
+                                      {o.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </li>
+                          );
+                        })}
+                      </AttentionColumn>
+                      <AttentionColumn label="Open risks" count={project.openRisks.length} tone="warn">
+                        {project.openRisks.map((r) => {
+                          const score = r.probability * r.impact;
+                          const pending = updateRisk.isPending && updateRisk.variables?.id === r.id;
+                          return (
+                            <li key={r.id} className={`flex items-center gap-2 ${pending ? "opacity-60" : ""}`}>
+                              <span className="min-w-0 flex-1 truncate text-sm text-on-surface">{r.description}</span>
+                              <span
+                                className={`shrink-0 rounded-sm border px-1.5 py-0.5 font-mono text-[10px] font-bold ${scoreClass(score)}`}
+                                title={`${r.probability} × ${r.impact} = ${score}`}
+                              >
+                                {scoreLevel(score)}
+                              </span>
+                              <Select
+                                value={r.status}
+                                onValueChange={(v) => updateRisk.mutate({ id: r.id, patch: { status: v as RiskStatus } })}
+                                disabled={pending}
+                              >
+                                <SelectTrigger
+                                  size="sm"
+                                  className="w-auto shrink-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                                  aria-label="Risk status"
+                                >
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent align="end">
+                                  {RISK_STATUS_OPTIONS.map((o) => (
+                                    <SelectItem key={o.value} value={o.value}>
+                                      {o.label}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </li>
+                          );
+                        })}
+                      </AttentionColumn>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 pr-16">
+                      <AttentionCount label="Overdue" count={project.overdueTasks.length} tone="bad" />
+                      <AttentionCount label="Open risks" count={project.openRisks.length} tone="warn" />
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="text-sm text-on-surface-variant">Nothing overdue · no open risks</p>
+            )}
+          </div>
+
+          <div className="px-4 py-3">
+            <WeekNotesEditor
+              // Keyed by the displayed week's Monday so switching weeks
+              // remounts the editor fresh, instead of carrying its
+              // collapsed/expanded (and in-progress edit) state across weeks.
+              key={days[0]}
+              days={days}
+              today={today}
+              notes={project.notes}
+              currentUserId={currentUserId}
+              canDeleteAny={canDeleteAny}
+              placeholder='What happened on this project today? Nothing? Use "Mark reviewed".'
+              ariaLabel={`Note for ${project.name}`}
+              rowsId={`week-rows-project-${project.id}`}
+              onAdd={(day, body) => addNote.mutate({ body, noteDate: day })}
+              onUpdate={(noteId, body) => updateNote.mutate({ noteId, body })}
+              onDelete={(noteId) => deleteNote.mutate({ noteId })}
+              addPending={addNote.isPending}
+              updatePending={updateNote.isPending}
+              deletePending={deleteNote.isPending}
+              focusDay={isFirstCard ? focusRequest?.day : undefined}
+              focusToken={isFirstCard ? focusRequest?.token : undefined}
+            />
+          </div>
+        </div>
+      )}
     </article>
   );
 }
@@ -305,11 +376,10 @@ function AttentionColumn({
   tone: "bad" | "warn";
   children: ReactNode;
 }) {
-  const toneClass = tone === "bad" ? "text-chip-rose-text" : "text-chip-amber-text";
   return (
     <div className="min-w-0">
-      <div className="mb-1 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-        {label} <span className={`font-mono ${toneClass}`}>{count}</span>
+      <div className="mb-1">
+        <AttentionCount label={label} count={count} tone={tone} />
       </div>
       {count > 0 ? (
         <ul className="space-y-1.5">{children}</ul>
@@ -317,5 +387,17 @@ function AttentionColumn({
         <p className="text-xs italic text-on-surface-variant">None</p>
       )}
     </div>
+  );
+}
+
+// One "OVERDUE 10"-style label + toned mono count. Used as each attention
+// column's heading, and as the one-line summary when the lists or the whole
+// card body are folded.
+function AttentionCount({ label, count, tone }: { label: string; count: number; tone: "bad" | "warn" }) {
+  const toneClass = tone === "bad" ? "text-chip-rose-text" : "text-chip-amber-text";
+  return (
+    <span className="flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+      {label} <span className={`font-mono ${toneClass}`}>{count}</span>
+    </span>
   );
 }
