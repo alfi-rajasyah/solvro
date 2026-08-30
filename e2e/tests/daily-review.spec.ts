@@ -288,6 +288,19 @@ test.describe("Daily Review v2", () => {
     await expect(notesPanel.getByText(projectNoteBody)).toBeVisible();
 
     // ------------------------------------------------------------------
+    // 8b. /overview — the "Recent notes" panel lists today's project note
+    //     and the operations note (its title), newest first.
+    // ------------------------------------------------------------------
+    await page.goto("/overview", { waitUntil: "networkidle" });
+    await page.waitForTimeout(500);
+    const recentNotes = page
+      .getByRole("heading", { name: "Recent notes" })
+      .locator("xpath=ancestor::div[1]");
+    await expect(recentNotes.getByText(projectNoteBody)).toBeVisible();
+    await expect(recentNotes.getByText(opsNoteTitle)).toBeVisible();
+    await expect(recentNotes.getByText(opsNoteBody)).toBeVisible();
+
+    // ------------------------------------------------------------------
     // 9. Week navigation: Previous changes ?week=, Next returns to it.
     // ------------------------------------------------------------------
     await page.goto("/daily-review", { waitUntil: "networkidle" });

@@ -25,6 +25,7 @@ import { searchRouter } from "./routes/search.js";
 import { opportunitiesRouter } from "./routes/opportunities.js";
 import { opportunityItemsRouter } from "./routes/opportunityItems.js";
 import { dailyReviewRouter } from "./routes/dailyReview.js";
+import { notesRouter } from "./routes/notes.js";
 
 export function createApp(): Express {
   const app = express();
@@ -50,6 +51,7 @@ export function createApp(): Express {
   app.use("/customers", customersRouter);
   app.use("/projects", projectsRouter);
   app.use("/daily-review", dailyReviewRouter);
+  app.use("/notes", notesRouter);
   app.use("/tasks", tasksRouter);
   app.use("/labels", labelsRouter);
   app.use("/sections", sectionsRouter);
