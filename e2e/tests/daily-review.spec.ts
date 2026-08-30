@@ -86,23 +86,24 @@ async function saveNote(container: Locator, textbox: Locator, body: string): Pro
 }
 
 /**
- * Polls until `customerName`'s group header toggle (CustomerGroup.tsx:
+ * Polls until `customerName`'s group header chevron (CustomerGroup.tsx:
  * `aria-expanded`, collapsed by the auto-collapse rule once every project
  * is reviewed today and the weekly update is DONE) reports `aria-expanded=
  * "false"`, then confirms the header row carries the "Done" weekly-status
  * pill — both facts checked in one poll so they can't race the
- * invalidation-driven re-render that produces them together. Filters by
- * `hasText: customerName` (not just the first match) because a dev DB this
- * spec has run against before can already have other customers' groups
- * sitting collapsed.
+ * invalidation-driven re-render that produces them together. Scoped to the
+ * customer's own h2 (not the first collapsed toggle on the page) because a
+ * dev DB this spec has run against before can already have other
+ * customers' groups sitting collapsed.
  */
 async function waitForCollapsedDone(page: Page, customerName: string): Promise<void> {
-  const toggle = page.getByRole("button", { expanded: false }).filter({ hasText: customerName });
+  const heading = page.getByRole("heading", { level: 2, name: customerName });
+  const toggle = heading.getByRole("button", { expanded: false });
   await expect
     .poll(
       async () => {
         if ((await toggle.count()) === 0) return false;
-        const text = (await toggle.first().textContent().catch(() => null)) ?? "";
+        const text = (await heading.textContent().catch(() => null)) ?? "";
         return text.includes("Done");
       },
       { timeout: 15_000, message: `waiting for "${customerName}"'s collapsed row to show Done` },
@@ -179,6 +180,25 @@ test.describe("Daily Review v2", () => {
     await expect(projectCard.getByRole("link", { name: projectName })).toBeVisible();
 
     // ------------------------------------------------------------------
+    // 1b. Folds. The attention row's "Hide lists" folds the overdue/open-
+    //     risk lists to a one-line count summary; the header chevron folds
+    //     the whole card body (note editor included) to the header row,
+    //     which keeps the name link. Both default expanded.
+    // ------------------------------------------------------------------
+    const overdueRow = projectCard.locator("li").filter({ hasText: overdueTitle });
+    await expect(overdueRow).toBeVisible();
+    await projectCard.getByRole("button", { name: "Hide lists" }).click();
+    await expect(overdueRow).toBeHidden();
+    await projectCard.getByRole("button", { name: "Show lists" }).click();
+    await expect(overdueRow).toBeVisible();
+
+    await projectCard.getByRole("button", { name: "Collapse project" }).click();
+    await expect(page.getByLabel(`Note for ${projectName}`)).toBeHidden();
+    await expect(projectCard.getByRole("link", { name: projectName })).toBeVisible();
+    await projectCard.getByRole("button", { name: "Expand project" }).click();
+    await expect(page.getByLabel(`Note for ${projectName}`)).toBeVisible();
+
+    // ------------------------------------------------------------------
     // 2. Today's project note, saved with ⌘/Ctrl+Enter (Save-button
     //    fallback on mobile) — appears as a saved row; "Notes this week"
     //    increments by 1.
@@ -244,9 +264,12 @@ test.describe("Daily Review v2", () => {
     await waitForCollapsedDone(page, customerName);
 
     // ------------------------------------------------------------------
-    // 7. /customers/:id — Weekly updates section lists Amber + Done.
+    // 7. The customer name in the (now collapsed) group header links to
+    //    /customers/:id — whose Weekly updates section lists Amber + Done.
     // ------------------------------------------------------------------
-    await page.goto(`/customers/${customer.id}`, { waitUntil: "networkidle" });
+    await customerHeading.getByRole("link", { name: customerName }).click();
+    await expect(page).toHaveURL(new RegExp(`/customers/${customer.id}$`));
+    await page.waitForLoadState("networkidle");
     await page.waitForTimeout(500);
     const weeklySection = page
       .getByRole("heading", { name: "Weekly updates" })

@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-08-31 — Daily Review: collapsible project cards and attention lists, customer name links to the customer page
+
+**`frontend/src/components/daily-review/ProjectCard.tsx`** — each project card gets a chevron in its header that folds the card body (phase/progress, overdue tasks, open risks, and the week's notes) down to the header row; while folded, the header shows the overdue and open-risk counts so nothing actionable disappears from view. The overdue/open-risk row gets its own "Hide lists" / "Show lists" toggle that folds the two lists to a one-line count summary. Both folds start expanded and are not persisted. A day-strip click still reaches the first card's note editor: it force-expands a folded card, the same way it already force-expands a folded customer group. **`frontend/src/components/daily-review/CustomerGroup.tsx`** — the customer name is now a link to `/customers/:id`; because a link cannot sit inside a button, the group's collapse toggle is the chevron icon button alone rather than the whole header row. Why: with many overdue tasks and risks, one project card filled the screen, and the customer page was two clicks away. **`e2e/tests/daily-review.spec.ts`** — covers both folds and reaches the customer page through the new link.
+
 ### Changed — 2026-08-31 — Owning a customer grants access to its projects
 
 **`backend/src/lib/visibility.ts`** — `projectVisibilityFilter` gains a third arm: a user sees every project of a customer they own as TAM (`Customer.tamId`), next to the projects where they are the project TAM or SA. This is full access, the same as being the project's TAM: every project-scoped route (project list and overview, Kanban, Gantt, tasks, sections, risks, dependencies, notes, reviews, services, baseline, and `PATCH /projects/:id` including status, TAM, and customer changes). Why: the Daily Review lists every active project of an owned customer, and the customer's TAM must be able to review them, log notes, and change task status — not only look at them.
