@@ -23,6 +23,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 **`backend/test/projectVisibility.test.ts`** — new suite for `projectVisibilityFilter`'s owned-customer arm: a customer's owner sees and can act on (review, note) every active project under it, including ones where another user is the project TAM; a project of a customer they don't own stays hidden with 404, and an unowned customer grants no one access through this arm.
 
+### Added — 2026-08-31 — End-to-end coverage for customer visibility
+
+**`e2e/tests/customer-visibility.spec.ts`** — one Playwright flow, run on desktop and mobile: the admin API creates two TAM users and one customer with one active project each; a TAM logs in through the UI and sees only their own customer on `/customers` and on `/daily-review`, never the other TAM's.
+
 ### Changed — 2026-08-31 — Daily Review subtitle names the customer-first page
 
 **`frontend/src/pages/DailyReview.tsx`** — the subtitle now reads "Your customers, their active projects, and each customer's weekly update."
