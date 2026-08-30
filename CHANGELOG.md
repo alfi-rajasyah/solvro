@@ -15,6 +15,30 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-08-31 — Owning a customer grants access to its projects
+
+**`backend/src/lib/visibility.ts`** — `projectVisibilityFilter` gains a third arm: a user sees every project of a customer they own as TAM (`Customer.tamId`), next to the projects where they are the project TAM or SA. This is full access, the same as being the project's TAM: every project-scoped route (project list and overview, Kanban, Gantt, tasks, sections, risks, dependencies, notes, reviews, services, baseline, and `PATCH /projects/:id` including status, TAM, and customer changes). Why: the Daily Review lists every active project of an owned customer, and the customer's TAM must be able to review them, log notes, and change task status — not only look at them.
+
+### Added — 2026-08-31 — Backend coverage for the owned-customer project arm
+
+**`backend/test/projectVisibility.test.ts`** — new suite for `projectVisibilityFilter`'s owned-customer arm: a customer's owner sees and can act on (review, note) every active project under it, including ones where another user is the project TAM; a project of a customer they don't own stays hidden with 404, and an unowned customer grants no one access through this arm.
+
+### Changed — 2026-08-31 — Daily Review is scoped by customer ownership
+
+**`backend/src/routes/dailyReview.ts`** — the page now starts from the customers you can see, not from your projects. A customer you own as TAM shows every active project, whoever the project TAM is; a customer you reach only through one of your own projects shows just your active projects; projects with no customer still appear under "No customer" when you are their TAM. Users with `project:view-all` (or `*`) keep the full view. Payload shape and query count are unchanged; the scope cases in `backend/test/dailyReview.test.ts` were rewritten for the customer-first page.
+
+### Changed — 2026-08-31 — Customer routes follow the customer visibility rule
+
+**`backend/src/routes/customers.ts`** — `GET /customers`, `GET /customers/:id`, the operations-notes routes, the weekly-updates routes, `PUT /customers/:id/services`, `PATCH`, and `DELETE` now apply `customerVisibilityFilter` / `ensureCustomerVisible`: a user sees a customer they own as TAM, an unowned customer, or a customer with a project they can already see; users with `project:view-all` (or `*`) see every customer. A hidden customer answers 404 `customer_not_found` on every route, so its existence never leaks. A customer's project list and project count follow `projectVisibilityFilter`, so a customer reached through one visible project never shows its other projects. `POST /customers` without a `tamId` now makes the creator the TAM, so nobody can create a customer they cannot see. Leaving a customer unowned — `tamId: null` on create, or clearing the TAM of an owned customer on `PATCH` — is accepted only from users with `project:view-all`, otherwise 400 `tam_required`; an already-unowned customer may stay unowned. Reassigning a customer to another TAM through `PATCH` stays allowed. New suite `backend/test/customerVisibility.test.ts` covers the rule end to end.
+
+### Fixed — 2026-08-31 — Search hits and project links respect customer visibility
+
+**`backend/src/routes/search.ts`** — customer hits are filtered by `customerVisibilityFilter`, so a customer hidden from the caller no longer appears in search results. **`backend/src/routes/projects.ts`, `backend/src/routes/opportunities.ts`** — `POST /projects`, `PATCH /projects/:id`, and the opportunity handoff check the `customerId` against the caller's visibility and answer 400 `customer_not_found` for a hidden or unknown customer; before, an unknown id crashed `POST /projects` and the handoff with a 500 and answered 404 on `PATCH /projects/:id`. New suite `backend/test/projectCustomerLink.test.ts` covers all three routes.
+
+### Added — 2026-08-31 — Customer visibility rule
+
+**`backend/src/lib/visibility.ts`** — `customerVisibilityFilter(user)`, `isCustomerVisible(user, id)`, and `ensureCustomerVisible(user, id)`, the customer counterparts of `projectVisibilityFilter` / `ensureProjectVisible`. Users with `project:view-all` (or `*`) see every customer; everyone else sees a customer they own as TAM (`Customer.tamId`), an unowned customer (`tamId` null), or a customer with at least one project they can already see. A hidden customer id answers 404 `customer_not_found`, never 403; as a body field (a project link) it answers 400 with the same code.
+
 ### Changed — 2026-08-29 — Daily Review: collapsible customer groups and week views
 
 **`frontend/src/components/daily-review/CustomerGroup.tsx`, `WeekNotesEditor.tsx`** — each customer's group header is now one toggle that shows the project count, TAM, how many projects are reviewed today, the weekly-update status, and health, whether the group is open or closed; a group still starts closed once every project is reviewed and the weekly update is done, and a manual click wins from then on. Each project's and operations card's week view opens showing only today's row, with a "Show week · N notes" toggle for the other six days; a click on the day strip opens the week and jumps to that day.

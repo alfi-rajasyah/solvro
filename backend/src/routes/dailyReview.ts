@@ -4,7 +4,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { hasPermission, requireAuth } from "../http/auth.js";
 import { validate } from "../http/validate.js";
-import { projectVisibilityFilter } from "../lib/visibility.js";
+import { customerVisibilityFilter, projectVisibilityFilter } from "../lib/visibility.js";
 import {
   isValidDayString,
   overdueBoundary,
@@ -128,19 +128,77 @@ dailyReviewRouter.get(
     const weekEndDate = utcMidnightOfDayString(week.days[6]);
     const overdueBoundaryDate = overdueBoundary(today);
 
-    // Decision 13: ACTIVE projects in scope. Non-view-all users are further
-    // restricted to their own tamId — never re-derived ad hoc from
-    // projectVisibilityFilter alone, since that also admits SA-only matches.
-    // AND-composed (not object-spread) so projectVisibilityFilter's own keys
-    // can never collide with or be silently overwritten by a sibling
-    // condition — same pattern as routes/overview.ts's `scope`.
-    const projectWhere: Prisma.ProjectWhereInput = {
+    // Decisions 8-9 (customer-visibility-spec.md §5.3): customer-first
+    // scope, replacing the old project-first Decisions 13/14. First resolve
+    // the customers on the page — a TAM's owned customers (tamId = me;
+    // view-all: every customer with a TAM set) plus any customer with at
+    // least one ACTIVE project visible to the caller (the "attached" tier,
+    // via projectVisibilityFilter so an SA or a project TAM on someone
+    // else's customer still reaches it) — then split them into owned vs.
+    // attached so the project query below can apply Decision 9's two-tier
+    // rule. AND-composed (not object-spread) so customerVisibilityFilter's
+    // own keys can never collide with or be silently overwritten by a
+    // sibling condition — same pattern as projectWhere below.
+    const customerWhere: Prisma.CustomerWhereInput = {
       AND: [
-        projectVisibilityFilter(user),
-        { status: "ACTIVE" },
-        ...(viewAll ? [] : [{ tamId: user.sub }]),
+        customerVisibilityFilter(user),
+        {
+          OR: [
+            viewAll ? { tamId: { not: null } } : { tamId: user.sub },
+            {
+              projects: {
+                some: { AND: [{ status: "ACTIVE" }, projectVisibilityFilter(user)] },
+              },
+            },
+          ],
+        },
       ],
     };
+
+    const candidateCustomers = await prisma.customer.findMany({
+      where: customerWhere,
+      orderBy: { name: "asc" },
+      select: {
+        id: true,
+        name: true,
+        tam: { select: { id: true, username: true } },
+      },
+    });
+    const candidateCustomerIds = candidateCustomers.map((c) => c.id);
+
+    // Decision 9: split into owned (tamId = me; view-all: every customer
+    // resolved above) vs. attached (visible only through a project) — the
+    // project query below treats the two tiers differently, and the
+    // post-projects prune further down uses ownedIdSet to decide which
+    // attached customers actually survive onto the page.
+    const ownedIds = viewAll
+      ? candidateCustomerIds
+      : candidateCustomers.filter((c) => c.tam?.id === user.sub).map((c) => c.id);
+    const ownedIdSet = new Set(ownedIds);
+    const attachedIds = candidateCustomerIds.filter((id) => !ownedIdSet.has(id));
+
+    // Decision 9: ACTIVE projects in scope. Owned customer → every ACTIVE
+    // project of that customer, whoever the project TAM is. Attached
+    // customer → only the caller's own ACTIVE projects (the old Decision 13
+    // rule). Decision 10: the "No customer" group is unchanged — ACTIVE
+    // projects with customerId: null and Project.tamId = me. AND-composed
+    // (not object-spread) so a sibling condition can never collide with or
+    // silently overwrite another — same pattern as routes/overview.ts's
+    // `scope`.
+    const projectWhere: Prisma.ProjectWhereInput = viewAll
+      ? { status: "ACTIVE" }
+      : {
+          AND: [
+            { status: "ACTIVE" },
+            {
+              OR: [
+                { customerId: { in: ownedIds } },
+                { tamId: user.sub, customerId: { in: attachedIds } },
+                { tamId: user.sub, customerId: null },
+              ],
+            },
+          ],
+        };
 
     const projects = await prisma.project.findMany({
       where: projectWhere,
@@ -154,6 +212,24 @@ dailyReviewRouter.get(
       },
     });
     const projectIds = projects.map((p) => p.id);
+
+    // Decision 9 (fix): an ATTACHED customer surfaces only when it actually
+    // has a project in the result above — the customer query's "attached"
+    // OR arm admits a customer via ANY project matching
+    // projectVisibilityFilter (which includes the saId arm), while the
+    // project query above only pulls the caller's own (tamId) projects for
+    // an attached customer. Without this prune, a customer the caller
+    // reaches purely as SA would render as an empty group and inflate
+    // coverage.total. Owned customers always stay, even with zero active
+    // projects — they still carry operations notes and the weekly update
+    // (Decision 8).
+    const projectCustomerIds = new Set(
+      projects.map((p) => p.customerId).filter((id): id is number => id !== null),
+    );
+    const customers = candidateCustomers.filter(
+      (c) => ownedIdSet.has(c.id) || projectCustomerIds.has(c.id),
+    );
+    const customerIds = customers.map((c) => c.id);
 
     const [tasks, risks, projectNotes, reviews] = await Promise.all([
       prisma.task.findMany({
@@ -203,33 +279,6 @@ dailyReviewRouter.get(
         select: { projectId: true, reviewDate: true, createdAt: true },
       }),
     ]);
-
-    // Decision 14: customers of the in-scope projects, union customers this
-    // user owns as TAM (view-all: union every customer with a TAM set).
-    const customerIdsFromProjects = [
-      ...new Set(
-        projects
-          .map((p) => p.customerId)
-          .filter((id): id is number => id !== null),
-      ),
-    ];
-    const customerWhere: Prisma.CustomerWhereInput = {
-      OR: [
-        { id: { in: customerIdsFromProjects } },
-        viewAll ? { tamId: { not: null } } : { tamId: user.sub },
-      ],
-    };
-
-    const customers = await prisma.customer.findMany({
-      where: customerWhere,
-      orderBy: { name: "asc" },
-      select: {
-        id: true,
-        name: true,
-        tam: { select: { id: true, username: true } },
-      },
-    });
-    const customerIds = customers.map((c) => c.id);
 
     const [customerNotes, weeklyUpdates] = await Promise.all([
       prisma.customerNote.findMany({
