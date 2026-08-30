@@ -23,6 +23,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 **`backend/test/projectVisibility.test.ts`** — new suite for `projectVisibilityFilter`'s owned-customer arm: a customer's owner sees and can act on (review, note) every active project under it, including ones where another user is the project TAM; a project of a customer they don't own stays hidden with 404, and an unowned customer grants no one access through this arm.
 
+### Changed — 2026-08-31 — Daily Review subtitle names the customer-first page
+
+**`frontend/src/pages/DailyReview.tsx`** — the subtitle now reads "Your customers, their active projects, and each customer's weekly update."
+
+### Changed — 2026-08-31 — Customers page and form follow the customer visibility rule
+
+**`frontend/src/pages/Customers.tsx`** — the subtitle and the empty state say what the list holds: every customer for users with `project:view-all`, otherwise "Customers assigned to you, plus customers of the projects you work on." Each card shows a `TAM:` line when the customer has one. **`frontend/src/components/CustomerFormModal.tsx`** — on create, the TAM select starts on the current user; the "— none —" option shows only for `project:view-all` users, or on edit of a customer that already has no TAM. Moving a customer you own to another TAM asks for confirmation first, because it can remove the customer from your list.
+
 ### Changed — 2026-08-31 — Daily Review is scoped by customer ownership
 
 **`backend/src/routes/dailyReview.ts`** — the page now starts from the customers you can see, not from your projects. A customer you own as TAM shows every active project, whoever the project TAM is; a customer you reach only through one of your own projects shows just your active projects; projects with no customer still appear under "No customer" when you are their TAM. Users with `project:view-all` (or `*`) keep the full view. Payload shape and query count are unchanged; the scope cases in `backend/test/dailyReview.test.ts` were rewritten for the customer-first page.

@@ -21,6 +21,7 @@ export function Customers() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const canMutate = hasPermission(user, "project:write");
+  const viewAll = hasPermission(user, "project:view-all");
 
   async function handleDelete(c: CustomerSummary) {
     if (!confirm(`Delete customer "${c.name}"? Linked projects keep their tasks but lose the customer link.`)) return;
@@ -38,8 +39,9 @@ export function Customers() {
         <div>
           <h1 className="font-display text-2xl font-bold text-on-surface">Customers</h1>
           <p className="text-sm text-on-surface-variant">
-            Customer database. Every project is mapped to a customer for cross-account
-            visibility and reporting.
+            {viewAll
+              ? "Customer database. Every project is mapped to a customer for cross-account visibility and reporting."
+              : "Customers assigned to you, plus customers of the projects you work on."}
           </p>
         </div>
         {canMutate && (
@@ -71,7 +73,7 @@ export function Customers() {
       {customers && customers.length === 0 && (
         <EmptyState
           icon="business"
-          message="No customers yet."
+          message={viewAll ? "No customers yet." : "No customers are assigned to you."}
           action={
             canMutate ? (
               <button
@@ -155,6 +157,11 @@ function CustomerCard({
             {customer.accountManager && (
               <p className="truncate text-[11px] text-on-surface-variant">
                 AM: {customer.accountManager}
+              </p>
+            )}
+            {customer.tam && (
+              <p className="truncate text-[11px] text-on-surface-variant">
+                TAM: {customer.tam.username}
               </p>
             )}
           </div>
