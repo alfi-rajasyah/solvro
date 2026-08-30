@@ -7,13 +7,14 @@ import {
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { dayLabel } from "@/lib/dailyReviewStats";
+import { dayFromIso } from "@/lib/dateField";
 import {
-  type OverviewProject,
   type OverviewResponse,
-  type OverviewTask,
   type ProjectStatus,
-  type TaskStatus,
+  type RecentNote,
   useOverview,
+  useRecentNotes,
 } from "@/lib/queries";
 
 export function Overview() {
@@ -111,9 +112,13 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
         )}
       </section>
 
-      {/* Two-up: attention + recent activity */}
+      {/* Two-up: attention + recent notes */}
       <div className="grid gap-4 lg:grid-cols-3">
-        <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5 lg:col-span-2">
+        {/* min-w-0 on both grid items: a grid item's automatic minimum is
+            its min-content width, so a nowrap row inside either panel would
+            otherwise size the single mobile column wider than the viewport
+            and clip both panels. */}
+        <div className="min-w-0 rounded-sm border border-outline-variant bg-surface-container-lowest p-5 lg:col-span-2">
           <header className="mb-3 flex items-center justify-between">
             <h3 className="font-display text-sm font-bold text-on-surface">Projects needing attention</h3>
             <Link to="/projects" className="text-[11px] font-semibold text-primary hover:underline">
@@ -137,7 +142,9 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
                 })
                 .slice(0, 6)
                 .map((p) => (
-                  <li key={p.id}>
+                  // min-w-0: same grid-item rule as the panels above — lets
+                  // the row's `truncate` name actually shrink on a phone.
+                  <li key={p.id} className="min-w-0">
                     <Link
                       to={`/projects/${p.id}`}
                       style={{
@@ -163,14 +170,14 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
           )}
         </div>
 
-        <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
+        <div className="min-w-0 rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
           <header className="mb-3 flex items-center justify-between">
-            <h3 className="font-display text-sm font-bold text-on-surface">Recent activity</h3>
-            <Link to="/projects" className="text-[11px] font-semibold text-primary hover:underline">
-              All projects →
+            <h3 className="font-display text-sm font-bold text-on-surface">Recent notes</h3>
+            <Link to="/daily-review" className="text-[11px] font-semibold text-primary hover:underline">
+              Daily Review →
             </Link>
           </header>
-          <ActivityFeed projects={data.recentProjects} tasks={data.recentTasks} />
+          <RecentNotesFeed />
         </div>
       </div>
     </>
@@ -208,34 +215,77 @@ function Kpi({ label, value, hint, icon, tone }: KpiProps) {
   );
 }
 
-function ActivityFeed({ projects, tasks }: { projects: OverviewProject[]; tasks: OverviewTask[] }) {
-  if (projects.length === 0 && tasks.length === 0) {
-    return <EmptyHint label="No activity yet." />;
+// The newest daily notes — project notes and operations notes — across
+// every customer the caller can see, last 7 days, newest first
+// (GET /notes/recent, useRecentNotes). Read-only and in-app only; the
+// panel header's Daily Review link is where notes are written. Owns its
+// own query, so it loads independently of useOverview()'s skeleton.
+function RecentNotesFeed() {
+  const { data, isLoading, isError } = useRecentNotes();
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div key={i} className="h-10 animate-pulse rounded-sm bg-surface-container-low" />
+        ))}
+      </div>
+    );
+  }
+  // No data at all (the first load failed) vs. a failed background refetch
+  // that still has the last good list — keep showing the list in that case.
+  if (!data) {
+    return <p className="text-xs text-error">Could not load recent notes.</p>;
   }
   return (
-    <ul className="space-y-3 text-[12px]">
-      {tasks.slice(0, 5).map((t) => {
-        const init = (t.assignedTo?.username ?? "?").slice(0, 2).toUpperCase();
-        const tone = avatarColor(t.assignedTo?.username ?? "?");
-        return (
-          <li key={`t-${t.id}`} className="flex gap-2.5">
-            <span
-              className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white"
-              style={{ background: tone }}
-            >
-              {init}
-            </span>
-            <div className="min-w-0 leading-snug">
-              <span className="font-semibold text-on-surface">{t.assignedTo?.username ?? "Unassigned"}</span>
-              {" · "}
-              <span className="text-on-surface-variant">{taskVerb(t.status)}</span>{" "}
-              <span className="font-mono text-primary">T-{String(t.id).padStart(3, "0")}</span>
-              <div className="truncate text-on-surface-variant">{t.project.name}</div>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+    <>
+      {isError && <p className="mb-2 text-xs text-error">Could not refresh — showing the last loaded notes.</p>}
+      {data.notes.length === 0 ? (
+        <EmptyHint label={`No notes in the last ${windowDays(data.from, data.to)} days.`} />
+      ) : (
+        <ul className="max-h-96 divide-y divide-outline-variant overflow-y-auto text-xs">
+          {data.notes.map((n) => (
+            <RecentNoteRow key={`${n.kind}-${n.id}`} note={n} />
+          ))}
+        </ul>
+      )}
+    </>
+  );
+}
+
+/** Inclusive day count of a "yyyy-MM-dd" window — the server owns the length. */
+function windowDays(from: string, to: string): number {
+  const ms = Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`);
+  return Math.round(ms / 86_400_000) + 1;
+}
+
+function RecentNoteRow({ note }: { note: RecentNote }) {
+  const day = dayFromIso(note.noteDate);
+  return (
+    <li className="py-2 first:pt-0 last:pb-0">
+      <div className="flex items-baseline gap-2 text-[11px] text-on-surface-variant">
+        <span className="shrink-0 font-mono tabular-nums">{day ? dayLabel(day) : "—"}</span>
+        <span className="min-w-0 truncate">
+          {note.customer ? (
+            <Link to={`/customers/${note.customer.id}`} className="hover:text-primary hover:underline">
+              {note.customer.name}
+            </Link>
+          ) : (
+            "No customer"
+          )}
+          {" › "}
+          {note.project ? (
+            <Link to={`/projects/${note.project.id}/overview`} className="hover:text-primary hover:underline">
+              {note.project.name}
+            </Link>
+          ) : (
+            "Operations"
+          )}
+        </span>
+        <span className="ml-auto shrink-0">{note.author.username}</span>
+      </div>
+      {note.title && <div className="mt-0.5 truncate font-semibold text-on-surface">{note.title}</div>}
+      <p className="mt-0.5 line-clamp-2 leading-snug text-on-surface">{note.body}</p>
+    </li>
   );
 }
 
@@ -262,19 +312,6 @@ function SkeletonGrid() {
       </div>
     </>
   );
-}
-
-function taskVerb(status: TaskStatus) {
-  if (status === "DONE") return "completed";
-  if (status === "IN_PROGRESS") return "is working on";
-  return "took ownership of";
-}
-
-const AVATAR_PALETTE = ["#0d9488", "#7c3aed", "#dc2626", "#0ea5e9", "#9333ea", "#a78bfa", "#f59e0b", "#10b981"];
-function avatarColor(seed: string) {
-  let h = 0;
-  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
-  return AVATAR_PALETTE[h % AVATAR_PALETTE.length];
 }
 
 // First name for the welcome heading. AuthUser carries no name field, so

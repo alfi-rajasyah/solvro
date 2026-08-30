@@ -190,25 +190,6 @@ export interface Comment {
   author: { id: number; username: string; email: string };
 }
 
-export interface OverviewProject {
-  id: number;
-  name: string;
-  description: string | null;
-  status: ProjectStatus;
-  updatedAt: string;
-  tam: { id: number; username: string };
-  sa: { id: number; username: string } | null;
-  _count: { tasks: number };
-}
-
-export interface OverviewTask {
-  id: number;
-  title: string;
-  status: TaskStatus;
-  project: { id: number; name: string };
-  assignedTo: { id: number; username: string } | null;
-}
-
 // Mirrors backend/src/lib/portfolio.ts (PortfolioProjectRow) — org-wide
 // portfolio roll-up row shape shared by GET /overview and GET /reports/executive.
 export interface PortfolioProjectRow {
@@ -232,9 +213,32 @@ export interface OverviewResponse {
   projectCount: number;
   projectStatusCounts: Partial<Record<ProjectStatus, number>>;
   taskCounts: Record<TaskStatus, number>;
-  recentProjects: OverviewProject[];
-  recentTasks: OverviewTask[];
   portfolio: PortfolioProjectRow[];
+}
+
+// GET /notes/recent — the Overview page's "Recent notes" feed
+// (backend/src/routes/notes.ts). One row per note, project notes and
+// operations (customer) notes merged: `project` is null for an operations
+// note, `title` is null for a project note, `customer` is null for a
+// project that has no customer. `noteDate` is a "T00:00:00.000Z" day
+// instant — read the day via dayFromIso, never `===` against a day string.
+export interface RecentNote {
+  kind: "project" | "operations";
+  id: number;
+  noteDate: string;
+  body: string;
+  title: string | null;
+  author: { id: number; username: string };
+  project: { id: number; name: string } | null;
+  customer: { id: number; name: string } | null;
+  updatedAt: string;
+}
+
+export interface RecentNotesResponse {
+  /** First and last calendar day of the window, "yyyy-MM-dd". */
+  from: string;
+  to: string;
+  notes: RecentNote[];
 }
 
 export type NoteVisibility = "INTERNAL" | "CUSTOMER_FACING";
@@ -435,6 +439,13 @@ export const queryKeys = {
   // uses (same shape as `pipelineKeys.root`), rather than ~20 repeated
   // `["daily-review"]` array literals that could each silently drift.
   dailyReviewRoot: ["daily-review"] as const,
+  // Overview's "Recent notes" feed (GET /notes/recent). `today` is folded
+  // into the key by useRecentNotes — same day-boundary rationale as
+  // useOverview. `recentNotesRoot` is the prefix every note mutation below
+  // invalidates, so a note saved on the Daily Review shows up on the
+  // Overview without waiting out staleTime.
+  recentNotes: (today: string) => ["recent-notes", today] as const,
+  recentNotesRoot: ["recent-notes"] as const,
 };
 
 export function useOverview() {
@@ -456,6 +467,19 @@ export function useOverview() {
     // The day-boundary key change (above) shouldn't flash a loading
     // skeleton on every render after midnight — keep showing the previous
     // day's data while the new key's request resolves in the background.
+    placeholderData: (prev) => prev,
+  });
+}
+
+// Overview's "Recent notes" panel. `today` bounds the server-side 7-day
+// window and sits in the key — see useOverview for why the day is part of
+// the key, not just the URL.
+export function useRecentNotes() {
+  const today = dateToDay(new Date())!;
+  return useQuery({
+    queryKey: queryKeys.recentNotes(today),
+    queryFn: ({ signal }) =>
+      apiRequest<RecentNotesResponse>(`/notes/recent?today=${today}`, { signal }),
     placeholderData: (prev) => prev,
   });
 }
@@ -1430,6 +1454,7 @@ export function useAddProjectNote(projectId: number) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.recentNotesRoot });
       // Every visibility/window-bucketed key for this project (see
       // queryKeys.projectNotes's doc) — not just the "all, unwindowed" one.
       qc.invalidateQueries({ queryKey: ["projects", projectId, "notes"] });
@@ -1473,6 +1498,7 @@ export function useUpdateProjectNote(projectId: number) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.recentNotesRoot });
       qc.invalidateQueries({ queryKey: ["projects", projectId, "notes"] });
     },
   });
@@ -1504,6 +1530,7 @@ export function useDeleteProjectNote(projectId: number) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.recentNotesRoot });
       qc.invalidateQueries({ queryKey: ["projects", projectId, "notes"] });
     },
   });
@@ -1627,6 +1654,7 @@ export function useAddCustomerNote(customerId: number) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.recentNotesRoot });
     },
   });
 }
@@ -1674,6 +1702,7 @@ export function useUpdateCustomerNote(customerId: number) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.recentNotesRoot });
     },
   });
 }
@@ -1704,6 +1733,7 @@ export function useDeleteCustomerNote(customerId: number) {
     },
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.recentNotesRoot });
     },
   });
 }

@@ -1,10 +1,13 @@
-// Customer group (spec §6.3 pin 3, Decision 15): a single header-row toggle
-// (aria-expanded, expand_more/expand_less icon) collapses/expands the
-// group's body (project cards, one operations card, one weekly-update
-// block, inside a left-bordered indent). The header row itself is always
-// the same summary content — name, project count, TAM, "reviewed x/y",
-// weekly-status badge, health chip — whether collapsed or expanded, so it
-// reads correctly for any group, not just a "done" one.
+// Customer group (spec §6.3 pin 3, Decision 15): a chevron toggle button
+// at the start of the header row (aria-expanded, expand_more/expand_less
+// icon) collapses/expands the group's body (project cards, one operations
+// card, one weekly-update block, inside a left-bordered indent). The
+// customer name is a link to /customers/:id, so the toggle is the icon
+// button alone rather than the whole row — a link can't sit inside a
+// button. The header row itself is always the same summary content —
+// name, project count, TAM, "reviewed x/y", weekly-status badge, health
+// chip — whether collapsed or expanded, so it reads correctly for any
+// group, not just a "done" one.
 //
 // Default: expanded, EXCEPT a group whose projects are all reviewed today
 // AND whose weekly update is DONE (`isGroupCollapsible`,
@@ -15,6 +18,7 @@
 // a new token, so it can force the group open again even after the user
 // dismissed a previous force-expand).
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Badge, type BadgeProps } from "@/components/reui/badge";
 import { isGroupCollapsible } from "@/lib/dailyReviewStats";
 import { dayFromIso } from "@/lib/dateField";
@@ -86,6 +90,7 @@ export function CustomerGroup({
   const weeklyStatus: WeeklyStatus = customer.weeklyUpdate?.status ?? "NOT_STARTED";
   const weeklyBadge = WEEKLY_STATUS_BADGE[weeklyStatus];
   const health = customer.weeklyUpdate?.health ?? null;
+  const bodyId = `customer-body-${customer.id}`;
 
   function handleToggle() {
     const next = !expanded;
@@ -97,35 +102,42 @@ export function CustomerGroup({
 
   return (
     <section className="space-y-3">
-      <h2>
+      <h2 className="flex w-full flex-wrap items-center gap-x-3 gap-y-1">
         <button
           type="button"
           onClick={handleToggle}
           aria-expanded={expanded}
-          className="flex w-full flex-wrap items-center gap-x-3 gap-y-1 rounded-sm text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          aria-controls={bodyId}
+          aria-label={expanded ? "Collapse customer" : "Expand customer"}
+          className="flex h-6 w-6 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
         >
-          <span className="material-symbols-outlined text-lg text-on-surface-variant" aria-hidden="true">
+          <span className="material-symbols-outlined text-lg" aria-hidden="true">
             {expanded ? "expand_less" : "expand_more"}
           </span>
-          <span className="font-display text-base font-semibold text-on-surface">{customer.name}</span>
-          <span className="text-xs text-on-surface-variant">
-            {projectCount} active project{projectCount === 1 ? "" : "s"}
-          </span>
-          <span className="text-xs text-on-surface-variant">TAM: {tamLabel}</span>
-          <span className="text-xs font-semibold text-on-surface-variant">
-            {reviewedCount} / {projectCount} reviewed
-          </span>
-          <Badge variant={weeklyBadge.variant}>{weeklyBadge.label}</Badge>
-          {health && (
-            <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${HEALTH_CLASS[health]}`}>
-              {health}
-            </span>
-          )}
         </button>
+        <Link
+          to={`/customers/${customer.id}`}
+          className="font-display text-base font-semibold text-on-surface hover:text-primary"
+        >
+          {customer.name}
+        </Link>
+        <span className="text-xs text-on-surface-variant">
+          {projectCount} active project{projectCount === 1 ? "" : "s"}
+        </span>
+        <span className="text-xs text-on-surface-variant">TAM: {tamLabel}</span>
+        <span className="text-xs font-semibold text-on-surface-variant">
+          {reviewedCount} / {projectCount} reviewed
+        </span>
+        <Badge variant={weeklyBadge.variant}>{weeklyBadge.label}</Badge>
+        {health && (
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${HEALTH_CLASS[health]}`}>
+            {health}
+          </span>
+        )}
       </h2>
 
       {expanded && (
-        <div className="space-y-3 border-l-2 border-outline-variant pl-4">
+        <div id={bodyId} className="space-y-3 border-l-2 border-outline-variant pl-4">
           {customer.projects.map((project) => (
             <ProjectCard
               key={project.id}

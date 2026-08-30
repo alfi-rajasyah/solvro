@@ -15,6 +15,26 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-08-31 — Overview: "Recent notes" replaces "Recent activity"
+
+**`frontend/src/pages/Overview.tsx`** — the right-hand panel now lists the newest daily notes across every customer you can see: project notes and operations notes, last 7 days, newest first, each with its day, customer › project (or "Operations"), author, title, and body; the panel links to the Daily Review, where notes are written. The "Recent activity" feed (the last 5 tasks by id) is gone. **`frontend/src/lib/queries.ts`** — `useRecentNotes()` reads `GET /notes/recent` with `today` in the key (same day-boundary rule as `useOverview`); the six note mutations also invalidate the `recent-notes` prefix, so a note saved on the Daily Review appears on the Overview without waiting out `staleTime`. **`e2e/tests/daily-review.spec.ts`** — after saving both notes, visits `/overview` and expects them in the panel. Why: notes had no cross-customer view — one week per customer on the Daily Review, 14 days per project on the project overview.
+
+### Added — 2026-08-31 — `GET /notes/recent`
+
+**`backend/src/routes/notes.ts`**, mounted at `/notes` in **`backend/src/app.ts`** — `GET /notes/recent?today=yyyy-MM-dd` returns up to 20 notes from the 7 calendar days ending on `today` (optional; defaults to the server's UTC day, like the other `today`-taking routes), merged from `ProjectNote` (project visible through `projectVisibilityFilter` — administrative containers included, since the Daily Review lets you write notes on them) and `CustomerNote` (customer visible through `customerVisibilityFilter`), ordered by note day, then last update, then id. Read-only and in-app only — no export path, so the INTERNAL-notes rule is unaffected. **`backend/test/recentNotes.test.ts`** — owner vs. other TAM vs. view-all scope, both window edges (a note dated after `today` is out), containers in, the no-customer row, the 20-item merge cap, optional `today`, validation and auth.
+
+### Fixed — 2026-08-31 — Overview two-up grid no longer overflows a phone viewport
+
+**`frontend/src/pages/Overview.tsx`** — both panels of the attention/notes grid and the rows inside "Projects needing attention" get `min-w-0`. A grid item's automatic minimum width is its min-content width, so one nowrap `truncate` line inside either panel sized the single mobile column to 425px on a 390px phone and clipped the right edge of both panels; the truncation now works as intended and everything fits in 358px.
+
+### Removed — 2026-08-31 — Overview payload drops `recentProjects` / `recentTasks`
+
+**`backend/src/routes/overview.ts`** — the two "recent" queries and payload fields fed only the removed "Recent activity" panel; `OverviewProject` and `OverviewTask` leave `frontend/src/lib/queries.ts` with them.
+
+### Changed — 2026-08-31 — Daily Review: collapsible project cards and attention lists, customer name links to the customer page
+
+**`frontend/src/components/daily-review/ProjectCard.tsx`** — each project card gets a chevron in its header that folds the card body (phase/progress, overdue tasks, open risks, and the week's notes) down to the header row; while folded, the header shows the overdue and open-risk counts so nothing actionable disappears from view. The overdue/open-risk row gets its own "Hide lists" / "Show lists" toggle that folds the two lists to a one-line count summary. Both folds start expanded and are not persisted. A day-strip click still reaches the first card's note editor: it force-expands a folded card, the same way it already force-expands a folded customer group. **`frontend/src/components/daily-review/CustomerGroup.tsx`** — the customer name is now a link to `/customers/:id`; because a link cannot sit inside a button, the group's collapse toggle is the chevron icon button alone rather than the whole header row. Why: with many overdue tasks and risks, one project card filled the screen, and the customer page was two clicks away. **`e2e/tests/daily-review.spec.ts`** — covers both folds and reaches the customer page through the new link.
+
 ### Changed — 2026-08-31 — Owning a customer grants access to its projects
 
 **`backend/src/lib/visibility.ts`** — `projectVisibilityFilter` gains a third arm: a user sees every project of a customer they own as TAM (`Customer.tamId`), next to the projects where they are the project TAM or SA. This is full access, the same as being the project's TAM: every project-scoped route (project list and overview, Kanban, Gantt, tasks, sections, risks, dependencies, notes, reviews, services, baseline, and `PATCH /projects/:id` including status, TAM, and customer changes). Why: the Daily Review lists every active project of an owned customer, and the customer's TAM must be able to review them, log notes, and change task status — not only look at them.
