@@ -3,7 +3,7 @@ import { z } from "zod";
 import { prisma } from "../prisma.js";
 import { requireAuth } from "../http/auth.js";
 import { validate } from "../http/validate.js";
-import { projectVisibilityFilter } from "../lib/visibility.js";
+import { customerVisibilityFilter, projectVisibilityFilter } from "../lib/visibility.js";
 
 const searchQuerySchema = z.object({
   q: z
@@ -61,7 +61,11 @@ searchRouter.get("/", validate("query", searchQuerySchema), async (req, res) => 
       take: GROUP_LIMIT,
     }),
     prisma.customer.findMany({
-      where: { name: { contains: q, mode: "insensitive" } },
+      // Customer Visibility (docs/plans/customer-visibility-spec.md §5.4,
+      // Decision 11): a search hit must obey the same rule as every other
+      // customer read — a customer owned by another TAM with no project of
+      // the caller's must not surface here either.
+      where: { AND: [customerVisibilityFilter(req.user!), { name: { contains: q, mode: "insensitive" } }] },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
       take: GROUP_LIMIT,

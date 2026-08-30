@@ -15,6 +15,7 @@ import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import {
   ensureProjectVisible,
+  isCustomerVisible,
   projectVisibilityFilter,
 } from "../lib/visibility.js";
 import {
@@ -144,6 +145,9 @@ projectsRouter.post(
   async (req, res) => {
     const body = req.body as z.infer<typeof createProjectSchema>;
     const tamId = body.tamId ?? req.user!.sub;
+    if (!(await isCustomerVisible(req.user!, body.customerId))) {
+      throw new HttpError(400, "customer_not_found", "Customer not found");
+    }
 
     const project = await prisma.project.create({
       data: {
@@ -165,7 +169,7 @@ projectsRouter.get("/:id", validate("params", idParamSchema), async (req, res) =
   const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
   // Apply the visibility filter inside the lookup. The previous hand-rolled
   // `"tamId" in filter` guard was a dead no-op — the filter shape is
-  // `{ OR: [{tamId}, {saId}] }`, so that key never exists — which left this
+  // `{ OR: [{tamId}, {saId}, {customer:{tamId}}] }`, so that key never exists — which left this
   // endpoint open to IDOR. Returning 404 (not 403) also stops leaking
   // existence, matching every other project-scoped route.
   const project = await prisma.project.findFirst({
@@ -305,6 +309,9 @@ projectsRouter.patch(
     }
     if (body.tamId !== undefined) data.tam = { connect: { id: body.tamId } };
     if (body.customerId !== undefined) {
+      if (!(await isCustomerVisible(req.user!, body.customerId))) {
+        throw new HttpError(400, "customer_not_found", "Customer not found");
+      }
       data.customer = { connect: { id: body.customerId } };
     }
     if (body.wipLimits !== undefined) {

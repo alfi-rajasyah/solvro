@@ -76,7 +76,7 @@ export function DailyReview() {
           <h1 className="font-display text-2xl font-bold text-on-surface">Daily Review</h1>
           <p className="text-sm text-on-surface-variant">
             {TODAY_FMT.format(new Date())}
-            {user?.username ? ` — ${user.username}` : ""}. Log a note, review your projects, and draft each
+            {user?.username ? ` — ${user.username}` : ""}. Your customers, their active projects, and each
             customer's weekly update.
           </p>
         </div>

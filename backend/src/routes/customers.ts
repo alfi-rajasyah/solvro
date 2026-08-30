@@ -2,12 +2,17 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma, WeeklyHealth, WeeklyStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, requirePermission, hasPermission } from "../http/auth.js";
+import { requireAuth, requirePermission, hasPermission, type JwtPayload } from "../http/auth.js";
 // services router lives in ./services.ts; this file owns the customer-side mapping.
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { isValidDayString, utcMidnightOf, utcMidnightOfDayString } from "../lib/dateBoundary.js";
 import { isMonday } from "../lib/isoWeek.js";
+import {
+  customerVisibilityFilter,
+  ensureCustomerVisible,
+  projectVisibilityFilter,
+} from "../lib/visibility.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -34,14 +39,6 @@ async function assertTamExists(tamId: number): Promise<void> {
   const user = await prisma.user.findUnique({ where: { id: tamId }, select: { id: true } });
   if (!user) {
     throw new HttpError(400, "tam_not_found", "Assigned TAM does not exist");
-  }
-}
-
-/** Customer routes have no visibility filter — 404 on an unknown id only. */
-async function assertCustomerExists(id: number): Promise<void> {
-  const customer = await prisma.customer.findUnique({ where: { id }, select: { id: true } });
-  if (!customer) {
-    throw new HttpError(404, "customer_not_found", "Customer not found");
   }
 }
 
@@ -96,40 +93,56 @@ export const customersRouter = Router();
 
 customersRouter.use(requireAuth);
 
-customersRouter.get("/", async (_req, res) => {
+customersRouter.get("/", async (req, res) => {
+  const user = req.user!;
   const customers = await prisma.customer.findMany({
+    where: customerVisibilityFilter(user),
     orderBy: { name: "asc" },
     include: {
       tam: { select: { id: true, username: true } },
-      _count: { select: { projects: true } },
+      // A visible customer can still carry projects the caller can't see
+      // (that's exactly how "attached" visibility works — Decision 1's
+      // third arm) — the count must match what /:id will actually show
+      // them, not every project the customer has.
+      _count: { select: { projects: { where: projectVisibilityFilter(user) } } },
     },
   });
   res.json(customers);
 });
 
-const customerInclude = {
-  projects: {
-    orderBy: { updatedAt: "desc" } as const,
-    include: {
-      tam: { select: { id: true, username: true } },
-      sa: { select: { id: true, username: true } },
-      _count: { select: { tasks: true } },
+// A function of the caller, not a module-level const: the nested `projects`
+// list (and its count) must itself be scoped to projectVisibilityFilter, so
+// a customer reached only through one visible project (Decision 1's third
+// arm) never leaks the rest of that customer's projects.
+function customerInclude(user: JwtPayload) {
+  return {
+    projects: {
+      where: projectVisibilityFilter(user),
+      orderBy: { updatedAt: "desc" } as const,
+      include: {
+        tam: { select: { id: true, username: true } },
+        sa: { select: { id: true, username: true } },
+        _count: { select: { tasks: true } },
+      },
     },
-  },
-  services: {
-    orderBy: { service: { name: "asc" } } as const,
-    include: { service: true },
-  },
-  tam: { select: { id: true, username: true } },
-  _count: { select: { projects: true } },
-} as const;
+    services: {
+      orderBy: { service: { name: "asc" } } as const,
+      include: { service: true },
+    },
+    tam: { select: { id: true, username: true } },
+    _count: { select: { projects: { where: projectVisibilityFilter(user) } } },
+  } as const;
+}
 
 customersRouter.get("/:id", validate("params", idParamSchema), async (req, res) => {
   const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
-  const customer = await prisma.customer.findUniqueOrThrow({
-    where: { id },
-    include: customerInclude,
+  const customer = await prisma.customer.findFirst({
+    where: { id, ...customerVisibilityFilter(req.user!) },
+    include: customerInclude(req.user!),
   });
+  if (!customer) {
+    throw new HttpError(404, "customer_not_found", "Customer not found");
+  }
   res.json(customer);
 });
 
@@ -150,6 +163,7 @@ customersRouter.put(
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const { assignments } = req.body as z.infer<typeof assignServicesSchema>;
+    await ensureCustomerVisible(req.user!, id);
 
     // Replace the whole assignment set in a single transaction:
     // - delete rows whose serviceId is no longer in the list
@@ -182,7 +196,7 @@ customersRouter.put(
 
     const updated = await prisma.customer.findUniqueOrThrow({
       where: { id },
-      include: customerInclude,
+      include: customerInclude(req.user!),
     });
     res.json(updated);
   },
@@ -194,8 +208,28 @@ customersRouter.post(
   validate("body", createCustomerSchema),
   async (req, res) => {
     const body = req.body as z.infer<typeof createCustomerSchema>;
-    if (body.tamId != null) {
+    const user = req.user!;
+
+    // Decision 4: an omitted tamId defaults to the creator, so a TAM can
+    // never create a customer they immediately can't see. Explicit `null`
+    // (an intentionally unowned customer) is only allowed for view-all
+    // users — anyone else gets 400 tam_required instead of silently
+    // creating a customer nobody owns.
+    let tamId: number | null;
+    if (body.tamId === undefined) {
+      tamId = user.sub;
+    } else if (body.tamId === null) {
+      if (!hasPermission(user, "project:view-all")) {
+        throw new HttpError(
+          400,
+          "tam_required",
+          "A TAM must be assigned unless you can view all customers",
+        );
+      }
+      tamId = null;
+    } else {
       await assertTamExists(body.tamId);
+      tamId = body.tamId;
     }
     const data: Prisma.CustomerCreateInput = {
       name: body.name,
@@ -203,8 +237,8 @@ customersRouter.post(
       solutionArchitect: body.solutionArchitect || null,
       description: body.description,
     };
-    if (body.tamId != null) {
-      data.tam = { connect: { id: body.tamId } };
+    if (tamId != null) {
+      data.tam = { connect: { id: tamId } };
     }
     const customer = await prisma.customer.create({
       data,
@@ -222,6 +256,19 @@ customersRouter.patch(
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const body = req.body as z.infer<typeof updateCustomerSchema>;
+    const user = req.user!;
+
+    // Same visibility preamble as ensureCustomerVisible, but read inline so
+    // the current tamId is on hand for the un-owning guard just below —
+    // avoids a second round trip for the same row.
+    const existing = await prisma.customer.findFirst({
+      where: { id, ...customerVisibilityFilter(user) },
+      select: { tamId: true },
+    });
+    if (!existing) {
+      throw new HttpError(404, "customer_not_found", "Customer not found");
+    }
+
     const data: Prisma.CustomerUpdateInput = {};
     if (body.name !== undefined) data.name = body.name;
     if (body.accountManager !== undefined)
@@ -231,6 +278,18 @@ customersRouter.patch(
     if (body.description !== undefined) data.description = body.description;
     if (body.tamId !== undefined) {
       if (body.tamId === null) {
+        // Un-owning must not be a side door around Decision 4's "a TAM can
+        // never create a customer they can't see": clearing an OWNED
+        // customer's tamId is a view-all-only move, same as creating one
+        // unowned. An already-unowned customer re-saving `tamId: null`
+        // (the edit form's steady state) must keep working for everyone.
+        if (existing.tamId !== null && !hasPermission(user, "project:view-all")) {
+          throw new HttpError(
+            400,
+            "tam_required",
+            "A TAM must be assigned unless you can view all customers",
+          );
+        }
         data.tam = { disconnect: true };
       } else {
         await assertTamExists(body.tamId);
@@ -252,6 +311,7 @@ customersRouter.delete(
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    await ensureCustomerVisible(req.user!, id);
     // onDelete: SetNull on Project.customerId — projects survive, customer link clears.
     await prisma.customer.delete({ where: { id } });
     res.status(204).end();
@@ -271,7 +331,7 @@ customersRouter.get(
     const { from, to, limit } = req.query as unknown as z.infer<
       typeof customerNoteListQuerySchema
     >;
-    await assertCustomerExists(id);
+    await ensureCustomerVisible(req.user!, id);
 
     const noteDateFilter: Prisma.DateTimeFilter = {};
     if (from) noteDateFilter.gte = utcMidnightOfDayString(from);
@@ -298,7 +358,7 @@ customersRouter.post(
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const body = req.body as z.infer<typeof createCustomerNoteSchema>;
-    await assertCustomerExists(id);
+    await ensureCustomerVisible(req.user!, id);
 
     const note = await prisma.customerNote.create({
       data: {
@@ -324,7 +384,7 @@ customersRouter.patch(
       typeof customerNoteParamSchema
     >;
     const body = req.body as z.infer<typeof updateCustomerNoteSchema>;
-    await assertCustomerExists(id);
+    await ensureCustomerVisible(req.user!, id);
 
     const existing = await prisma.customerNote.findUnique({ where: { id: noteId } });
     if (!existing || existing.customerId !== id) {
@@ -357,7 +417,7 @@ customersRouter.delete(
     const { id, noteId } = req.params as unknown as z.infer<
       typeof customerNoteParamSchema
     >;
-    await assertCustomerExists(id);
+    await ensureCustomerVisible(req.user!, id);
 
     const existing = await prisma.customerNote.findUnique({ where: { id: noteId } });
     if (!existing || existing.customerId !== id) {
@@ -386,7 +446,7 @@ customersRouter.get(
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const { limit } = req.query as unknown as z.infer<typeof weeklyUpdateListQuerySchema>;
-    await assertCustomerExists(id);
+    await ensureCustomerVisible(req.user!, id);
 
     const updates = await prisma.weeklyUpdate.findMany({
       where: { customerId: id },
@@ -408,7 +468,7 @@ customersRouter.put(
       typeof weeklyUpdateParamSchema
     >;
     const body = req.body as z.infer<typeof saveWeeklyUpdateSchema>;
-    await assertCustomerExists(id);
+    await ensureCustomerVisible(req.user!, id);
 
     // weekStart is already a valid day string (dayStringSchema, param
     // validation) — isMonday only needs to check the ISO weekday now.

@@ -254,7 +254,7 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
 describe("admin user-delete blockers for notes/weekly updates", () => {
   it("blocks deleting a user who wrote a weekly update: 400 user_in_use", async () => {
     const author = await createUserWithRole("TAM");
-    const customerId = await createCustomer();
+    const customerId = await createCustomer(author.token);
     const saved = await request(app)
       .put(`/customers/${customerId}/weekly-updates/2026-08-24`)
       .set("Authorization", `Bearer ${author.token}`)
@@ -271,7 +271,7 @@ describe("admin user-delete blockers for notes/weekly updates", () => {
 
   it("blocks deleting a user who wrote a project note: 400 user_in_use", async () => {
     const author = await createUserWithRole("TAM");
-    const customerId = await createCustomer();
+    const customerId = await createCustomer(author.token);
     // Created by the author so the default tamId (= creator) makes the
     // project visible to them for the note POST below.
     const projectId = await createProject(customerId, author.token);
