@@ -144,6 +144,33 @@ describe("GET /search", () => {
     expect(adminRes.body.tasks).toHaveLength(2);
   });
 
+  it("scopes customer hits by customerVisibilityFilter (Decision 11: an unrelated customer never surfaces)", async () => {
+    const owner = await createUserWithRole("TAM");
+    const tam = await createUserWithRole("TAM");
+    const n = needle();
+
+    // Hidden from `tam`: owned by another TAM, no project of `tam`'s.
+    await prisma.customer.create({
+      data: { name: `${n} unrelated`, description: "d", tamId: owner.userId },
+    });
+    // Visible: owned by `tam` themselves.
+    await prisma.customer.create({
+      data: { name: `${n} owned`, description: "d", tamId: tam.userId },
+    });
+    // Visible: unowned.
+    await prisma.customer.create({
+      data: { name: `${n} unowned`, description: "d", tamId: null },
+    });
+
+    const res = await request(app)
+      .get("/search")
+      .query({ q: n })
+      .set("Authorization", `Bearer ${tam.token}`);
+    expect(res.status).toBe(200);
+    const names = res.body.customers.map((c: { name: string }) => c.name).sort();
+    expect(names).toEqual([`${n} owned`, `${n} unowned`]);
+  });
+
   it("escapes LIKE metacharacters so % and _ are not treated as wildcards", async () => {
     const { token, userId } = await createAdminAndToken();
     const n = needle();

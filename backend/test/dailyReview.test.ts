@@ -73,23 +73,145 @@ function allProjectDtos(body: any): any[] {
   ];
 }
 
-describe("GET /daily-review — scope (Decisions 13-14)", () => {
-  it("a TAM sees only its own ACTIVE projects, excludes PLANNING and other TAMs' projects, and sees its own customers", async () => {
+describe("GET /daily-review — scope (Decisions 8-10)", () => {
+  it("TAM sees, under an OWNED customer, every ACTIVE project including one whose project tamId is another user", async () => {
     const tam = await createUserWithRole("TAM");
     const otherTam = await createUserWithRole("TAM");
-    const customer = await createCustomer({ tamId: tam.userId });
-    await createProject({ tamId: tam.userId, customerId: customer.id, status: "ACTIVE", name: "Mine Active" });
-    await createProject({ tamId: tam.userId, customerId: customer.id, status: "PLANNING", name: "Mine Planning" });
-    await createProject({ tamId: otherTam.userId, status: "ACTIVE", name: "Other TAM Active" });
+    const customer = await createCustomer({ tamId: tam.userId, name: uniq("Owned Customer") });
+    const mine = await createProject({ tamId: tam.userId, customerId: customer.id, status: "ACTIVE", name: uniq("Owned Mine") });
+    const theirs = await createProject({ tamId: otherTam.userId, customerId: customer.id, status: "ACTIVE", name: uniq("Owned Theirs") });
 
     const res = await get(tam.token, { week: WEEK, today: TODAY });
     expect(res.status).toBe(200);
 
-    const names = allProjectDtos(res.body).map((p) => p.name);
-    expect(names).toContain("Mine Active");
-    expect(names).not.toContain("Mine Planning");
-    expect(names).not.toContain("Other TAM Active");
-    expect(res.body.customers.map((c: any) => c.id)).toContain(customer.id);
+    const cust = res.body.customers.find((c: any) => c.id === customer.id);
+    expect(cust).toBeDefined();
+    const projectIds = cust.projects.map((p: any) => p.id);
+    expect(projectIds).toContain(mine.id);
+    expect(projectIds).toContain(theirs.id);
+  });
+
+  it("TAM sees, under an ATTACHED customer (caller is project TAM, customer owned by another TAM), only the caller's ACTIVE projects", async () => {
+    const tam = await createUserWithRole("TAM");
+    const otherTam = await createUserWithRole("TAM");
+    const customer = await createCustomer({ tamId: otherTam.userId, name: uniq("Attached Customer") });
+    const mine = await createProject({ tamId: tam.userId, customerId: customer.id, status: "ACTIVE", name: uniq("Attached Mine") });
+    const theirs = await createProject({ tamId: otherTam.userId, customerId: customer.id, status: "ACTIVE", name: uniq("Attached Theirs") });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    expect(res.status).toBe(200);
+
+    const cust = res.body.customers.find((c: any) => c.id === customer.id);
+    expect(cust).toBeDefined();
+    const projectIds = cust.projects.map((p: any) => p.id);
+    expect(projectIds).toContain(mine.id);
+    expect(projectIds).not.toContain(theirs.id);
+  });
+
+  it("an unrelated customer (owned by another TAM, no project of the caller) is absent", async () => {
+    const tam = await createUserWithRole("TAM");
+    const otherTam = await createUserWithRole("TAM");
+    const customer = await createCustomer({ tamId: otherTam.userId, name: uniq("Unrelated Customer") });
+    await createProject({ tamId: otherTam.userId, customerId: customer.id, status: "ACTIVE", name: uniq("Unrelated Project") });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    expect(res.status).toBe(200);
+    expect(res.body.customers.some((c: any) => c.id === customer.id)).toBe(false);
+  });
+
+  it("an unowned customer with no active project is absent, and appears once it has an ACTIVE project of the caller", async () => {
+    const tam = await createUserWithRole("TAM");
+    const customer = await createCustomer({ tamId: null, name: uniq("Unowned Customer") });
+
+    let res = await get(tam.token, { week: WEEK, today: TODAY });
+    expect(res.status).toBe(200);
+    expect(res.body.customers.some((c: any) => c.id === customer.id)).toBe(false);
+
+    const project = await createProject({ tamId: tam.userId, customerId: customer.id, status: "ACTIVE", name: uniq("Unowned Now Active") });
+
+    res = await get(tam.token, { week: WEEK, today: TODAY });
+    expect(res.status).toBe(200);
+    const cust = res.body.customers.find((c: any) => c.id === customer.id);
+    expect(cust).toBeDefined();
+    expect(cust.projects.map((p: any) => p.id)).toContain(project.id);
+  });
+
+  it("customerId: null projects land in unassignedProjects only when Project.tamId is the caller", async () => {
+    const tam = await createUserWithRole("TAM");
+    const otherTam = await createUserWithRole("TAM");
+    const mine = await createProject({ tamId: tam.userId, status: "ACTIVE", customerId: null, name: uniq("No Customer Mine") });
+    const theirs = await createProject({ tamId: otherTam.userId, status: "ACTIVE", customerId: null, name: uniq("No Customer Theirs") });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    expect(res.status).toBe(200);
+    const ids = res.body.unassignedProjects.map((p: any) => p.id);
+    expect(ids).toContain(mine.id);
+    expect(ids).not.toContain(theirs.id);
+  });
+
+  it("excludes a PLANNING project from an owned customer's group", async () => {
+    const tam = await createUserWithRole("TAM");
+    const customer = await createCustomer({ tamId: tam.userId, name: uniq("Planning Owner Customer") });
+    const planning = await createProject({ tamId: tam.userId, customerId: customer.id, status: "PLANNING", name: uniq("Planning Proj") });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    expect(res.status).toBe(200);
+    // The customer still shows (owned via tamId, independent of any active
+    // project), but the PLANNING project itself never appears.
+    const cust = res.body.customers.find((c: any) => c.id === customer.id);
+    expect(cust).toBeDefined();
+    expect(cust.projects.map((p: any) => p.id)).not.toContain(planning.id);
+  });
+
+  it("a PLANNING project alone does not surface an otherwise-invisible customer", async () => {
+    const tam = await createUserWithRole("TAM");
+    const otherTam = await createUserWithRole("TAM");
+    const customer = await createCustomer({ tamId: otherTam.userId, name: uniq("Planning Only Customer") });
+    await createProject({ tamId: tam.userId, customerId: customer.id, status: "PLANNING", name: uniq("Planning Attached") });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    expect(res.status).toBe(200);
+    expect(res.body.customers.some((c: any) => c.id === customer.id)).toBe(false);
+  });
+
+  it("a customer reached only via the caller's SA assignment (not project TAM) is absent, and does not inflate coverage total", async () => {
+    const sa = await createUserWithRole("SA");
+    const otherTam = await createUserWithRole("TAM");
+    const customer = await createCustomer({ tamId: otherTam.userId, name: uniq("SA Only Customer") });
+    // The only ACTIVE project under this customer has the caller as SA, not
+    // TAM — projectVisibilityFilter's saId arm makes the project (and thus
+    // the customer, via the customers query's "attached" OR clause) visible
+    // to the caller, but the attached-tier project query only pulls
+    // Project.tamId = caller, so this project never lands in the result and
+    // the customer must not surface as an empty group.
+    await prisma.project.create({
+      data: {
+        name: uniq("SA Only Project"),
+        tamId: otherTam.userId,
+        saId: sa.userId,
+        customerId: customer.id,
+        status: "ACTIVE",
+      },
+    });
+
+    const res = await get(sa.token, { week: WEEK, today: TODAY });
+    expect(res.status).toBe(200);
+    expect(res.body.customers.some((c: any) => c.id === customer.id)).toBe(false);
+    expect(res.body.coverage[TODAY].total).toBe(0);
+  });
+
+  it("coverage total equals the number of customer groups on the page (owned + attached)", async () => {
+    const tam = await createUserWithRole("TAM");
+    const otherTam = await createUserWithRole("TAM");
+    const owned = await createCustomer({ tamId: tam.userId, name: uniq("Coverage Owned") });
+    await createProject({ tamId: tam.userId, customerId: owned.id, status: "ACTIVE", name: uniq("Owned Active") });
+    const attached = await createCustomer({ tamId: otherTam.userId, name: uniq("Coverage Attached") });
+    await createProject({ tamId: tam.userId, customerId: attached.id, status: "ACTIVE", name: uniq("Attached Active") });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    expect(res.status).toBe(200);
+    expect(res.body.customers).toHaveLength(2);
+    expect(res.body.coverage[TODAY].total).toBe(2);
   });
 
   it("ADMIN (wildcard) sees every ACTIVE project", async () => {
@@ -108,7 +230,7 @@ describe("GET /daily-review — scope (Decisions 13-14)", () => {
     const customer = await createCustomer({ tamId: tam.userId, name: uniq("Stakeholder Customer") });
     await createProject({ tamId: tam.userId, status: "ACTIVE", customerId: customer.id, name: "Stakeholder Visible" });
     // A customer with a TAM set but no active project must still show for a
-    // view-all user (Decision 14's "union every customer with tamId set").
+    // view-all user (Decision 8's "union every customer with tamId set").
     const orphanCustomer = await createCustomer({ tamId: tam.userId, name: uniq("Orphan Customer") });
 
     const res = await get(stakeholder.token, { week: WEEK, today: TODAY });

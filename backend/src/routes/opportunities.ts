@@ -7,6 +7,7 @@ import { hasPermission, requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { isValidDayString, utcMidnightOfDayString } from "../lib/dateBoundary.js";
+import { isCustomerVisible } from "../lib/visibility.js";
 import { assertCanWriteOpportunity, PIC_SELECT } from "../lib/pipelineAccess.js";
 import { logger } from "../logger.js";
 // Anti-drift seam (finding S6): the handoff body is byte-for-byte the same
@@ -768,6 +769,14 @@ opportunitiesRouter.post(
     // Same default POST /projects applies when the body omits tamId: the
     // caller becomes the project's TAM.
     const tamId = body.tamId ?? req.user!.sub;
+
+    // Customer Visibility (docs/plans/customer-visibility-spec.md §5.5,
+    // Decision 7): same rule routes/projects.ts applies on POST / and
+    // PATCH /:id — a customerId the caller can't see 400s before the deal
+    // or any project row is touched.
+    if (!(await isCustomerVisible(req.user!, body.customerId))) {
+      throw new HttpError(400, "customer_not_found", "Customer not found");
+    }
 
     const { project, opportunity } = await prisma.$transaction(async (tx) => {
       // Field-for-field mirror of POST /projects's `prisma.project.create`
