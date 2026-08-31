@@ -3,6 +3,7 @@ import {
   Link,
   NavLink,
   Outlet,
+  useNavigate,
   useOutletContext,
   useParams,
   useSearchParams,
@@ -11,9 +12,14 @@ import { RightSidebar } from "@/components/layout/RightSidebar";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { TaskPanel } from "@/components/TaskPanel";
+import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { GanttExportProvider } from "@/lib/gantt/exportContext";
-import { type ProjectDetail as ProjectDetailType, useProject } from "@/lib/queries";
+import {
+  type ProjectDetail as ProjectDetailType,
+  useDeleteProject,
+  useProject,
+} from "@/lib/queries";
 
 const TABS = [
   { to: "overview", label: "Overview" },
@@ -35,7 +41,10 @@ export function ProjectDetail() {
   const { user } = useAuth();
   const [editOpen, setEditOpen] = useState(false);
   const [contextOpen, setContextOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
+  const deleteProject = useDeleteProject();
 
   const { data: project, isLoading, isError, error } = useProject(projectId);
 
@@ -97,6 +106,24 @@ export function ProjectDetail() {
     );
   }
 
+  async function handleDelete() {
+    if (!project) return;
+    const taskCount = project._count.tasks;
+    const confirmed = confirm(
+      `Delete project "${project.name}"? This permanently removes its ${taskCount} ${
+        taskCount === 1 ? "task" : "tasks"
+      }, sections, labels, notes, risks and reviews, and unlinks any won deal. There is no undo.`,
+    );
+    if (!confirmed) return;
+    setActionError(null);
+    try {
+      await deleteProject.mutateAsync(project.id);
+      navigate("/projects", { replace: true });
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Delete failed.");
+    }
+  }
+
   return (
     <GanttExportProvider>
     <div
@@ -124,14 +151,25 @@ export function ProjectDetail() {
 
         <div className="flex shrink-0 items-center gap-2">
           {canEdit && (
-            <button
-              type="button"
-              onClick={() => setEditOpen(true)}
-              className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container"
-            >
-              <span className="material-symbols-outlined text-base">edit</span>
-              Edit project
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setEditOpen(true)}
+                className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container"
+              >
+                <span className="material-symbols-outlined text-base">edit</span>
+                Edit project
+              </button>
+              <button
+                type="button"
+                onClick={handleDelete}
+                disabled={deleteProject.isPending}
+                className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface-variant hover:border-error hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-base">delete</span>
+                Delete project
+              </button>
+            </>
           )}
           <button
             type="button"
@@ -152,6 +190,12 @@ export function ProjectDetail() {
           </button>
         </div>
       </div>
+
+      {actionError && (
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription>{actionError}</AlertDescription>
+        </Alert>
+      )}
 
       <nav className="mb-6 flex gap-6 overflow-x-auto overflow-y-clip whitespace-nowrap border-b border-outline-variant">
         {TABS.map((tab) => (
