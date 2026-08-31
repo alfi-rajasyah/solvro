@@ -420,14 +420,28 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
 
     await gotoSeededGantt(page, projectId);
 
+    // Since 2026-08-31 the lock/reset action lives in the Context panel, not
+    // the toolbar: with the baseline locked above, the panel's Baseline
+    // section must report the lock (no "Not yet") and offer the reset — the
+    // admin has project:write, the gate POST /projects/:id/baseline uses.
+    await page.getByRole("button", { name: /show project context/i }).click();
+    const baselineSection = page
+      .getByRole("heading", { name: "Baseline", exact: true })
+      .locator("..");
+    await expect(baselineSection).toBeVisible();
+    await expect(baselineSection.getByText("Not yet")).toHaveCount(0);
+    await expect(baselineSection.getByRole("button", { name: /reset baseline/i })).toBeVisible();
+    await page.getByRole("button", { name: /hide project context/i }).click();
+    await expect(baselineSection).toBeHidden();
+
     // Not shown until the toggle is clicked.
     await expect(page.locator("[data-baseline-rect]")).toHaveCount(0);
 
     // The toggle's accessible name is "show_chart Baseline" (the Material
     // Symbols ligature span has no aria-hidden, so its literal glyph text
     // "show_chart" is part of the computed name) — match on the trailing
-    // capitalized "Baseline" word to avoid also matching the separate
-    // "Lock baseline"/"Reset baseline" button (lowercase "baseline").
+    // capitalized "Baseline" word. (The "Lock baseline"/"Reset baseline"
+    // button lives in the Context panel since 2026-08-31, not the toolbar.)
     const baselineToggle = page.getByRole("button", { name: /\bBaseline$/ });
     await baselineToggle.click();
 

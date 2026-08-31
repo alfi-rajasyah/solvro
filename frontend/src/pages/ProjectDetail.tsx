@@ -33,6 +33,8 @@ const TABS = [
 
 export interface ProjectOutletContext {
   project: ProjectDetailType;
+  /** Opens the Context panel (RightSidebar) — e.g. the Overview's "Lock baseline" shortcut. */
+  openContext: () => void;
 }
 
 export function ProjectDetail() {
@@ -218,7 +220,11 @@ export function ProjectDetail() {
       </nav>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <Outlet context={{ project } satisfies ProjectOutletContext} />
+        <Outlet
+          context={
+            { project, openContext: () => setContextOpen(true) } satisfies ProjectOutletContext
+          }
+        />
       </div>
 
       <ProjectFormModal
