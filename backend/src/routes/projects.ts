@@ -326,6 +326,25 @@ projectsRouter.patch(
   },
 );
 
+projectsRouter.delete(
+  "/:id",
+  requirePermission("project:write"),
+  validate("params", idParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    await ensureProjectVisible(req.user!, id);
+
+    // Hard delete, no soft-delete or undo — the UI confirms first. The schema
+    // cascades to the project's tasks (with their subtasks, comments and
+    // dependencies), sections, labels, risks, notes, reviews and service
+    // assignments. A won deal linked through Opportunity.projectId keeps its
+    // row and loses the link (onDelete: SetNull), so the pipeline history
+    // survives the project it handed off to.
+    await prisma.project.delete({ where: { id } });
+    res.status(204).end();
+  },
+);
+
 projectsRouter.get(
   "/:id/tasks",
   validate("params", idParamSchema),

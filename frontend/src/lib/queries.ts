@@ -668,6 +668,29 @@ export function useUpdateProject(id: number) {
   });
 }
 
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: number) => apiRequest<void>(`/projects/${id}`, { method: "DELETE" }),
+    onSuccess: (_data, id) => {
+      // The project is gone: drop its own cache subtree instead of refetching
+      // it into 404s, then refresh everything that listed or counted it or
+      // its cascaded tasks — plus the pipeline, where the linked won deal's
+      // `projectId` just went null (the inverse of useHandoffOpportunity).
+      qc.removeQueries({ queryKey: queryKeys.project(id) });
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: adminQueryKeys.projects });
+      qc.invalidateQueries({ queryKey: queryKeys.overview });
+      qc.invalidateQueries({ queryKey: queryKeys.customers });
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.recentNotesRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.executiveReport() });
+      qc.invalidateQueries({ queryKey: pipelineKeys.root });
+    },
+  });
+}
+
 export interface CustomerInput {
   name: string;
   accountManager?: string;

@@ -9,8 +9,10 @@
 //   `useOpportunities()` + `find(o => o.projectId === projectId)` rather
 //   than a new backend lookup — deliberate: there's exactly one deal per
 //   project (the backend transaction sets `Opportunity.projectId` once, on
-//   handoff, and there's no second write path back to null it under the
-//   native port), the opportunities list is already fetched everywhere else
+//   handoff; the only path back to null is `DELETE /projects/:id`, which
+//   clears it via `onDelete: SetNull` — its `useDeleteProject` hook
+//   invalidates `pipelineKeys.root` so this lookup refreshes), the
+//   opportunities list is already fetched everywhere else
 //   the Pipeline module needs it, and a project-side "find my linked deal"
 //   endpoint would be a second, redundant way to answer the same question
 //   `useOpportunities()` already knows. Gated on `pipeline:view` — a
