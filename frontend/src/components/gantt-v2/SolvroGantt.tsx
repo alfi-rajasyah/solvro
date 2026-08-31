@@ -3,7 +3,7 @@ import { parseISO } from "date-fns";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
-import { dateToDay, formatDisplay } from "@/lib/dateField";
+import { dateToDay } from "@/lib/dateField";
 import { useGanttExport } from "@/lib/gantt/exportContext";
 import { addDays, buildRows, rowsDateRange, startOfDay, type Row } from "@/lib/gantt/geometry";
 import {
@@ -20,7 +20,6 @@ import {
   useDeleteDependency,
   useDeleteTask,
   useHolidays,
-  useLockBaseline,
   useProjectDependencies,
   useProjectSections,
   useProjectTasks,
@@ -29,7 +28,6 @@ import {
 } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { DateField } from "@/components/DateField";
 import {
   Gantt,
   type GanttApi,
@@ -40,6 +38,16 @@ import {
   ContextMenuItem,
   ContextMenuSeparator,
 } from "@/components/ui/context-menu";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { GanttView } from "@/components/reui/gantt/gantt-view";
 import type {
   GanttEvent,
@@ -122,7 +130,7 @@ const SCALES: Array<{ mode: GanttScale; label: string }> = [
 
 // T6 (fix round, user-reported: toolbar "cards" rendered at visibly
 // different sizes) — every segmented-pill item (buttons AND the Color-by
-// <select>) shares this exact box height, with vertical padding (py-*)
+// menu trigger) shares this exact box height, with vertical padding (py-*)
 // dropped everywhere in favor of it + `items-center`. The mismatch wasn't
 // container padding (that was already identical — `p-0.5` everywhere) but
 // CONTENT-driven sizing: text-label-caps carries line-height 1 while the
@@ -136,8 +144,14 @@ const TOOLBAR_ITEM_HEIGHT = "h-7";
 // existing pick survives the engine swap.
 const COLOR_BY_STORAGE_KEY = "solvro.gantt.colorBy";
 
-// Ported verbatim from GanttFrame.tsx:76.
-const LEGEND_CAP = 6;
+// Color-by menu (2026-08-31): mode order + labels for the radio items and
+// the trigger's current-mode text.
+const COLOR_BY_MODES: readonly ColorByMode[] = ["status", "section", "priority"];
+const COLOR_BY_LABELS: Record<ColorByMode, string> = {
+  status: "Status",
+  section: "Section",
+  priority: "Priority",
+};
 
 // Walkthrough F6 (2026-07-25) — tree-pane width persistence, same pattern as
 // COLOR_BY_STORAGE_KEY above. The vendored engine already ships a controlled
@@ -333,7 +347,6 @@ export function SolvroGantt(props: SolvroGanttProps) {
   const updateTask = useUpdateTask(projectId);
   const updateSection = useUpdateSection(projectId);
   const createSection = useCreateSection(projectId);
-  const lockBaseline = useLockBaseline(projectId);
   // Invalidate-only (queries.ts:1308,1336) — no optimistic connector add/
   // remove, matching the old engine's dependency mutations exactly.
   const createDependency = useCreateDependency(projectId);
@@ -458,20 +471,9 @@ export function SolvroGantt(props: SolvroGanttProps) {
     return () => document.removeEventListener("pointerdown", onDocPointer);
   }, [exportMenuOpen]);
 
-  // Baseline lock flow — ported verbatim from GanttFrame.tsx:97-121, 1033-1123.
-  const [confirmingBaseline, setConfirmingBaseline] = useState(false);
-  const [baselineAsOf, setBaselineAsOf] = useState<string>("");
-  const [baselineToast, setBaselineToast] = useState<string | null>(null);
-  useEffect(() => {
-    if (!baselineToast) return;
-    const t = setTimeout(() => setBaselineToast(null), 4000);
-    return () => clearTimeout(t);
-  }, [baselineToast]);
-  useEffect(() => {
-    if (confirmingBaseline) {
-      setBaselineAsOf(dateToDay(new Date()) ?? "");
-    }
-  }, [confirmingBaseline]);
+  // The lock/reset flow lives in the Context panel
+  // (components/layout/RightSidebar.tsx, 2026-08-31); the toolbar only
+  // toggles the ghosts and reports the lock state in the toggle's tooltip.
   const baselineLockedAtPretty = baselineLockedAt ? new Date(baselineLockedAt).toLocaleString() : null;
 
   const resources = useMemo(() => buildResources(tasks, sections), [tasks, sections]);
@@ -1007,8 +1009,6 @@ export function SolvroGantt(props: SolvroGanttProps) {
   }, [isLoading, resources.length, projectId, allDateRange]);
 
   const legend = useMemo(() => legendEntries(colorBy, sections), [colorBy, sections]);
-  const legendShown = legend.slice(0, LEGEND_CAP);
-  const legendOverflow = legend.slice(LEGEND_CAP);
 
   const handleAddSection = useCallback(
     async (e: React.FormEvent<HTMLFormElement>) => {
@@ -1067,7 +1067,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
                 onClick={() => onCreateTaskOpen(null)}
                 className={cn(
                   TOOLBAR_ITEM_HEIGHT,
-                  "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-label-caps uppercase tracking-wider text-on-surface outline-hidden transition-colors hover:text-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+                  "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-[11.5px] font-medium text-on-surface outline-hidden transition-colors hover:text-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
                 )}
               >
                 <span className="material-symbols-outlined text-[15px]">add</span>
@@ -1078,7 +1078,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
                 onClick={() => setAddingSection(true)}
                 className={cn(
                   TOOLBAR_ITEM_HEIGHT,
-                  "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+                  "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-[11.5px] font-medium text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
                 )}
               >
                 <span className="material-symbols-outlined text-[15px]">add</span>
@@ -1092,7 +1092,13 @@ export function SolvroGantt(props: SolvroGanttProps) {
           {tasks.filter((t) => t.startDate || t.dueDate).length} dated · {sections.length} sections
         </span>
 
-        <div className="ml-auto flex items-center gap-2">
+        {/* `flex-1 min-w-0` + `flex-wrap` (2026-08-31): the cluster takes
+            whatever row space is left (flex-basis 0, so it can never
+            line-break as a block) and folds its groups one at a time,
+            `justify-end` keeping them right-aligned — previously it dropped
+            to a second row whole, leaving the space under the zoom pills
+            empty. */}
+        <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
           {/* T6 — Today/prev/next merged into one segmented pill (mirrors the
               scale-pill container above); the period title stays plain text
               (per the plan's "text elements ... stay text"), positioned right
@@ -1151,12 +1157,11 @@ export function SolvroGantt(props: SolvroGanttProps) {
               {navTitle}
             </span>
           )}
-          {/* T6 — Baseline toggle + Lock/Reset baseline merged into one
-              segmented pill; the toggle's active state now mirrors the
-              scale-pill's exact active treatment (bg-primary/text-on-primary)
-              instead of its old border+tint styling, so aria-pressed is added
-              to carry that state semantically now that it's a proper
-              pressed-toggle look, not just a border/color cue. */}
+          {/* Baseline toggle. The Lock/Reset action moved to the Context
+              panel (RightSidebar.tsx, 2026-08-31) — a once-per-project step
+              that was costing the toolbar ~105px. The active state mirrors
+              the scale-pill's exact active treatment (bg-primary/
+              text-on-primary), with aria-pressed carrying it semantically. */}
           <div className="inline-flex overflow-hidden rounded-md bg-surface-container-low p-0.5">
             <button
               type="button"
@@ -1165,7 +1170,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
               title={
                 baselineLockedAt
                   ? `Baseline locked ${baselineLockedAtPretty}${baselineLockedBy ? ` by ${baselineLockedBy.username}` : ""}`
-                  : "No baseline locked yet — lock one from the project menu"
+                  : "No baseline locked yet — lock one from the Context panel"
               }
               className={cn(
                 TOOLBAR_ITEM_HEIGHT,
@@ -1178,81 +1183,103 @@ export function SolvroGantt(props: SolvroGanttProps) {
               <span className="material-symbols-outlined text-[15px]">show_chart</span>
               Baseline
             </button>
-            {canEdit && (
-              <button
-                type="button"
-                onClick={() => setConfirmingBaseline(true)}
-                className={cn(
-                  TOOLBAR_ITEM_HEIGHT,
-                  "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-[11.5px] font-medium text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
-                )}
-              >
-                <span className="material-symbols-outlined text-[15px]">
-                  {baselineLockedAt ? "bookmark" : "bookmark_add"}
-                </span>
-                {baselineLockedAt ? "Reset baseline" : "Lock baseline"}
-              </button>
-            )}
           </div>
-          <div className="flex items-center gap-1.5">
-            {/* T6 — Color-by shell uses the exact same container classes as
-                every other group (fix round: was carrying extra items-
-                center/gap/pl-2 that also broke the "identical container"
-                rule) so the native select "reads as part of the family";
-                the <label> wrapping (text + <select> as descendants, no
-                for/id) is unchanged, so accessible-name lookups (getByLabel)
-                keep working — the pl-2 that gave the label breathing room
-                against the pill's rounded edge just moved onto the label
-                itself. The select keeps its own border — it's a distinct
-                input control nested inside the shell, not a segmented
-                action item — but now shares TOOLBAR_ITEM_HEIGHT so its
-                native UA chrome can't render it taller than its siblings. */}
+          {/* Color-by menu (2026-08-31): mode radios on top, the full color
+              key below. Replaces the native <select> + inline legend — the
+              legend grew with the section count (capped at 6 + "+N more")
+              and was the main reason the toolbar wrapped to a second row.
+              Radio items keep the menu open on pick (Base-UI RadioItem's
+              closeOnClick default), so switching modes updates the key in
+              place. The trigger shares the segmented shell and
+              TOOLBAR_ITEM_HEIGHT of every other group; the `render` element
+              carries all visual content (house pattern — see
+              OpportunityDetail.tsx, reui/gantt/gantt-nav.tsx). */}
+          <DropdownMenu>
             <div className="inline-flex overflow-hidden rounded-md bg-surface-container-low p-0.5">
-              <label className="flex items-center gap-1.5 pl-2">
-                <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                  Color by
-                </span>
-                <select
-                  value={colorBy}
-                  onChange={(e) => setColorBy(e.target.value as ColorByMode)}
-                  className={cn(
-                    TOOLBAR_ITEM_HEIGHT,
-                    "rounded-sm border border-outline-variant bg-surface-container-lowest px-2 font-display text-[11.5px] font-medium text-on-surface outline-hidden focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
-                  )}
-                >
-                  <option value="status">Status</option>
-                  <option value="section">Section</option>
-                  <option value="priority">Priority</option>
-                </select>
-              </label>
-            </div>
-            {legendShown.length > 0 && (
-              <div data-testid="gantt-legend" className="ml-1 flex flex-wrap items-center gap-2">
-                {legendShown.map(([label, hex], i) => (
-                  <span
-                    key={`${colorBy}-${i}-${label}`}
-                    className="flex items-center gap-1 text-[10px] text-on-surface-variant"
+              <DropdownMenuTrigger
+                render={
+                  <button
+                    type="button"
+                    className={cn(
+                      TOOLBAR_ITEM_HEIGHT,
+                      "inline-flex items-center gap-1.5 rounded-sm pl-2.5 pr-1.5 font-display text-[11.5px] font-medium text-on-surface outline-hidden transition-colors hover:text-primary focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+                    )}
                   >
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                      Color by
+                    </span>
+                    {COLOR_BY_LABELS[colorBy]}
                     <span
-                      className="h-2 w-2 rounded-[2px]"
-                      style={{ backgroundColor: hex }}
+                      className="material-symbols-outlined text-[16px] text-on-surface-variant"
                       aria-hidden="true"
-                    />
-                    {label}
-                  </span>
+                    >
+                      expand_more
+                    </span>
+                  </button>
+                }
+              />
+            </div>
+            {/* positionerClassName, not className, carries the z-index
+                (frontend/CLAUDE.md "Popover z-index"): the menu opens over
+                the Gantt's sticky `z-30` axis header. Deliberately `z-50`,
+                not the convention's `z-101`: that value exists for pickers
+                that open INSIDE Modal.tsx's `z-100` layer; this menu never
+                does, and must stay below it. `shadow-overlay!` +
+                `bg-surface-container-lowest` put the popup on the app's one
+                sanctioned shadow/surface pair (docs/DESIGN.md §4), matching
+                the Export dropdown beside it — the `!` is needed because the
+                vendored popup's `shadow-md` is a stock class twMerge doesn't
+                fold against the custom token (same as DateRangeField.tsx). */}
+            <DropdownMenuContent
+              align="end"
+              className="w-60 bg-surface-container-lowest shadow-overlay!"
+              positionerClassName="z-50"
+            >
+              <DropdownMenuRadioGroup
+                value={colorBy}
+                onValueChange={(v) => setColorBy(v as ColorByMode)}
+              >
+                {COLOR_BY_MODES.map((mode) => (
+                  <DropdownMenuRadioItem key={mode} value={mode} className="text-[12px]">
+                    {COLOR_BY_LABELS[mode]}
+                  </DropdownMenuRadioItem>
                 ))}
-                {legendOverflow.length > 0 && (
-                  <span
-                    title={legendOverflow.map(([label]) => label).join(", ")}
-                    className="text-[10px] text-on-surface-variant"
-                  >
-                    +{legendOverflow.length} more
-                  </span>
-                )}
-              </div>
-            )}
-          </div>
-          {/* Export (Excel/PDF) — ported from GanttFrame.tsx:882-910. T6 —
+              </DropdownMenuRadioGroup>
+              {legend.length > 0 && (
+                <>
+                  <DropdownMenuSeparator />
+                  {/* Menu.Group (role="group") + its GroupLabel keep the
+                      popup's `role="menu"` children valid for assistive
+                      tech — plain divs inside a menu are skipped, and this
+                      menu is now the only place the key exists. */}
+                  <DropdownMenuGroup aria-label="Color key">
+                    <DropdownMenuLabel className="pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                      Key
+                    </DropdownMenuLabel>
+                    <div data-testid="gantt-legend" className="flex flex-col gap-1 px-2 pb-1.5">
+                      {legend.map(([label, hex], i) => (
+                        <span
+                          key={`${colorBy}-${i}-${label}`}
+                          title={label}
+                          className="flex min-w-0 items-center gap-2 text-[12px] text-on-surface-variant"
+                        >
+                          <span
+                            className="h-2 w-2 shrink-0 rounded-[2px]"
+                            style={{ backgroundColor: hex }}
+                            aria-hidden="true"
+                          />
+                          <span className="truncate">{label}</span>
+                        </span>
+                      ))}
+                    </div>
+                  </DropdownMenuGroup>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+          {/* Export (Excel/PDF) — ported from GanttFrame.tsx:882-910. Icon-only
+              since 2026-08-31 (aria-label + title carry the name; the Context
+              panel keeps the labelled Excel / PDF / View trio). T6 —
               the segmented shell wraps ONLY the trigger button, not the
               dropdown: the dropdown is `absolute top-full`, positioned
               BELOW the shell's bounds, so putting it inside an
@@ -1267,13 +1294,16 @@ export function SolvroGantt(props: SolvroGanttProps) {
                 type="button"
                 onClick={() => setExportMenuOpen((v) => !v)}
                 disabled={!exportHandlers || exporting !== null}
+                aria-label={exporting ? "Exporting…" : "Export"}
+                title={exporting ? "Exporting…" : "Export"}
                 className={cn(
                   TOOLBAR_ITEM_HEIGHT,
-                  "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-[11.5px] font-medium text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50",
+                  "inline-flex w-7 items-center justify-center rounded-sm text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50",
                 )}
               >
-                <span className="material-symbols-outlined text-[15px]">download</span>
-                {exporting ? "Exporting…" : "Export"}
+                <span className="material-symbols-outlined text-[15px]" aria-hidden="true">
+                  {exporting ? "hourglass_top" : "download"}
+                </span>
               </button>
             </div>
             {exportMenuOpen && (
@@ -1590,95 +1620,6 @@ export function SolvroGantt(props: SolvroGanttProps) {
         </div>
       )}
 
-      <ConfirmModal
-        open={confirmingBaseline}
-        onClose={() => setConfirmingBaseline(false)}
-        onConfirm={async () => {
-          try {
-            const asOfIso = baselineAsOf ? new Date(`${baselineAsOf}T00:00:00`).toISOString() : undefined;
-            const res = await lockBaseline.mutateAsync({ asOfDate: asOfIso });
-            const stamp = res.baselineLockedAt ? new Date(res.baselineLockedAt).toLocaleDateString() : "";
-            setBaselineToast(
-              baselineLockedAt
-                ? `Baseline overwritten — now anchored to ${stamp}`
-                : `Baseline locked as of ${stamp}`,
-            );
-            setShowBaseline(true);
-            setConfirmingBaseline(false);
-          } catch (err) {
-            setActionError(err instanceof ApiError ? err.message : "Could not lock baseline.");
-            setConfirmingBaseline(false);
-          }
-        }}
-        title={baselineLockedAt ? "Reset project baseline?" : "Lock project baseline?"}
-        confirmLabel={baselineLockedAt ? "Overwrite baseline" : "Lock baseline"}
-        confirmTone={baselineLockedAt ? "warning" : "primary"}
-        busy={lockBaseline.isPending}
-        body={
-          <div className="space-y-3">
-            {baselineLockedAt ? (
-              <p>
-                <strong>Overwrite the existing baseline?</strong> The previous snapshot
-                {baselineLockedBy
-                  ? ` (locked by ${baselineLockedBy.username} on ${baselineLockedAtPretty})`
-                  : ` (locked ${baselineLockedAtPretty})`}{" "}
-                will be replaced with the current schedule. This cannot be undone.
-              </p>
-            ) : (
-              <p>
-                Lock the current schedule as the official baseline for this project? Every task's
-                current Start and Due dates will be saved as its baseline so future slips can be
-                measured against this snapshot.
-              </p>
-            )}
-            <label className="block">
-              <span className="mb-1 block font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
-                Baseline as-of date
-              </span>
-              <DateField
-                variant="boxed"
-                className="w-full px-2 py-1.5 text-xs font-body focus:ring-2 focus:ring-primary/30"
-                value={baselineAsOf || null}
-                onChange={(d) => setBaselineAsOf(d ?? "")}
-                aria-label={
-                  baselineAsOf
-                    ? `Baseline as-of date, currently ${formatDisplay(baselineAsOf)}`
-                    : "Baseline as-of date"
-                }
-              />
-              <span className="mt-1 block text-[11px] text-on-surface-variant">
-                Defaults to today. Use a different date to backdate the snapshot — e.g. "May 1
-                baseline".
-              </span>
-            </label>
-            {baselineLockedAt && (
-              <div className="border-t border-outline-variant pt-2">
-                <button
-                  type="button"
-                  disabled={lockBaseline.isPending}
-                  onClick={async () => {
-                    try {
-                      await lockBaseline.mutateAsync({ clear: true });
-                      setBaselineToast("Baseline cleared");
-                      setConfirmingBaseline(false);
-                    } catch (err) {
-                      setActionError(err instanceof ApiError ? err.message : "Could not clear baseline.");
-                      setConfirmingBaseline(false);
-                    }
-                  }}
-                  className="font-display text-label-caps uppercase tracking-wider text-error hover:underline disabled:opacity-50"
-                >
-                  Clear baseline instead
-                </button>
-                <span className="ml-1 text-[11px] text-on-surface-variant">
-                  — removes the snapshot entirely.
-                </span>
-              </div>
-            )}
-          </div>
-        }
-      />
-
       {/* T5 (gantt visual refresh) — row menu's Delete confirmation.
           Subtask count mirrors TaskPanel.tsx's ConfirmModal body verbatim
           (same cascade-delete warning copy). */}
@@ -1707,15 +1648,6 @@ export function SolvroGantt(props: SolvroGanttProps) {
         busy={deleteTask.isPending}
       />
 
-      {baselineToast && (
-        <div
-          role="status"
-          className="pointer-events-auto fixed bottom-6 left-1/2 z-110 -translate-x-1/2 rounded-full border border-emerald-300 bg-emerald-50 px-4 py-2 font-display text-[12px] font-bold uppercase tracking-wider text-emerald-700 shadow-md"
-        >
-          <span className="material-symbols-outlined mr-1 align-middle text-[15px]">check_circle</span>
-          {baselineToast}
-        </div>
-      )}
     </div>
   );
 }
