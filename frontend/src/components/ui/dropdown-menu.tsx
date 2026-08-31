@@ -35,12 +35,20 @@ function DropdownMenuContent({
   side,
   align,
   alignOffset,
+  // SOLVRO PATCH: optional className passthrough for the Positioner — same
+  // patch as ui/popover.tsx. Base-UI's Positioner carries an inline
+  // `transform`, which creates its own stacking context, so the Popup's
+  // `z-50` below never competes with page-level z-indexes (e.g. the Gantt's
+  // sticky `z-30` header painted over the toolbar's Color-by menu). Callers
+  // that open over such content set the z-index on the Positioner via this
+  // prop; default unset keeps every existing menu unchanged.
+  positionerClassName,
   ...props
 }: Omit<React.ComponentProps<typeof DropdownMenuPrimitive.Popup>, "className"> &
   Pick<
     React.ComponentProps<typeof DropdownMenuPrimitive.Positioner>,
     "sideOffset" | "side" | "align" | "alignOffset"
-  > & { className?: string }) {
+  > & { className?: string; positionerClassName?: string }) {
   return (
     <DropdownMenuPrimitive.Portal>
       <DropdownMenuPrimitive.Positioner
@@ -48,6 +56,8 @@ function DropdownMenuContent({
         side={side}
         align={align}
         alignOffset={alignOffset}
+        // SOLVRO PATCH: see positionerClassName comment above.
+        className={cn(positionerClassName)}
       >
         <DropdownMenuPrimitive.Popup
           data-slot="dropdown-menu-content"

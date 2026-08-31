@@ -13,6 +13,7 @@ import {
   YAxis,
 } from "recharts";
 import { useProjectContext } from "../ProjectDetail";
+import { hasPermission, useAuth } from "@/lib/auth";
 import { DealCard } from "@/components/DealCard";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { scoreClass, scoreLevel } from "@/components/RiskFormModal";
@@ -21,7 +22,12 @@ import { dateToDay, dayFromIso } from "@/lib/dateField";
 import { type Task, useProjectNotes, useProjectRisks, useProjectTasks } from "@/lib/queries";
 
 export function ProjectOverview() {
-  const { project } = useProjectContext();
+  const { project, openContext } = useProjectContext();
+  const { user } = useAuth();
+  // Same gate as the Context panel's button (POST /projects/:id/baseline
+  // requires project:write) — a read-only user must not be sent to a
+  // panel that has no button for them.
+  const canLockBaseline = hasPermission(user, "project:write");
   const { data: tasks, isLoading, isError, error } = useProjectTasks(project.id);
 
   const stats = useMemo(() => computeStats(tasks ?? []), [tasks]);
@@ -117,14 +123,15 @@ export function ProjectOverview() {
               baseline against the current (re-planned) schedule.
             </p>
           </div>
-          {!project.baselineLockedAt && (
-            <Link
-              to={`/projects/${project.id}/gantt`}
+          {!project.baselineLockedAt && canLockBaseline && (
+            <button
+              type="button"
+              onClick={openContext}
               className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface hover:border-primary hover:text-primary"
             >
               <span className="material-symbols-outlined text-base">lock</span>
-              Lock baseline in Gantt
-            </Link>
+              Lock baseline
+            </button>
           )}
         </header>
 

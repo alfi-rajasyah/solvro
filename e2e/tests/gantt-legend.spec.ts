@@ -3,10 +3,13 @@ import type { Page } from "@playwright/test";
 
 // Regression coverage for the sustained Color-by legend
 // (docs/plans/optional-sa-and-gantt-color-legend-plan.md, Task 3): the
-// toolbar must expose a labeled "Color by" select, and the legend must be
-// present in ALL three modes — Section mode previously rendered no legend
-// at all. Assertions are scoped to the legend container because section
-// names also appear as rows in the gantt list pane.
+// toolbar must expose a "Color by" control, and the legend must be present
+// in ALL three modes — Section mode previously rendered no legend at all.
+// Since 2026-08-31 the control is a menu button (mode radios + the full
+// color key), not a <select> + inline legend: open the menu, pick a mode
+// with its `menuitemradio`, and read the key inside the menu — picking a
+// radio keeps the menu open. Assertions are scoped to the legend container
+// because section names also appear as rows in the gantt list pane.
 
 async function openGantt(page: Page, projectId: number): Promise<void> {
   await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
@@ -47,25 +50,35 @@ test.describe("gantt color-by legend — desktop", () => {
     await loginViaUi(page);
     await openGantt(page, projectId);
 
-    const select = page.getByLabel(/color by/i);
-    await expect(select).toBeVisible();
+    const colorBy = page.getByRole("button", { name: /color by/i });
+    await expect(colorBy).toBeVisible();
     // Default colorBy is "section" (GanttFrame.tsx: decided 2026-07-20,
     // unrelated to this task) — Section mode is therefore the FIRST legend
     // shown, which is also the mode that previously had no legend at all.
-    await expect(select).toHaveValue("section");
+    await expect(colorBy).toHaveText(/section/i);
 
+    await colorBy.click();
     const legend = page.getByTestId("gantt-legend");
+    await expect(page.getByRole("menuitemradio", { name: "Section" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
     await expect(legend.getByText(phaseAlpha, { exact: true })).toBeVisible();
     await expect(legend.getByText(phaseBeta, { exact: true })).toBeVisible();
 
-    await select.selectOption("status");
+    await page.getByRole("menuitemradio", { name: "Status" }).click();
     await expect(legend.getByText("In Progress", { exact: true })).toBeVisible();
 
-    await select.selectOption("priority");
+    await page.getByRole("menuitemradio", { name: "Priority" }).click();
     await expect(legend.getByText("Urgent", { exact: true })).toBeVisible();
 
     // Back to section — sustained, not one-shot.
-    await select.selectOption("section");
+    await page.getByRole("menuitemradio", { name: "Section" }).click();
     await expect(legend.getByText(phaseAlpha, { exact: true })).toBeVisible();
+
+    // The pick survives the menu closing: the trigger reads the mode.
+    await page.keyboard.press("Escape");
+    await expect(legend).toHaveCount(0);
+    await expect(colorBy).toHaveText(/section/i);
   });
 });
