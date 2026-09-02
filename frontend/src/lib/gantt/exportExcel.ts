@@ -1,5 +1,6 @@
 import { addDays, parseISODate, startOfDay, type Row } from "./geometry";
 import {
+  CRITICAL_PATH_HEX,
   HOLIDAY_HEX,
   PRIORITY_BORDER_HEX,
   WEEKEND_HEX,
@@ -45,6 +46,59 @@ function argb(hex: string, alpha = "FF"): string {
   return `${alpha}${hex.replace(/^#/, "").toUpperCase()}`;
 }
 
+/**
+ * Builds the Tasks sheet's column defs + per-row cell values — "Section /
+ * Title / Status / Priority / [Critical Path] / Start / Due". Pure and
+ * synchronous (no ExcelJS workbook needed) so exportExcel.test.ts can assert
+ * on the sheet's actual input directly — mirrors exportPdf.ts's
+ * `buildTaskTable`.
+ *
+ * Critical Path column (plan §3, empty-project rule): added only when at
+ * least one row in `rows` carries the mark — a project with no marked task
+ * gets the exact same 6-column sheet as before the mark shipped.
+ */
+export function buildTasksSheet(rows: Row[]): {
+  columns: Array<{ header: string; key: string; width: number }>;
+  rows: Array<Record<string, string>>;
+  hasCriticalPath: boolean;
+} {
+  const taskRows = rows.filter((r) => r.kind === "task" || r.kind === "subtask");
+  const sectionLookup = new Map<string, string>();
+  for (const r of rows) {
+    if (r.kind === "section") sectionLookup.set(r.id, r.name);
+  }
+  const hasCriticalPath = taskRows.some((r) => r.isCriticalPath);
+
+  const columns = [
+    { header: "Section", key: "section", width: 24 },
+    { header: "Title", key: "title", width: 48 },
+    { header: "Status", key: "status", width: 14 },
+    { header: "Priority", key: "priority", width: 12 },
+    ...(hasCriticalPath
+      ? [{ header: "Critical Path", key: "criticalPath", width: 14 }]
+      : []),
+    { header: "Start", key: "start", width: 12 },
+    { header: "Due", key: "due", width: 12 },
+  ];
+
+  const sheetRows = taskRows.map((r) => {
+    const t = r.task;
+    const sectionName = r.parentRowId ? sectionLookup.get(r.parentRowId) ?? "" : "";
+    const indent = r.kind === "subtask" ? "  └ " : "";
+    return {
+      section: sectionName,
+      title: `${indent}${r.name}`,
+      status: t ? STATUS_LABEL[t.status] ?? t.status : "",
+      priority: t?.priority ?? "",
+      ...(hasCriticalPath ? { criticalPath: r.isCriticalPath ? "Yes" : "" } : {}),
+      start: t?.startDate ? fmtIsoDate(parseISODate(t.startDate)) : "",
+      due: t?.dueDate ? fmtIsoDate(parseISODate(t.dueDate)) : "",
+    };
+  });
+
+  return { columns, rows: sheetRows, hasCriticalPath };
+}
+
 export async function exportGanttToExcel(opts: ExportExcelOpts): Promise<void> {
   const { projectName, rows, chartStart, chartEnd, holidays, colorBy } = opts;
   const ExcelJS = (await import("exceljs")).default;
@@ -53,22 +107,15 @@ export async function exportGanttToExcel(opts: ExportExcelOpts): Promise<void> {
   workbook.creator = "Solvro";
   workbook.created = new Date();
 
-  const taskRows = rows.filter((r) => r.kind === "task" || r.kind === "subtask");
-  const sectionLookup = new Map<string, string>();
-  for (const r of rows) {
-    if (r.kind === "section") sectionLookup.set(r.id, r.name);
-  }
-
   // ────────── Sheet 1: Tasks ──────────
+  const { columns: taskColumns, rows: taskSheetRows } = buildTasksSheet(rows);
+  // Zipped 1:1 with `taskSheetRows` (both filter `rows` the same way, see
+  // buildTasksSheet) — only used here for the priority cell's fill/font,
+  // which stays an ExcelJS-side concern rather than plain cell data.
+  const taskRows = rows.filter((r) => r.kind === "task" || r.kind === "subtask");
+
   const tasksSheet = workbook.addWorksheet("Tasks");
-  tasksSheet.columns = [
-    { header: "Section", key: "section", width: 24 },
-    { header: "Title", key: "title", width: 48 },
-    { header: "Status", key: "status", width: 14 },
-    { header: "Priority", key: "priority", width: 12 },
-    { header: "Start", key: "start", width: 12 },
-    { header: "Due", key: "due", width: 12 },
-  ];
+  tasksSheet.columns = taskColumns;
   const headerRow = tasksSheet.getRow(1);
   headerRow.font = { bold: true };
   headerRow.fill = {
@@ -78,25 +125,14 @@ export async function exportGanttToExcel(opts: ExportExcelOpts): Promise<void> {
   };
   headerRow.alignment = { vertical: "middle" };
 
-  for (const r of taskRows) {
-    const t = r.task;
-    const sectionName = r.parentRowId
-      ? sectionLookup.get(r.parentRowId) ?? ""
-      : "";
-    const indent = r.kind === "subtask" ? "  └ " : "";
-    const row = tasksSheet.addRow({
-      section: sectionName,
-      title: `${indent}${r.name}`,
-      status: t ? STATUS_LABEL[t.status] ?? t.status : "",
-      priority: t?.priority ?? "",
-      start: t?.startDate ? fmtIsoDate(parseISODate(t.startDate)) : "",
-      due: t?.dueDate ? fmtIsoDate(parseISODate(t.dueDate)) : "",
-    });
-    if (t?.priority) {
+  for (let i = 0; i < taskSheetRows.length; i++) {
+    const priority = taskRows[i].task?.priority;
+    const row = tasksSheet.addRow(taskSheetRows[i]);
+    if (priority) {
       row.getCell("priority").fill = {
         type: "pattern",
         pattern: "solid",
-        fgColor: { argb: argb(PRIORITY_BORDER_HEX[t.priority].replace(/^#/, "")) },
+        fgColor: { argb: argb(PRIORITY_BORDER_HEX[priority].replace(/^#/, "")) },
       };
       row.getCell("priority").font = {
         color: { argb: argb("FFFFFF") },
@@ -277,6 +313,22 @@ export async function exportGanttToExcel(opts: ExportExcelOpts): Promise<void> {
           cell.border = {
             ...(cell.border ?? {}),
             left: { style: "medium", color: { argb: argb(borderHex) } },
+          };
+        }
+        if (r.isCriticalPath) {
+          // Critical Path mark (plan §3): a violet frame on every painted
+          // day cell of a marked task — the Excel analogue of the Gantt
+          // bar's violet ring (there's no per-run outline across a series
+          // of unmerged single-day cells, so top+bottom on each cell reads
+          // as the same continuous frame). Merged in, not replacing, so the
+          // start cell keeps its `left` border above.
+          cell.border = {
+            ...(cell.border ?? {}),
+            top: { style: "medium", color: { argb: argb(CRITICAL_PATH_HEX.replace(/^#/, "")) } },
+            bottom: {
+              style: "medium",
+              color: { argb: argb(CRITICAL_PATH_HEX.replace(/^#/, "")) },
+            },
           };
         }
       }

@@ -6,6 +6,7 @@ import {
   type Row,
 } from "./geometry";
 import {
+  CRITICAL_PATH_HEX,
   HOLIDAY_HEX,
   PROGRESS_OVERLAY_ALPHA,
   WEEKEND_HEX,
@@ -148,8 +149,18 @@ function fitText(pdf: JsPDFInstance, text: string, maxWidth: number): string {
 
 /** Diamond of half-diagonal `r` centered at (cx, cy), filled with the
  *  current fill color. jsPDF has no primitive diamond — traced as a closed
- *  3-segment path (the 4th edge is implied by `closed: true`). */
-function drawDiamond(pdf: JsPDFInstance, cx: number, cy: number, r: number): void {
+ *  3-segment path (the 4th edge is implied by `closed: true`).
+ *  `mode` (Critical Path mark, plan §3 — default unchanged) selects fill
+ *  ("F") vs. stroke ("S") so the same path can also draw the mark's
+ *  diamond-ring outline, using whatever draw color/line width the caller
+ *  already set. */
+function drawDiamond(
+  pdf: JsPDFInstance,
+  cx: number,
+  cy: number,
+  r: number,
+  mode: "F" | "S" = "F",
+): void {
   pdf.lines(
     [
       [r, r],
@@ -159,14 +170,17 @@ function drawDiamond(pdf: JsPDFInstance, cx: number, cy: number, r: number): voi
     cx,
     cy - r,
     [1, 1],
-    "F",
+    mode,
     true,
   );
 }
 
 /** Clamps the corner radius so `roundedRect` never receives rx/ry larger
  *  than the rect itself (degenerates a near-zero-width clamped bar into a
- *  plain rect instead of a jsPDF geometry glitch). */
+ *  plain rect instead of a jsPDF geometry glitch).
+ *  `mode` (Critical Path mark, plan §3 — default unchanged) selects fill
+ *  ("F") vs. stroke ("S") so the same helper also draws the mark's ring
+ *  outline around a task bar. */
 function fillRoundedRect(
   pdf: JsPDFInstance,
   x: number,
@@ -174,12 +188,13 @@ function fillRoundedRect(
   w: number,
   h: number,
   r: number,
+  mode: "F" | "S" = "F",
 ): void {
   const rr = Math.max(0, Math.min(r, w / 2, h / 2));
   if (rr <= 0) {
-    pdf.rect(x, y, Math.max(0, w), Math.max(0, h), "F");
+    pdf.rect(x, y, Math.max(0, w), Math.max(0, h), mode);
   } else {
-    pdf.roundedRect(x, y, w, h, rr, rr, "F");
+    pdf.roundedRect(x, y, w, h, rr, rr, mode);
   }
 }
 
@@ -247,6 +262,54 @@ interface BarRect {
   y: number;
   width: number;
   height: number;
+}
+
+/**
+ * Builds the final-page task table's head + body — "Section / Title /
+ * Status / Priority / [Critical Path] / Start / Due". Pure and synchronous
+ * (no jsPDF instance needed) so exportPdf.test.ts can assert on the table's
+ * actual input directly, rather than driving the whole async PDF pipeline.
+ *
+ * Critical Path column (plan §3, empty-project rule): added only when at
+ * least one row in `rows` carries the mark — a project with no marked task
+ * gets the exact same 6-column table as before the mark shipped.
+ */
+export function buildTaskTable(
+  rows: Row[],
+): { head: string[]; body: string[][]; hasCriticalPath: boolean } {
+  const taskRows = rows.filter((r) => r.kind === "task" || r.kind === "subtask");
+  const sectionLookup = new Map<string, string>();
+  for (const r of rows) {
+    if (r.kind === "section") sectionLookup.set(r.id, r.name);
+  }
+  const hasCriticalPath = taskRows.some((r) => r.isCriticalPath);
+
+  const head = ["Section", "Title", "Status", "Priority"];
+  if (hasCriticalPath) head.push("Critical Path");
+  head.push("Start", "Due");
+
+  const body = taskRows.map((r) => {
+    const t = r.task;
+    const sectionName = r.parentRowId ? sectionLookup.get(r.parentRowId) ?? "" : "";
+    // ASCII-safe indent — not a WinAnsi-encoding-representable glyph like
+    // "└" (U+2514), which jsPDF's core helvetica font renders as mojibake
+    // (confirmed against the F4 sample render: showed up as a stray "%").
+    // Pre-existing bug (this string predates F4), fixed opportunistically
+    // since this section was already being restyled.
+    const indent = r.kind === "subtask" ? "    - " : "";
+    const line = [
+      sectionName,
+      `${indent}${r.name}`,
+      t ? STATUS_LABEL[t.status] ?? t.status : "",
+      t?.priority ?? "",
+    ];
+    if (hasCriticalPath) line.push(r.isCriticalPath ? "Yes" : "");
+    line.push(t?.startDate ? fmtIsoDate(parseISODate(t.startDate)) : "");
+    line.push(t?.dueDate ? fmtIsoDate(parseISODate(t.dueDate)) : "");
+    return line;
+  });
+
+  return { head, body, hasCriticalPath };
 }
 
 export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
@@ -387,6 +450,9 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
   const surfaceContainerLowRgb = hexToRgb(THEME_HEX.surfaceContainerLow);
   const surfaceContainerRgb = hexToRgb(THEME_HEX.surfaceContainer);
   const primaryRgb = hexToRgb(THEME_HEX.primary);
+  // Critical Path mark (plan §3) — shared with exportExcel.ts via
+  // palette.ts's CRITICAL_PATH_HEX, not a locally-duplicated literal.
+  const criticalPathRgb = hexToRgb(CRITICAL_PATH_HEX);
 
   const today = startOfDay(new Date());
   const holidayDates = new Set(holidays.map((h) => h.date));
@@ -692,6 +758,14 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
           // choice ported from the old engine).
           pdf.setFillColor(primaryRgb[0], primaryRgb[1], primaryRgb[2]);
           drawDiamond(pdf, cx, cy, dr);
+          // Critical Path mark (plan §3): stroke the same diamond in
+          // violet, on top of the fill — the PDF analogue of the on-screen
+          // `outline outline-2 outline-offset-1` diamond ring.
+          if (row.isCriticalPath) {
+            pdf.setDrawColor(criticalPathRgb[0], criticalPathRgb[1], criticalPathRgb[2]);
+            pdf.setLineWidth(0.75);
+            drawDiamond(pdf, cx, cy, dr, "S");
+          }
           // Label in on-surface (near-black), NOT the luminance-derived
           // insideLabelRgb SolvroBar.tsx uses for this text: on screen that
           // color is computed from the bar's resolved fill color even
@@ -735,6 +809,19 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
           const [fr, fg, fb] = hexToRgb(fillHex);
           pdf.setFillColor(fr, fg, fb);
           fillRoundedRect(pdf, bx, by, bw, bh, 1.5);
+
+          // Critical Path mark (plan §3): a violet stroke on the same
+          // rounded rect, right after the fill — the PDF analogue of the
+          // on-screen `ring-2 ring-inset` bar overlay. No restore needed
+          // after: every later `setDrawColor`/`setLineWidth` call in this
+          // file (row separators, the diamond stroke, connectors, the
+          // outer chart border) sets its own color/width before drawing
+          // rather than relying on whatever was last left set.
+          if (row.isCriticalPath) {
+            pdf.setDrawColor(criticalPathRgb[0], criticalPathRgb[1], criticalPathRgb[2]);
+            pdf.setLineWidth(0.75);
+            fillRoundedRect(pdf, bx, by, bw, bh, 1.5, "S");
+          }
 
           // Progress overlay — darker fill on the completed fraction, only
           // for 0%<p<100%, and only on the page where the bar STARTS (a
@@ -826,35 +913,25 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
   pdf.setTextColor(onSurfaceRgb[0], onSurfaceRgb[1], onSurfaceRgb[2]);
   pdf.text(`${projectName} — Tasks`, margin, margin + 14);
 
-  const taskRows = rows.filter((r) => r.kind === "task" || r.kind === "subtask");
-  const sectionLookup = new Map<string, string>();
-  for (const r of rows) {
-    if (r.kind === "section") sectionLookup.set(r.id, r.name);
-  }
-
-  const tableRows = taskRows.map((r) => {
-    const t = r.task;
-    const sectionName = r.parentRowId ? sectionLookup.get(r.parentRowId) ?? "" : "";
-    // ASCII-safe indent — not a WinAnsi-encoding-representable glyph like
-    // "└" (U+2514), which jsPDF's core helvetica font renders as mojibake
-    // (confirmed against the F4 sample render: showed up as a stray "%").
-    // Pre-existing bug (this string predates F4), fixed opportunistically
-    // since this section was already being restyled.
-    const indent = r.kind === "subtask" ? "    - " : "";
-    return [
-      sectionName,
-      `${indent}${r.name}`,
-      t ? STATUS_LABEL[t.status] ?? t.status : "",
-      t?.priority ?? "",
-      t?.startDate ? fmtIsoDate(parseISODate(t.startDate)) : "",
-      t?.dueDate ? fmtIsoDate(parseISODate(t.dueDate)) : "",
-    ];
-  });
+  const { head, body: tableRows, hasCriticalPath } = buildTaskTable(rows);
+  // Critical Path column (plan §3, empty-project rule): present only when
+  // `buildTaskTable` reports at least one exported task row is marked —
+  // when it doesn't, every column index below matches the pre-mark table
+  // byte-for-byte.
+  const columnStyles: Record<number, { cellWidth: number | "auto" }> = {
+    0: { cellWidth: 100 },
+    1: { cellWidth: "auto" },
+    2: { cellWidth: 70 },
+    3: { cellWidth: 60 },
+  };
+  if (hasCriticalPath) columnStyles[4] = { cellWidth: 70 };
+  columnStyles[head.length - 2] = { cellWidth: 70 }; // Start
+  columnStyles[head.length - 1] = { cellWidth: 70 }; // Due
 
   autoTable(pdf, {
     startY: margin + 28,
     margin: { left: margin, right: margin },
-    head: [["Section", "Title", "Status", "Priority", "Start", "Due"]],
+    head: [head],
     body: tableRows,
     styles: { fontSize: 8, cellPadding: 3, textColor: onSurfaceRgb },
     headStyles: {
@@ -863,14 +940,7 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
       fontStyle: "bold",
     },
     alternateRowStyles: { fillColor: surfaceContainerLowRgb },
-    columnStyles: {
-      0: { cellWidth: 100 },
-      1: { cellWidth: "auto" },
-      2: { cellWidth: 70 },
-      3: { cellWidth: 60 },
-      4: { cellWidth: 70 },
-      5: { cellWidth: 70 },
-    },
+    columnStyles,
   });
 
   if (tabWindow !== undefined) {

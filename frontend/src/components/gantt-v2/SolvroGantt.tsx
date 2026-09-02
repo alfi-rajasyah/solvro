@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { parseISO } from "date-fns";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import {
+  CRITICAL_PATH_GLYPH,
+  CRITICAL_PATH_LABEL,
+  CriticalPathMark,
+} from "@/components/CriticalPathMark";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { dateToDay } from "@/lib/dateField";
@@ -1245,36 +1250,58 @@ export function SolvroGantt(props: SolvroGanttProps) {
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
-              {legend.length > 0 && (
-                <>
-                  <DropdownMenuSeparator />
-                  {/* Menu.Group (role="group") + its GroupLabel keep the
-                      popup's `role="menu"` children valid for assistive
-                      tech — plain divs inside a menu are skipped, and this
-                      menu is now the only place the key exists. */}
-                  <DropdownMenuGroup aria-label="Color key">
-                    <DropdownMenuLabel className="pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
-                      Key
-                    </DropdownMenuLabel>
-                    <div data-testid="gantt-legend" className="flex flex-col gap-1 px-2 pb-1.5">
-                      {legend.map(([label, hex], i) => (
-                        <span
-                          key={`${colorBy}-${i}-${label}`}
-                          title={label}
-                          className="flex min-w-0 items-center gap-2 text-[12px] text-on-surface-variant"
-                        >
-                          <span
-                            className="h-2 w-2 shrink-0 rounded-[2px]"
-                            style={{ backgroundColor: hex }}
-                            aria-hidden="true"
-                          />
-                          <span className="truncate">{label}</span>
-                        </span>
-                      ))}
-                    </div>
-                  </DropdownMenuGroup>
-                </>
-              )}
+              <DropdownMenuSeparator />
+              {/* Menu.Group (role="group") + its GroupLabel keep the
+                  popup's `role="menu"` children valid for assistive
+                  tech — plain divs inside a menu are skipped, and this
+                  menu is now the only place the key exists.
+                  Critical Path fix round (plan §3): the group used to be
+                  gated on `legend.length > 0` (only "section" mode with
+                  zero sections could ever hit that), which would have hidden
+                  the new static Critical Path row too — "shown in every
+                  mode" means unconditionally, so the group (and its
+                  Key label) now always renders; only the per-mode `legend`
+                  list inside it stays conditional. */}
+              <DropdownMenuGroup aria-label="Color key">
+                <DropdownMenuLabel className="pb-1 pt-1.5 text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+                  Key
+                </DropdownMenuLabel>
+                <div data-testid="gantt-legend" className="flex flex-col gap-1 px-2 pb-1.5">
+                  {legend.map(([label, hex], i) => (
+                    <span
+                      key={`${colorBy}-${i}-${label}`}
+                      title={label}
+                      className="flex min-w-0 items-center gap-2 text-[12px] text-on-surface-variant"
+                    >
+                      <span
+                        className="h-2 w-2 shrink-0 rounded-[2px]"
+                        style={{ backgroundColor: hex }}
+                        aria-hidden="true"
+                      />
+                      <span className="truncate">{label}</span>
+                    </span>
+                  ))}
+                  {/* Critical Path mark (plan §3): one static LAST row,
+                      shown in every Color-by mode — the mark is a ring/
+                      glyph, never a fill, so it survives whichever mode's
+                      fills are active rather than being one more fill entry
+                      in the mode-specific list above. */}
+                  <span
+                    title={CRITICAL_PATH_LABEL}
+                    className="flex min-w-0 items-center gap-2 text-[12px] text-on-surface-variant"
+                  >
+                    {/* Phase review: a 2px ring on this 8px box left only a 4px
+                        hole and read as a filled square. A 1px ring keeps a 6px
+                        transparent center, and the 8px box keeps the label
+                        column aligned with the mode swatches above. */}
+                    <span
+                      className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-inset ring-chip-violet-text"
+                      aria-hidden="true"
+                    />
+                    <span className="truncate">{CRITICAL_PATH_LABEL}</span>
+                  </span>
+                </div>
+              </DropdownMenuGroup>
             </DropdownMenuContent>
           </DropdownMenu>
           {/* Export (Excel/PDF) — ported from GanttFrame.tsx:882-910. Icon-only
@@ -1440,6 +1467,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
               return (
                 <>
                   {task && <TaskStatusDot status={task.status} />}
+                  {/* Critical Path mark (plan §3) — glyph only, tight tree
+                      column; the shared component carries the label as its
+                      title/aria-label. `me-1.5` matches TaskStatusDot's own
+                      gap (this row has no `gap`, review fix round: the
+                      glyph sat flush against the title without it). */}
+                  {task?.isCriticalPath && (
+                    <CriticalPathMark variant="glyph" className="me-1.5 shrink-0" />
+                  )}
                   {/* Walkthrough F6 (2026-07-25) — cheap hover affordance: a
                     native title tooltip surfaces the full name even before
                     the user discovers the splitter, and stays useful for
@@ -1520,6 +1555,41 @@ export function SolvroGantt(props: SolvroGanttProps) {
                             edit
                           </span>
                           Edit
+                        </ContextMenuItem>
+                        {/* Critical Path mark (plan §3): toggles the manual
+                          flag via the same optimistic single-field patch
+                          the panel toggle and other row actions use
+                          (useUpdateTask — see queries.ts's UpdateTaskInput
+                          spread, §4). `canEdit` only — this menu already is. */}
+                        <ContextMenuItem
+                          className="text-xs"
+                          onClick={() =>
+                            updateTask.mutate(
+                              {
+                                id: task.id,
+                                patch: { isCriticalPath: !task.isCriticalPath },
+                              },
+                              {
+                                onError: (err) => {
+                                  setActionError(
+                                    err instanceof ApiError
+                                      ? err.message
+                                      : "Could not update the Critical Path mark.",
+                                  );
+                                },
+                              },
+                            )
+                          }
+                        >
+                          <span
+                            className="material-symbols-outlined text-sm text-on-surface-variant"
+                            aria-hidden="true"
+                          >
+                            {CRITICAL_PATH_GLYPH}
+                          </span>
+                          {task.isCriticalPath
+                            ? `Remove from ${CRITICAL_PATH_LABEL}`
+                            : `Mark as ${CRITICAL_PATH_LABEL}`}
                         </ContextMenuItem>
                         {/* Fix round — the removed comment here claimed
                           TaskFormModal's own "Parent" dropdown "only lists

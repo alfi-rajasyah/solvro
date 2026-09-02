@@ -23,6 +23,8 @@ export interface Row {
   priority?: Task["priority"];
   /** Mirrors Task.isMilestone (explicit flag). */
   isMilestone?: boolean;
+  /** Mirrors Task.isCriticalPath — the manual Critical Path mark (plan critical-path-mark.md §3). */
+  isCriticalPath?: boolean;
   /** 0-100. DONE tasks are 100; parents with subtasks use done/total; else 0. */
   progressPct?: number;
 }
@@ -194,6 +196,7 @@ export function buildRows({ tasks, sections, collapsed }: BuildRowsOpts): Row[] 
         status: p.status,
         priority: p.priority,
         isMilestone: isMilestoneTask(p),
+        isCriticalPath: p.isCriticalPath,
         progressPct: progressForTask(p, childrenById),
         hasChildren: children.length > 0,
         collapsed: parentCollapsed,
@@ -216,6 +219,7 @@ export function buildRows({ tasks, sections, collapsed }: BuildRowsOpts): Row[] 
           status: c.status,
           priority: c.priority,
           isMilestone: isMilestoneTask(c),
+          isCriticalPath: c.isCriticalPath,
           progressPct: progressForTask(c, childrenById),
         });
       }

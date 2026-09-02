@@ -17,6 +17,7 @@
 // toggle (`onToggleSubtask`) and TaskCard's mobile-only "more_horiz" menu
 // button (opens MobileMoveSheet, wired in SolvroKanban.tsx).
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
+import { CriticalPathMark } from "@/components/CriticalPathMark";
 import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { KanbanItemHandle } from "@/components/reui/kanban";
@@ -161,7 +162,10 @@ export function TaskCard({
             {task._count.comments}
           </span>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-1">
+          {task.isCriticalPath && (
+            <CriticalPathMark variant="chip" className="shrink-0 whitespace-nowrap" />
+          )}
           <PriorityBadge priority={task.priority} compact />
           {task.assignedTo && <AssigneeAvatar user={task.assignedTo} size="sm" />}
         </div>

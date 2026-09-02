@@ -160,6 +160,7 @@ export interface CreateTaskInput {
   startDate?: string | null;
   dueDate?: string | null;
   isMilestone?: boolean;
+  isCriticalPath?: boolean;
 }
 
 /**

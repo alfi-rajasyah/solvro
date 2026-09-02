@@ -19,6 +19,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "../ProjectDetail";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
+import { CriticalPathMark } from "@/components/CriticalPathMark";
 import { DateField } from "@/components/DateField";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { SectionReorderModal } from "@/components/SectionReorderModal";
@@ -767,20 +768,23 @@ function TaskRow({
           />
         </span>
 
-        <button
-          type="button"
-          disabled={!canEdit}
-          onClick={(e) => {
-            e.stopPropagation();
-            onCyclePriority(task);
-          }}
-          className="flex items-center justify-start disabled:cursor-default"
-          title={canEdit ? "Click to cycle priority" : undefined}
-        >
-          <span className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}>
-            flag
-          </span>
-        </button>
+        <span className="flex items-center gap-0.5">
+          <button
+            type="button"
+            disabled={!canEdit}
+            onClick={(e) => {
+              e.stopPropagation();
+              onCyclePriority(task);
+            }}
+            className="flex grow items-center justify-start disabled:cursor-default"
+            title={canEdit ? "Click to cycle priority" : undefined}
+          >
+            <span className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}>
+              flag
+            </span>
+          </button>
+          {task.isCriticalPath && <CriticalPathMark variant="glyph" />}
+        </span>
 
         <span onClick={(e) => e.stopPropagation()}>
           <StatusSelect canEdit={canEdit} value={task.status} onChange={(s) => onSetStatus(task, s)} />
@@ -818,6 +822,7 @@ function TaskRow({
           <span className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}>
             flag
           </span>
+          {task.isCriticalPath && <CriticalPathMark variant="glyph" />}
         </div>
         <div className="flex items-center justify-between gap-2 pl-0">
           <span className="flex items-center gap-1.5">
@@ -919,8 +924,11 @@ function SubtaskRow({
       >
         {done && <span className="material-symbols-outlined text-[10px] leading-none">check</span>}
       </button>
-      <span className={["truncate", done ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
-        {task.title}
+      <span className="flex min-w-0 items-center gap-1">
+        <span className={["truncate", done ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
+          {task.title}
+        </span>
+        {task.isCriticalPath && <CriticalPathMark variant="glyph" className="shrink-0" />}
       </span>
     </div>
   );
