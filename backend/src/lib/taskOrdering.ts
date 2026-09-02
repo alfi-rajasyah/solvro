@@ -86,6 +86,57 @@ async function insertAt(
 }
 
 /**
+ * Insert `newIds` (already-existing rows in the sibling list `key`, in the
+ * given order) directly after `afterTaskId`, then re-pack the WHOLE list to
+ * dense 0..n-1 in one pass. `afterTaskId` falls back to "append at the end"
+ * when it's null or isn't a member of this exact sibling list (e.g. a task
+ * from a different project/parent, or one that no longer exists) — the same
+ * clamp-to-end behavior `insertAt` gives an out-of-range position.
+ *
+ * Precondition: every id in `newIds` must already be a row in sibling list
+ * `key` (e.g. just appended there by `duplicateTaskTree`/`countSiblings`) —
+ * this only *reorders* the list, it never creates or moves rows across
+ * lists. Throws if that precondition doesn't hold, rather than silently
+ * inserting a foreign id into the list.
+ *
+ * Used by the section-duplicate route to drop a batch of copied top-level
+ * tasks right after the source section's last task, in one re-pack instead
+ * of one `moveTaskWithinSiblings` call per copy. Must be called inside a
+ * `prisma.$transaction`.
+ */
+export async function insertManyAfter(
+  tx: Tx,
+  key: SiblingKey,
+  afterTaskId: number | null,
+  newIds: number[],
+): Promise<void> {
+  if (newIds.length === 0) return;
+
+  const memberCount = await tx.task.count({
+    where: { ...siblingWhere(key), id: { in: newIds } },
+  });
+  if (memberCount !== newIds.length) {
+    throw new Error("insertManyAfter: every newId must already belong to the sibling list");
+  }
+
+  const others = await tx.task.findMany({
+    where: { ...siblingWhere(key), id: { notIn: newIds } },
+    orderBy: [{ position: "asc" }, { id: "asc" }],
+    select: { id: true },
+  });
+
+  const afterIndex = afterTaskId === null ? -1 : others.findIndex((o) => o.id === afterTaskId);
+  const insertIndex = afterIndex === -1 ? others.length : afterIndex + 1;
+
+  const ordered = others.map((o) => o.id);
+  ordered.splice(insertIndex, 0, ...newIds);
+
+  for (let i = 0; i < ordered.length; i++) {
+    await tx.task.update({ where: { id: ordered[i] }, data: { position: i } });
+  }
+}
+
+/**
  * Move `taskId` from `oldKey` to `newKey` (which may be the same list) and
  * place it at `requestedPosition` (append to the end when omitted). Always
  * leaves both the old and new sibling lists densely packed (0..n-1).
