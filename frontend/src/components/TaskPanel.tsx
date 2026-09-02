@@ -1,6 +1,11 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { AssigneeAvatar } from "./AssigneeAvatar";
 import { ConfirmModal } from "./ConfirmModal";
+import {
+  CRITICAL_PATH_GLYPH,
+  CRITICAL_PATH_HELPER_TEXT,
+  CRITICAL_PATH_LABEL,
+} from "./CriticalPathMark";
 import { InlineDateRangeEditor } from "./InlineDateRangeEditor";
 import { LabelPicker } from "./LabelPicker";
 import { Alert, AlertDescription } from "@/components/reui/alert";
@@ -499,6 +504,25 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
               <span className="text-on-surface">
                 {task.isMilestone ? "Milestone" : "Task"}
               </span>
+            </button>
+
+            <span className="self-center font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">
+              {CRITICAL_PATH_LABEL}
+            </span>
+            <button
+              type="button"
+              disabled={!canEdit}
+              onClick={() => patch({ isCriticalPath: !task.isCriticalPath })}
+              className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
+              title={canEdit ? CRITICAL_PATH_HELPER_TEXT : undefined}
+              aria-label={`${CRITICAL_PATH_LABEL}: ${task.isCriticalPath ? "Yes" : "No"}`}
+            >
+              <span
+                className={`material-symbols-outlined text-[15px] ${task.isCriticalPath ? "text-chip-violet-text" : "text-on-surface-variant"}`}
+              >
+                {task.isCriticalPath ? CRITICAL_PATH_GLYPH : "check_box_outline_blank"}
+              </span>
+              <span className="text-on-surface">{task.isCriticalPath ? "Yes" : "No"}</span>
             </button>
 
             <span className="self-center font-display text-[10px] font-bold uppercase tracking-wider text-on-surface-variant">

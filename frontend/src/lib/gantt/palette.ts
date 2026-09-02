@@ -20,6 +20,11 @@ export const PRIORITY_BORDER_HEX: Record<Priority, string> = {
 export const WEEKEND_HEX = "#e2e8f0";  // slate-200, very subtle
 export const HOLIDAY_HEX = "#fecaca";  // rose-200
 export const TODAY_HEX = "#3aae51";    // primary green — Gantt v2 today line/pill
+// Critical Path mark (plan critical-path-mark.md §3) — light-theme
+// `chip-violet-text` (index.css's `:root` block). Both exporters are
+// light-background-only (PDF: always; Excel: no dark-mode concept), so this
+// single light value is the shared source for both, same as the hexes above.
+export const CRITICAL_PATH_HEX = "#6d28d9";
 
 // Neutral fallback for tasks/sections without a Section.color. Mirrors the
 // `--phase` CSS fallback in index.css and geometry.ts's DEFAULT_SECTION_COLOR.

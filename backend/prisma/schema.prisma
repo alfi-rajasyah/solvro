@@ -282,6 +282,10 @@ model Task {
   // (startDate === dueDate, or dueDate-only); backfilled once by the
   // task_is_milestone migration, user-controlled thereafter.
   isMilestone       Boolean          @default(false) @map("is_milestone")
+  // Manual "if this task slips, the project end date slips" flag, set by the
+  // TAM. Independent of priority; NOT computed from dependencies — the
+  // computed critical path (Kahn sort + longest path) stays deferred.
+  isCriticalPath    Boolean          @default(false) @map("is_critical_path")
   baselineStartDate DateTime?        @map("baseline_start_date")
   baselineDueDate   DateTime?        @map("baseline_due_date")
   assignedToId      Int?             @map("assigned_to")

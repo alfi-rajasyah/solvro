@@ -12,6 +12,7 @@ function makeTask(
     startDate: null,
     dueDate: null,
     isMilestone: false,
+    isCriticalPath: false,
     baselineStartDate: null,
     baselineDueDate: null,
     assignedToId: null,

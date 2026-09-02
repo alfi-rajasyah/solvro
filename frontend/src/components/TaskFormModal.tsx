@@ -2,7 +2,13 @@ import { useCallback, useEffect, useState, type FormEvent } from "react";
 import { DateRangeField } from "./DateRangeField";
 import { Drawer } from "./Drawer";
 import { LabelPicker } from "./LabelPicker";
+import {
+  CRITICAL_PATH_GLYPH,
+  CRITICAL_PATH_HELPER_TEXT,
+  CRITICAL_PATH_LABEL,
+} from "./CriticalPathMark";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import { Checkbox } from "@/components/ui/checkbox";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { commitDraft, dayFromIso, isoFromDay } from "@/lib/dateField";
@@ -77,6 +83,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
   const [parentTaskId, setParentTaskId] = useState<number | "">("");
   const [sectionId, setSectionId] = useState<number | "">("");
   const [labelIds, setLabelIds] = useState<number[]>([]);
+  const [isCriticalPath, setIsCriticalPath] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Drive the drawer's slide-out: every close path sets `closing`, and
   // the parent's real `onClose` (which unmounts us) only runs once the
@@ -101,6 +108,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
       setParentTaskId(editingTask.parentTaskId ?? "");
       setSectionId(editingTask.sectionId ?? "");
       setLabelIds(editingTask.labels.map((l) => l.id));
+      setIsCriticalPath(editingTask.isCriticalPath ?? false);
     } else {
       setTitle("");
       setDescription("");
@@ -112,6 +120,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
       setParentTaskId(createProps?.initialParentTaskId ?? "");
       setSectionId(createProps?.initialSectionId ?? "");
       setLabelIds([]);
+      setIsCriticalPath(false);
     }
     // Primitives only — the props OBJECT gets fresh identity on every parent
     // render (query refetches, sibling mutations invalidating), and re-running
@@ -186,6 +195,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             parentTaskId: parent,
             sectionId: sec,
             labelIds,
+            isCriticalPath,
           },
         });
       } else {
@@ -200,6 +210,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
           parentTaskId: parent,
           sectionId: sec,
           labelIds: labelIds.length > 0 ? labelIds : undefined,
+          isCriticalPath,
         });
       }
       requestClose();
@@ -333,6 +344,21 @@ export function TaskFormModal(props: TaskFormModalProps) {
                 </option>
               ))}
             </select>
+          </FieldRow>
+
+          {/* Critical Path */}
+          <FieldRow icon={CRITICAL_PATH_GLYPH} label="Critical Path">
+            <div className="flex items-center gap-2">
+              <Checkbox
+                checked={isCriticalPath}
+                onCheckedChange={(checked) => setIsCriticalPath(checked)}
+                disabled={!canEdit}
+                aria-label={CRITICAL_PATH_LABEL}
+              />
+              <span className="text-xs text-on-surface-variant">
+                {CRITICAL_PATH_HELPER_TEXT}
+              </span>
+            </div>
           </FieldRow>
 
           {/* Assignee */}

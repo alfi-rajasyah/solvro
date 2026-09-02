@@ -289,6 +289,10 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
       <span
         data-task-id={task.id}
         data-milestone
+        // Critical Path DOM contract (plan §3): present only when marked,
+        // absent (not "false") otherwise — e2e selects on the attribute's
+        // mere presence.
+        data-critical-path={task.isCriticalPath || undefined}
         className={cn(
           "flex min-w-0 items-center gap-1.5 rounded-sm",
           selectedOutline,
@@ -302,7 +306,19 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
             Task 4 review finding). */}
         <span
           aria-hidden
-          className="bg-primary inline-block size-2.5 shrink-0 rotate-45"
+          className={cn(
+            "bg-primary inline-block size-2.5 shrink-0 rotate-45",
+            // Critical Path mark (plan §3): an outline (not the wrapper's
+            // selection `outline`, which stays untouched) rotates with the
+            // `rotate-45` box, so it reads as a diamond-shaped ring around
+            // the filled diamond. `me-1` (review fix round): the wrapper's
+            // `gap-1.5` alone left the ring's outer edge — 3px past the box
+            // from the 2px outline + 1px offset — almost touching the
+            // title; the extra margin restores clearance without widening
+            // the gap for the unmarked (common) case.
+            task.isCriticalPath &&
+              "me-1 outline outline-2 outline-offset-1 outline-chip-violet-text",
+          )}
         />
         {/* Decorative — the button's own aria-label (gantt-bar.tsx) already
             announces the title, so this visual duplicate stays out of the a11y tree. */}
@@ -388,6 +404,18 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
         className="absolute inset-y-0 start-0"
         style={{ width: `${doneWidth}%`, backgroundColor: color }}
       />
+      {/* Critical Path mark (plan §3): a violet inset ring, painted LAST
+          (after the hatch and the progress fill) so it sits above both.
+          `ring`, not `outline` — `selectedOutline` above already claims
+          `outline` for the selection affordance, and the two live in
+          separate tailwind-merge conflict groups so they never fight. */}
+      {task.isCriticalPath && (
+        <span
+          aria-hidden
+          data-slot="solvro-bar-critical"
+          className="pointer-events-none absolute inset-0 rounded-[inherit] ring-2 ring-inset ring-chip-violet-text"
+        />
+      )}
     </span>
   );
 
@@ -395,6 +423,11 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
     <span
       ref={containerRef}
       data-task-id={task.id}
+      // Critical Path DOM contract (plan §3): present only when marked,
+      // absent (not "false") otherwise — e2e selects on the attribute's
+      // mere presence. Section rollups never reach this branch (they
+      // return early above), so they never carry it.
+      data-critical-path={task.isCriticalPath || undefined}
       data-label-outside={!fits || undefined}
       className="flex h-full min-w-0 flex-1 items-center"
     >
