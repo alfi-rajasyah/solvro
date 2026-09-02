@@ -7,6 +7,7 @@ export interface PortfolioProjectRow {
   name: string;
   status: ProjectStatus;
   tamName: string;
+  customerId: number | null;
   customerName: string | null;
   start: string | null;
   end: string | null;
@@ -37,7 +38,7 @@ export async function computePortfolioRows(
       status: true,
       updatedAt: true,
       tam: { select: { username: true } },
-      customer: { select: { name: true } },
+      customer: { select: { id: true, name: true } },
       sections: {
         orderBy: { position: "asc" },
         select: { id: true, name: true, color: true },
@@ -101,6 +102,7 @@ export async function computePortfolioRows(
       name: project.name,
       status: project.status,
       tamName: project.tam.username,
+      customerId: project.customer?.id ?? null,
       customerName: project.customer?.name ?? null,
       start,
       end,

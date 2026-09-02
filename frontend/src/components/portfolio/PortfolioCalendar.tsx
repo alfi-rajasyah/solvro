@@ -34,6 +34,11 @@ const MONTH_LABELS = [
 
 const MIN_BAR_WIDTH_PCT = 1;
 
+// Width of the label column (project name · customer, status chip). Shared
+// by the row label, the month-header spacer and the Today-line spacer so
+// the three can never drift apart.
+const LABEL_COL_CLASS = "w-64";
+
 function clamp01(x: number): number {
   return Math.max(0, Math.min(1, x));
 }
@@ -144,9 +149,9 @@ export function PortfolioCalendar({
       </div>
 
       <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest">
-        <div className="min-w-[720px]">
+        <div className="min-w-[784px]">
           <div className="flex items-center gap-3 border-b border-outline-variant bg-surface-container-low px-3">
-            <div className="w-48 shrink-0" />
+            <div className={`${LABEL_COL_CLASS} shrink-0`} />
             <div className="grid flex-1 grid-cols-12">
               {MONTH_LABELS.map((label, i) => (
                 <div
@@ -169,7 +174,7 @@ export function PortfolioCalendar({
             <div className="relative">
               {showTodayLine && (
                 <div className="pointer-events-none absolute inset-0 z-10 flex gap-3 px-3">
-                  <div className="w-48 shrink-0" />
+                  <div className={`${LABEL_COL_CLASS} shrink-0`} />
                   <div className="relative flex-1">
                     <div
                       className="absolute top-0 h-full border-l border-dashed border-primary"
@@ -196,19 +201,53 @@ export function PortfolioCalendar({
                 );
                 const clippedStart = start < yearStart;
                 const clippedEnd = end >= yearEnd;
+                // One condition drives both the tooltip and the rendered
+                // link, so the title can never advertise a customer the
+                // row doesn't show.
+                const customer =
+                  p.customerId !== null && p.customerName !== null
+                    ? { id: p.customerId, name: p.customerName }
+                    : null;
 
                 return (
                   <div
                     key={p.id}
                     className="flex items-center gap-3 border-t border-outline-variant px-3 py-2 first:border-t-0"
                   >
-                    <div className="flex w-48 shrink-0 flex-col gap-0.5">
-                      <Link
-                        to={`/projects/${p.id}`}
-                        className="truncate font-semibold text-primary hover:underline"
+                    <div
+                      className={`flex ${LABEL_COL_CLASS} shrink-0 flex-col items-start gap-0.5`}
+                    >
+                      {/* One truncating line: the project name, then the
+                          customer. The customer is what gets cut on a long
+                          pair, and `title` carries the full text. The
+                          project name stays the only primary-coloured
+                          element at rest — the customer link is muted and
+                          takes the same hover treatment the Overview page
+                          gives its customer links. */}
+                      <div
+                        className="w-full min-w-0 truncate"
+                        title={
+                          customer ? `${p.name} · ${customer.name}` : p.name
+                        }
                       >
-                        {p.name}
-                      </Link>
+                        <Link
+                          to={`/projects/${p.id}`}
+                          className="font-semibold text-primary hover:underline"
+                        >
+                          {p.name}
+                        </Link>
+                        {customer && (
+                          <span className="text-on-surface-variant">
+                            {" · "}
+                            <Link
+                              to={`/customers/${customer.id}`}
+                              className="hover:text-primary hover:underline"
+                            >
+                              {customer.name}
+                            </Link>
+                          </span>
+                        )}
+                      </div>
                       <ProjectStatusChip status={p.status} />
                     </div>
                     <div className="relative h-5 flex-1">
