@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useProjectContext } from "../ProjectDetail";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
+import { CriticalPathMark } from "@/components/CriticalPathMark";
 import { EmptyState } from "@/components/EmptyState";
 import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
@@ -173,6 +174,7 @@ function TaskTimelineItem({
           <div className="flex flex-wrap items-center gap-2">
             <TaskStatusChip status={task.status} />
             <PriorityBadge priority={task.priority} compact />
+            {task.isCriticalPath && <CriticalPathMark variant="chip" />}
             {task.labels.slice(0, 4).map((l) => (
               <LabelChip key={l.id} label={l} compact />
             ))}

@@ -133,6 +133,7 @@ export interface Task {
   startDate: string | null;
   dueDate: string | null;
   isMilestone: boolean;
+  isCriticalPath: boolean;
   baselineStartDate: string | null;
   baselineDueDate: string | null;
   assignedToId: number | null;
@@ -835,6 +836,7 @@ export interface UpdateTaskInput {
   startDate?: string | null;
   dueDate?: string | null;
   isMilestone?: boolean;
+  isCriticalPath?: boolean;
   baselineStartDate?: string | null;
   baselineDueDate?: string | null;
   assignedToId?: number | null;
@@ -1017,6 +1019,7 @@ export interface CreateTaskInput {
   startDate?: string | null;
   dueDate?: string | null;
   isMilestone?: boolean;
+  isCriticalPath?: boolean;
   assignedToId?: number | null;
   parentTaskId?: number | null;
   sectionId?: number | null;

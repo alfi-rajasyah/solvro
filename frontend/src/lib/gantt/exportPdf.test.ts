@@ -1,6 +1,6 @@
 import { resolveObjectURL } from "node:buffer";
 import { describe, expect, it } from "vitest";
-import { exportGanttToPdf } from "./exportPdf";
+import { buildTaskTable, exportGanttToPdf } from "./exportPdf";
 import type { Row } from "./geometry";
 
 // The chart sheet is cut to the chart's own size (see exportPdf.ts's "Page
@@ -134,5 +134,71 @@ describe("exportGanttToPdf page size", () => {
     // The section row's own name is short, so only the task rows grow.
     expect(wrapped[1]).toBe(CHROME_H + wrappedRowH(1) + taskCount * wrappedRowH(2));
     expect(wrapped[1]).toBeGreaterThan(short[1]);
+  });
+});
+
+// Critical Path mark (plan critical-path-mark.md §3): the final-page task
+// table gains a "Critical Path" column only when at least one exported row
+// is marked (the empty-project rule). `buildTaskTable` is the pure head/body
+// builder `exportGanttToPdf` feeds to autoTable — asserted directly here
+// rather than parsing autoTable's rendered PDF content stream.
+describe("buildTaskTable", () => {
+  const section: Row = {
+    id: "s1",
+    kind: "section",
+    depth: 0,
+    name: "Phase 1",
+    start: START,
+    end: START,
+    parentRowId: null,
+    sectionId: 1,
+  };
+
+  function taskRow(id: string, isCriticalPath = false): Row {
+    return {
+      id,
+      kind: "task",
+      depth: 1,
+      name: `Task ${id}`,
+      start: START,
+      end: START,
+      parentRowId: "s1",
+      taskId: 1,
+      sectionId: 1,
+      isCriticalPath,
+    };
+  }
+
+  it("adds a Critical Path column when one task is marked — the marked row reads \"Yes\", the unmarked row \"\"", () => {
+    const { head, body, hasCriticalPath } = buildTaskTable([
+      section,
+      taskRow("t1", true),
+      taskRow("t2", false),
+    ]);
+    expect(hasCriticalPath).toBe(true);
+    expect(head).toEqual([
+      "Section",
+      "Title",
+      "Status",
+      "Priority",
+      "Critical Path",
+      "Start",
+      "Due",
+    ]);
+    // The section row never enters the task table.
+    expect(body).toHaveLength(2);
+    expect(body[0][4]).toBe("Yes");
+    expect(body[1][4]).toBe("");
+  });
+
+  it("omits the Critical Path column when no task is marked — header list unchanged (empty-project rule)", () => {
+    const { head, body, hasCriticalPath } = buildTaskTable([
+      section,
+      taskRow("t1", false),
+      taskRow("t2", false),
+    ]);
+    expect(hasCriticalPath).toBe(false);
+    expect(head).toEqual(["Section", "Title", "Status", "Priority", "Start", "Due"]);
+    for (const line of body) expect(line).toHaveLength(6);
   });
 });
