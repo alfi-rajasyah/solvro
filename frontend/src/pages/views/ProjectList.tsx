@@ -34,6 +34,7 @@ import {
   type TaskStatus,
   useCreateSection,
   useDeleteSection,
+  useDuplicateSection,
   useProjectSections,
   useProjectTasks,
   useUpdateSection,
@@ -120,6 +121,7 @@ export function ProjectList() {
   const createSection = useCreateSection(project.id);
   const updateSection = useUpdateSection(project.id);
   const deleteSection = useDeleteSection(project.id);
+  const duplicateSection = useDuplicateSection(project.id);
 
   const [collapsed, setCollapsed] = useState<Set<GroupKey>>(new Set());
   const [createTaskCtx, setCreateTaskCtx] = useState<{
@@ -217,6 +219,17 @@ export function ProjectList() {
       await deleteSection.mutateAsync(s.id);
     } catch (err) {
       setActionError(err instanceof ApiError ? err.message : "Could not delete section.");
+    }
+  }
+
+  // One click, no confirm dialog (Decision 7, docs/plans/duplicate-tasks-sections.md) —
+  // same error-surfacing pattern as handleDeleteSection above.
+  async function handleDuplicateSection(s: Section) {
+    setActionError(null);
+    try {
+      await duplicateSection.mutateAsync(s.id);
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : "Could not duplicate section.");
     }
   }
 
@@ -438,6 +451,10 @@ export function ProjectList() {
                 setRenameValue(s ? s.name : "");
               }}
               onDelete={handleDeleteSection}
+              onDuplicate={handleDuplicateSection}
+              duplicatingSectionId={
+                duplicateSection.isPending ? (duplicateSection.variables ?? null) : null
+              }
               renamingKey={renamingSectionKey}
               renameValue={renameValue}
               onRenameChange={setRenameValue}
@@ -519,6 +536,8 @@ interface SectionGroupProps {
   onSetDates: (t: Task, start: string | null, due: string | null) => void;
   onRename: (s: Section | null) => void;
   onDelete: (s: Section) => void;
+  onDuplicate: (s: Section) => void;
+  duplicatingSectionId: number | null;
   renamingKey: GroupKey | null;
   renameValue: string;
   onRenameChange: (v: string) => void;
@@ -543,6 +562,8 @@ function SectionGroup({
   onSetDates,
   onRename,
   onDelete,
+  onDuplicate,
+  duplicatingSectionId,
   renamingKey,
   renameValue,
   onRenameChange,
@@ -613,7 +634,7 @@ function SectionGroup({
             <button
               type="button"
               onClick={() => onRename(section)}
-              className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+              className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               title={section ? "Rename section" : "Promote into a real section"}
             >
               <span className="material-symbols-outlined text-[17px]">edit</span>
@@ -621,8 +642,20 @@ function SectionGroup({
             {section && (
               <button
                 type="button"
+                onClick={() => onDuplicate(section)}
+                disabled={duplicatingSectionId === section.id}
+                className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-default disabled:opacity-50"
+                title="Duplicate section"
+                aria-label="Duplicate section"
+              >
+                <span className="material-symbols-outlined text-[17px]">content_copy</span>
+              </button>
+            )}
+            {section && (
+              <button
+                type="button"
                 onClick={() => onDelete(section)}
-                className="rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-on-error-container"
+                className="rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-on-error-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                 title="Delete section"
               >
                 <span className="material-symbols-outlined text-[17px]">delete</span>

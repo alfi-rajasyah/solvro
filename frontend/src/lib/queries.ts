@@ -1043,6 +1043,28 @@ export function useCreateTask(projectId: number) {
   });
 }
 
+export function useDuplicateTask(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (taskId: number) =>
+      apiRequest<Task>(`/tasks/${taskId}/duplicate`, { method: "POST" }),
+    // Returning the Promise.all here (rather than firing invalidations without
+    // awaiting) makes React Query await the refetches before resolving
+    // mutateAsync — TaskPanel's handleDuplicate awaits the copy and then
+    // re-targets the panel at it, so the refetched list is already in cache
+    // by the time that happens, avoiding a "Loading task…" flash.
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) }),
+        qc.invalidateQueries({ queryKey: ["tasks"] }),
+        qc.invalidateQueries({ queryKey: queryKeys.overview }),
+        // Same rationale as useUpdateTask/useDeleteTask above — a duplicated
+        // task can newly appear in the Daily Review page's attention lists.
+        qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot }),
+      ]),
+  });
+}
+
 export interface CreateLabelInput {
   name: string;
   color?: string;
@@ -1179,6 +1201,28 @@ export function useDeleteSection(projectId: number) {
       qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
       qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
     },
+  });
+}
+
+export function useDuplicateSection(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (sectionId: number) =>
+      apiRequest<{ section: Section; taskCount: number }>(`/sections/${sectionId}/duplicate`, {
+        method: "POST",
+      }),
+    // Same shape as useDuplicateTask above — Promise.all so the invalidated
+    // queries have refetched before mutateAsync resolves, plus
+    // projectSections (the new group header) alongside the task-shaped
+    // invalidations every task-tree write already does.
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) }),
+        qc.invalidateQueries({ queryKey: ["tasks"] }),
+        qc.invalidateQueries({ queryKey: queryKeys.overview }),
+        qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot }),
+      ]),
   });
 }
 

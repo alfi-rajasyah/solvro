@@ -11,10 +11,12 @@ import {
   assertLabelsInProject,
   assertSectionInProject,
   assertValidParent,
+  insertManyAfter,
   moveTaskWithinSiblings,
   siblingKeyEquals,
   type SiblingKey,
 } from "../lib/taskOrdering.js";
+import { duplicateTaskTree } from "../lib/duplicate.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -288,6 +290,54 @@ tasksRouter.delete(
     await ensureTaskVisible(req.user!, id);
     await prisma.task.delete({ where: { id } });
     res.status(204).end();
+  },
+);
+
+// Duplicate a task (and, when it's a top-level task, its subtasks) — no
+// body. A top-level source copies with its subtasks nested under the copy;
+// a subtask source copies just that one row under the same parentTaskId.
+// See docs/plans/duplicate-tasks-sections.md §3-4 for the settled field
+// rules (status -> TODO, baseline cleared, dependencies dropped, comments
+// never copied) implemented by duplicateTaskTree.
+tasksRouter.post(
+  "/:id/duplicate",
+  requirePermission("task:write"),
+  validate("params", idParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    await ensureTaskVisible(req.user!, id);
+
+    const newTask = await prisma.$transaction(async (tx) => {
+      const source = await tx.task.findUniqueOrThrow({
+        where: { id },
+        select: { projectId: true, parentTaskId: true },
+      });
+
+      const idMap = await duplicateTaskTree(tx, [id]);
+      const newId = idMap.get(id)!;
+
+      // The copy lands at the end of the same sibling list duplicateTaskTree
+      // appended it to (source's own list, since no overrides were passed) —
+      // move it to right after the source. Placed by the source's identity
+      // (insertManyAfter), not `source.position + 1` as an index: DELETE
+      // /tasks/:id never re-packs its sibling list, so a stale position
+      // value can point at the wrong row once an earlier sibling was
+      // deleted. insertManyAfter re-packs the whole list dense regardless.
+      const key: SiblingKey = { projectId: source.projectId, parentTaskId: source.parentTaskId };
+      await insertManyAfter(tx, key, id, [newId]);
+
+      return tx.task.findUniqueOrThrow({
+        where: { id: newId },
+        include: {
+          assignedTo: { select: { id: true, username: true, email: true } },
+          labels: true,
+          section: { select: { id: true, name: true, position: true, color: true } },
+          _count: { select: { subtasks: true, comments: true } },
+        },
+      });
+    });
+
+    res.status(201).json(newTask);
   },
 );
 

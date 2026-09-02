@@ -4,6 +4,7 @@ import request from "supertest";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/prisma.js";
 import { seedRoles, createAdminAndToken } from "./testAuth.js";
+import { insertManyAfter, type SiblingKey } from "../src/lib/taskOrdering.js";
 
 const app = createApp();
 
@@ -369,6 +370,102 @@ describe("global top-level ordering (status does not partition)", () => {
     expect(res.status).toBe(200);
     const all = await listProjectTasks("?parentTaskId=null");
     expect(all.map((t) => t.title)).toEqual(["A", "C", "B"]);
+  });
+});
+
+describe("insertManyAfter", () => {
+  it("inserts new ids directly after the given task, re-packing the rest densely", async () => {
+    const a = await createTask({ title: "A" });
+    const b = await createTask({ title: "B" });
+    const c = await createTask({ title: "C" });
+    const n1 = await createTask({ title: "N1" });
+    const n2 = await createTask({ title: "N2" });
+
+    const key: SiblingKey = { projectId, parentTaskId: null };
+    await insertManyAfter(prisma, key, a.id, [n1.id, n2.id]);
+
+    const listed = await listProjectTasks();
+    const relevant = listed.filter((t) => [a.id, b.id, c.id, n1.id, n2.id].includes(t.id));
+    expect(relevant.map((t) => t.id)).toEqual([a.id, n1.id, n2.id, b.id, c.id]);
+    expect(relevant.map((t) => t.position)).toEqual([0, 1, 2, 3, 4]);
+  });
+
+  it("appends at the end when afterTaskId is null", async () => {
+    const a = await createTask({ title: "A" });
+    const b = await createTask({ title: "B" });
+    const n1 = await createTask({ title: "N1" });
+
+    const key: SiblingKey = { projectId, parentTaskId: null };
+    await insertManyAfter(prisma, key, null, [n1.id]);
+
+    const listed = await listProjectTasks();
+    const relevant = listed.filter((t) => [a.id, b.id, n1.id].includes(t.id));
+    expect(relevant.map((t) => t.id)).toEqual([a.id, b.id, n1.id]);
+    expect(relevant.map((t) => t.position)).toEqual([0, 1, 2]);
+  });
+
+  it("falls back to append-at-end when afterTaskId isn't a member of this sibling list", async () => {
+    const a = await createTask({ title: "A" });
+    const parent = await createTask({ title: "Parent" });
+    // `sub` belongs to parent's subtask list, not the top-level list `key`
+    // below — so it's not a member of that list even though it's a real id.
+    const sub = await createTask({ title: "Sub", parentTaskId: parent.id });
+    const n1 = await createTask({ title: "N1" });
+
+    const key: SiblingKey = { projectId, parentTaskId: null };
+    await insertManyAfter(prisma, key, sub.id, [n1.id]);
+
+    const listed = await listProjectTasks();
+    const relevant = listed.filter((t) => [a.id, parent.id, n1.id].includes(t.id));
+    expect(relevant.map((t) => t.id)).toEqual([a.id, parent.id, n1.id]);
+  });
+
+  it("does nothing when newIds is empty", async () => {
+    const a = await createTask({ title: "A" });
+    const b = await createTask({ title: "B" });
+
+    const key: SiblingKey = { projectId, parentTaskId: null };
+    await insertManyAfter(prisma, key, a.id, []);
+
+    const listed = await listProjectTasks();
+    const relevant = listed.filter((t) => [a.id, b.id].includes(t.id));
+    expect(relevant.map((t) => t.id)).toEqual([a.id, b.id]);
+    expect(relevant.map((t) => t.position)).toEqual([0, 1]);
+  });
+
+  it("works on a subtask sibling list too", async () => {
+    const parent = await createTask({ title: "Parent" });
+    const s0 = await createTask({ title: "S0", parentTaskId: parent.id });
+    const s1 = await createTask({ title: "S1", parentTaskId: parent.id });
+    const n1 = await createTask({ title: "N1", parentTaskId: parent.id });
+
+    const key: SiblingKey = { projectId, parentTaskId: parent.id };
+    await insertManyAfter(prisma, key, s0.id, [n1.id]);
+
+    const subtasks = await listProjectTasks(`?parentTaskId=${parent.id}`);
+    expect(subtasks.map((t) => t.id)).toEqual([s0.id, n1.id, s1.id]);
+    expect(subtasks.map((t) => t.position)).toEqual([0, 1, 2]);
+  });
+
+  it("throws when a newId isn't already a member of the sibling list", async () => {
+    const a = await createTask({ title: "A" });
+    const otherProjectId = await createProject();
+    const foreignRes = await request(app)
+      .post(`/projects/${otherProjectId}/tasks`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ title: "Foreign" });
+    expect(foreignRes.status).toBe(201);
+    const foreignId = (foreignRes.body as TaskRow).id;
+
+    const key: SiblingKey = { projectId, parentTaskId: null };
+    await expect(insertManyAfter(prisma, key, a.id, [foreignId])).rejects.toThrow(
+      "insertManyAfter: every newId must already belong to the sibling list",
+    );
+
+    // Rejected call must not have touched the list.
+    const listed = await listProjectTasks();
+    const relevant = listed.filter((t) => t.id === a.id);
+    expect(relevant.map((t) => t.position)).toEqual([0]);
   });
 });
 
