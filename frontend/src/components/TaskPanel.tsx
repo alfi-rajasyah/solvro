@@ -21,6 +21,7 @@ import {
   useComments,
   useCreateTask,
   useDeleteTask,
+  useDuplicateTask,
   useProjectSections,
   useProjectTasks,
   useUpdateTask,
@@ -95,6 +96,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
   const updateTask = useUpdateTask(projectId);
   const createTask = useCreateTask(projectId);
   const deleteTask = useDeleteTask(projectId);
+  const duplicateTask = useDuplicateTask(projectId);
 
   const task = (tasks ?? []).find((t) => t.id === taskId) ?? null;
   const subtasks = (tasks ?? [])
@@ -250,6 +252,28 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
     );
   }
 
+  async function handleSubtaskDuplicate(s: Task) {
+    setError(null);
+    try {
+      // No navigation — the copy shows up in the subtask list via the
+      // mutation's own cache invalidation.
+      await duplicateTask.mutateAsync(s.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not duplicate the task.");
+    }
+  }
+
+  async function handleDuplicate() {
+    if (!task) return;
+    setError(null);
+    try {
+      const copy = await duplicateTask.mutateAsync(task.id);
+      onOpenTask(copy.id);
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Could not duplicate the task.");
+    }
+  }
+
   async function handleDelete() {
     if (!task) return;
     setError(null);
@@ -332,6 +356,20 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
                 <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+                  <button
+                    type="button"
+                    disabled={!canEdit || duplicateTask.isPending}
+                    onClick={() => {
+                      setMenuOpen(false);
+                      void handleDuplicate();
+                    }}
+                    className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-on-surface hover:bg-surface-container-high disabled:cursor-default disabled:opacity-50"
+                  >
+                    <span className="material-symbols-outlined text-sm" aria-hidden="true">
+                      content_copy
+                    </span>
+                    Duplicate task
+                  </button>
                   <button
                     type="button"
                     disabled={!canEdit}
@@ -682,9 +720,20 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                         type="button"
                         onClick={() => startSubtaskRename(s)}
                         aria-label={`Rename ${s.title}`}
-                        className="material-symbols-outlined -m-1 shrink-0 rounded-sm p-1 text-sm text-on-surface-variant/60 hover:text-primary outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring md:opacity-0 md:group-hover/subtask:opacity-100 md:focus-visible:opacity-100"
+                        className="material-symbols-outlined -m-1 shrink-0 rounded-sm p-1 text-sm text-on-surface-variant/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 md:opacity-0 md:group-hover/subtask:opacity-100 md:focus-visible:opacity-100"
                       >
                         edit
+                      </button>
+                    )}
+                    {canEdit && editingSubtaskId !== s.id && (
+                      <button
+                        type="button"
+                        disabled={duplicateTask.isPending && duplicateTask.variables === s.id}
+                        onClick={() => void handleSubtaskDuplicate(s)}
+                        aria-label={`Duplicate ${s.title}`}
+                        className="material-symbols-outlined -m-1 shrink-0 rounded-sm p-1 text-sm text-on-surface-variant/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 md:opacity-0 md:group-hover/subtask:opacity-100 md:focus-visible:opacity-100 disabled:cursor-default disabled:opacity-50"
+                      >
+                        content_copy
                       </button>
                     )}
                     {canEdit && (

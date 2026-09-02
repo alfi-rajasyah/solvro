@@ -24,6 +24,7 @@ import {
   useCreateSection,
   useDeleteDependency,
   useDeleteTask,
+  useDuplicateTask,
   useHolidays,
   useProjectDependencies,
   useProjectSections,
@@ -361,6 +362,10 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // deletion isn't inline-edit territory per frontend/CLAUDE.md's
   // convention split).
   const deleteTask = useDeleteTask(projectId);
+  // Row menu's Duplicate action — POST /tasks/:id/duplicate; the copy lands
+  // directly after the source row. Invalidate-only, same shape as
+  // deleteTask above.
+  const duplicateTask = useDuplicateTask(projectId);
   const ganttContainerRef = useRef<HTMLDivElement | null>(null);
 
   // Plan B Task 9 (F3 fix) — default is the "Week" pill, whose underlying
@@ -1555,6 +1560,34 @@ export function SolvroGantt(props: SolvroGanttProps) {
                             edit
                           </span>
                           Edit
+                        </ContextMenuItem>
+                        {/* Duplicate task — top-level rows AND
+                          subtask rows, unlike "Add subtask" below which is
+                          top-level only. Server-side copy: no optimistic
+                          write, same invalidate-only shape as Delete. */}
+                        <ContextMenuItem
+                          className="text-xs"
+                          disabled={duplicateTask.isPending && duplicateTask.variables === task.id}
+                          onClick={() => {
+                            setActionError(null);
+                            duplicateTask.mutate(task.id, {
+                              onError: (err) => {
+                                setActionError(
+                                  err instanceof ApiError
+                                    ? err.message
+                                    : "Could not duplicate the task.",
+                                );
+                              },
+                            });
+                          }}
+                        >
+                          <span
+                            className="material-symbols-outlined text-sm text-on-surface-variant"
+                            aria-hidden="true"
+                          >
+                            content_copy
+                          </span>
+                          Duplicate
                         </ContextMenuItem>
                         {/* Critical Path mark (plan §3): toggles the manual
                           flag via the same optimistic single-field patch
