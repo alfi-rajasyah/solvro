@@ -6,6 +6,8 @@ import { requireAuth, requirePermission, type JwtPayload } from "../http/auth.js
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { ensureProjectVisible } from "../lib/visibility.js";
+import { insertManyAfter, type SiblingKey } from "../lib/taskOrdering.js";
+import { duplicateTaskTree } from "../lib/duplicate.js";
 
 // Resolve the section's owning project and 404 if the caller can't see it.
 // Permission alone (`project:write`) doesn't scope the caller to a project, so
@@ -64,6 +66,50 @@ async function insertSectionAt(
   return clamped;
 }
 
+/**
+ * Insert a brand-new section (`newSectionId`) into `projectId`'s section
+ * list directly after `afterSectionId`, BY IDENTITY, then re-pack the whole
+ * list to dense 0..n-1 in one pass. Deliberately not `insertSectionAt`
+ * (which inserts by INDEX via a requested position): the section list can
+ * be sparse after `DELETE /sections/:id` (a bare delete with no re-pack —
+ * see the delete handler below), so treating `source.position + 1` as an
+ * index into the list can land the new section on the wrong row or collide
+ * with an existing position value. Mirrors taskOrdering.ts's
+ * `insertManyAfter` (same identity-based approach, singular instead of
+ * batched since a section-duplicate only ever creates one new section) but
+ * carries no membership guard of its own — the caller created
+ * `newSectionId` in this project one statement earlier.
+ *
+ * `newSectionId` must already be a row in this project's section list (the
+ * caller just created it); `afterSectionId` is excluded from the "existing
+ * members" read below, so the splice below finds it in `others` correctly
+ * regardless of where the create landed it.
+ *
+ * Must run inside a `prisma.$transaction`.
+ */
+async function insertSectionAfter(
+  tx: Prisma.TransactionClient,
+  projectId: number,
+  newSectionId: number,
+  afterSectionId: number,
+): Promise<void> {
+  const others = await tx.section.findMany({
+    where: { projectId, id: { not: newSectionId } },
+    orderBy: [{ position: "asc" }, { id: "asc" }],
+    select: { id: true },
+  });
+
+  const afterIndex = others.findIndex((s) => s.id === afterSectionId);
+  const insertIndex = afterIndex === -1 ? others.length : afterIndex + 1;
+
+  const ordered = others.map((s) => s.id);
+  ordered.splice(insertIndex, 0, newSectionId);
+
+  for (let i = 0; i < ordered.length; i++) {
+    await tx.section.update({ where: { id: ordered[i] }, data: { position: i } });
+  }
+}
+
 export const sectionsRouter = Router();
 
 sectionsRouter.use(requireAuth);
@@ -102,6 +148,82 @@ sectionsRouter.patch(
       return tx.section.findUniqueOrThrow({ where: { id } });
     });
     res.json(updated);
+  },
+);
+
+// Duplicate a section — its own name/color plus every top-level task
+// (sectionId = id, parentTaskId = null) and each of THEIR subtasks — no
+// body. See docs/plans/duplicate-tasks-sections.md §3-4 for the settled
+// field rules (status -> TODO, baseline cleared, dependencies dropped,
+// comments never copied) implemented by duplicateTaskTree — the same
+// engine POST /tasks/:id/duplicate uses. The new section carries the
+// source's name and color verbatim (decision 1) and is placed directly
+// after the source in the project's section list (decision 10); its
+// top-level task copies land directly after the source section's own last
+// top-level task in the project's task order (also decision 10) — NOT at
+// the end of the project and NOT interleaved with the source's tasks.
+sectionsRouter.post(
+  "/:id/duplicate",
+  requirePermission("project:write"),
+  validate("params", idParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const { projectId } = await ensureSectionVisible(req.user!, id);
+
+    const result = await prisma.$transaction(async (tx) => {
+      const source = await tx.section.findUniqueOrThrow({
+        where: { id },
+        select: { name: true, color: true },
+      });
+
+      // Position is a placeholder here: insertSectionAfter places the new
+      // row by identity (right after `id`) and re-packs the whole list
+      // itself in the same pass, overwriting whatever position the create
+      // below lands on.
+      const newSection = await tx.section.create({
+        data: { projectId, name: source.name, color: source.color, position: 0 },
+      });
+      await insertSectionAfter(tx, projectId, newSection.id, id);
+
+      // The source's top-level tasks, in the project's manual order. A task
+      // that carries this section's id directly but is itself a subtask
+      // (parentTaskId != null) is NOT in this list — it's picked up below
+      // only if its own parent is one of these top-level tasks, exactly as
+      // duplicateTaskTree already handles for POST /tasks/:id/duplicate.
+      const sourceTasks = await tx.task.findMany({
+        where: { sectionId: id, parentTaskId: null },
+        orderBy: [{ position: "asc" }, { id: "asc" }],
+        select: { id: true },
+      });
+      // Counts TOP-LEVEL copies only — subtasks copied alongside them are
+      // not added to this count, so it matches what a caller would see
+      // counting this section's direct rows, not a full descendant count.
+      const taskCount = sourceTasks.length;
+
+      if (taskCount > 0) {
+        const sourceTaskIds = sourceTasks.map((t) => t.id);
+        const idMap = await duplicateTaskTree(tx, sourceTaskIds, { sectionId: newSection.id });
+        const newTopLevelIds = sourceTaskIds.map((sourceId) => idMap.get(sourceId)!);
+
+        // Drop the whole copied batch in right after the source section's
+        // OWN last top-level task, in one re-pack of the project's
+        // top-level list — not `insertManyAfter` once per copy.
+        const lastSourceTopLevelId = sourceTaskIds[sourceTaskIds.length - 1];
+        const key: SiblingKey = { projectId, parentTaskId: null };
+        await insertManyAfter(tx, key, lastSourceTopLevelId, newTopLevelIds);
+      }
+
+      const finalSection = await tx.section.findUniqueOrThrow({ where: { id: newSection.id } });
+      return { section: finalSection, taskCount };
+    }, {
+      // Statement count scales with the whole project (every top-level row is
+      // re-packed); Prisma's default 5s interactive-transaction budget is too
+      // tight for a large section.
+      timeout: 30_000,
+      maxWait: 10_000,
+    });
+
+    res.status(201).json(result);
   },
 );
 
