@@ -191,6 +191,41 @@ export async function getTasks(base: string, token: string, projectId: number): 
   return json<SeededTask[]>(res);
 }
 
+export interface CreateSectionInput {
+  name: string;
+  position?: number;
+  color?: string;
+}
+
+export interface SeededSection {
+  id: number;
+  projectId: number;
+  name: string;
+  position: number;
+  color: string;
+  createdAt: string;
+}
+
+/**
+ * Creates a section in an already-seeded project (POST /projects/:id/sections).
+ * `gantt-parity.spec.ts` and `gantt-legend.spec.ts` each carry their own
+ * private, narrower copy (name-only, predate this helper) — new specs
+ * needing a section use this one instead.
+ */
+export async function createSection(
+  base: string,
+  token: string,
+  projectId: number,
+  input: CreateSectionInput,
+): Promise<SeededSection> {
+  const res = await fetch(`${base}/api/projects/${projectId}/sections`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+  return json<SeededSection>(res);
+}
+
 export async function setWipLimits(
   base: string,
   token: string,
