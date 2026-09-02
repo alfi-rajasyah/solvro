@@ -198,6 +198,7 @@ export interface PortfolioProjectRow {
   name: string;
   status: ProjectStatus;
   tamName: string;
+  customerId: number | null;
   customerName: string | null;
   start: string | null;
   end: string | null;
