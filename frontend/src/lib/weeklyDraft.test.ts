@@ -74,6 +74,7 @@ function customer(
     projects,
     operationsNotes,
     weeklyUpdate: null,
+    previousWeeklyUpdate: null,
   };
 }
 
@@ -93,7 +94,6 @@ describe("draftWeeklyUpdate", () => {
         "Project A — Mon 24: Kickoff done · Tue 25: Scope review",
         "Project B — Mon 24: Blocked on vendor",
         "Operations — Wed 26 [SD-WAN]: Circuit flapping",
-        "Next week — ",
       ].join("\n\n"),
     );
   });
@@ -104,7 +104,7 @@ describe("draftWeeklyUpdate", () => {
 
     const result = draftWeeklyUpdate(customer([withNotes, noNotes]), WEEK);
 
-    expect(result).toBe(["Project A — Mon 24: Kickoff done", "Next week — "].join("\n\n"));
+    expect(result).toBe("Project A — Mon 24: Kickoff done");
     expect(result).not.toContain("Project C");
   });
 
@@ -116,9 +116,7 @@ describe("draftWeeklyUpdate", () => {
 
     const result = draftWeeklyUpdate(customer([p]), WEEK);
 
-    expect(result).toBe(
-      ["Project A — Mon 24: Note one / Note two", "Next week — "].join("\n\n"),
-    );
+    expect(result).toBe("Project A — Mon 24: Note one / Note two");
   });
 
   it("days without a note are skipped, only noted days appear as rows", () => {
@@ -129,18 +127,14 @@ describe("draftWeeklyUpdate", () => {
 
     const result = draftWeeklyUpdate(customer([p]), WEEK);
 
-    expect(result).toBe(
-      ["Project A — Mon 24: Mon note · Sun 30: Sun note", "Next week — "].join("\n\n"),
-    );
+    expect(result).toBe("Project A — Mon 24: Mon note · Sun 30: Sun note");
   });
 
   describe("Operations bracket (single note per day, title is required)", () => {
     it("title -> [<title>]", () => {
       const ops = [opsNote(1, "2026-08-24", "Maintenance window", "SD-WAN")];
       const result = draftWeeklyUpdate(customer([], ops), WEEK);
-      expect(result).toBe(
-        ["Operations — Mon 24 [SD-WAN]: Maintenance window", "Next week — "].join("\n\n"),
-      );
+      expect(result).toBe("Operations — Mon 24 [SD-WAN]: Maintenance window");
     });
   });
 
@@ -151,10 +145,7 @@ describe("draftWeeklyUpdate", () => {
     ];
     const result = draftWeeklyUpdate(customer([], ops), WEEK);
     expect(result).toBe(
-      [
-        "Operations — Mon 24: [SD-WAN] Circuit flapping / [Firewall] Rule updated",
-        "Next week — ",
-      ].join("\n\n"),
+      "Operations — Mon 24: [SD-WAN] Circuit flapping / [Firewall] Rule updated",
     );
   });
 
@@ -166,22 +157,19 @@ describe("draftWeeklyUpdate", () => {
     ];
     const result = draftWeeklyUpdate(customer([], ops), WEEK);
     expect(result).toBe(
-      [
-        "Operations — Mon 24: [SD-WAN] Circuit flapping / [Status check] General update / [Firewall] Ticket opened",
-        "Next week — ",
-      ].join("\n\n"),
+      "Operations — Mon 24: [SD-WAN] Circuit flapping / [Status check] General update / [Firewall] Ticket opened",
     );
   });
 
-  it("empty customer (no projects, no operations notes) drafts to just the trailing line", () => {
+  it("empty customer (no projects, no operations notes) drafts to an empty string — no trailing stub", () => {
     const result = draftWeeklyUpdate(customer([]), WEEK);
-    expect(result).toBe("Next week — ");
+    expect(result).toBe("");
   });
 
-  it("a project with only an empty projects array and no operations notes also drafts to just the trailing line", () => {
+  it("a project with only an empty projects array and no operations notes also drafts to an empty string", () => {
     const empty = project(1, "Project A", []);
     const result = draftWeeklyUpdate(customer([empty]), WEEK);
-    expect(result).toBe("Next week — ");
+    expect(result).toBe("");
   });
 
   it("keeps multi-line note bodies verbatim, internal newlines untouched", () => {
@@ -190,10 +178,59 @@ describe("draftWeeklyUpdate", () => {
 
     const result = draftWeeklyUpdate(customer([p]), WEEK);
 
-    expect(result).toBe(
-      [`Project A — Mon 24: ${body}`, "Next week — "].join("\n\n"),
-    );
+    expect(result).toBe(`Project A — Mon 24: ${body}`);
     expect(result).toContain(body);
+  });
+
+  describe("opts.throughDay (D11 — Mid-week's Highlight drafts Mon-Wed only)", () => {
+    it("keeps notes on the boundary day and drops any note after it, for project and operations notes alike", () => {
+      const p = project(1, "Project A", [
+        note(1, "2026-08-24", "Mon note"),
+        note(2, "2026-08-26", "Wed note"),
+        note(3, "2026-08-27", "Thu note"),
+      ]);
+      const ops = [
+        opsNote(10, "2026-08-26", "Wed ops", "SD-WAN"),
+        opsNote(11, "2026-08-28", "Fri ops", "Firewall"),
+      ];
+
+      const result = draftWeeklyUpdate(customer([p], ops), WEEK, { throughDay: "2026-08-26" });
+
+      expect(result).toBe(
+        [
+          "Project A — Mon 24: Mon note · Wed 26: Wed note",
+          "Operations — Wed 26 [SD-WAN]: Wed ops",
+        ].join("\n\n"),
+      );
+      expect(result).not.toContain("Thu note");
+      expect(result).not.toContain("Fri ops");
+    });
+
+    it("drops the Operations paragraph entirely when every operations note falls after throughDay", () => {
+      const p = project(1, "Project A", [note(1, "2026-08-24", "Mon note")]);
+      const ops = [opsNote(10, "2026-08-28", "Fri ops", "Firewall")];
+
+      const result = draftWeeklyUpdate(customer([p], ops), WEEK, { throughDay: "2026-08-26" });
+
+      expect(result).toBe("Project A — Mon 24: Mon note");
+      expect(result).not.toContain("Operations");
+    });
+
+    it("omitting throughDay (or passing opts with none) still drafts every day, weekend notes included", () => {
+      const p = project(1, "Project A", [
+        note(1, "2026-08-24", "Mon note"),
+        note(2, "2026-08-30", "Sun note"),
+      ]);
+      const ops = [opsNote(10, "2026-08-29", "Sat ops", "SD-WAN")];
+
+      const expected = [
+        "Project A — Mon 24: Mon note · Sun 30: Sun note",
+        "Operations — Sat 29 [SD-WAN]: Sat ops",
+      ].join("\n\n");
+
+      expect(draftWeeklyUpdate(customer([p], ops), WEEK)).toBe(expected);
+      expect(draftWeeklyUpdate(customer([p], ops), WEEK, {})).toBe(expected);
+    });
   });
 
   it("a bare 'yyyy-MM-dd' noteDate (not an ISO instant) still groups and labels correctly", () => {
@@ -211,8 +248,6 @@ describe("draftWeeklyUpdate", () => {
 
     const result = draftWeeklyUpdate(customer([p]), WEEK);
 
-    expect(result).toBe(
-      ["Project A — Mon 24: Kickoff done", "Next week — "].join("\n\n"),
-    );
+    expect(result).toBe("Project A — Mon 24: Kickoff done");
   });
 });

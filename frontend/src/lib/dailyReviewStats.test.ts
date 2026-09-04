@@ -12,6 +12,7 @@ import type {
   DailyReviewNote,
   DailyReviewProject,
   DailyReviewResponse,
+  WeeklyUpdate,
 } from "./queries";
 
 // Same "2026-W35" fixture week as weeklyDraft.test.ts / isoWeek.test.ts.
@@ -74,6 +75,34 @@ function customer(overrides: Partial<DailyReviewCustomer> = {}): DailyReviewCust
     projects: [],
     operationsNotes: [],
     weeklyUpdate: null,
+    previousWeeklyUpdate: null,
+    ...overrides,
+  };
+}
+
+// Defaults to a DONE/GREEN row with only `achievement` set — the shape
+// every `weeklyUpdate:` fixture below needs; callers override the 1-2
+// fields that vary per test (e.g. `health`/`status`/`doneAt` for a DRAFT
+// row).
+function weeklyUpdate(overrides: Partial<WeeklyUpdate> = {}): WeeklyUpdate {
+  return {
+    id: 1,
+    weekStart: dayInstant(WEEK.start),
+    health: "GREEN",
+    status: "DONE",
+    category: null,
+    highlight: null,
+    risk: null,
+    action: null,
+    achievement: "x",
+    outstandingIssue: null,
+    lessonLearned: null,
+    nextWeekFocus: null,
+    managerDecision: null,
+    midweekSavedAt: null,
+    doneAt: "2026-08-28T10:00:00.000Z",
+    author: AUTHOR,
+    updatedAt: "2026-08-28T10:00:00.000Z",
     ...overrides,
   };
 }
@@ -174,10 +203,7 @@ describe("computeDailyReviewStats", () => {
   it("counts weekly-updates-done only against customers, excluding the unassigned group", () => {
     const done = customer({
       id: 1,
-      weeklyUpdate: {
-        id: 1, weekStart: dayInstant(WEEK.start), body: "x", health: "GREEN", status: "DONE",
-        doneAt: "2026-08-28T10:00:00.000Z", author: AUTHOR, updatedAt: "2026-08-28T10:00:00.000Z",
-      },
+      weeklyUpdate: weeklyUpdate(),
     });
     const notDone = customer({ id: 2, weeklyUpdate: null });
     const data = response({ customers: [done, notDone], unassignedProjects: [project({ id: 9 })] });
@@ -205,10 +231,7 @@ describe("isGroupCollapsible", () => {
   it("treats reviewDate as an ISO instant, not a bare day string — a naive === would never match", () => {
     const c = customer({
       projects: [project({ id: 1, reviews: [{ reviewDate: dayInstant(TODAY), createdAt: dayInstant(TODAY) }] })],
-      weeklyUpdate: {
-        id: 1, weekStart: dayInstant(WEEK.start), body: "x", health: "GREEN", status: "DONE",
-        doneAt: "2026-08-28T10:00:00.000Z", author: AUTHOR, updatedAt: "2026-08-28T10:00:00.000Z",
-      },
+      weeklyUpdate: weeklyUpdate(),
     });
     expect(isGroupCollapsible(c, TODAY)).toBe(true);
   });
@@ -216,10 +239,7 @@ describe("isGroupCollapsible", () => {
   it("is false for a customer with no projects, regardless of the weekly update", () => {
     const c = customer({
       projects: [],
-      weeklyUpdate: {
-        id: 1, weekStart: dayInstant(WEEK.start), body: "x", health: "GREEN", status: "DONE",
-        doneAt: "2026-08-28T10:00:00.000Z", author: AUTHOR, updatedAt: "2026-08-28T10:00:00.000Z",
-      },
+      weeklyUpdate: weeklyUpdate(),
     });
     expect(isGroupCollapsible(c, TODAY)).toBe(false);
   });
@@ -230,10 +250,7 @@ describe("isGroupCollapsible", () => {
         project({ id: 1, reviews: [{ reviewDate: dayInstant(TODAY), createdAt: `${TODAY}T09:00:00.000Z` }] }),
         project({ id: 2, reviews: [] }),
       ],
-      weeklyUpdate: {
-        id: 1, weekStart: dayInstant(WEEK.start), body: "x", health: "GREEN", status: "DONE",
-        doneAt: "2026-08-28T10:00:00.000Z", author: AUTHOR, updatedAt: "2026-08-28T10:00:00.000Z",
-      },
+      weeklyUpdate: weeklyUpdate(),
     });
     expect(isGroupCollapsible(c, TODAY)).toBe(false);
   });
@@ -241,10 +258,7 @@ describe("isGroupCollapsible", () => {
   it("is false when every project is reviewed but the weekly update is only DRAFT", () => {
     const c = customer({
       projects: [project({ id: 1, reviews: [{ reviewDate: dayInstant(TODAY), createdAt: `${TODAY}T09:00:00.000Z` }] })],
-      weeklyUpdate: {
-        id: 1, weekStart: dayInstant(WEEK.start), body: "x", health: null, status: "DRAFT",
-        doneAt: null, author: AUTHOR, updatedAt: "2026-08-28T10:00:00.000Z",
-      },
+      weeklyUpdate: weeklyUpdate({ health: null, status: "DRAFT", doneAt: null }),
     });
     expect(isGroupCollapsible(c, TODAY)).toBe(false);
   });
@@ -255,10 +269,7 @@ describe("isGroupCollapsible", () => {
         project({ id: 1, reviews: [{ reviewDate: dayInstant(TODAY), createdAt: `${TODAY}T09:00:00.000Z` }] }),
         project({ id: 2, reviews: [{ reviewDate: dayInstant(TODAY), createdAt: `${TODAY}T09:05:00.000Z` }] }),
       ],
-      weeklyUpdate: {
-        id: 1, weekStart: dayInstant(WEEK.start), body: "x", health: "AMBER", status: "DONE",
-        doneAt: "2026-08-28T10:00:00.000Z", author: AUTHOR, updatedAt: "2026-08-28T10:00:00.000Z",
-      },
+      weeklyUpdate: weeklyUpdate({ health: "AMBER" }),
     });
     expect(isGroupCollapsible(c, TODAY)).toBe(true);
   });

@@ -16,6 +16,7 @@ export const NAV_COMMANDS: readonly NavCommand[] = [
   { to: "/projects", label: "Projects", icon: "folder_managed" },
   { to: "/customers", label: "Customers", icon: "groups" },
   { to: "/daily-review", label: "Daily Review", icon: "edit_note" },
+  { to: "/weekly-sync", label: "Weekly Sync", icon: "table_chart" },
   // Work Logs (WorkLogs.tsx) is an unbuilt placeholder (iTop API integration),
   // so it's intentionally NOT in this catalogue. Route stays registered in
   // App.tsx — mirror of how Tasks is kept routable but hidden. This also keeps

@@ -474,7 +474,7 @@ describe("GET /daily-review — weeklyUpdate", () => {
         customerId: customer.id,
         weekStart: new Date("2026-08-24T00:00:00.000Z"),
         authorId: tam.userId,
-        body: "Weekly text",
+        achievement: "Weekly text",
         status: "DRAFT",
       },
     });
@@ -482,11 +482,113 @@ describe("GET /daily-review — weeklyUpdate", () => {
     res = await get(tam.token, { week: WEEK, today: TODAY });
     cust = res.body.customers.find((c: any) => c.id === customer.id);
     expect(cust.weeklyUpdate).not.toBeNull();
-    expect(cust.weeklyUpdate.body).toBe("Weekly text");
+    expect(cust.weeklyUpdate.achievement).toBe("Weekly text");
     expect(cust.weeklyUpdate.status).toBe("DRAFT");
     // Pin the wire shape: weekStart ships as the UTC-midnight instant of
     // week.start's day, not the bare "yyyy-MM-dd" string week.start itself is.
     expect(cust.weeklyUpdate.weekStart).toBe(dayInstant(res.body.week.start));
+  });
+
+  it("weeklyUpdate carries every Mid-week and Reflection field with the stored values, and no body key", async () => {
+    const tam = await createUserWithRole("TAM");
+    const customer = await createCustomer({ tamId: tam.userId, name: uniq("WU Full Customer") });
+    await createProject({ tamId: tam.userId, status: "ACTIVE", customerId: customer.id, name: "WU Full Proj" });
+    const midweekSavedAt = new Date("2026-08-26T09:00:00.000Z");
+
+    await prisma.weeklyUpdate.create({
+      data: {
+        customerId: customer.id,
+        weekStart: new Date("2026-08-24T00:00:00.000Z"),
+        authorId: tam.userId,
+        health: "GREEN",
+        status: "DONE",
+        category: "Onboarding",
+        highlight: "Kickoff went well",
+        risk: "Scope creep",
+        action: "Tighten the SOW",
+        achievement: "Shipped milestone 1",
+        outstandingIssue: "Waiting on legal sign-off",
+        lessonLearned: "Loop in security earlier",
+        nextWeekFocus: "Finalize rollout plan",
+        managerDecision: "Approve extra budget",
+        midweekSavedAt,
+      },
+    });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    const cust = res.body.customers.find((c: any) => c.id === customer.id);
+    expect(cust.weeklyUpdate).toMatchObject({
+      health: "GREEN",
+      status: "DONE",
+      category: "Onboarding",
+      highlight: "Kickoff went well",
+      risk: "Scope creep",
+      action: "Tighten the SOW",
+      achievement: "Shipped milestone 1",
+      outstandingIssue: "Waiting on legal sign-off",
+      lessonLearned: "Loop in security earlier",
+      nextWeekFocus: "Finalize rollout plan",
+      managerDecision: "Approve extra budget",
+      midweekSavedAt: midweekSavedAt.toISOString(),
+    });
+    expect(cust.weeklyUpdate.body).toBeUndefined();
+  });
+
+  it("previousWeeklyUpdate is null when no row exists for the previous week", async () => {
+    const tam = await createUserWithRole("TAM");
+    const customer = await createCustomer({ tamId: tam.userId, name: uniq("No Prev WU Customer") });
+    await createProject({ tamId: tam.userId, status: "ACTIVE", customerId: customer.id, name: "No Prev WU Proj" });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    const cust = res.body.customers.find((c: any) => c.id === customer.id);
+    expect(cust.previousWeeklyUpdate).toBeNull();
+  });
+
+  it("previousWeeklyUpdate carries exactly weekStart/outstandingIssue/nextWeekFocus/managerDecision from the row 7 days back, and ignores a row two weeks back", async () => {
+    const tam = await createUserWithRole("TAM");
+    const customer = await createCustomer({ tamId: tam.userId, name: uniq("Prev WU Customer") });
+    await createProject({ tamId: tam.userId, status: "ACTIVE", customerId: customer.id, name: "Prev WU Proj" });
+
+    // WEEK's Monday is 2026-08-24, so the previous week's Monday is
+    // 2026-08-17 and two weeks back is 2026-08-10.
+    await prisma.weeklyUpdate.create({
+      data: {
+        customerId: customer.id,
+        weekStart: new Date("2026-08-17T00:00:00.000Z"),
+        authorId: tam.userId,
+        status: "DONE",
+        health: "AMBER",
+        achievement: "Prior week achievement",
+        outstandingIssue: "Contract not yet signed",
+        nextWeekFocus: "Get signature",
+        managerDecision: "Escalate to VP",
+      },
+    });
+    await prisma.weeklyUpdate.create({
+      data: {
+        customerId: customer.id,
+        weekStart: new Date("2026-08-10T00:00:00.000Z"),
+        authorId: tam.userId,
+        status: "DONE",
+        health: "GREEN",
+        achievement: "Two weeks back achievement",
+        outstandingIssue: "Should never surface",
+        nextWeekFocus: "Should never surface",
+        managerDecision: "Should never surface",
+      },
+    });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    const cust = res.body.customers.find((c: any) => c.id === customer.id);
+    expect(cust.previousWeeklyUpdate).toEqual({
+      weekStart: dayInstant("2026-08-17"),
+      outstandingIssue: "Contract not yet signed",
+      nextWeekFocus: "Get signature",
+      managerDecision: "Escalate to VP",
+    });
+    expect(Object.keys(cust.previousWeeklyUpdate).sort()).toEqual(
+      ["managerDecision", "nextWeekFocus", "outstandingIssue", "weekStart"].sort(),
+    );
   });
 });
 

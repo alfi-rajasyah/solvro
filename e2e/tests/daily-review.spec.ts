@@ -2,14 +2,15 @@ import type { Locator, Page } from "@playwright/test";
 import { apiBase, expect, loginViaUi, test } from "../fixtures/test";
 import { createTask, isoDateOffset } from "../fixtures/seed";
 
-// Daily Review v2 (docs/plans/daily-review-v2-spec.md §9): one end-to-end
-// pass through the rewritten /daily-review page — a project note, an
-// operations note, Mark reviewed, an overdue-task status change, the
-// weekly-update draft/health/Mark-done cycle and the resulting collapsed
-// group summary, the two read-only surfaces that consume the same data
-// (CustomerDetail's "Weekly updates" list, the project overview's "Notes"
-// panel), and week navigation. Runs under both Playwright projects (desktop
-// + mobile) per playwright.config.ts.
+// Daily Review v2 (docs/plans/daily-review-v2-spec.md §9; weekly sync tables
+// per docs/plans/weekly-sync-tables.md): one end-to-end pass through the
+// rewritten /daily-review page — a project note, an operations note, Mark
+// reviewed, an overdue-task status change, the Reflection sync modal's
+// draft/health/Mark-done cycle and the resulting collapsed group summary,
+// the two read-only surfaces that consume the same data (CustomerDetail's
+// "Weekly updates" list, the project overview's "Notes" panel), and week
+// navigation. Runs under both Playwright projects (desktop + mobile) per
+// playwright.config.ts.
 //
 // The 5 stats-bar tiles (StatsBar.tsx) are GLOBAL aggregates across every
 // ACTIVE project/customer the logged-in user can see — for the admin
@@ -244,19 +245,25 @@ test.describe("Daily Review v2", () => {
     await expect(page.getByTestId("stat-overdue-tasks")).toHaveText(String(baseOverdue));
 
     // ------------------------------------------------------------------
-    // 6. Weekly update: draft from notes, pick Amber, Mark done — tile,
-    //    then the group collapses to its summary row.
+    // 6. Weekly update: open Reflection sync, draft from this week's
+    //    notes, pick Amber, Mark done — tile, then the group collapses to
+    //    its summary row.
     // ------------------------------------------------------------------
-    const weeklyBlock = customerSection.locator("section");
-    await weeklyBlock.getByRole("button", { name: "Draft from this week's notes" }).click();
-    const weeklyTextarea = page.getByLabel(`Weekly update for ${customerName}`);
+    await customerSection.getByRole("button", { name: "Reflection sync" }).click();
+    const reflectionDialog = page.getByRole("dialog", {
+      name: new RegExp(`^Reflection sync — ${customerName}, week \\d+$`),
+    });
+    await expect(reflectionDialog).toBeVisible();
+    await reflectionDialog.getByRole("button", { name: "Draft from this week's notes" }).click();
+    const weeklyTextarea = page.getByLabel(`Weekly achievement for ${customerName}`);
     const draftValue = await weeklyTextarea.inputValue();
     expect(draftValue).toContain(projectNoteBody);
     expect(draftValue).toContain(opsNoteBody);
     expect(draftValue).toContain(opsNoteTitle);
 
-    await weeklyBlock.getByRole("radio", { name: "Amber" }).click();
-    await weeklyBlock.getByRole("button", { name: "Mark done" }).click();
+    await reflectionDialog.getByRole("radio", { name: "Amber" }).click();
+    await reflectionDialog.getByRole("button", { name: "Mark done" }).click();
+    await expect(reflectionDialog).toBeHidden();
 
     await expect(page.getByTestId("stat-weekly-updates")).toHaveText(
       `${baseWeekly.count + 1} / ${baseWeekly.total + 1}`,
@@ -265,7 +272,8 @@ test.describe("Daily Review v2", () => {
 
     // ------------------------------------------------------------------
     // 7. The customer name in the (now collapsed) group header links to
-    //    /customers/:id — whose Weekly updates section lists Amber + Done.
+    //    /customers/:id — whose Weekly updates section lists Amber, Done,
+    //    and the achievement text (the project note body) drafted above.
     // ------------------------------------------------------------------
     await customerHeading.getByRole("link", { name: customerName }).click();
     await expect(page).toHaveURL(new RegExp(`/customers/${customer.id}$`));
@@ -276,6 +284,7 @@ test.describe("Daily Review v2", () => {
       .locator("xpath=ancestor::section[1]");
     await expect(weeklySection.getByText("Amber", { exact: true })).toBeVisible();
     await expect(weeklySection.getByText("Done", { exact: true })).toBeVisible();
+    await expect(weeklySection.getByText(projectNoteBody, { exact: false })).toBeVisible();
 
     // ------------------------------------------------------------------
     // 8. /projects/:id/overview — Notes panel shows today's project note.

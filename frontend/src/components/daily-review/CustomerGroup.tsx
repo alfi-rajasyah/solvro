@@ -1,7 +1,7 @@
 // Customer group (spec §6.3 pin 3, Decision 15): a chevron toggle button
 // at the start of the header row (aria-expanded, expand_more/expand_less
 // icon) collapses/expands the group's body (project cards, one operations
-// card, one weekly-update block, inside a left-bordered indent). The
+// card, one weekly-sync row, inside a left-bordered indent). The
 // customer name is a link to /customers/:id, so the toggle is the icon
 // button alone rather than the whole row — a link can't sit inside a
 // button. The header row itself is always the same summary content —
@@ -19,27 +19,14 @@
 // dismissed a previous force-expand).
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Badge, type BadgeProps } from "@/components/reui/badge";
+import { Badge } from "@/components/reui/badge";
 import { isGroupCollapsible } from "@/lib/dailyReviewStats";
 import { dayFromIso } from "@/lib/dateField";
-import type { DailyReviewCustomer, WeeklyHealth, WeeklyStatus } from "@/lib/queries";
+import type { DailyReviewCustomer, WeeklyStatus } from "@/lib/queries";
 import { OperationsCard } from "./OperationsCard";
 import { ProjectCard } from "./ProjectCard";
-import { WeeklyUpdateBlock } from "./WeeklyUpdateBlock";
-
-const HEALTH_CLASS: Record<WeeklyHealth, string> = {
-  GREEN: "bg-chip-emerald-bg text-chip-emerald-text",
-  AMBER: "bg-chip-amber-bg text-chip-amber-text",
-  RED: "bg-chip-rose-bg text-chip-rose-text",
-};
-
-// Same reui/badge variants as WeeklyUpdateBlock.tsx's own STATUS_BADGE /
-// CustomerDetail.tsx's statusBadge — kept in lockstep with those.
-const WEEKLY_STATUS_BADGE: Record<WeeklyStatus, { label: string; variant: BadgeProps["variant"] }> = {
-  NOT_STARTED: { label: "Not started", variant: "outline" },
-  DRAFT: { label: "Draft", variant: "warning-light" },
-  DONE: { label: "Done", variant: "success-light" },
-};
+import { HEALTH_CLASS, WEEKLY_STATUS_BADGE } from "./SyncField";
+import { WeeklySyncRow } from "./WeeklySyncRow";
 
 export interface CustomerGroupProps {
   customer: DailyReviewCustomer;
@@ -157,7 +144,7 @@ export function CustomerGroup({
             currentUserId={currentUserId}
             canDeleteAny={canDeleteAny}
           />
-          <WeeklyUpdateBlock customer={customer} week={week} />
+          <WeeklySyncRow customer={customer} week={week} />
         </div>
       )}
     </section>
