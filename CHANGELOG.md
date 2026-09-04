@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-09-04 — CI: faster end-to-end gate
+
+- **`.github/workflows/ci.yml`**, **`ci/docker-compose.ci.yml`** — the `e2e` job is split into `e2e (desktop)` and `e2e (mobile)`, one Playwright project each on its own stack, so the two halves run side by side; each keeps a single worker because the specs share one database. The backend and frontend images are built with BuildKit through the GitHub Actions layer cache (`docker/build-push-action`, `cache-from`/`cache-to: type=gha`) and started with `compose up --no-build`, so the `npm ci` layers inside the Dockerfiles rebuild only when a lock file changes; the compose services carry explicit `image:` names as the handshake. The Chromium download is cached on the e2e lock file. The job limit drops from 25 to 20 minutes. Why: a run took 13–17 minutes on a normal runner and 26 on one with a slow npm registry — two runs in a row were cancelled at the limit with every test passing — and about half of that time was `npm ci` and browser downloads repeated on every run.
+
 ### Added — 2026-09-02 — Duplicate a section from the List view
 
 - **`frontend/src/pages/views/ProjectList.tsx`** — section headers in the List view gain a "Duplicate section" button between Rename and Delete (hidden on the "No section" group) that copies the section — same name and color — with every task and subtask inside it, placed directly after the source; copied tasks and subtasks start at To Do. One click, no confirmation. **`frontend/src/lib/queries.ts`** — `useDuplicateSection(projectId)` calls `POST /sections/:id/duplicate` and refreshes sections, tasks, the overview, and the Daily Review. **`e2e/tests/duplicate.spec.ts`** (new) covers all four duplicate surfaces — Task panel menu, subtask row, Gantt row menu, section header — on desktop and mobile (the Gantt case is desktop-only); **`e2e/fixtures/seed.ts`** gains a shared `createSection` helper. The Rename and Delete buttons beside the new one pick up the app-wide focus ring.

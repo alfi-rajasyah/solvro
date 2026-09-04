@@ -140,9 +140,22 @@ jobs:
         working-directory: backend
         run: npm test
 
+  # One job per Playwright project (desktop, mobile), each on its own stack,
+  # so the two halves of the suite run side by side instead of back to back.
+  # Each job keeps Playwright's single worker: the specs share one database
+  # and assert deltas against it, which two workers on one stack would race.
+  # The images build through BuildKit's GitHub Actions cache, so the three
+  # `npm ci` layers inside the Dockerfiles are rebuilt only when a lock file
+  # changes — on every other run the build is seconds, not minutes, and a
+  # slow registry cannot stall the gate.
   e2e:
+    name: e2e (${{ matrix.project }})
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        project: [desktop, mobile]
     env:
       ADMIN_EMAIL: qa@solvro.test
     steps:
@@ -169,13 +182,34 @@ jobs:
             echo "ADMIN_PASSWORD=$(openssl rand -hex 24)"
           } >> "$GITHUB_ENV"
 
-      - name: Build and start stack (retry once on failure)
-        run: |
-          docker compose -f ci/docker-compose.ci.yml up -d --build || (
-            echo "docker compose up failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && \
-            sleep "$NPM_CI_RETRY_SLEEP" && \
-            docker compose -f ci/docker-compose.ci.yml up -d --build
-          )
+      - uses: docker/setup-buildx-action@v3
+
+      # Both images are built here, not by `compose up --build`, so BuildKit
+      # can read and write the GitHub Actions layer cache. `load: true` puts
+      # the result in the local daemon under the `image:` name the compose
+      # file declares, and `compose up` below starts it without rebuilding.
+      - name: Build backend image (cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          target: runtime
+          tags: solvro-ci-backend:latest
+          load: true
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Build frontend image (cached)
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          target: runtime
+          tags: solvro-ci-frontend:latest
+          load: true
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+      - name: Start stack
+        run: docker compose -f ci/docker-compose.ci.yml up -d --no-build
 
       - name: Wait for backend health
         run: |
@@ -212,16 +246,32 @@ jobs:
         run: |
           npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
 
+      # The Chromium download is the same on every run for a given Playwright
+      # version, so it is cached on the e2e lock file. On a hit only the
+      # system libraries are (re)installed, which takes seconds.
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
+
       - name: Install Playwright browsers (chromium)
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: e2e
         run: npx playwright install --with-deps chromium
 
-      - name: Run Playwright tests
+      - name: Install Playwright system dependencies (cached browser)
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        working-directory: e2e
+        run: npx playwright install-deps chromium
+
+      - name: Run Playwright tests (${{ matrix.project }})
         working-directory: e2e
         env:
           BASE_URL: http://localhost:8080
           CI: "true"
-        run: npx playwright test
+        run: npx playwright test --project=${{ matrix.project }}
 
       - name: Dump container logs on failure
         if: failure()
@@ -231,7 +281,7 @@ jobs:
         if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: playwright-traces
+          name: playwright-traces-${{ matrix.project }}
           path: |
             e2e/test-results/
             e2e/playwright-report/

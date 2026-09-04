@@ -18,6 +18,10 @@ services:
       retries: 20
 
   backend:
+    # The workflow builds this image itself (BuildKit + GitHub Actions layer
+    # cache) and starts the stack with `up --no-build`; the `image:` name is
+    # the handshake between the two. `build:` stays for local use.
+    image: solvro-ci-backend:latest
     build:
       context: ../backend
       target: runtime
@@ -38,6 +42,7 @@ services:
       - "127.0.0.1:3300:3000"
 
   frontend:
+    image: solvro-ci-frontend:latest
     build:
       context: ../frontend
       target: runtime
