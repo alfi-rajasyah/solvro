@@ -19,6 +19,13 @@ env:
   # download flakes transiently on GitHub's runners. Retrying the whole
   # `npm ci` once is cheaper than diagnosing a specific transient host.
   NPM_CI_RETRY_SLEEP: 10
+  # A registry connection that hangs otherwise sits out npm's default
+  # 5-minute fetch timeout before the first retry — seen as "added 6
+  # packages in 7m" on three runs in a row. Fail a request after 60s and
+  # retry more often instead; every tarball this repo fetches is small.
+  npm_config_fetch_timeout: "60000"
+  npm_config_fetch_retries: "5"
+  npm_config_fetch_retry_maxtimeout: "30000"
 
 jobs:
   # Fast-feedback gate: surfaces type errors in ~2 minutes instead of burying
