@@ -1,0 +1,245 @@
+import type { Page } from "@playwright/test";
+import { apiBase, expect, loginViaUi, test } from "../fixtures/test";
+
+// Weekly Sync page (docs/plans/weekly-sync-tables.md §4 "Weekly Sync page",
+// T6; e2e task T8): two passes through the new /weekly-sync page.
+//
+// The first test drives the row/group/count mechanics on both Playwright
+// projects (desktop + mobile): a seeded customer's row starts under "Other
+// customers" on the Reflection tab; saving a Need-manager-decision through
+// the Reflection sync modal (reused from Daily Review, T5) pins the row
+// under "Needs a manager decision" and bumps the tab's decision count; the
+// row then carries the saved achievement text; and the Mid-week tab shows
+// the same customer as "Not filled" (no mid-week save happened).
+//
+// The second test is the "Copy as table" clipboard round-trip, split out on
+// its own (rather than a tail appended to the first test) so a mid-test
+// `test.skip()` on the clipboard-only part doesn't mark the whole first
+// test's row/group/count assertions as "skipped" in the report on mobile —
+// the mobile project's CDP-emulated Chromium doesn't reliably grant
+// clipboard-read/clipboard-write, so only this second test skips there.
+//
+// No DELETE endpoint exists for customers/projects (same shared-dev-DB
+// posture as daily-review.spec.ts's header comment — nothing here is torn
+// down afterwards), so every assertion below is either scoped to the test's
+// own customer id (the group-membership checks, the row text) or a delta
+// off a baseline read before that test's own save (the decision count),
+// never a hardcoded total. Both tests share the worker-scoped
+// `seededProject` fixture's underlying project (re-pointing it at their own
+// fresh customer via PATCH) — each test's assertions key off its own
+// customer id, so the second test moving the project to its own customer
+// doesn't disturb the first test's already-saved data.
+
+test.describe.configure({ mode: "serial" });
+
+/**
+ * Parses the Reflection tab's label ("Reflection", "Reflection · 1
+ * decision", "Reflection · 3 decisions") into its decision count — 0 when
+ * the " · N decisions" suffix is absent (WeeklySync.tsx).
+ */
+function parseDecisionCount(label: string): number {
+  const m = /^Reflection(?: · (\d+) decisions?)?$/.exec(label.trim());
+  if (!m) throw new Error(`unexpected Reflection tab label: "${label}"`);
+  return m[1] ? Number(m[1]) : 0;
+}
+
+/**
+ * Walks the direct children of `customerId`'s row's parent container (the
+ * Weekly Sync table body — the header row, group-header rows, and
+ * per-customer rows are all plain `<div>` siblings there, see
+ * WeeklySync.tsx's `HeaderRow`/`GroupHeader`/`SyncRow`) in DOM order,
+ * tracking the most recently seen group-header text, and returns whichever
+ * group label was current when the target row is reached. Returns null if
+ * the row isn't found under either group (e.g. the Mid-week tab, which has
+ * no groups at all).
+ */
+async function groupContainingRow(page: Page, customerId: number): Promise<"decision" | "other" | null> {
+  const row = page.getByTestId(`weekly-sync-row-${customerId}`);
+  const container = row.locator("xpath=..");
+  const children = container.locator("> div");
+  const count = await children.count();
+  let currentGroup: "decision" | "other" | null = null;
+  for (let i = 0; i < count; i++) {
+    const child = children.nth(i);
+    const testId = await child.getAttribute("data-testid");
+    if (testId === `weekly-sync-row-${customerId}`) return currentGroup;
+    if (testId?.startsWith("weekly-sync-row-")) continue; // another customer's row — not a group header
+    const text = (await child.textContent()) ?? "";
+    if (/Needs a manager decision/.test(text)) currentGroup = "decision";
+    else if (/Other customers/.test(text)) currentGroup = "other";
+  }
+  return null;
+}
+
+/**
+ * Creates a fresh customer (tamId = the admin fixture user) and re-points
+ * the worker-scoped fixture's project at it, ACTIVE — same pattern
+ * daily-review.spec.ts uses, so the customer lands in the admin's Daily
+ * Review / Weekly Sync scope.
+ */
+async function seedActiveCustomer(
+  base: string,
+  token: string,
+  userId: number,
+  projectId: number,
+  namePrefix: string,
+): Promise<{ id: number; name: string }> {
+  const H = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+  const name = `${namePrefix} ${stamp}`;
+
+  const customerRes = await fetch(`${base}/api/customers`, {
+    method: "POST",
+    headers: H,
+    body: JSON.stringify({ name, description: "e2e weekly sync fixture", tamId: userId }),
+  });
+  expect(customerRes.ok, `create customer: ${customerRes.status}`).toBeTruthy();
+  const customer = (await customerRes.json()) as { id: number };
+
+  const projectRes = await fetch(`${base}/api/projects/${projectId}`, {
+    method: "PATCH",
+    headers: H,
+    body: JSON.stringify({ status: "ACTIVE", customerId: customer.id }),
+  });
+  expect(projectRes.ok, `patch project: ${projectRes.status}`).toBeTruthy();
+
+  return { id: customer.id, name };
+}
+
+/**
+ * The current ISO week key, derived the same way daily-review.spec.ts does
+ * (its step 9): land on /daily-review with no `?week=` and read back
+ * whatever week it resolves to, rather than re-deriving ISO week arithmetic
+ * locally. DailyReview.tsx's default is the plain current ISO week (no
+ * Monday-shift — that shift is Weekly Sync's own D8 rule for its default,
+ * not something to reproduce here).
+ */
+async function currentWeekKey(page: Page): Promise<string> {
+  await page.goto("/daily-review", { waitUntil: "networkidle" });
+  await page.waitForTimeout(500);
+  await expect(page).toHaveURL(/[?&]week=\d{4}-W\d{2}/);
+  return new URL(page.url()).searchParams.get("week")!;
+}
+
+test.describe("Weekly Sync page", () => {
+  test("customer row, Reflection sync save, group pin, mid-week not filled", async (
+    { page, seededProject },
+    testInfo,
+  ) => {
+    const { token, userId, projectId } = seededProject;
+    const base = apiBase(testInfo);
+
+    await loginViaUi(page);
+
+    const customer = await seedActiveCustomer(base, token, userId, projectId, "Weekly Sync Co");
+    const weekKey = await currentWeekKey(page);
+
+    // ------------------------------------------------------------------
+    // 1. Open the Weekly Sync page on this week's Reflection tab — our
+    //    fresh customer (no weekly update yet) sits under "Other
+    //    customers" and contributes nothing to the decision count yet.
+    // ------------------------------------------------------------------
+    await page.goto(`/weekly-sync?week=${weekKey}&tab=reflection`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("heading", { level: 1, name: "Weekly Sync" })).toBeVisible();
+
+    const reflectionTab = page.getByTestId("weekly-sync-tab-reflection");
+    const baseDecisionCount = parseDecisionCount((await reflectionTab.textContent()) ?? "");
+
+    const row = page.getByTestId(`weekly-sync-row-${customer.id}`);
+    await expect(row).toBeVisible();
+    await expect.poll(() => groupContainingRow(page, customer.id)).toBe("other");
+
+    // ------------------------------------------------------------------
+    // 2. Click the row to open its Reflection sync modal (reused from
+    //    Daily Review); fill the achievement and a manager decision, pick
+    //    Green, Save draft.
+    // ------------------------------------------------------------------
+    await row.click();
+    const dialog = page.getByRole("dialog", {
+      name: new RegExp(`^Reflection sync — ${customer.name}, week \\d+$`),
+    });
+    await expect(dialog).toBeVisible();
+
+    const achievementText = `Weekly achievement ${customer.name}`;
+    const decisionText = `Need a call on renewal ${customer.name}`;
+    await dialog.getByLabel(`Weekly achievement for ${customer.name}`).fill(achievementText);
+    await dialog.getByLabel(`Need manager decision for ${customer.name}`).fill(decisionText);
+    await dialog.getByRole("radio", { name: "Green" }).click();
+    await dialog.getByRole("button", { name: "Save draft" }).click();
+    await expect(dialog).toBeHidden();
+
+    // ------------------------------------------------------------------
+    // 3. The row now pins under "Needs a manager decision", the tab's
+    //    decision count is +1, and the achievement text is visible on the
+    //    row. `expect.poll` rather than a fixed wait: the post-save
+    //    refetch (React Query invalidation) can take longer than any
+    //    single guessed timeout, and a plain one-shot read of
+    //    `groupContainingRow` would otherwise race it.
+    // ------------------------------------------------------------------
+    await expect.poll(() => groupContainingRow(page, customer.id)).toBe("decision");
+    await expect(reflectionTab).toHaveText(new RegExp(`Reflection · ${baseDecisionCount + 1} decisions?$`));
+    await expect(row.getByText(achievementText)).toBeVisible();
+
+    // ------------------------------------------------------------------
+    // 4. Mid-week tab: no mid-week save happened, so this same customer's
+    //    row shows "Not filled".
+    // ------------------------------------------------------------------
+    await page.getByTestId("weekly-sync-tab-midweek").click();
+    await expect(page.getByTestId(`weekly-sync-row-${customer.id}`).getByText("Not filled")).toBeVisible();
+  });
+
+  test("copy as table puts the Reflection table on the clipboard", async (
+    { page, context, seededProject },
+    testInfo,
+  ) => {
+    test.skip(
+      testInfo.project.name === "mobile",
+      "clipboard permissions are not granted in the CDP-emulated mobile project",
+    );
+
+    const { token, userId, projectId } = seededProject;
+    const base = apiBase(testInfo);
+
+    await loginViaUi(page);
+
+    const customer = await seedActiveCustomer(base, token, userId, projectId, "Weekly Sync Copy Co");
+    const weekKey = await currentWeekKey(page);
+
+    await page.goto(`/weekly-sync?week=${weekKey}&tab=reflection`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("heading", { level: 1, name: "Weekly Sync" })).toBeVisible();
+
+    // Seed one saved Reflection row through the same modal the first test
+    // uses, so the copy below has real Reflection data to carry.
+    const row = page.getByTestId(`weekly-sync-row-${customer.id}`);
+    await expect(row).toBeVisible();
+    await row.click();
+    const dialog = page.getByRole("dialog", {
+      name: new RegExp(`^Reflection sync — ${customer.name}, week \\d+$`),
+    });
+    await expect(dialog).toBeVisible();
+
+    const achievementText = `Weekly achievement ${customer.name}`;
+    await dialog.getByLabel(`Weekly achievement for ${customer.name}`).fill(achievementText);
+    await dialog.getByRole("radio", { name: "Green" }).click();
+    await dialog.getByRole("button", { name: "Save draft" }).click();
+    await expect(dialog).toBeHidden();
+    await page.waitForTimeout(500);
+    await expect(row.getByText(achievementText)).toBeVisible();
+
+    // ------------------------------------------------------------------
+    // Copy as table: grant clipboard permissions, click, assert the
+    // status line, then read the clipboard back and check it carries the
+    // customer name and the achievement text.
+    // ------------------------------------------------------------------
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: base });
+    const copyButton = page.getByTestId("weekly-sync-copy");
+    await expect(copyButton).toBeVisible();
+    await copyButton.click();
+    await expect(page.getByTestId("weekly-sync-copied")).toContainText("Copied");
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboardText).toContain(customer.name);
+    expect(clipboardText).toContain(achievementText);
+  });
+});
