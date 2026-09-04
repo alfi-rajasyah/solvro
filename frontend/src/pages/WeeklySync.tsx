@@ -1,0 +1,475 @@
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
+import { MidweekSyncModal } from "@/components/daily-review/MidweekSyncModal";
+import { ReflectionSyncModal } from "@/components/daily-review/ReflectionSyncModal";
+import { HEALTH_CLASS, WEEKLY_STATUS_BADGE } from "@/components/daily-review/SyncField";
+import { Alert, AlertDescription } from "@/components/reui/alert";
+import { Badge } from "@/components/reui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { hasPermission, useAuth } from "@/lib/auth";
+import { weekNumberLabel } from "@/lib/dailyReviewStats";
+import { dateToDay } from "@/lib/dateField";
+import { formatWeekRange, parseWeekKey, shiftWeek, weekKeyOf } from "@/lib/isoWeek";
+import { type DailyReviewCustomer, useDailyReview } from "@/lib/queries";
+import {
+  buildSyncTable,
+  HEALTH_LABEL,
+  hasManagerDecision,
+  orderForTab,
+  toHtmlTable,
+  toTsv,
+  type WeeklySyncTab,
+} from "@/lib/weeklySyncTable";
+
+const MIDWEEK_SAVED_FMT = new Intl.DateTimeFormat(undefined, {
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+});
+
+const MIDWEEK_GRID_COLS = "grid-cols-[180px_88px_1fr_1fr_1fr_140px]";
+const REFLECTION_GRID_COLS = "grid-cols-[180px_88px_1fr_1fr_1fr_1fr_1.2fr_110px]";
+
+const MIDWEEK_HEADER = ["Customer", "Health", "Highlight", "Risk", "Action", "Status"];
+const REFLECTION_HEADER = [
+  "Customer",
+  "Health",
+  "Weekly achievement",
+  "Outstanding issue",
+  "Lesson learned",
+  "Next week focus",
+  "Need manager decision",
+  "Status",
+];
+
+/**
+ * Default week/tab (docs/plans/weekly-sync-tables.md §4 "Weekly Sync page",
+ * D8), computed from today's LOCAL calendar day: Monday opens on last week's
+ * Reflection tab (the VP sync reads it); Tuesday–Thursday opens on the
+ * current week's Mid-week tab; Friday–Sunday opens on the current week's
+ * Reflection tab. `?week=`/`?tab=` in the URL always win over this — see
+ * the resolution in `WeeklySync` below.
+ */
+function computeDefaults(): { week: string; tab: WeeklySyncTab } {
+  const today = dateToDay(new Date())!;
+  const currentWeek = weekKeyOf(today);
+  const weekday = new Date().getDay(); // 0=Sun..6=Sat, local clock — matches `today` above
+  if (weekday === 1) {
+    return { week: shiftWeek(currentWeek, -1), tab: "reflection" };
+  }
+  if (weekday >= 2 && weekday <= 4) {
+    return { week: currentWeek, tab: "midweek" };
+  }
+  return { week: currentWeek, tab: "reflection" };
+}
+
+// Weekly Sync page (docs/plans/weekly-sync-tables.md §4, T6): a read-on-
+// Monday table view of the same `useDailyReview(week)` payload the Daily
+// Review page uses — one row per customer, Mid-week and Reflection tabs, and
+// a "Copy as table" action (D13) that writes both an HTML `<table>` and a
+// tab-separated fallback to the clipboard. The page owns layout, URL
+// week/tab state, and the click-to-open-modal wiring; the two sync modals
+// (T5) are reused as-is.
+export function WeeklySync() {
+  const { user } = useAuth();
+  const canWrite = hasPermission(user, "project:write");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const defaults = useMemo(() => computeDefaults(), []);
+
+  const weekParam = searchParams.get("week");
+  const week = weekParam && parseWeekKey(weekParam) ? weekParam : defaults.week;
+
+  const tabParam = searchParams.get("tab");
+  const tab: WeeklySyncTab = tabParam === "midweek" || tabParam === "reflection" ? tabParam : defaults.tab;
+
+  // Missing/invalid `?week=`/`?tab=` resolve to the defaults above for
+  // rendering, but the URL is normalized to the resolved values too
+  // (replace, so it doesn't add a spurious history entry) — same pattern as
+  // DailyReview.tsx's week normalization, extended to `tab`.
+  useEffect(() => {
+    const next = new URLSearchParams(searchParams);
+    let changed = false;
+    if (weekParam !== week) {
+      next.set("week", week);
+      changed = true;
+    }
+    if (tabParam !== tab) {
+      next.set("tab", tab);
+      changed = true;
+    }
+    if (changed) setSearchParams(next, { replace: true });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [week, tab, weekParam, tabParam]);
+
+  const { data, isLoading, isError, error } = useDailyReview(week);
+
+  const [openRow, setOpenRow] = useState<{ customerId: number; tab: WeeklySyncTab } | null>(null);
+  const [copyMessage, setCopyMessage] = useState<string | null>(null);
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
+
+  // Prev/Next week and tab clicks push a history entry — same as
+  // DailyReview.tsx's Prev/Next — so Back walks through the weeks/tabs the
+  // user actually visited. Only the initial normalization effect above
+  // (a missing/invalid `?week=`/`?tab=`) uses `replace`.
+  function goToWeek(next: string) {
+    const params = new URLSearchParams(searchParams);
+    params.set("week", next);
+    setSearchParams(params);
+  }
+
+  function goToTab(next: WeeklySyncTab) {
+    const params = new URLSearchParams(searchParams);
+    params.set("tab", next);
+    setSearchParams(params);
+  }
+
+  function showCopyMessage(message: string) {
+    if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    setCopyMessage(message);
+    copyTimeoutRef.current = setTimeout(() => setCopyMessage(null), 2000);
+  }
+
+  async function handleCopy() {
+    if (!data) return;
+    const ordered = orderForTab(tab, data.customers);
+    const table = buildSyncTable(tab, ordered);
+    const html = toHtmlTable(table);
+    const tsv = toTsv(table);
+    try {
+      if (typeof ClipboardItem !== "undefined") {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            "text/html": new Blob([html], { type: "text/html" }),
+            "text/plain": new Blob([tsv], { type: "text/plain" }),
+          }),
+        ]);
+      } else {
+        await navigator.clipboard.writeText(tsv);
+      }
+      showCopyMessage(`Copied ${table.rows.length} rows`);
+    } catch {
+      showCopyMessage("Copy failed");
+    }
+  }
+
+  const customers = data?.customers ?? [];
+  const pinned = useMemo(() => customers.filter(hasManagerDecision), [customers]);
+  const rest = useMemo(() => customers.filter((c) => !hasManagerDecision(c)), [customers]);
+  const decisionCount = pinned.length;
+
+  const openCustomer = openRow ? (customers.find((c) => c.id === openRow.customerId) ?? null) : null;
+
+  const gridColsClass = tab === "midweek" ? MIDWEEK_GRID_COLS : REFLECTION_GRID_COLS;
+  const isEmpty = data ? data.customers.length === 0 : false;
+
+  function openModalFor(customer: DailyReviewCustomer) {
+    setOpenRow({ customerId: customer.id, tab });
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="font-display text-2xl font-bold text-on-surface">Weekly Sync</h1>
+          <p className="text-sm text-on-surface-variant">
+            One row per customer. Wednesday and Friday tables, read on Monday.
+          </p>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => goToWeek(shiftWeek(week, -1))}
+              aria-label="Previous week"
+              className="flex h-8 w-8 items-center justify-center rounded-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              <span className="material-symbols-outlined text-lg">chevron_left</span>
+            </button>
+            <div className="text-center">
+              <div className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                Week {weekNumberLabel(week)}
+              </div>
+              <div className="font-mono text-xs tabular-nums text-on-surface">{formatWeekRange(week)}</div>
+            </div>
+            <button
+              type="button"
+              onClick={() => goToWeek(shiftWeek(week, 1))}
+              aria-label="Next week"
+              className="flex h-8 w-8 items-center justify-center rounded-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            >
+              <span className="material-symbols-outlined text-lg">chevron_right</span>
+            </button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleCopy}
+              disabled={!data}
+              data-testid="weekly-sync-copy"
+              className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container disabled:opacity-50"
+            >
+              <span className="material-symbols-outlined text-base">content_copy</span>
+              Copy as table
+            </button>
+            <span
+              role="status"
+              data-testid="weekly-sync-copied"
+              className="text-[12px] font-semibold text-on-surface-variant"
+            >
+              {copyMessage ?? ""}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <nav className="flex gap-6 border-b border-outline-variant">
+        <button
+          type="button"
+          data-testid="weekly-sync-tab-midweek"
+          onClick={() => goToTab("midweek")}
+          className={[
+            "-mb-px border-b-2 px-1 pb-3 font-display text-sm transition-colors",
+            tab === "midweek"
+              ? "border-primary text-primary"
+              : "border-transparent text-on-surface-variant hover:text-on-surface",
+          ].join(" ")}
+        >
+          Mid-week
+        </button>
+        <button
+          type="button"
+          data-testid="weekly-sync-tab-reflection"
+          onClick={() => goToTab("reflection")}
+          className={[
+            "-mb-px border-b-2 px-1 pb-3 font-display text-sm transition-colors",
+            tab === "reflection"
+              ? "border-primary text-primary"
+              : "border-transparent text-on-surface-variant hover:text-on-surface",
+          ].join(" ")}
+        >
+          Reflection{decisionCount > 0 ? ` · ${decisionCount} ${decisionCount === 1 ? "decision" : "decisions"}` : ""}
+        </button>
+      </nav>
+
+      {isLoading && (
+        <div className="space-y-2">
+          {[0, 1, 2, 3].map((i) => (
+            <Skeleton key={i} className="h-12 w-full rounded-sm" />
+          ))}
+        </div>
+      )}
+
+      {isError && (
+        <Alert variant="destructive">
+          <AlertDescription>Could not load the weekly sync: {(error as Error).message}</AlertDescription>
+        </Alert>
+      )}
+
+      {data && isEmpty && (
+        <div className="rounded-sm border border-outline-variant bg-surface-container px-6 py-10 text-center text-sm text-on-surface-variant">
+          No customers in your scope this week.
+        </div>
+      )}
+
+      {data && !isEmpty && (
+        <>
+          <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest">
+            <div className="min-w-[960px]">
+              <HeaderRow tab={tab} gridColsClass={gridColsClass} />
+              {tab === "midweek"
+                ? customers.map((c) => (
+                    <SyncRow
+                      key={c.id}
+                      customer={c}
+                      tab={tab}
+                      gridColsClass={gridColsClass}
+                      clickable={canWrite}
+                      onOpen={openModalFor}
+                    />
+                  ))
+                : (
+                    <>
+                      {pinned.length > 0 && (
+                        <GroupHeader label={`Needs a manager decision · ${pinned.length}`} amber />
+                      )}
+                      {pinned.map((c) => (
+                        <SyncRow
+                          key={c.id}
+                          customer={c}
+                          tab={tab}
+                          gridColsClass={gridColsClass}
+                          clickable={canWrite}
+                          onOpen={openModalFor}
+                        />
+                      ))}
+                      {rest.length > 0 && <GroupHeader label={`Other customers · ${rest.length}`} />}
+                      {rest.map((c) => (
+                        <SyncRow
+                          key={c.id}
+                          customer={c}
+                          tab={tab}
+                          gridColsClass={gridColsClass}
+                          clickable={canWrite}
+                          onOpen={openModalFor}
+                        />
+                      ))}
+                    </>
+                  )}
+            </div>
+          </div>
+
+          <p className="text-[13px] text-on-surface-variant">
+            Click a row to open its {tab === "midweek" ? "Mid-week" : "Reflection"} sync form. Copy as table pastes
+            into Google Docs as a real table.
+          </p>
+        </>
+      )}
+
+      {openCustomer && data && openRow?.tab === "midweek" && (
+        <MidweekSyncModal customer={openCustomer} week={data.week} onClose={() => setOpenRow(null)} />
+      )}
+      {openCustomer && data && openRow?.tab === "reflection" && (
+        <ReflectionSyncModal customer={openCustomer} week={data.week} onClose={() => setOpenRow(null)} />
+      )}
+    </div>
+  );
+}
+
+function HeaderCell({ children }: { children: ReactNode }) {
+  return (
+    <div className="bg-surface-container px-3 py-2 font-display text-label-caps uppercase text-on-surface-variant">
+      {children}
+    </div>
+  );
+}
+
+function HeaderRow({ tab, gridColsClass }: { tab: WeeklySyncTab; gridColsClass: string }) {
+  const labels = tab === "midweek" ? MIDWEEK_HEADER : REFLECTION_HEADER;
+  return (
+    <div className={`grid ${gridColsClass}`}>
+      {labels.map((label) => (
+        <HeaderCell key={label}>{label}</HeaderCell>
+      ))}
+    </div>
+  );
+}
+
+function GroupHeader({ label, amber }: { label: string; amber?: boolean }) {
+  return (
+    <div
+      className={[
+        "border-t border-outline-variant bg-surface-container-low px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider",
+        amber ? "text-chip-amber-text" : "text-on-surface-variant",
+      ].join(" ")}
+    >
+      {label}
+    </div>
+  );
+}
+
+function Cell({ children }: { children: ReactNode }) {
+  return (
+    <div className="whitespace-pre-wrap border-t border-outline-variant px-3 py-2.5 text-sm text-on-surface">
+      {children}
+    </div>
+  );
+}
+
+function TextCell({ value }: { value: string | null | undefined }) {
+  const trimmed = value?.trim();
+  return <Cell>{trimmed ? value : <span className="text-on-surface-variant">—</span>}</Cell>;
+}
+
+interface SyncRowProps {
+  customer: DailyReviewCustomer;
+  tab: WeeklySyncTab;
+  gridColsClass: string;
+  clickable: boolean;
+  onOpen: (customer: DailyReviewCustomer) => void;
+}
+
+function SyncRow({ customer, tab, gridColsClass, clickable, onOpen }: SyncRowProps) {
+  const update = customer.weeklyUpdate;
+  const health = update?.health ?? null;
+  const category = update?.category?.trim() ? update.category : null;
+
+  function handleClick() {
+    if (clickable) onOpen(customer);
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (!clickable) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onOpen(customer);
+    }
+  }
+
+  return (
+    <div
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? handleClick : undefined}
+      onKeyDown={clickable ? handleKeyDown : undefined}
+      data-testid={`weekly-sync-row-${customer.id}`}
+      className={[
+        "grid",
+        gridColsClass,
+        clickable
+          ? "cursor-pointer hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          : "",
+      ].join(" ")}
+    >
+      <Cell>
+        <div className="font-semibold text-on-surface">{customer.name}</div>
+        <div className="mt-0.5 text-[12px] text-on-surface-variant">{category ?? "—"}</div>
+      </Cell>
+      <Cell>
+        {health ? (
+          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${HEALTH_CLASS[health]}`}>
+            {HEALTH_LABEL[health]}
+          </span>
+        ) : (
+          <span className="text-on-surface-variant">—</span>
+        )}
+      </Cell>
+      {tab === "midweek" ? (
+        <>
+          <TextCell value={update?.highlight} />
+          <TextCell value={update?.risk} />
+          <TextCell value={update?.action} />
+          <Cell>
+            {update?.midweekSavedAt ? (
+              `Saved ${MIDWEEK_SAVED_FMT.format(new Date(update.midweekSavedAt))}`
+            ) : (
+              <span className="text-on-surface-variant">Not filled</span>
+            )}
+          </Cell>
+        </>
+      ) : (
+        <>
+          <TextCell value={update?.achievement} />
+          <TextCell value={update?.outstandingIssue} />
+          <TextCell value={update?.lessonLearned} />
+          <TextCell value={update?.nextWeekFocus} />
+          <TextCell value={update?.managerDecision} />
+          <Cell>
+            {(() => {
+              const badge = WEEKLY_STATUS_BADGE[update?.status ?? "NOT_STARTED"];
+              return <Badge variant={badge.variant}>{badge.label}</Badge>;
+            })()}
+          </Cell>
+        </>
+      )}
+    </div>
+  );
+}
