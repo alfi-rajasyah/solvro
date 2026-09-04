@@ -127,6 +127,16 @@ dailyReviewRouter.get(
     const weekStartDate = utcMidnightOfDayString(week.start);
     const weekEndDate = utcMidnightOfDayString(week.days[6]);
     const overdueBoundaryDate = overdueBoundary(today);
+    // D9 (Mid-week carry-over): the Monday exactly 7 days before this
+    // week's, computed on weekStartDate's own UTC-midnight instant (never
+    // local-time arithmetic) so it stays a valid @db.Date value.
+    const previousWeekStartDate = new Date(
+      Date.UTC(
+        weekStartDate.getUTCFullYear(),
+        weekStartDate.getUTCMonth(),
+        weekStartDate.getUTCDate() - 7,
+      ),
+    );
 
     // Decisions 8-9 (customer-visibility-spec.md §5.3): customer-first
     // scope, replacing the old project-first Decisions 13/14. First resolve
@@ -280,7 +290,7 @@ dailyReviewRouter.get(
       }),
     ]);
 
-    const [customerNotes, weeklyUpdates] = await Promise.all([
+    const [customerNotes, weeklyUpdates, previousWeeklyUpdates] = await Promise.all([
       prisma.customerNote.findMany({
         where: {
           customerId: { in: customerIds },
@@ -303,12 +313,34 @@ dailyReviewRouter.get(
           id: true,
           customerId: true,
           weekStart: true,
-          body: true,
           health: true,
           status: true,
           doneAt: true,
+          category: true,
+          highlight: true,
+          risk: true,
+          action: true,
+          achievement: true,
+          outstandingIssue: true,
+          lessonLearned: true,
+          nextWeekFocus: true,
+          managerDecision: true,
+          midweekSavedAt: true,
           updatedAt: true,
           author: { select: { id: true, username: true } },
+        },
+      }),
+      // D9: last Friday's carry-over fields for the Mid-week modal — one
+      // extra batched findMany over the same customerIds, keeping the
+      // per-request query count fixed regardless of page size.
+      prisma.weeklyUpdate.findMany({
+        where: { customerId: { in: customerIds }, weekStart: previousWeekStartDate },
+        select: {
+          customerId: true,
+          weekStart: true,
+          outstandingIssue: true,
+          nextWeekFocus: true,
+          managerDecision: true,
         },
       }),
     ]);
@@ -375,9 +407,13 @@ dailyReviewRouter.get(
 
     const customerNotesByCustomer = groupBy(customerNotes, (n) => n.customerId);
     const weeklyUpdateByCustomer = new Map(weeklyUpdates.map((wu) => [wu.customerId, wu]));
+    const previousWeeklyUpdateByCustomer = new Map(
+      previousWeeklyUpdates.map((wu) => [wu.customerId, wu]),
+    );
 
     const customerDtos = customers.map((c) => {
       const weeklyUpdate = weeklyUpdateByCustomer.get(c.id);
+      const previousWeeklyUpdate = previousWeeklyUpdateByCustomer.get(c.id);
       return {
         id: c.id,
         name: c.name,
@@ -395,12 +431,31 @@ dailyReviewRouter.get(
           ? {
               id: weeklyUpdate.id,
               weekStart: weeklyUpdate.weekStart,
-              body: weeklyUpdate.body,
               health: weeklyUpdate.health,
               status: weeklyUpdate.status,
               doneAt: weeklyUpdate.doneAt,
+              category: weeklyUpdate.category,
+              highlight: weeklyUpdate.highlight,
+              risk: weeklyUpdate.risk,
+              action: weeklyUpdate.action,
+              achievement: weeklyUpdate.achievement,
+              outstandingIssue: weeklyUpdate.outstandingIssue,
+              lessonLearned: weeklyUpdate.lessonLearned,
+              nextWeekFocus: weeklyUpdate.nextWeekFocus,
+              managerDecision: weeklyUpdate.managerDecision,
+              midweekSavedAt: weeklyUpdate.midweekSavedAt,
               author: weeklyUpdate.author,
               updatedAt: weeklyUpdate.updatedAt,
+            }
+          : null,
+        // D9: last Friday's carry-over for the Mid-week modal — only the 3
+        // fields the modal reads, nothing else from the previous row.
+        previousWeeklyUpdate: previousWeeklyUpdate
+          ? {
+              weekStart: previousWeeklyUpdate.weekStart,
+              outstandingIssue: previousWeeklyUpdate.outstandingIssue,
+              nextWeekFocus: previousWeeklyUpdate.nextWeekFocus,
+              managerDecision: previousWeeklyUpdate.managerDecision,
             }
           : null,
       };

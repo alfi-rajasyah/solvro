@@ -452,18 +452,27 @@ model CustomerNote {
 // notes. NOT_STARTED is the client-side state for "no row yet" — the enum
 // value exists so a saved update can be reset without deleting the row.
 model WeeklyUpdate {
-  id         Int           @id @default(autoincrement())
-  customerId Int           @map("customer_id")
-  customer   Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  weekStart  DateTime      @map("week_start") @db.Date
-  authorId   Int           @map("author_id")
-  author     User          @relation(fields: [authorId], references: [id])
-  body       String        @db.Text
-  health     WeeklyHealth?
-  status     WeeklyStatus  @default(DRAFT)
-  doneAt     DateTime?     @map("done_at")
-  createdAt  DateTime      @default(now()) @map("created_at")
-  updatedAt  DateTime      @updatedAt @map("updated_at")
+  id                Int           @id @default(autoincrement())
+  customerId        Int           @map("customer_id")
+  customer          Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  weekStart         DateTime      @map("week_start") @db.Date
+  authorId          Int           @map("author_id")
+  author            User          @relation(fields: [authorId], references: [id])
+  category          String?       @db.VarChar(120)
+  highlight         String?       @db.Text
+  risk              String?       @db.Text
+  action            String?       @db.Text
+  achievement       String?       @db.Text
+  outstandingIssue  String?       @map("outstanding_issue") @db.Text
+  lessonLearned     String?       @map("lesson_learned") @db.Text
+  nextWeekFocus     String?       @map("next_week_focus") @db.Text
+  managerDecision   String?       @map("manager_decision") @db.Text
+  midweekSavedAt    DateTime?     @map("midweek_saved_at")
+  health            WeeklyHealth?
+  status            WeeklyStatus  @default(DRAFT)
+  doneAt            DateTime?     @map("done_at")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
 
   @@unique([customerId, weekStart])
   @@index([authorId])

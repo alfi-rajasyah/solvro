@@ -43,17 +43,17 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const created = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "First draft", status: "DRAFT" });
+      .send({ achievement: "First draft", status: "DRAFT" });
     expect(created.status).toBe(201);
     const id = created.body.id;
 
     const updated = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "Second draft", status: "DRAFT" });
+      .send({ achievement: "Second draft", status: "DRAFT" });
     expect(updated.status).toBe(200);
     expect(updated.body.id).toBe(id);
-    expect(updated.body.body).toBe("Second draft");
+    expect(updated.body.achievement).toBe("Second draft");
   });
 
   it("rejects a non-Monday weekStart with 400 week_start_not_monday", async () => {
@@ -62,7 +62,7 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const res = await request(app)
       .put(`/customers/${customerId}/weekly-updates/2026-08-25`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "x", status: "DRAFT" });
+      .send({ achievement: "x", status: "DRAFT" });
     expect(res.status).toBe(400);
     expect(res.body.code).toBe("week_start_not_monday");
   });
@@ -72,27 +72,27 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const res = await request(app)
       .put(`/customers/${customerId}/weekly-updates/not-a-date`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "x", status: "DRAFT" });
+      .send({ achievement: "x", status: "DRAFT" });
     expect(res.status).toBe(400);
   });
 
-  it("rejects DONE without health, and DONE with an empty body: 400 weekly_update_incomplete", async () => {
+  it("rejects DONE without health, and DONE with a whitespace-only achievement: 400 weekly_update_incomplete", async () => {
     const customerId = await createCustomer();
     const monday = "2026-08-24";
 
     const noHealth = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "Ready to ship", status: "DONE" });
+      .send({ achievement: "Ready to ship", status: "DONE" });
     expect(noHealth.status).toBe(400);
     expect(noHealth.body.code).toBe("weekly_update_incomplete");
 
-    const emptyBody = await request(app)
+    const emptyAchievement = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "   ", status: "DONE", health: "GREEN" });
-    expect(emptyBody.status).toBe(400);
-    expect(emptyBody.body.code).toBe("weekly_update_incomplete");
+      .send({ achievement: "   ", status: "DONE", health: "GREEN" });
+    expect(emptyAchievement.status).toBe(400);
+    expect(emptyAchievement.body.code).toBe("weekly_update_incomplete");
   });
 
   it("sets doneAt on DONE and clears it moving back to DRAFT", async () => {
@@ -102,7 +102,7 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const done = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "Shipping this week", status: "DONE", health: "GREEN" });
+      .send({ achievement: "Shipping this week", status: "DONE", health: "GREEN" });
     expect(done.status).toBe(201);
     expect(done.body.status).toBe("DONE");
     expect(done.body.doneAt).not.toBeNull();
@@ -110,7 +110,7 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const reopened = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "Reopened", status: "DRAFT" });
+      .send({ achievement: "Reopened", status: "DRAFT" });
     expect(reopened.status).toBe(200);
     expect(reopened.body.status).toBe("DRAFT");
     expect(reopened.body.doneAt).toBeNull();
@@ -123,7 +123,7 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const done = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "Shipping this week", status: "DONE", health: "GREEN" });
+      .send({ achievement: "Shipping this week", status: "DONE", health: "GREEN" });
     expect(done.status).toBe(201);
     const firstDoneAt = done.body.doneAt;
     expect(firstDoneAt).not.toBeNull();
@@ -136,14 +136,14 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const resaved = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "Shipping this week (typo fix)", status: "DONE", health: "GREEN" });
+      .send({ achievement: "Shipping this week (typo fix)", status: "DONE", health: "GREEN" });
     expect(resaved.status).toBe(200);
     expect(resaved.body.doneAt).toBe(firstDoneAt);
 
     const reopened = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "Back to draft", status: "DRAFT" });
+      .send({ achievement: "Back to draft", status: "DRAFT" });
     expect(reopened.status).toBe(200);
     expect(reopened.body.doneAt).toBeNull();
 
@@ -152,7 +152,7 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const doneAgain = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "Done again", status: "DONE", health: "AMBER" });
+      .send({ achievement: "Done again", status: "DONE", health: "AMBER" });
     expect(doneAgain.status).toBe(200);
     expect(doneAgain.body.doneAt).not.toBeNull();
     expect(doneAgain.body.doneAt).not.toBe(firstDoneAt);
@@ -165,21 +165,21 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const created = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "First draft", status: "DRAFT", health: "AMBER" });
+      .send({ achievement: "First draft", status: "DRAFT", health: "AMBER" });
     expect(created.status).toBe(201);
     expect(created.body.health).toBe("AMBER");
 
     const omitted = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "Second draft", status: "DRAFT" });
+      .send({ achievement: "Second draft", status: "DRAFT" });
     expect(omitted.status).toBe(200);
     expect(omitted.body.health).toBe("AMBER");
 
     const cleared = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "Third draft", status: "DRAFT", health: null });
+      .send({ achievement: "Third draft", status: "DRAFT", health: null });
     expect(cleared.status).toBe(200);
     expect(cleared.body.health).toBeNull();
   });
@@ -191,7 +191,7 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const res = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ body: "", status: "NOT_STARTED" });
+      .send({ achievement: "", status: "NOT_STARTED" });
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("NOT_STARTED");
     expect(res.body.doneAt).toBeNull();
@@ -211,7 +211,7 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
       const res = await request(app)
         .put(`/customers/${customerId}/weekly-updates/${monday}`)
         .set("Authorization", `Bearer ${token}`)
-        .send({ body: `Update for ${monday}`, status: "DRAFT" });
+        .send({ achievement: `Update for ${monday}`, status: "DRAFT" });
       expect(res.status).toBe(201);
     }
 
@@ -225,13 +225,177 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     expect(list.body[1].weekStart.slice(0, 10)).toBe("2026-08-17");
   });
 
+  it("a partial save (only highlight) leaves a previously saved achievement, health and status unchanged", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const created = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ achievement: "Shipped the migration", health: "GREEN", status: "DRAFT" });
+    expect(created.status).toBe(201);
+
+    const partial = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlight: "New integration landed" });
+    expect(partial.status).toBe(200);
+    expect(partial.body.highlight).toBe("New integration landed");
+    expect(partial.body.achievement).toBe("Shipped the migration");
+    expect(partial.body.health).toBe("GREEN");
+    expect(partial.body.status).toBe("DRAFT");
+  });
+
+  it("stores a whitespace-only risk as null and a padded category trimmed", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const res = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ category: "  Ops Review  ", risk: "   " });
+    expect(res.status).toBe(201);
+    expect(res.body.category).toBe("Ops Review");
+    expect(res.body.risk).toBeNull();
+  });
+
+  it("rejects a category longer than 120 characters with 400", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const res = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ category: "x".repeat(121) });
+    expect(res.status).toBe(400);
+  });
+
+  it("trims category before the 120-character check, so trailing padding doesn't push it over", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const res = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ category: "x".repeat(120) + "  " });
+    expect(res.status).toBe(201);
+    expect(res.body.category).toHaveLength(120);
+  });
+
+  it("stamps midweekSavedAt only when the body carries a Mid-week field", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const reflectionOnly = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ achievement: "Shipped it", outstandingIssue: "None" });
+    expect(reflectionOnly.status).toBe(201);
+    expect(reflectionOnly.body.midweekSavedAt).toBeNull();
+
+    const midweekTouch = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ action: null });
+    expect(midweekTouch.status).toBe(200);
+    expect(midweekTouch.body.midweekSavedAt).not.toBeNull();
+    expect(midweekTouch.body.action).toBeNull();
+  });
+
+  it("keeps DONE and its doneAt when a Mid-week save omits status", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const done = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ achievement: "Shipped this week", status: "DONE", health: "GREEN" });
+    expect(done.status).toBe(201);
+    expect(done.body.status).toBe("DONE");
+    const doneAt = done.body.doneAt;
+    expect(doneAt).not.toBeNull();
+
+    const midweekEdit = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlight: "Late Wednesday note" });
+    expect(midweekEdit.status).toBe(200);
+    expect(midweekEdit.body.status).toBe("DONE");
+    expect(midweekEdit.body.doneAt).toBe(doneAt);
+  });
+
+  it("list endpoint returns all nine text fields and midweekSavedAt", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const saved = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        category: "Ops",
+        highlight: "Highlight text",
+        risk: "Risk text",
+        action: "Action text",
+        achievement: "Achievement text",
+        outstandingIssue: "Outstanding text",
+        lessonLearned: "Lesson text",
+        nextWeekFocus: "Focus text",
+        managerDecision: "Decision text",
+      });
+    expect(saved.status).toBe(201);
+
+    const list = await request(app)
+      .get(`/customers/${customerId}/weekly-updates`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body).toHaveLength(1);
+    const row = list.body[0];
+    expect(row.category).toBe("Ops");
+    expect(row.highlight).toBe("Highlight text");
+    expect(row.risk).toBe("Risk text");
+    expect(row.action).toBe("Action text");
+    expect(row.achievement).toBe("Achievement text");
+    expect(row.outstandingIssue).toBe("Outstanding text");
+    expect(row.lessonLearned).toBe("Lesson text");
+    expect(row.nextWeekFocus).toBe("Focus text");
+    expect(row.managerDecision).toBe("Decision text");
+    expect(row.midweekSavedAt).not.toBeNull();
+  });
+
+  it("rejects DONE when achievement is stored null even with health present, and accepts it once achievement is supplied", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const draft = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ health: "GREEN", status: "DRAFT" });
+    expect(draft.status).toBe(201);
+    expect(draft.body.achievement).toBeNull();
+
+    const rejected = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ status: "DONE" });
+    expect(rejected.status).toBe(400);
+    expect(rejected.body.code).toBe("weekly_update_incomplete");
+
+    const accepted = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ status: "DONE", achievement: "Finally shipped" });
+    expect(accepted.status).toBe(200);
+    expect(accepted.body.status).toBe("DONE");
+    expect(accepted.body.achievement).toBe("Finally shipped");
+  });
+
   it("STAKEHOLDER gets 403 saving a weekly update", async () => {
     const customerId = await createCustomer();
     const stakeholder = await createUserWithRole("STAKEHOLDER");
     const res = await request(app)
       .put(`/customers/${customerId}/weekly-updates/2026-08-24`)
       .set("Authorization", `Bearer ${stakeholder.token}`)
-      .send({ body: "x", status: "DRAFT" });
+      .send({ achievement: "x", status: "DRAFT" });
     expect(res.status).toBe(403);
   });
 
@@ -258,7 +422,7 @@ describe("admin user-delete blockers for notes/weekly updates", () => {
     const saved = await request(app)
       .put(`/customers/${customerId}/weekly-updates/2026-08-24`)
       .set("Authorization", `Bearer ${author.token}`)
-      .send({ body: "Weekly note", status: "DRAFT" });
+      .send({ achievement: "Weekly note", status: "DRAFT" });
     expect(saved.status).toBe(201);
 
     const del = await request(app)

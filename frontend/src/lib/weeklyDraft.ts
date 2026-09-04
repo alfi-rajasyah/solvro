@@ -1,8 +1,14 @@
-// Drafts a customer's weekly update body from the week's daily notes
-// (daily-review-v2-spec.md §6.2). Pure function — no React, no network —
-// so `DailyReview.tsx`'s "Draft from this week's notes" / "Re-draft" actions
-// (T6) can call it directly and the Vitest suite below can exercise it in
-// isolation.
+// Drafts a customer's weekly-sync text from the week's daily notes
+// (docs/plans/weekly-sync-tables.md §4 "Draft helper", D11). Pure function —
+// no React, no network — so the Daily Review modals' "Draft from notes"
+// actions can call it directly and the Vitest suite below can exercise it in
+// isolation. `opts.throughDay`, when given, restricts BOTH project and
+// operations notes to `week.days` entries on or before that day (a plain
+// string compare on "yyyy-MM-dd" — the boundary day itself is kept): the
+// Mid-week modal passes `week.days[2]` so Highlight only drafts from
+// Mon-Wed notes, while the Reflection modal omits it so Weekly Achievement
+// keeps drafting from the full week, weekend notes included, exactly as
+// before.
 import { dayFromIso } from "./dateField";
 import type { DailyReviewCustomer, DailyReviewNote, DailyReviewOpsNote } from "./queries";
 
@@ -98,29 +104,35 @@ function bracketFor(note: DailyReviewOpsNote): string {
 }
 
 /**
- * Drafts a customer's weekly update from this week's project + operations
+ * Drafts a customer's weekly-sync text from this week's project + operations
  * notes: one paragraph per project (customer's own project order, project
  * skipped entirely if it has zero notes this week), then one "Operations —"
- * paragraph if any operations notes exist this week, then a trailing
- * "Next week — " line — always appended, even for a customer with no notes
- * at all (in which case the whole output is just that one line). Paragraphs
- * are separated by a blank line.
+ * paragraph if any operations notes exist this week. No trailing "next
+ * week" line: the draft now lands in a single column (Highlight on
+ * Wednesday, Weekly Achievement on Friday) that gets copied verbatim into
+ * the meeting table, and "next week" is its own field (Next Week Focus) —
+ * a stub belonged here only when the draft filled one free-text box.
+ * Paragraphs are separated by a blank line; a customer with no notes at all
+ * (in the drafted range) drafts to an empty string.
  */
 export function draftWeeklyUpdate(
   customer: DailyReviewCustomer,
   week: { days: string[] },
+  opts?: { throughDay?: string },
 ): string {
   const paragraphs: string[] = [];
+  const throughDay = opts?.throughDay;
+  const days = throughDay ? week.days.filter((d) => d <= throughDay) : week.days;
 
   for (const project of customer.projects) {
-    const rows = buildDayRows<DailyReviewNote>(week.days, groupNotesByDay(project.notes));
+    const rows = buildDayRows<DailyReviewNote>(days, groupNotesByDay(project.notes));
     if (rows.length === 0) continue;
     paragraphs.push(`${project.name} — ${rows.join(" · ")}`);
   }
 
   if (customer.operationsNotes.length > 0) {
     const rows = buildDayRows<DailyReviewOpsNote>(
-      week.days,
+      days,
       groupNotesByDay(customer.operationsNotes),
       bracketFor,
     );
@@ -129,6 +141,5 @@ export function draftWeeklyUpdate(
     }
   }
 
-  paragraphs.push("Next week — ");
   return paragraphs.join("\n\n");
 }

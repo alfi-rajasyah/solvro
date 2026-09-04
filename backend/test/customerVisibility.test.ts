@@ -198,7 +198,7 @@ describe("Id-keyed customer routes — 404 customer_not_found on the unrelated c
     const putRes = await request(app)
       .put(`/customers/${unrelated.id}/weekly-updates/2026-08-24`)
       .set("Authorization", `Bearer ${tam.token}`)
-      .send({ body: "x", status: "DRAFT" });
+      .send({ achievement: "x", status: "DRAFT" });
     expect(putRes.status).toBe(404);
     expect(putRes.body.code).toBe("customer_not_found");
   });

@@ -84,10 +84,37 @@ const weeklyUpdateParamSchema = z.object({
 });
 
 const saveWeeklyUpdateSchema = z.object({
-  body: z.string().max(8000),
   health: z.nativeEnum(WeeklyHealth).nullable().optional(),
-  status: z.nativeEnum(WeeklyStatus),
+  status: z.nativeEnum(WeeklyStatus).optional(),
+  // Trim before the length check so a value that's exactly 120 characters
+  // after trimming isn't rejected for padding that normalizeText would
+  // have stripped anyway.
+  category: z
+    .string()
+    .transform((s) => s.trim())
+    .pipe(z.string().max(120))
+    .nullable()
+    .optional(),
+  highlight: z.string().max(8000).nullable().optional(),
+  risk: z.string().max(8000).nullable().optional(),
+  action: z.string().max(8000).nullable().optional(),
+  achievement: z.string().max(8000).nullable().optional(),
+  outstandingIssue: z.string().max(8000).nullable().optional(),
+  lessonLearned: z.string().max(8000).nullable().optional(),
+  nextWeekFocus: z.string().max(8000).nullable().optional(),
+  managerDecision: z.string().max(8000).nullable().optional(),
 });
+
+// Every Mid-week/Reflection text field goes through this one normalisation:
+// `undefined` (the key was omitted) leaves the stored value unchanged;
+// `null` or a whitespace-only string clears it to `null`; anything else is
+// stored trimmed. A field is NEVER stored as `""`.
+function normalizeText(value: string | null | undefined): string | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? null : trimmed;
+}
 
 export const customersRouter = Router();
 
@@ -480,29 +507,55 @@ customersRouter.put(
       );
     }
 
+    // Normalise every text field once. Each stays `undefined` when the key
+    // was omitted (leave unchanged), or becomes the trimmed string / `null`
+    // otherwise — see normalizeText.
+    const category = normalizeText(body.category);
+    const highlight = normalizeText(body.highlight);
+    const risk = normalizeText(body.risk);
+    const action = normalizeText(body.action);
+    const achievement = normalizeText(body.achievement);
+    const outstandingIssue = normalizeText(body.outstandingIssue);
+    const lessonLearned = normalizeText(body.lessonLearned);
+    const nextWeekFocus = normalizeText(body.nextWeekFocus);
+    const managerDecision = normalizeText(body.managerDecision);
+
     const weekStartDate = utcMidnightOfDayString(weekStart);
     const existing = await prisma.weeklyUpdate.findUnique({
       where: { customerId_weekStart: { customerId: id, weekStart: weekStartDate } },
-      select: { id: true, status: true, doneAt: true, health: true },
+      select: { id: true, status: true, doneAt: true, health: true, achievement: true },
     });
 
-    // An omitted `health` leaves the stored value unchanged (explicit
-    // `null` still clears it) — so the DONE completeness check looks at
-    // the EFFECTIVE health: what the body sends, else what's already there.
+    // An omitted `status` leaves the stored status unchanged (DRAFT on
+    // create) — a Mid-week-only save must never reopen (or otherwise
+    // touch) a DONE row's status.
+    const status = body.status ?? existing?.status ?? "DRAFT";
+
+    // An omitted `health`/`achievement` leaves the stored value unchanged
+    // (explicit `null` still clears it) — so the DONE completeness check
+    // looks at the EFFECTIVE value: what the body sends, else what's
+    // already there.
     const effectiveHealth = body.health !== undefined ? body.health : (existing?.health ?? null);
-    if (body.status === "DONE" && (body.body.trim().length === 0 || effectiveHealth == null)) {
+    const effectiveAchievement =
+      achievement !== undefined ? achievement : (existing?.achievement ?? null);
+    if (status === "DONE" && (effectiveAchievement === null || effectiveHealth == null)) {
       throw new HttpError(
         400,
         "weekly_update_incomplete",
-        "Marking a weekly update done requires a non-empty body and a health value",
+        "Marking a weekly update done requires health and Weekly Achievement to both be set",
       );
     }
 
     // doneAt is stamped once, on the transition INTO done — re-saving an
-    // already-DONE row (e.g. a body edit) must not bump it. Any non-DONE
-    // status always clears it.
+    // already-DONE row (e.g. a Mid-week-only edit) must not bump it. Any
+    // non-DONE status always clears it.
     const doneAt =
-      body.status === "DONE" ? (existing?.status === "DONE" ? existing.doneAt : new Date()) : null;
+      status === "DONE" ? (existing?.status === "DONE" ? existing.doneAt : new Date()) : null;
+
+    // Stamped whenever the body touches any Mid-week field (category,
+    // highlight, risk, action) — even a field sent as `null` counts, since
+    // this marks "the Mid-week form was saved this week", not "it has text".
+    const midweekTouched = [category, highlight, risk, action].some((v) => v !== undefined);
 
     const updated = await prisma.weeklyUpdate.upsert({
       where: { customerId_weekStart: { customerId: id, weekStart: weekStartDate } },
@@ -510,17 +563,35 @@ customersRouter.put(
         customerId: id,
         weekStart: weekStartDate,
         authorId: req.user!.sub,
-        body: body.body,
         health: body.health ?? null,
-        status: body.status,
+        status,
         doneAt,
+        category: category ?? null,
+        highlight: highlight ?? null,
+        risk: risk ?? null,
+        action: action ?? null,
+        achievement: achievement ?? null,
+        outstandingIssue: outstandingIssue ?? null,
+        lessonLearned: lessonLearned ?? null,
+        nextWeekFocus: nextWeekFocus ?? null,
+        managerDecision: managerDecision ?? null,
+        midweekSavedAt: midweekTouched ? new Date() : null,
       },
       update: {
         authorId: req.user!.sub,
-        body: body.body,
-        ...(body.health !== undefined && { health: body.health }),
-        status: body.status,
+        status,
         doneAt,
+        ...(body.health !== undefined && { health: body.health }),
+        ...(category !== undefined && { category }),
+        ...(highlight !== undefined && { highlight }),
+        ...(risk !== undefined && { risk }),
+        ...(action !== undefined && { action }),
+        ...(achievement !== undefined && { achievement }),
+        ...(outstandingIssue !== undefined && { outstandingIssue }),
+        ...(lessonLearned !== undefined && { lessonLearned }),
+        ...(nextWeekFocus !== undefined && { nextWeekFocus }),
+        ...(managerDecision !== undefined && { managerDecision }),
+        ...(midweekTouched && { midweekSavedAt: new Date() }),
       },
       include: { author: { select: { id: true, username: true } } },
     });
