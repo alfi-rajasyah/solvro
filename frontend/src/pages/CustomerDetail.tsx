@@ -619,6 +619,10 @@ function WeeklyUpdatesList({ customerId }: { customerId: number }) {
 function WeeklyUpdateRow({ update }: { update: WeeklyUpdate }) {
   const weekKey = weekKeyOf(dayFromIso(update.weekStart)!);
   const isDone = update.status === "DONE";
+  const [midweekOpen, setMidweekOpen] = useState(false);
+  const midweekFieldsId = `weekly-update-${update.id}-midweek-fields`;
+  const hasMidweekContent = Boolean(update.highlight || update.risk || update.action);
+
   return (
     <li className="py-3 first:pt-0 last:pb-0">
       <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
@@ -635,20 +639,93 @@ function WeeklyUpdateRow({ update }: { update: WeeklyUpdate }) {
           {statusBadge(update.status)}
         </div>
       </div>
-      <p
-        className={[
-          "whitespace-pre-wrap text-sm",
-          isDone ? "text-on-surface" : "text-on-surface-variant",
-        ].join(" ")}
-      >
-        {update.body}
-      </p>
+
+      {update.category && (
+        <p className="mt-1 font-display text-sm font-semibold text-on-surface">
+          {update.category}
+        </p>
+      )}
+
+      <div className="mt-2 grid gap-x-5 gap-y-2.5 sm:grid-cols-2">
+        <WeeklyUpdateField label="Weekly achievement" value={update.achievement} isDone={isDone} />
+        <WeeklyUpdateField label="Outstanding issue" value={update.outstandingIssue} isDone={isDone} />
+        <WeeklyUpdateField label="Lesson learned" value={update.lessonLearned} isDone={isDone} />
+        <WeeklyUpdateField label="Next week focus" value={update.nextWeekFocus} isDone={isDone} />
+        <WeeklyUpdateField
+          label="Need manager decision"
+          value={update.managerDecision}
+          isDone={isDone}
+          spanBothColumns
+          labelClassName="text-chip-amber-text"
+        />
+      </div>
+
+      {hasMidweekContent && (
+        <>
+          <button
+            type="button"
+            onClick={() => setMidweekOpen((v) => !v)}
+            aria-expanded={midweekOpen}
+            aria-controls={midweekFieldsId}
+            className="mt-2 text-[12px] font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          >
+            {midweekOpen ? "Hide mid-week" : "Show mid-week"}
+          </button>
+
+          {midweekOpen && (
+            <div
+              id={midweekFieldsId}
+              className="mt-2 grid gap-x-5 gap-y-2.5 sm:grid-cols-2"
+            >
+              <WeeklyUpdateField label="Highlight" value={update.highlight} isDone={isDone} />
+              <WeeklyUpdateField label="Risk" value={update.risk} isDone={isDone} />
+              <WeeklyUpdateField label="Action" value={update.action} isDone={isDone} />
+            </div>
+          )}
+        </>
+      )}
+
       <p className="mt-1.5 text-[11px] text-on-surface-variant">
         by {update.author.username} · updated{" "}
         {new Date(update.updatedAt).toLocaleDateString()}
         {update.doneAt && ` · done ${new Date(update.doneAt).toLocaleString()}`}
       </p>
     </li>
+  );
+}
+
+function WeeklyUpdateField({
+  label,
+  value,
+  isDone,
+  spanBothColumns,
+  labelClassName,
+}: {
+  label: string;
+  value: string | null;
+  isDone: boolean;
+  spanBothColumns?: boolean;
+  labelClassName?: string;
+}) {
+  return (
+    <div className={spanBothColumns ? "sm:col-span-2" : undefined}>
+      <p
+        className={[
+          "text-[11px] font-bold uppercase tracking-wider",
+          labelClassName ?? "text-on-surface-variant",
+        ].join(" ")}
+      >
+        {label}
+      </p>
+      <p
+        className={[
+          "whitespace-pre-wrap text-sm",
+          value ? (isDone ? "text-on-surface" : "text-on-surface-variant") : "text-on-surface-variant",
+        ].join(" ")}
+      >
+        {value || "—"}
+      </p>
+    </div>
   );
 }
 

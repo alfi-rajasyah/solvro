@@ -309,6 +309,12 @@ export interface ProjectsFilter {
 // `reviewDate`) all arrive as ISO strings — the backend's `@db.Date` columns
 // serialise as `T00:00:00.000Z` instants; read the calendar day via
 // `dayFromIso`/`.slice(0, 10)` (dateField.ts), never `new Date(x) < today`.
+// `WeeklyUpdate.midweekSavedAt` is also an ISO string but NOT one of these
+// `@db.Date` columns — it's a real `DateTime` with a meaningful time-of-day
+// (when the Mid-week form was saved), so a caller displaying it (e.g. "Mid-
+// week saved Wed 2 Sep, 3:14 PM") should format it with `new Date(...)` in
+// the viewer's local time, never slice/`dayFromIso` it like the day-only
+// fields above.
 // ─────────────────────────────────────────────────────────────────────────
 
 export interface DailyReviewNote {
@@ -328,12 +334,37 @@ export interface DailyReviewOpsNote extends DailyReviewNote {
 export interface WeeklyUpdate {
   id: number;
   weekStart: string;
-  body: string;
   health: WeeklyHealth | null;
   status: WeeklyStatus;
   doneAt: string | null;
+  // Mid-week table fields (docs/plans/weekly-sync-tables.md §2 D2).
+  category: string | null;
+  highlight: string | null;
+  risk: string | null;
+  action: string | null;
+  // Reflection table fields. `achievement` replaces the old free-text
+  // `body` (D6 — the migration copied every existing `body` into this
+  // column, then dropped `body`).
+  achievement: string | null;
+  outstandingIssue: string | null;
+  lessonLearned: string | null;
+  nextWeekFocus: string | null;
+  managerDecision: string | null;
+  // Stamped on every save that carries at least one Mid-week field —
+  // drives "Mid-week saved {date}" on the Daily Review row and Weekly Sync
+  // page.
+  midweekSavedAt: string | null;
   author: { id: number; username: string };
   updatedAt: string;
+}
+
+// D9: last Friday's carry-over — only the 3 fields the Mid-week modal shows
+// read-only, never the full previous row.
+export interface WeeklyUpdateCarryOver {
+  weekStart: string;
+  outstandingIssue: string | null;
+  nextWeekFocus: string | null;
+  managerDecision: string | null;
 }
 
 export interface DailyReviewProject {
@@ -367,6 +398,9 @@ export interface DailyReviewCustomer {
   projects: DailyReviewProject[];
   operationsNotes: DailyReviewOpsNote[];
   weeklyUpdate: WeeklyUpdate | null;
+  // D9: the row for `weekStart − 7 days`, or null if the customer had no
+  // weekly update that week. Feeds the Mid-week modal's carry-over panel.
+  previousWeeklyUpdate: WeeklyUpdateCarryOver | null;
 }
 
 export interface DailyReviewResponse {
@@ -1811,16 +1845,33 @@ export function useDeleteCustomerNote(customerId: number) {
 
 // ---- Weekly updates (per customer, Decision 2) -----------------------------
 
-// `health` is REQUIRED here (nullable, never optional/omittable): the
-// backend treats an omitted `health` key as "leave the stored value
-// unchanged", so this hook must always send it explicitly — `null` to
-// clear it, never `undefined`. TypeScript enforces this at the call site;
-// don't loosen it to `health?:`.
+// Every key but `weekStart` is optional (docs/plans/weekly-sync-tables.md
+// §3 D12, the backend's partial-save contract): an OMITTED key leaves the
+// stored value unchanged, while `null` (or a whitespace-only string, for
+// the text fields) clears it. This is what lets the Mid-week and Reflection
+// modals each save their own half of the row without clobbering the
+// other's unsaved work — a modal must only include the keys it actually
+// edits, never spread in the fields it doesn't own. `src/lib/api.ts`'s
+// `JSON.stringify(body)` drops any key whose value is `undefined`, so an
+// explicitly-`undefined` field and one never set on the object reach the
+// server identically (absent) and leave the stored value unchanged either
+// way; only `null` or a whitespace-only string actually clears a text field
+// (`normalizeText` in `backend/src/routes/customers.ts`). `status` is never
+// sent by the Mid-week modal — the backend defaults it to DRAFT on create
+// and otherwise leaves it alone.
 export interface SaveWeeklyUpdateInput {
   weekStart: string;
-  body: string;
-  health: WeeklyHealth | null;
-  status: WeeklyStatus;
+  health?: WeeklyHealth | null;
+  status?: WeeklyStatus;
+  category?: string | null;
+  highlight?: string | null;
+  risk?: string | null;
+  action?: string | null;
+  achievement?: string | null;
+  outstandingIssue?: string | null;
+  lessonLearned?: string | null;
+  nextWeekFocus?: string | null;
+  managerDecision?: string | null;
 }
 
 // Plain mutation, no onMutate optimism (spec §6.1): the textarea already
