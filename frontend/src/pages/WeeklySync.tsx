@@ -28,8 +28,10 @@ const MIDWEEK_SAVED_FMT = new Intl.DateTimeFormat(undefined, {
   month: "short",
 });
 
-const MIDWEEK_GRID_COLS = "grid-cols-[180px_88px_1fr_1fr_1fr_140px]";
-const REFLECTION_GRID_COLS = "grid-cols-[180px_88px_1fr_1fr_1fr_1fr_1.2fr_110px]";
+const MIDWEEK_GRID_COLS =
+  "grid-cols-[180px_88px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_140px]";
+const REFLECTION_GRID_COLS =
+  "grid-cols-[180px_88px_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1fr)_minmax(0,1.2fr)_110px]";
 
 const MIDWEEK_HEADER = ["Customer", "Health", "Highlight", "Risk", "Action", "Status"];
 const REFLECTION_HEADER = [
@@ -416,7 +418,7 @@ function GroupHeader({ label, amber }: { label: string; amber?: boolean }) {
 
 function Cell({ children }: { children: ReactNode }) {
   return (
-    <div className="whitespace-pre-wrap border-t border-outline-variant px-3 py-2.5 text-sm text-on-surface">
+    <div className="whitespace-pre-wrap wrap-break-word border-t border-outline-variant px-3 py-2.5 text-sm text-on-surface">
       {children}
     </div>
   );
