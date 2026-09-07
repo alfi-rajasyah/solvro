@@ -37,6 +37,33 @@ export function hasManagerDecision(customer: DailyReviewCustomer): boolean {
   return Boolean(customer.weeklyUpdate?.managerDecision?.trim());
 }
 
+/** True when `value` has content after trim — the same test the page's "—" fallback uses. */
+function hasText(value: string | null | undefined): boolean {
+  return Boolean(value?.trim());
+}
+
+/**
+ * True when `customer` has an update for `tab` this week — the Weekly Sync
+ * page lists only these rows by default. Mid-week: the Mid-week form was
+ * saved (`midweekSavedAt`) or any Mid-week text field has content.
+ * Reflection: the week is DONE or any Reflection text field has content.
+ * Health alone never counts — it is set on Wednesday too, so counting it
+ * would surface every Mid-week-only customer as an empty row on the
+ * Reflection tab. A customer with no weekly-update row at all has no update
+ * on either tab.
+ */
+export function hasTabUpdate(tab: WeeklySyncTab, customer: DailyReviewCustomer): boolean {
+  const u = customer.weeklyUpdate;
+  if (!u) return false;
+  if (tab === "midweek") {
+    return u.midweekSavedAt != null || [u.category, u.highlight, u.risk, u.action].some(hasText);
+  }
+  return (
+    u.status === "DONE" ||
+    [u.achievement, u.outstandingIssue, u.lessonLearned, u.nextWeekFocus, u.managerDecision].some(hasText)
+  );
+}
+
 /**
  * The display order for `tab` (D10): on the Reflection tab, customers with a
  * non-empty `managerDecision` sort first, then the rest — each group keeping

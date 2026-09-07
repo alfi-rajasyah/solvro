@@ -1,6 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { DailyReviewCustomer, WeeklyUpdate } from "./queries";
-import { buildSyncTable, hasManagerDecision, orderForTab, toHtmlTable, toTsv } from "./weeklySyncTable";
+import {
+  buildSyncTable,
+  hasManagerDecision,
+  hasTabUpdate,
+  orderForTab,
+  toHtmlTable,
+  toTsv,
+} from "./weeklySyncTable";
 
 let nextId = 1;
 
@@ -48,6 +55,43 @@ describe("hasManagerDecision", () => {
 
   it("is true for a non-empty decision", () => {
     expect(hasManagerDecision(customer("D", { managerDecision: "Approve budget" }))).toBe(true);
+  });
+});
+
+describe("hasTabUpdate", () => {
+  it("is false on both tabs for a customer with no weekly-update row", () => {
+    const c = customer("None", null);
+    expect(hasTabUpdate("midweek", c)).toBe(false);
+    expect(hasTabUpdate("reflection", c)).toBe(false);
+  });
+
+  it("mid-week: true once the Mid-week form was saved, or any Mid-week field has text", () => {
+    expect(hasTabUpdate("midweek", customer("Saved", { midweekSavedAt: "2026-08-26T09:00:00.000Z" }))).toBe(true);
+    expect(hasTabUpdate("midweek", customer("Risk", { risk: "Vendor delay" }))).toBe(true);
+    expect(hasTabUpdate("midweek", customer("Category", { category: "Onboarding" }))).toBe(true);
+    expect(hasTabUpdate("midweek", customer("Blank", { highlight: "   ", action: "" }))).toBe(false);
+  });
+
+  it("reflection: true once the week is done, or any Reflection field has text", () => {
+    expect(
+      hasTabUpdate("reflection", customer("Done", { status: "DONE", health: "GREEN", achievement: "Shipped" })),
+    ).toBe(true);
+    expect(hasTabUpdate("reflection", customer("Focus", { nextWeekFocus: "Phase 2" }))).toBe(true);
+    expect(hasTabUpdate("reflection", customer("Decision", { managerDecision: "Approve" }))).toBe(true);
+    expect(hasTabUpdate("reflection", customer("Blank", { achievement: "  ", lessonLearned: null }))).toBe(false);
+  });
+
+  it("health alone never counts, and a Mid-week-only save is not a Reflection update", () => {
+    const midweekOnly = customer("Midweek", {
+      health: "AMBER",
+      highlight: "Kickoff",
+      midweekSavedAt: "2026-08-26T09:00:00.000Z",
+    });
+    expect(hasTabUpdate("midweek", midweekOnly)).toBe(true);
+    expect(hasTabUpdate("reflection", midweekOnly)).toBe(false);
+    const healthOnly = customer("Health", { health: "GREEN" });
+    expect(hasTabUpdate("midweek", healthOnly)).toBe(false);
+    expect(hasTabUpdate("reflection", healthOnly)).toBe(false);
   });
 });
 
