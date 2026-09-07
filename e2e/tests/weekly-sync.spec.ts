@@ -5,12 +5,15 @@ import { apiBase, expect, loginViaUi, test } from "../fixtures/test";
 // T6; e2e task T8): two passes through the new /weekly-sync page.
 //
 // The first test drives the row/group/count mechanics on both Playwright
-// projects (desktop + mobile): a seeded customer's row starts under "Other
-// customers" on the Reflection tab; saving a Need-manager-decision through
-// the Reflection sync modal (reused from Daily Review, T5) pins the row
-// under "Needs a manager decision" and bumps the tab's decision count; the
-// row then carries the saved achievement text; and the Mid-week tab shows
-// the same customer as "Not filled" (no mid-week save happened).
+// projects (desktop + mobile): a seeded customer with no update is hidden
+// from the Reflection tab until the "Show them" toggle lists the customers
+// without an update, where its row sits under "Other customers"; saving a
+// Need-manager-decision through the Reflection sync modal (reused from
+// Daily Review, T5) pins the row under "Needs a manager decision" and bumps
+// the tab's decision count; the row then carries the saved achievement
+// text and stays listed on a fresh page load (toggle off); and the Mid-week
+// tab hides the same customer again (no mid-week save happened) until the
+// toggle shows it as "Not filled".
 //
 // The second test is the "Copy as table" clipboard round-trip, split out on
 // its own (rather than a tail appended to the first test) so a mid-test
@@ -136,8 +139,10 @@ test.describe("Weekly Sync page", () => {
 
     // ------------------------------------------------------------------
     // 1. Open the Weekly Sync page on this week's Reflection tab — our
-    //    fresh customer (no weekly update yet) sits under "Other
-    //    customers" and contributes nothing to the decision count yet.
+    //    fresh customer (no weekly update yet) is hidden until the "Show
+    //    them" toggle lists the customers without an update; then it sits
+    //    under "Other customers" and contributes nothing to the decision
+    //    count yet.
     // ------------------------------------------------------------------
     await page.goto(`/weekly-sync?week=${weekKey}&tab=reflection`, { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
@@ -147,6 +152,10 @@ test.describe("Weekly Sync page", () => {
     const baseDecisionCount = parseDecisionCount((await reflectionTab.textContent()) ?? "");
 
     const row = page.getByTestId(`weekly-sync-row-${customer.id}`);
+    const hiddenToggle = page.getByTestId("weekly-sync-hidden-toggle");
+    await expect(row).toBeHidden();
+    await expect(hiddenToggle).toHaveText("Show them");
+    await hiddenToggle.click();
     await expect(row).toBeVisible();
     await expect.poll(() => groupContainingRow(page, customer.id)).toBe("other");
 
@@ -182,11 +191,26 @@ test.describe("Weekly Sync page", () => {
     await expect(row.getByText(achievementText)).toBeVisible();
 
     // ------------------------------------------------------------------
-    // 4. Mid-week tab: no mid-week save happened, so this same customer's
-    //    row shows "Not filled".
+    // 3b. A fresh page load starts with the toggle off — the row now
+    //     carries a Reflection update, so it stays listed (and pinned)
+    //     without the toggle. A reload rather than clicking "Hide them":
+    //     on a fresh database this customer may be the only one without
+    //     an update, in which case the count line is gone after the save.
+    // ------------------------------------------------------------------
+    await page.goto(`/weekly-sync?week=${weekKey}&tab=reflection`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(500);
+    await expect(row).toBeVisible();
+    await expect.poll(() => groupContainingRow(page, customer.id)).toBe("decision");
+
+    // ------------------------------------------------------------------
+    // 4. Mid-week tab: no mid-week save happened, so this same customer is
+    //    hidden here until the toggle shows it — as "Not filled".
     // ------------------------------------------------------------------
     await page.getByTestId("weekly-sync-tab-midweek").click();
-    await expect(page.getByTestId(`weekly-sync-row-${customer.id}`).getByText("Not filled")).toBeVisible();
+    await expect(row).toBeHidden();
+    await expect(hiddenToggle).toHaveText("Show them");
+    await hiddenToggle.click();
+    await expect(row.getByText("Not filled")).toBeVisible();
   });
 
   test("copy as table puts the Reflection table on the clipboard", async (
@@ -211,8 +235,11 @@ test.describe("Weekly Sync page", () => {
     await expect(page.getByRole("heading", { level: 1, name: "Weekly Sync" })).toBeVisible();
 
     // Seed one saved Reflection row through the same modal the first test
-    // uses, so the copy below has real Reflection data to carry.
+    // uses, so the copy below has real Reflection data to carry. The fresh
+    // customer has no update yet, so the toggle has to list it first.
     const row = page.getByTestId(`weekly-sync-row-${customer.id}`);
+    await expect(row).toBeHidden();
+    await page.getByTestId("weekly-sync-hidden-toggle").click();
     await expect(row).toBeVisible();
     await row.click();
     const dialog = page.getByRole("dialog", {
@@ -225,6 +252,12 @@ test.describe("Weekly Sync page", () => {
     await dialog.getByRole("radio", { name: "Green" }).click();
     await dialog.getByRole("button", { name: "Save draft" }).click();
     await expect(dialog).toBeHidden();
+    await page.waitForTimeout(500);
+    await expect(row.getByText(achievementText)).toBeVisible();
+
+    // A fresh load (toggle off) — the copy below reads the rows on screen,
+    // and this customer now has a Reflection update, so it stays listed.
+    await page.goto(`/weekly-sync?week=${weekKey}&tab=reflection`, { waitUntil: "networkidle" });
     await page.waitForTimeout(500);
     await expect(row.getByText(achievementText)).toBeVisible();
 

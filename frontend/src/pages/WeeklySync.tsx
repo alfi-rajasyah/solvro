@@ -15,6 +15,7 @@ import {
   buildSyncTable,
   HEALTH_LABEL,
   hasManagerDecision,
+  hasTabUpdate,
   orderForTab,
   toHtmlTable,
   toTsv,
@@ -70,6 +71,12 @@ function computeDefaults(): { week: string; tab: WeeklySyncTab } {
 // tab-separated fallback to the clipboard. The page owns layout, URL
 // week/tab state, and the click-to-open-modal wiring; the two sync modals
 // (T5) are reused as-is.
+//
+// Each tab lists only the customers with an update for that tab this week
+// (`hasTabUpdate`). The rest are counted in a line under the table with a
+// "Show them" / "Hide them" toggle — clicking a row is how a sync form opens
+// from this page, so a customer without an update must stay reachable.
+// "Copy as table" copies the rows on screen.
 export function WeeklySync() {
   const { user } = useAuth();
   const canWrite = hasPermission(user, "project:write");
@@ -105,6 +112,7 @@ export function WeeklySync() {
   const { data, isLoading, isError, error } = useDailyReview(week);
 
   const [openRow, setOpenRow] = useState<{ customerId: number; tab: WeeklySyncTab } | null>(null);
+  const [showAll, setShowAll] = useState(false);
   const [copyMessage, setCopyMessage] = useState<string | null>(null);
   const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -136,9 +144,20 @@ export function WeeklySync() {
     copyTimeoutRef.current = setTimeout(() => setCopyMessage(null), 2000);
   }
 
+  const customers = data?.customers ?? [];
+  // Rows without an update for the active tab are hidden unless `showAll`.
+  // Pinned rows always carry a managerDecision, so the filter never changes
+  // the decision count.
+  const withUpdate = useMemo(() => customers.filter((c) => hasTabUpdate(tab, c)), [customers, tab]);
+  const noUpdateCount = customers.length - withUpdate.length;
+  const shown = showAll ? customers : withUpdate;
+  const pinned = useMemo(() => shown.filter(hasManagerDecision), [shown]);
+  const rest = useMemo(() => shown.filter((c) => !hasManagerDecision(c)), [shown]);
+  const decisionCount = pinned.length;
+
   async function handleCopy() {
     if (!data) return;
-    const ordered = orderForTab(tab, data.customers);
+    const ordered = orderForTab(tab, shown);
     const table = buildSyncTable(tab, ordered);
     const html = toHtmlTable(table);
     const tsv = toTsv(table);
@@ -159,14 +178,10 @@ export function WeeklySync() {
     }
   }
 
-  const customers = data?.customers ?? [];
-  const pinned = useMemo(() => customers.filter(hasManagerDecision), [customers]);
-  const rest = useMemo(() => customers.filter((c) => !hasManagerDecision(c)), [customers]);
-  const decisionCount = pinned.length;
-
   const openCustomer = openRow ? (customers.find((c) => c.id === openRow.customerId) ?? null) : null;
 
   const gridColsClass = tab === "midweek" ? MIDWEEK_GRID_COLS : REFLECTION_GRID_COLS;
+  const tabLabel = tab === "midweek" ? "Mid-week" : "Reflection";
   const isEmpty = data ? data.customers.length === 0 : false;
 
   function openModalFor(customer: DailyReviewCustomer) {
@@ -179,7 +194,7 @@ export function WeeklySync() {
         <div>
           <h1 className="font-display text-2xl font-bold text-on-surface">Weekly Sync</h1>
           <p className="text-sm text-on-surface-variant">
-            One row per customer. Wednesday and Friday tables, read on Monday.
+            One row per customer with an update. Wednesday and Friday tables, read on Monday.
           </p>
         </div>
 
@@ -282,54 +297,77 @@ export function WeeklySync() {
 
       {data && !isEmpty && (
         <>
-          <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest">
-            <div className="min-w-[960px]">
-              <HeaderRow tab={tab} gridColsClass={gridColsClass} />
-              {tab === "midweek"
-                ? customers.map((c) => (
-                    <SyncRow
-                      key={c.id}
-                      customer={c}
-                      tab={tab}
-                      gridColsClass={gridColsClass}
-                      clickable={canWrite}
-                      onOpen={openModalFor}
-                    />
-                  ))
-                : (
-                    <>
-                      {pinned.length > 0 && (
-                        <GroupHeader label={`Needs a manager decision · ${pinned.length}`} amber />
-                      )}
-                      {pinned.map((c) => (
-                        <SyncRow
-                          key={c.id}
-                          customer={c}
-                          tab={tab}
-                          gridColsClass={gridColsClass}
-                          clickable={canWrite}
-                          onOpen={openModalFor}
-                        />
-                      ))}
-                      {rest.length > 0 && <GroupHeader label={`Other customers · ${rest.length}`} />}
-                      {rest.map((c) => (
-                        <SyncRow
-                          key={c.id}
-                          customer={c}
-                          tab={tab}
-                          gridColsClass={gridColsClass}
-                          clickable={canWrite}
-                          onOpen={openModalFor}
-                        />
-                      ))}
-                    </>
-                  )}
+          {shown.length > 0 ? (
+            <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest">
+              <div className="min-w-[960px]">
+                <HeaderRow tab={tab} gridColsClass={gridColsClass} />
+                {tab === "midweek"
+                  ? shown.map((c) => (
+                      <SyncRow
+                        key={c.id}
+                        customer={c}
+                        tab={tab}
+                        gridColsClass={gridColsClass}
+                        clickable={canWrite}
+                        onOpen={openModalFor}
+                      />
+                    ))
+                  : (
+                      <>
+                        {pinned.length > 0 && (
+                          <GroupHeader label={`Needs a manager decision · ${pinned.length}`} amber />
+                        )}
+                        {pinned.map((c) => (
+                          <SyncRow
+                            key={c.id}
+                            customer={c}
+                            tab={tab}
+                            gridColsClass={gridColsClass}
+                            clickable={canWrite}
+                            onOpen={openModalFor}
+                          />
+                        ))}
+                        {rest.length > 0 && <GroupHeader label={`Other customers · ${rest.length}`} />}
+                        {rest.map((c) => (
+                          <SyncRow
+                            key={c.id}
+                            customer={c}
+                            tab={tab}
+                            gridColsClass={gridColsClass}
+                            clickable={canWrite}
+                            onOpen={openModalFor}
+                          />
+                        ))}
+                      </>
+                    )}
+              </div>
             </div>
-          </div>
+          ) : (
+            <div
+              data-testid="weekly-sync-no-updates"
+              className="rounded-sm border border-outline-variant bg-surface-container px-6 py-10 text-center text-sm text-on-surface-variant"
+            >
+              No {tabLabel} updates this week.
+            </div>
+          )}
+
+          {noUpdateCount > 0 && (
+            <p data-testid="weekly-sync-hidden" className="text-[13px] text-on-surface-variant">
+              {noUpdateCount} {noUpdateCount === 1 ? "customer has" : "customers have"} no {tabLabel} update this
+              week.{" "}
+              <button
+                type="button"
+                onClick={() => setShowAll((v) => !v)}
+                data-testid="weekly-sync-hidden-toggle"
+                className="text-[12px] font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              >
+                {showAll ? "Hide them" : "Show them"}
+              </button>
+            </p>
+          )}
 
           <p className="text-[13px] text-on-surface-variant">
-            Click a row to open its {tab === "midweek" ? "Mid-week" : "Reflection"} sync form. Copy as table pastes
-            into Google Docs as a real table.
+            Click a row to open its {tabLabel} sync form. Copy as table pastes into Google Docs as a real table.
           </p>
         </>
       )}
