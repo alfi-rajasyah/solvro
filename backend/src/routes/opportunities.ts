@@ -8,7 +8,7 @@ import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { isValidDayString, utcMidnightOfDayString } from "../lib/dateBoundary.js";
 import { isCustomerVisible } from "../lib/visibility.js";
-import { assertCanWriteOpportunity, PIC_SELECT } from "../lib/pipelineAccess.js";
+import { assertCanAssignOpportunity, assertCanWriteOpportunity, PIC_SELECT } from "../lib/pipelineAccess.js";
 import { logger } from "../logger.js";
 // Anti-drift seam (finding S6): the handoff body is byte-for-byte the same
 // shape as a plain project create, so this reuses routes/projects.ts's own
@@ -81,6 +81,11 @@ const moveOpportunitySchema = z.object({
   stage: z.nativeEnum(PipelineStage),
   stageOrder: z.number().int().min(0),
 });
+
+// `.strict()`: the only writable field is the new PIC — this route exists
+// specifically to hand a PIC to an unassigned deal (docs/plans/
+// claim-unassigned-deals.md D2), not as a partial PATCH.
+const assignOpportunitySchema = z.object({ picId: z.number().int().positive() }).strict();
 
 // --- POST /import ----------------------------------------------------------
 //
@@ -696,6 +701,74 @@ opportunitiesRouter.post(
           },
         });
       }
+
+      return result;
+    });
+
+    res.json(serializeOpportunity(updated));
+  },
+);
+
+// The one writer of a PIC on an unassigned deal for `pipeline:edit_own`
+// holders (docs/plans/claim-unassigned-deals.md D1/D2/D4) — PATCH keeps
+// serving `edit_all` holders (any deal, any time) and a deal's own PIC
+// (their own deal only); an unassigned deal stays locked for every other
+// write (drag, edit, stage change, link, delete) until this route gives it
+// a PIC. Logs the same kind of activity note POST /:id/move logs for a
+// stage change, but only when the PIC actually changes (D6) — repeating the
+// same picId on an already-assigned deal is a true no-op (no write, no
+// note, `updatedAt` untouched), same idempotence POST /:id/move gives a
+// same-stage reorder.
+opportunitiesRouter.post(
+  "/:id/assign",
+  validate("params", idParamSchema),
+  validate("body", assignOpportunitySchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const body = req.body as z.infer<typeof assignOpportunitySchema>;
+    const current = await findOpportunityOr404(id);
+    assertCanAssignOpportunity(req.user!, current);
+
+    // Relation `connect` (not a raw FK-scalar write), same as PATCH/POST — a
+    // nonexistent user id would otherwise 500 on an unmapped P2003 FK
+    // violation instead of a clean 400. Fetched up front (rather than
+    // caught from Prisma) because the username is needed for the activity
+    // note either way (finding S1's pattern, reused here).
+    const pic = await prisma.user.findUnique({
+      where: { id: body.picId },
+      select: { id: true, username: true },
+    });
+    if (!pic) throw new HttpError(400, "pic_not_found", "User not found");
+
+    // D6: assigning a deal to its already-current PIC is a true no-op — no
+    // write at all, not just a suppressed activity note. A plain
+    // `tx.opportunity.update` with the same `pic.connect` would still bump
+    // `updatedAt` even though nothing actually changed, so this short-circuits
+    // before the transaction and re-serves the current row with the same
+    // `pic` include the write path uses.
+    if (current.picId === pic.id) {
+      const unchanged = await prisma.opportunity.findUniqueOrThrow({
+        where: { id },
+        include: { pic: { select: PIC_SELECT } },
+      });
+      res.json(serializeOpportunity(unchanged as OpportunityWithPic));
+      return;
+    }
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.opportunity.update({
+        where: { id },
+        data: { pic: { connect: { id: pic.id } } },
+        include: { pic: { select: PIC_SELECT } },
+      });
+
+      await tx.opportunityActivity.create({
+        data: {
+          opportunityId: id,
+          userId: req.user!.sub,
+          note: `Assigned to ${pic.username}`,
+        },
+      });
 
       return result;
     });

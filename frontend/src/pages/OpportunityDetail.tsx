@@ -8,13 +8,27 @@
 // mode, gated on `canEditDeal` (same `canDragDeal` gate the board's drag
 // handle and the StageChip menu below already use) — see the header's Edit
 // button and the modal mount near the bottom of this component.
+//
+// Assign PIC affordance (claim-unassigned-deals plan, D1/D2): an unassigned
+// deal is locked for `pipeline:edit_own` holders — no drag, edit, stage
+// change, link or delete — until it has a PIC. This button, gated on
+// `canAssignThisDeal`, is the one exception; it opens `AssignPicModal`.
+// Once assigned, the deal's normal own-rules (canEditDeal/canDeleteThisDeal
+// above) take over — an `edit_all` holder reassigns an already-assigned
+// deal through Edit, not through this button.
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
+import { AssignPicModal } from "@/components/AssignPicModal";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { HandoffProjectModal } from "@/components/DealCard";
 import { OpportunityFormModal } from "@/components/OpportunityFormModal";
-import { canDeleteDeal, canDragDeal, needsTerminalConfirm } from "@/components/pipeline/boardLogic";
+import {
+  canAssignDeal,
+  canDeleteDeal,
+  canDragDeal,
+  needsTerminalConfirm,
+} from "@/components/pipeline/boardLogic";
 import { probabilityTone } from "@/components/pipeline/kpi";
 import { Alert, AlertAction, AlertDescription } from "@/components/reui/alert";
 import {
@@ -126,6 +140,7 @@ export function OpportunityDetail() {
   const [pendingStage, setPendingStage] = useState<PipelineStage | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
+  const [assignOpen, setAssignOpen] = useState(false);
   // Post-won handoff offer (PRD §2.10, M5.24): a transient nudge shown
   // right after THIS SESSION's own move into WON succeeds — separate from
   // the persistent "Create project" button below, which covers the case
@@ -165,6 +180,9 @@ export function OpportunityDetail() {
 
   const canEditDeal = canDragDeal(user, deal);
   const canDeleteThisDeal = canDeleteDeal(user, deal);
+  // Shows only on an unassigned deal — an `edit_all` holder reassigns an
+  // already-assigned deal through Edit, not through this button (D4).
+  const canAssignThisDeal = deal.picId === null && canAssignDeal(user, deal);
 
   function handleSelectStage(stage: PipelineStage) {
     if (!deal || stage === deal.stage) return;
@@ -277,6 +295,16 @@ export function OpportunityDetail() {
               >
                 <span className="material-symbols-outlined text-base">rocket_launch</span>
                 Create project
+              </button>
+            )}
+            {canAssignThisDeal && (
+              <button
+                type="button"
+                onClick={() => setAssignOpen(true)}
+                className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-primary hover:bg-primary/10"
+              >
+                <span className="material-symbols-outlined text-base">person_add</span>
+                Assign PIC
               </button>
             )}
             {canEditDeal && (
@@ -407,6 +435,8 @@ export function OpportunityDetail() {
       />
 
       <OpportunityFormModal open={editOpen} onClose={() => setEditOpen(false)} opportunity={deal} />
+
+      <AssignPicModal open={assignOpen} onClose={() => setAssignOpen(false)} opportunity={deal} />
 
       <HandoffProjectModal open={handoffOpen} onClose={() => setHandoffOpen(false)} deal={deal} />
     </div>
