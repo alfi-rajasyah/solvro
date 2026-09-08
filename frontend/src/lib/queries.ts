@@ -2477,6 +2477,29 @@ export function useUpdateOpportunity() {
   });
 }
 
+// One writer of a PIC on an unassigned deal for `pipeline:edit_own` holders
+// (the PATCH route keeps refusing an unassigned deal for them — see
+// POST /opportunities/:id/assign in backend/src/routes/opportunities.ts).
+// Not optimistic: this is a dialog submit (AssignPicModal), not an
+// inline-edit field, so there's no local value to write ahead of the
+// response. The route writes an "Assigned to <username>" activity note in
+// the same transaction, but only when the PIC actually changes (D6).
+// `activities(id)` is already a prefix-match of `detail(id)`, so its
+// invalidation below is explicit rather than load-bearing — same
+// enumerate-every-key convention as useDeleteOpportunity/useMoveOpportunity.
+export function useAssignOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, picId }: { id: string; picId: number }) =>
+      apiRequest<Opportunity>(`/opportunities/${id}/assign`, { method: "POST", body: { picId } }),
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: pipelineKeys.list });
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(updated.id) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.activities(updated.id) });
+    },
+  });
+}
+
 export function useDeleteOpportunity() {
   const qc = useQueryClient();
   return useMutation({

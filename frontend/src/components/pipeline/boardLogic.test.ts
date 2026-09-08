@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { AuthUser } from "@/lib/auth";
-import { canDeleteDeal, canDragDeal, needsTerminalConfirm } from "./boardLogic";
+import { canAssignDeal, canDeleteDeal, canDragDeal, needsTerminalConfirm } from "./boardLogic";
 
 function user(overrides: Partial<AuthUser> = {}): AuthUser {
   return {
@@ -64,6 +64,35 @@ describe("canDeleteDeal", () => {
   it("denies for a null/undefined user", () => {
     expect(canDeleteDeal(null, { picId: 1 })).toBe(false);
     expect(canDeleteDeal(undefined, { picId: 1 })).toBe(false);
+  });
+});
+
+describe("canAssignDeal", () => {
+  it("denies a user with no pipeline permissions", () => {
+    expect(canAssignDeal(user({ permissions: [] }), { picId: null })).toBe(false);
+  });
+
+  it("allows edit_all for an unassigned deal, the caller's own deal, and a foreign deal", () => {
+    const u = user({ id: 1, permissions: ["pipeline:edit_all"] });
+    expect(canAssignDeal(u, { picId: null })).toBe(true);
+    expect(canAssignDeal(u, { picId: 1 })).toBe(true);
+    expect(canAssignDeal(u, { picId: 2 })).toBe(true);
+  });
+
+  it("allows edit_own only for an unassigned deal, never an already-assigned one", () => {
+    const u = user({ id: 1, permissions: ["pipeline:edit_own"] });
+    expect(canAssignDeal(u, { picId: null })).toBe(true);
+    expect(canAssignDeal(u, { picId: 1 })).toBe(false);
+    expect(canAssignDeal(u, { picId: 2 })).toBe(false);
+  });
+
+  it("the '*' wildcard allows everything, same as the backend's hasPermission", () => {
+    expect(canAssignDeal(user({ id: 1, permissions: ["*"] }), { picId: 999 })).toBe(true);
+  });
+
+  it("denies for a null/undefined user", () => {
+    expect(canAssignDeal(null, { picId: null })).toBe(false);
+    expect(canAssignDeal(undefined, { picId: null })).toBe(false);
   });
 });
 

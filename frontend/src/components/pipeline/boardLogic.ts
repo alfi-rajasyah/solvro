@@ -60,3 +60,25 @@ export function canDeleteDeal(
     (hasPermission(user, "pipeline:delete_own") && deal.picId === user?.id)
   );
 }
+
+/**
+ * Assign-permission gate for a single deal — mirrors the backend's new
+ * `assertCanAssignOpportunity` (backend/src/lib/pipelineAccess.ts):
+ * `pipeline:edit_all` (or the `"*"` wildcard, handled inside
+ * `hasPermission`) always allows; otherwise the caller needs
+ * `pipeline:edit_own` AND the deal must have no PIC yet (D1: an unassigned
+ * deal stays locked for everything but this one action, for everyone but
+ * `_all` holders — an `_own` holder can never reassign an already-assigned
+ * deal through this gate, foreign or their own, per D4). Same
+ * proactive-UI-gate caveat as `canDragDeal`/`canDeleteDeal` above — the
+ * server remains the authority; a 403 here would just be a race.
+ */
+export function canAssignDeal(
+  user: AuthUser | null | undefined,
+  deal: Pick<PipelineBoardDeal, "picId">,
+): boolean {
+  return (
+    hasPermission(user, "pipeline:edit_all") ||
+    (hasPermission(user, "pipeline:edit_own") && deal.picId === null)
+  );
+}
