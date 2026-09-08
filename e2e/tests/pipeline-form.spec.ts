@@ -90,6 +90,12 @@ async function apiFindOpportunityIdByTitle(ctx: ApiCtx, title: string): Promise<
 const createdOpportunityIds: string[] = [];
 let viewerUserId: number | null = null;
 let viewerRoleId: number | null = null;
+// Second role/user pair for the "assign PIC" flow below — kept separate
+// from viewerUserId/viewerRoleId (a `pipeline:view`-only role) rather than
+// turned into arrays, since the two roles need different permission sets
+// and this reads more plainly than indexing into a shared array.
+let assignerUserId: number | null = null;
+let assignerRoleId: number | null = null;
 
 test.afterAll(async ({ seededProject }, workerInfo) => {
   // Deliberately NOT `apiBase(testInfo)` (fixtures/test.ts) — that helper's
@@ -111,6 +117,18 @@ test.afterAll(async ({ seededProject }, workerInfo) => {
   }
   if (viewerRoleId !== null) {
     await fetch(`${ctx.base}/api/admin/roles/${viewerRoleId}`, {
+      method: "DELETE",
+      headers: headers(ctx),
+    }).catch(() => {});
+  }
+  if (assignerUserId !== null) {
+    await fetch(`${ctx.base}/api/admin/users/${assignerUserId}`, {
+      method: "DELETE",
+      headers: headers(ctx),
+    }).catch(() => {});
+  }
+  if (assignerRoleId !== null) {
+    await fetch(`${ctx.base}/api/admin/roles/${assignerRoleId}`, {
       method: "DELETE",
       headers: headers(ctx),
     }).catch(() => {});
@@ -473,5 +491,109 @@ test.describe("Pipeline permissions — desktop", () => {
     // above are still on the board until this file's afterAll cleanup).
     await expect(page.getByRole("button", { name: "New opportunity", exact: true })).toHaveCount(0);
     await expect(page.getByRole("button", { name: "Import", exact: true })).toHaveCount(0);
+  });
+});
+
+test.describe("Pipeline assign PIC — desktop", () => {
+  test.beforeEach(async () => {
+    test.skip(test.info().project.name !== "desktop", "Assign PIC dialog flow asserted at desktop width");
+  });
+
+  test("a pipeline:edit_own user can claim an unassigned deal via Assign PIC, unlocking Edit/Delete", async ({
+    page,
+    seededProject,
+  }, testInfo) => {
+    const base = apiBase(testInfo);
+    const ctx: ApiCtx = { base, token: seededProject.token };
+    const suffix = stamp().toUpperCase();
+    const roleName = `E2E_PIPELINE_ASSIGNER_${suffix}`;
+    const email = `e2e-pipeline-assigner-${stamp()}@solvro.test`;
+    const password = "QaAssigner1234!";
+    const username = `e2e-pl-assigner-${suffix}`;
+
+    const role = await json<{ id: number }>(
+      await fetch(`${ctx.base}/api/admin/roles`, {
+        method: "POST",
+        headers: headers(ctx),
+        body: JSON.stringify({
+          roleName,
+          permissions: ["pipeline:view", "pipeline:create", "pipeline:edit_own", "pipeline:delete_own"],
+        }),
+      }),
+    );
+    expect(role.id, "assigner role was not created").toBeTruthy();
+    assignerRoleId = role.id;
+
+    const user = await json<{ id: number }>(
+      await fetch(`${ctx.base}/api/admin/users`, {
+        method: "POST",
+        headers: headers(ctx),
+        body: JSON.stringify({ email, username, password, role: roleName }),
+      }),
+    );
+    expect(user.id, "assigner user was not created").toBeTruthy();
+    assignerUserId = user.id;
+
+    // Admin-created, no `picId` — the deal this SA will claim through the
+    // dialog rather than through Edit (Edit stays gated off until it has a
+    // PIC — D1 in docs/plans/claim-unassigned-deals.md).
+    const title = `${PREFIX} Assign ${stamp()}`;
+    const created = await apiCreateOpportunity(ctx, {
+      title,
+      customerName: `${PREFIX} Assign Co ${stamp()}`,
+    });
+    createdOpportunityIds.push(created.id);
+
+    await loginViaUi(page, email, password);
+    await page.goto(`/pipeline/${created.id}`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+
+    // Before assignment: no Edit/Delete (D1), Assign PIC is the one
+    // affordance available, and the Details card reads "Unassigned".
+    // Not `exact: true` here — these header buttons render a leading
+    // material-symbols icon span (e.g. "person_add") ahead of the visible
+    // label, and that glyph's ligature text folds into the accessible name
+    // (so the real name is "person_add Assign PIC", not "Assign PIC"),
+    // exactly like this file's earlier `getByRole("button", { name: "Edit" })`
+    // (no exact) on the same header row.
+    await expect(page.getByRole("button", { name: "Edit" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Delete" })).toHaveCount(0);
+    const assignButton = page.getByRole("button", { name: "Assign PIC" });
+    await expect(assignButton).toBeVisible();
+
+    // The Details card's PIC value sits in the sibling <div> right after the
+    // "PIC" label <p> (MetaGrid's MetaItem) — anchoring off that label and
+    // walking to its value sibling avoids also matching the Activity
+    // section's later "Assigned to <username>" note, same
+    // label-then-sibling-value pattern as this file's import-tile() helper.
+    const picLabel = page.getByText("PIC", { exact: true });
+    const picValue = picLabel.locator("xpath=following-sibling::div[1]");
+    await expect(picValue).toContainText("Unassigned");
+
+    await assignButton.click();
+    const dialog = page.getByRole("dialog", { name: "Assign PIC" });
+    await expect(dialog).toBeVisible();
+
+    // The select preselects the caller (D2/D4) — asserted by value (the
+    // user id) rather than the visible option text.
+    const picSelect = dialog.getByLabel("PIC");
+    await expect(picSelect).toHaveValue(String(user.id));
+
+    await dialog.getByRole("button", { name: "Assign", exact: true }).click();
+    await expect(dialog).toBeHidden();
+
+    // After assignment: the Details card shows the username, Edit/Delete
+    // are now visible (the deal's own-rules unlock for its new PIC — D3),
+    // and the activity feed recorded the assign note (D6).
+    await expect(picValue).toContainText(username);
+    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Delete" })).toBeVisible();
+    await expect(page.getByText(`Assigned to ${username}`, { exact: true })).toBeVisible();
+
+    // Server-persisted, not just a client-side optimistic update.
+    await page.reload({ waitUntil: "networkidle" });
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
   });
 });

@@ -22,6 +22,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 - **`frontend/src/pages/OpportunityDetail.tsx`**, **`frontend/src/components/AssignPicModal.tsx`** (new) — an "Assign PIC" button on the opportunity detail page, shown only on a deal without a PIC to a user who may assign one. It opens a small dialog with one required PIC select (every user, preselected to the caller) and a line that says what the PIC can do; Assign closes it and the deal unlocks for its new PIC. Edit, Delete, the stage menu and Add link keep their existing gates.
 - **`frontend/src/components/OpportunityFormModal.tsx`** — a new opportunity now starts with its creator as PIC instead of "No PIC" (still selectable), so an SA no longer locks themself out of a deal they just created. Editing an existing deal is unchanged.
 - **`frontend/src/lib/auth.tsx`** — the Admin › Roles hint for "Edit own opportunities" now also says it lets the holder assign a PIC to an unassigned opportunity.
+- **`e2e/tests/pipeline-form.spec.ts`** — desktop end-to-end coverage for the flow: a user with edit-own permission opens an unassigned deal, sees no Edit or Delete, assigns themself through the Assign PIC dialog, and then sees the PIC, the Edit and Delete buttons, and the "Assigned to" activity entry, also after a reload.
 
 ### Fixed — 2026-09-07 — Weekly Sync: a long unbreakable word no longer shifts a row's columns
 
