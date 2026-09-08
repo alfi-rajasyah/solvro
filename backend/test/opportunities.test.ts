@@ -17,14 +17,15 @@ let roleCounter = 0;
 // to testAuth.ts's fixed SA/Manager shape.
 async function createUserWithPermissions(
   permissions: string[],
-): Promise<{ userId: number; token: string }> {
+): Promise<{ userId: number; username: string; token: string }> {
   roleCounter += 1;
   const role = await prisma.role.create({
     data: { roleName: `test-opp-role-${roleCounter}-${Date.now()}`, permissions },
   });
+  const username = `test-opp-user-${roleCounter}-${Date.now()}`;
   const user = await prisma.user.create({
     data: {
-      username: `test-opp-user-${roleCounter}-${Date.now()}`,
+      username,
       email: `test-opp-user-${roleCounter}-${Date.now()}@example.com`,
       passwordHash: null,
       roleId: role.id,
@@ -32,11 +33,11 @@ async function createUserWithPermissions(
     },
   });
   const token = signToken({ sub: user.id, role: role.roleName, permissions });
-  return { userId: user.id, token };
+  return { userId: user.id, username: user.username, token };
 }
 
 // Mirrors the real SA role's pipeline grants (view/create/edit_own/delete_own).
-async function createSaLikeUser(): Promise<{ userId: number; token: string }> {
+async function createSaLikeUser(): Promise<{ userId: number; username: string; token: string }> {
   return createUserWithPermissions([
     "pipeline:view",
     "pipeline:create",
@@ -48,7 +49,7 @@ async function createSaLikeUser(): Promise<{ userId: number; token: string }> {
 // Mirrors the plan's "SA Manager" custom role (edit_all/delete_all, granted
 // as explicit strings — not the "*" wildcard — so these tests exercise the
 // actual permission-string path, not just hasPermission's wildcard shortcut).
-async function createManagerLikeUser(): Promise<{ userId: number; token: string }> {
+async function createManagerLikeUser(): Promise<{ userId: number; username: string; token: string }> {
   return createUserWithPermissions([
     "pipeline:view",
     "pipeline:create",
@@ -84,6 +85,13 @@ function moveOpportunity(token: string, id: string, body: Record<string, unknown
 
 function deleteOpportunity(token: string, id: string) {
   return request(app).delete(`/opportunities/${id}`).set("Authorization", `Bearer ${token}`);
+}
+
+function assignOpportunity(token: string, id: string, body: Record<string, unknown>) {
+  return request(app)
+    .post(`/opportunities/${id}/assign`)
+    .set("Authorization", `Bearer ${token}`)
+    .send(body);
 }
 
 async function activitiesFor(opportunityId: string) {
@@ -516,5 +524,167 @@ describe("POST /opportunities — append-at-bottom ordering", () => {
     expect((await getOpportunity(sa.token, a.body.id as string)).body.stageOrder).toBe(0);
     expect((await getOpportunity(sa.token, b.body.id as string)).body.stageOrder).toBe(1);
     expect((await getOpportunity(sa.token, c.body.id as string)).body.stageOrder).toBe(2);
+  });
+});
+
+describe("POST /opportunities/:id/assign", () => {
+  it("lets an edit_own holder claim an unassigned deal for themselves, logging one activity", async () => {
+    const manager = await createManagerLikeUser();
+    const sa = await createSaLikeUser();
+    // Created by a manager with no picId — unassigned.
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+    expect(created.body.pic).toBeNull();
+
+    const res = await assignOpportunity(sa.token, id, { picId: sa.userId });
+    expect(res.status).toBe(200);
+    expect(res.body.pic.id).toBe(sa.userId);
+
+    const activities = await activitiesFor(id);
+    expect(activities).toHaveLength(1);
+    expect(activities[0].note).toBe(`Assigned to ${sa.username}`);
+    expect(activities[0].userId).toBe(sa.userId);
+  });
+
+  it("lets an edit_own holder assign an unassigned deal to another existing user (D4)", async () => {
+    const manager = await createManagerLikeUser();
+    const sa = await createSaLikeUser();
+    const other = await createSaLikeUser();
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+
+    const res = await assignOpportunity(sa.token, id, { picId: other.userId });
+    expect(res.status).toBe(200);
+    expect(res.body.pic.id).toBe(other.userId);
+  });
+
+  it("403s an edit_own holder assigning a deal whose PIC is another user", async () => {
+    const owner = await createSaLikeUser();
+    const other = await createSaLikeUser();
+    const created = await createOpportunity(owner.token, { picId: owner.userId });
+    const id = created.body.id as string;
+
+    const res = await assignOpportunity(other.token, id, { picId: other.userId });
+    expect(res.status).toBe(403);
+  });
+
+  it("403s an edit_own holder assigning their own already-assigned deal (Edit covers own deals)", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId });
+    const id = created.body.id as string;
+
+    const res = await assignOpportunity(sa.token, id, { picId: sa.userId });
+    expect(res.status).toBe(403);
+  });
+
+  it("lets an edit_all holder assign an already-assigned deal; repeating the same picId 200s with no second note (D6)", async () => {
+    const owner = await createSaLikeUser();
+    const manager = await createManagerLikeUser();
+    const other = await createSaLikeUser();
+    const created = await createOpportunity(owner.token, { picId: owner.userId });
+    const id = created.body.id as string;
+
+    const res = await assignOpportunity(manager.token, id, { picId: other.userId });
+    expect(res.status).toBe(200);
+    expect(res.body.pic.id).toBe(other.userId);
+    let activities = await activitiesFor(id);
+    expect(activities).toHaveLength(1);
+    expect(activities[0].note).toBe(`Assigned to ${other.username}`);
+
+    const again = await assignOpportunity(manager.token, id, { picId: other.userId });
+    expect(again.status).toBe(200);
+    activities = await activitiesFor(id);
+    expect(activities).toHaveLength(1);
+    // True no-op (N1 fix): a repeat assign to the same PIC does not write
+    // the row at all, so updatedAt stays exactly what the first assign set.
+    expect(again.body.updatedAt).toBe(res.body.updatedAt);
+  });
+
+  it("403s a pipeline:view-only caller", async () => {
+    const manager = await createManagerLikeUser();
+    const viewer = await createUserWithPermissions(["pipeline:view"]);
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+
+    const res = await assignOpportunity(viewer.token, id, { picId: viewer.userId });
+    expect(res.status).toBe(403);
+  });
+
+  it("400s an unknown picId with code pic_not_found", async () => {
+    const manager = await createManagerLikeUser();
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+
+    const res = await assignOpportunity(manager.token, id, { picId: 999_999_999 });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("pic_not_found");
+  });
+
+  it("400s a missing picId", async () => {
+    const manager = await createManagerLikeUser();
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+
+    const res = await assignOpportunity(manager.token, id, {});
+    expect(res.status).toBe(400);
+  });
+
+  it("400s a non-positive picId", async () => {
+    const manager = await createManagerLikeUser();
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+
+    const res = await assignOpportunity(manager.token, id, { picId: 0 });
+    expect(res.status).toBe(400);
+  });
+
+  it("400s a malformed :id", async () => {
+    const manager = await createManagerLikeUser();
+
+    const res = await request(app)
+      .post("/opportunities/not-a-uuid/assign")
+      .set("Authorization", `Bearer ${manager.token}`)
+      .send({ picId: manager.userId });
+    expect(res.status).toBe(400);
+  });
+
+  it("404s a well-formed but unknown id", async () => {
+    const manager = await createManagerLikeUser();
+
+    const res = await assignOpportunity(manager.token, "00000000-0000-0000-0000-000000000000", {
+      picId: manager.userId,
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("400s a body with an extra key — .strict() (D2)", async () => {
+    const manager = await createManagerLikeUser();
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+
+    const res = await assignOpportunity(manager.token, id, { picId: manager.userId, title: "x" });
+    expect(res.status).toBe(400);
+  });
+
+  it("401s without a token", async () => {
+    const manager = await createManagerLikeUser();
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+
+    const res = await request(app).post(`/opportunities/${id}/assign`).send({ picId: manager.userId });
+    expect(res.status).toBe(401);
+  });
+
+  it("D1 regression guard: an edit_own holder still can't PATCH or DELETE an unassigned deal", async () => {
+    const manager = await createManagerLikeUser();
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+
+    const patched = await patchOpportunity(sa.token, id, { title: "x" });
+    expect(patched.status).toBe(403);
+
+    const deleted = await deleteOpportunity(sa.token, id);
+    expect(deleted.status).toBe(403);
   });
 });

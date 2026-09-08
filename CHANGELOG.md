@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-09-08 — Pipeline: an unassigned deal can be given a PIC
+
+- **`backend/src/routes/opportunities.ts`**, **`backend/src/lib/pipelineAccess.ts`**, **`backend/test/opportunities.test.ts`** — a new `POST /opportunities/:id/assign` (body `{ picId }`) sets a deal's PIC. A holder of `pipeline:edit_own` may use it only on a deal that has no PIC yet; a holder of `pipeline:edit_all` may use it on any deal. An unknown user answers 400 `pic_not_found`. Every actual PIC change writes an "Assigned to <name>" activity note in the same transaction; repeating the same PIC changes nothing and writes no note. Nothing else changes: an unassigned deal stays locked for edits, stage moves, links and deletion until it has a PIC, and the existing PIC-only rules then apply. Why: the own-permission compares the deal's PIC to the caller, and a deal without a PIC matched nobody, so an SA could neither claim it nor unlock it — only an admin could. 14 new tests cover the route and guard the lock on the other routes.
+
 ### Fixed — 2026-09-07 — Weekly Sync: a long unbreakable word no longer shifts a row's columns
 
 - **`frontend/src/pages/WeeklySync.tsx`** — the header and every row of the Weekly Sync table are separate CSS grids that share one column template. The text columns were `1fr` tracks, whose minimum is the content's minimum width, so a cell with one long unbreakable word — a pasted Google Docs URL in "Next week focus" — widened that column in its own row only and squeezed the row's other text columns, leaving the row out of line with the header. The text columns are now `minmax(0,1fr)` and every cell breaks long words (`wrap-break-word`), so a URL wraps inside its column and every row keeps the header's column widths.

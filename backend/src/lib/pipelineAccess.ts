@@ -35,6 +35,33 @@ export function assertCanWriteOpportunity(
 }
 
 /**
+ * Gate for `POST /opportunities/:id/assign` (docs/plans/claim-unassigned-deals.md
+ * D1/D4): `pipeline:edit_all` (or "*") may assign a PIC to any deal, any
+ * time. `pipeline:edit_own` may assign a PIC only to a deal that has none
+ * yet (`picId === null`) — D1's "assign first" rule keeps an unassigned deal
+ * locked for every other write until it has a PIC, and this is the one
+ * route that unlocks it; an `edit_own` holder can never reassign a deal that
+ * already has a different PIC (that stays PATCH's job, gated by
+ * `assertCanWriteOpportunity`, and only for the deal's own PIC). Distinct
+ * from `assertCanWriteOpportunity` on purpose — the two gates read the same
+ * `picId` but ask opposite questions ("is this already mine?" vs "is this
+ * still nobody's?"), so folding them into one function would just replace a
+ * clear boolean with a harder-to-read three-way branch.
+ */
+export function assertCanAssignOpportunity(
+  user: JwtPayload,
+  current: { picId: number | null },
+): void {
+  if (hasPermission(user, "pipeline:edit_all")) return;
+  if (hasPermission(user, "pipeline:edit_own") && current.picId === null) return;
+  throw new HttpError(
+    403,
+    "forbidden",
+    "Missing permission: pipeline:edit_all, or pipeline:edit_own on an unassigned deal",
+  );
+}
+
+/**
  * Fetch-and-gate helper for routes that only hold an opportunity id (e.g.
  * opportunityItems.ts's link mutations) and don't already have the row in
  * hand the way routes/opportunities.ts does after `findOpportunityOr404`.
