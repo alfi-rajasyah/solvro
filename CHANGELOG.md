@@ -18,6 +18,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 ### Fixed — 2026-09-08 — Pipeline: an unassigned deal can be given a PIC
 
 - **`backend/src/routes/opportunities.ts`**, **`backend/src/lib/pipelineAccess.ts`**, **`backend/test/opportunities.test.ts`** — a new `POST /opportunities/:id/assign` (body `{ picId }`) sets a deal's PIC. A holder of `pipeline:edit_own` may use it only on a deal that has no PIC yet; a holder of `pipeline:edit_all` may use it on any deal. An unknown user answers 400 `pic_not_found`. Every actual PIC change writes an "Assigned to <name>" activity note in the same transaction; repeating the same PIC changes nothing and writes no note. Nothing else changes: an unassigned deal stays locked for edits, stage moves, links and deletion until it has a PIC, and the existing PIC-only rules then apply. Why: the own-permission compares the deal's PIC to the caller, and a deal without a PIC matched nobody, so an SA could neither claim it nor unlock it — only an admin could. 14 new tests cover the route and guard the lock on the other routes.
+- **`frontend/src/components/pipeline/boardLogic.ts`**, **`frontend/src/lib/queries.ts`**, **`frontend/src/components/pipeline/boardLogic.test.ts`** — `canAssignDeal` mirrors the server rule for the UI, and `useAssignOpportunity` calls the new route and refreshes the deal's list entry, detail and activity feed. 5 new unit tests.
 
 ### Fixed — 2026-09-07 — Weekly Sync: a long unbreakable word no longer shifts a row's columns
 
