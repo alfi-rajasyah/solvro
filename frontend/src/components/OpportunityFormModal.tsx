@@ -3,6 +3,7 @@ import { DateField } from "./DateField";
 import { Modal } from "./Modal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth";
 import { STAGE_LABELS, STAGE_ORDER, type PipelineStage } from "@/lib/pipelineFormat";
 import { type Opportunity, useCreateOpportunity, useUpdateOpportunity, useUsers } from "@/lib/queries";
 
@@ -22,6 +23,7 @@ interface Props {
 export function OpportunityFormModal({ open, onClose, opportunity, initialStage }: Props) {
   const isEdit = Boolean(opportunity);
   const { data: users } = useUsers();
+  const { user } = useAuth();
 
   const create = useCreateOpportunity();
   const update = useUpdateOpportunity();
@@ -59,7 +61,11 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
       setCustomerName("");
       setDealValue("");
       setStage(initialStage ?? "ASSESSMENT");
-      setPicId("");
+      // D5: a deal that starts unassigned is locked for its own creator
+      // (canAssignDeal/assertCanAssignOpportunity) until someone gives it a
+      // PIC, so the create form defaults to the creator; "No PIC" stays
+      // selectable for the rare deliberate unassigned create.
+      setPicId(user?.id ?? "");
       setRequestDate(null);
       setDeadline(null);
       setWinProbability("50");
@@ -67,7 +73,13 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
       setProductSolution("");
       setDescription("");
     }
-  }, [open, opportunity, initialStage]);
+    // `user?.id`, not `user` — AuthProvider replaces the whole user object on
+    // the boot /auth/me rehydrate (frontend/src/lib/auth.tsx:116-121), which
+    // can happen while this modal is already open; depending on the object
+    // would re-run this reset (wiping whatever the user had typed) on that
+    // rehydrate even though the id, and thus the correct default, didn't
+    // change.
+  }, [open, opportunity, initialStage, user?.id]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();

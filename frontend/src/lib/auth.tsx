@@ -43,7 +43,7 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
   { value: "task:write", label: "Manage tasks", hint: "Create, edit, move, and delete tasks." },
   { value: "pipeline:view", label: "View pipeline", hint: "See the Pipeline board, opportunity details, and Pipeline analytics." },
   { value: "pipeline:create", label: "Create opportunities", hint: "Add new opportunities to the Pipeline board." },
-  { value: "pipeline:edit_own", label: "Edit own opportunities", hint: "Edit and change the stage of opportunities you're the PIC for." },
+  { value: "pipeline:edit_own", label: "Edit own opportunities", hint: "Edit and change the stage of opportunities you're the PIC for, and assign a PIC to an unassigned opportunity." },
   { value: "pipeline:edit_all", label: "Edit all opportunities", hint: "Edit and change the stage of any opportunity, not just your own." },
   { value: "pipeline:delete_own", label: "Delete own opportunities", hint: "Delete opportunities you're the PIC for." },
   { value: "pipeline:delete_all", label: "Delete all opportunities", hint: "Delete any opportunity, not just your own." },
