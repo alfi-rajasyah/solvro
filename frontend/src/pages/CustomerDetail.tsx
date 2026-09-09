@@ -621,7 +621,7 @@ function WeeklyUpdateRow({ update }: { update: WeeklyUpdate }) {
   const isDone = update.status === "DONE";
   const [midweekOpen, setMidweekOpen] = useState(false);
   const midweekFieldsId = `weekly-update-${update.id}-midweek-fields`;
-  const hasMidweekContent = Boolean(update.highlight || update.risk || update.action);
+  const hasMidweekContent = update.highlights.length > 0;
 
   return (
     <li className="py-3 first:pt-0 last:pb-0">
@@ -673,13 +673,41 @@ function WeeklyUpdateRow({ update }: { update: WeeklyUpdate }) {
           </button>
 
           {midweekOpen && (
-            <div
-              id={midweekFieldsId}
-              className="mt-2 grid gap-x-5 gap-y-2.5 sm:grid-cols-2"
-            >
-              <WeeklyUpdateField label="Highlight" value={update.highlight} isDone={isDone} />
-              <WeeklyUpdateField label="Risk" value={update.risk} isDone={isDone} />
-              <WeeklyUpdateField label="Action" value={update.action} isDone={isDone} />
+            <div id={midweekFieldsId} className="mt-2 flex flex-col gap-2.5">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                Highlights · {update.highlights.length}
+              </p>
+              {update.highlights.map((highlight, i) => (
+                <div
+                  key={highlight.id}
+                  className={
+                    i === 0
+                      ? "flex flex-col gap-2"
+                      : "flex flex-col gap-2 border-t border-outline-variant/60 pt-2.5"
+                  }
+                >
+                  <div>
+                    <p
+                      className={
+                        isDone
+                          ? "wrap-break-word text-sm text-on-surface"
+                          : "wrap-break-word text-sm text-on-surface-variant"
+                      }
+                    >
+                      {highlight.title}
+                    </p>
+                    {highlight.detail && (
+                      <p className="whitespace-pre-wrap wrap-break-word text-[13px] text-on-surface-variant">
+                        {highlight.detail}
+                      </p>
+                    )}
+                  </div>
+                  <div className="grid gap-x-5 gap-y-2.5 sm:grid-cols-2">
+                    <WeeklyUpdateField label="Risk" value={highlight.risk} isDone={isDone} />
+                    <WeeklyUpdateField label="Action" value={highlight.action} isDone={isDone} />
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </>
