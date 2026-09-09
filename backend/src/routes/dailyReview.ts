@@ -307,6 +307,10 @@ dailyReviewRouter.get(
           author: { select: { id: true, username: true } },
         },
       }),
+      // Mid-week highlights: a relation `select` on this same batched
+      // findMany costs one extra query for the whole page (Prisma issues a
+      // second `SELECT ... WHERE weekly_update_id IN (...)`), not one per
+      // row — the per-request call count stays fixed regardless of page size.
       prisma.weeklyUpdate.findMany({
         where: { customerId: { in: customerIds }, weekStart: weekStartDate },
         select: {
@@ -317,9 +321,10 @@ dailyReviewRouter.get(
           status: true,
           doneAt: true,
           category: true,
-          highlight: true,
-          risk: true,
-          action: true,
+          highlights: {
+            orderBy: { position: "asc" },
+            select: { id: true, position: true, title: true, detail: true, risk: true, action: true },
+          },
           achievement: true,
           outstandingIssue: true,
           lessonLearned: true,
@@ -435,9 +440,7 @@ dailyReviewRouter.get(
               status: weeklyUpdate.status,
               doneAt: weeklyUpdate.doneAt,
               category: weeklyUpdate.category,
-              highlight: weeklyUpdate.highlight,
-              risk: weeklyUpdate.risk,
-              action: weeklyUpdate.action,
+              highlights: weeklyUpdate.highlights,
               achievement: weeklyUpdate.achievement,
               outstandingIssue: weeklyUpdate.outstandingIssue,
               lessonLearned: weeklyUpdate.lessonLearned,

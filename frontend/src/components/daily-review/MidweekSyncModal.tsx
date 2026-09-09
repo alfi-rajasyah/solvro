@@ -1,13 +1,18 @@
-// Mid-week sync modal (docs/plans/weekly-sync-tables.md §4 "Daily Review",
-// T5): edits the Mid-week half of a customer's WeeklyUpdate row — Category,
-// Highlight, Risk, Action — plus Health (Wednesday sets it; the Reflection
-// modal can change it again on Friday). Never sends `status` (D12 — a
-// Mid-week save must not reopen or otherwise touch a Done/Draft row's
-// status). Mounted only while its WeeklySyncRow button is open
-// (WeeklySyncRow.tsx), so local state below always starts fresh from
-// `customer.weeklyUpdate` for the week being opened — never carried over
-// from a previous open or a different week.
-import { useState, type KeyboardEvent } from "react";
+// Mid-week sync modal (docs/plans/weekly-sync-highlight-rows.md §4 "Mid-week
+// form"): edits the Mid-week half of a customer's WeeklyUpdate row —
+// Category and one row per highlight (title, detail, risk, action) — plus
+// Health (Wednesday sets it; the Reflection modal can change it again on
+// Friday). `highlights` fully replaces the server's list on save, in array
+// order (D6) — there is no per-row diffing, so a highlight's local `key` is
+// assigned by a counter, never the server `id`. Never sends `status` (D12 of
+// the prior tables phase — a Mid-week save must not reopen or otherwise
+// touch a Done/Draft row's status). Mounted only while its WeeklySyncRow
+// button is open (WeeklySyncRow.tsx), so local state below always starts
+// fresh from `customer.weeklyUpdate` for the week being opened — never
+// carried over from a previous open or a different week. A week with no
+// saved highlights opens with one blank card rather than none, so a TAM
+// can start typing immediately.
+import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Modal } from "@/components/Modal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
@@ -17,25 +22,61 @@ import { weekNumberLabel } from "@/lib/dailyReviewStats";
 import { dayFromIso } from "@/lib/dateField";
 import { weekKeyOf } from "@/lib/isoWeek";
 import { type DailyReviewCustomer, type WeeklyHealth, useSaveWeeklyUpdate } from "@/lib/queries";
-import { draftWeeklyUpdate } from "@/lib/weeklyDraft";
+import { draftWeeklyHighlights } from "@/lib/weeklyDraft";
 import { HealthButtonGroup, SyncField } from "./SyncField";
+
+const MAX_HIGHLIGHTS = 20;
+
+interface HighlightDraft {
+  key: string;
+  title: string;
+  detail: string;
+  risk: string;
+  action: string;
+  detailOpen: boolean;
+}
 
 interface DraftState {
   health: WeeklyHealth | null;
   category: string;
-  highlight: string;
-  risk: string;
-  action: string;
+  highlights: HighlightDraft[];
 }
 
-function initialState(customer: DailyReviewCustomer): DraftState {
+// Shape common to both `WeeklyHighlight` (server rows, has `id`/`position`
+// too) and `WeeklyHighlightInput` (the draft helper's output) — the only
+// fields a `HighlightDraft` needs, so one function builds a row from either.
+interface HighlightSource {
+  title: string;
+  detail?: string | null;
+  risk?: string | null;
+  action?: string | null;
+}
+
+function toHighlightDraft(nextKey: () => string, h: HighlightSource): HighlightDraft {
+  const detail = h.detail ?? "";
+  return {
+    key: nextKey(),
+    title: h.title,
+    detail,
+    risk: h.risk ?? "",
+    action: h.action ?? "",
+    detailOpen: detail !== "",
+  };
+}
+
+function emptyHighlightDraft(key: string): HighlightDraft {
+  return { key, title: "", detail: "", risk: "", action: "", detailOpen: false };
+}
+
+function initialState(customer: DailyReviewCustomer, nextKey: () => string): DraftState {
   const u = customer.weeklyUpdate;
+  const saved = u?.highlights ?? [];
   return {
     health: u?.health ?? null,
     category: u?.category ?? "",
-    highlight: u?.highlight ?? "",
-    risk: u?.risk ?? "",
-    action: u?.action ?? "",
+    // No saved highlights → open with one blank card instead of none, so
+    // the form isn't empty of fields to type into.
+    highlights: saved.length > 0 ? saved.map((h) => toHighlightDraft(nextKey, h)) : [emptyHighlightDraft(nextKey())],
   };
 }
 
@@ -47,9 +88,23 @@ export interface MidweekSyncModalProps {
 
 export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalProps) {
   const save = useSaveWeeklyUpdate(customer.id);
-  const [state, setState] = useState<DraftState>(() => initialState(customer));
+  const highlightKeyCounter = useRef(0);
+  function nextHighlightKey(): string {
+    highlightKeyCounter.current += 1;
+    return `h${highlightKeyCounter.current}`;
+  }
+
+  const [state, setState] = useState<DraftState>(() => initialState(customer, nextHighlightKey));
   const [confirmRedraft, setConfirmRedraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
+  const titleRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
+
+  useEffect(() => {
+    if (!pendingFocusKey) return;
+    titleRefs.current.get(pendingFocusKey)?.focus();
+    setPendingFocusKey(null);
+  }, [pendingFocusKey]);
 
   const weekNumber = weekNumberLabel(week.key);
   const carryOver = customer.previousWeeklyUpdate;
@@ -60,12 +115,45 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
     setState((prev) => ({ ...prev, ...p }));
   }
 
+  function patchHighlight(key: string, p: Partial<HighlightDraft>) {
+    setState((prev) => ({
+      ...prev,
+      highlights: prev.highlights.map((h) => (h.key === key ? { ...h, ...p } : h)),
+    }));
+  }
+
+  function addHighlight() {
+    const key = nextHighlightKey();
+    setState((prev) => ({ ...prev, highlights: [...prev.highlights, emptyHighlightDraft(key)] }));
+    setPendingFocusKey(key);
+  }
+
+  function removeHighlight(key: string) {
+    setState((prev) => ({ ...prev, highlights: prev.highlights.filter((h) => h.key !== key) }));
+  }
+
   function applyDraft() {
-    patch({ highlight: draftWeeklyUpdate(customer, week, { throughDay: week.days[2] }) });
+    // One note can draft to more than MAX_HIGHLIGHTS rows (every project's
+    // notes plus operations notes, across three days) — cut the draft at
+    // the cap rather than let a save-time rejection surprise the user.
+    const drafted = draftWeeklyHighlights(customer, week, { throughDay: week.days[2] }).slice(0, MAX_HIGHLIGHTS);
+    // A week with no Mon–Wed notes drafts to nothing — keep one blank card
+    // rather than empty the form (same rule as initialState).
+    const rows =
+      drafted.length > 0
+        ? drafted.map((h) => toHighlightDraft(nextHighlightKey, h))
+        : [emptyHighlightDraft(nextHighlightKey())];
+    setState((prev) => ({ ...prev, highlights: rows }));
   }
 
   function requestDraft() {
-    if (state.highlight.trim().length > 0) {
+    // The blank starter card (initialState) has no text in any field, so
+    // it shouldn't trigger a "replace?" confirm — only a card that already
+    // carries something worth losing does.
+    const hasContent = state.highlights.some(
+      (h) => h.title.trim() !== "" || h.detail.trim() !== "" || h.risk.trim() !== "" || h.action.trim() !== "",
+    );
+    if (hasContent) {
       setConfirmRedraft(true);
     } else {
       applyDraft();
@@ -74,14 +162,25 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
 
   function submit() {
     setError(null);
+    const kept = state.highlights.filter((h) => {
+      const titleEmpty = h.title.trim() === "";
+      const restEmpty = h.detail.trim() === "" && h.risk.trim() === "" && h.action.trim() === "";
+      return !(titleEmpty && restEmpty);
+    });
+    if (kept.some((h) => h.title.trim() === "")) {
+      setError("Every highlight needs a title.");
+      return;
+    }
+    if (kept.length > MAX_HIGHLIGHTS) {
+      setError("20 highlights max — remove some before saving.");
+      return;
+    }
     save.mutate(
       {
         weekStart: week.start,
         health: state.health,
         category: state.category,
-        highlight: state.highlight,
-        risk: state.risk,
-        action: state.action,
+        highlights: kept.map((h) => ({ title: h.title.trim(), detail: h.detail, risk: h.risk, action: h.action })),
       },
       {
         onSuccess: () => onClose(),
@@ -98,6 +197,8 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
   }
 
   const fieldId = (name: string) => `midweek-${customer.id}-${name}`;
+  const linkClass =
+    "text-[12px] font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
 
   // Modal.tsx registers one document-level Escape listener per open
   // instance with no stopPropagation, so a single Escape press would
@@ -109,7 +210,7 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
       open
       onClose={save.isPending || confirmRedraft ? () => {} : onClose}
       title={`Mid-week sync — ${customer.name}, week ${weekNumber}`}
-      widthClass="max-w-2xl"
+      widthClass="max-w-3xl"
       footer={
         <>
           <button
@@ -172,45 +273,122 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
             />
           </SyncField>
 
-          <SyncField
-            id={fieldId("highlight")}
-            label="Highlight"
-            action={
+          <div className="space-y-2.5">
+            <div>
+              <div className="mb-1 flex items-baseline justify-between gap-2">
+                <p className="block font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
+                  Highlights
+                </p>
+                <button type="button" onClick={requestDraft} className={linkClass}>
+                  Draft from Mon–Wed notes
+                </button>
+              </div>
+              <p className="text-[11px] text-on-surface-variant">
+                One row in Monday&rsquo;s table per highlight. Title: one line, 200 characters max. Detail shows in
+                the form and in Copy as table, not in the table on screen.
+              </p>
+            </div>
+
+            {state.highlights.map((h, index) => {
+              const n = index + 1;
+              const titleId = fieldId(`h${n}-title`);
+              const riskId = fieldId(`h${n}-risk`);
+              const actionId = fieldId(`h${n}-action`);
+              const detailId = fieldId(`h${n}-detail`);
+              return (
+                <div
+                  key={h.key}
+                  data-testid={`midweek-highlight-${n}`}
+                  className="space-y-2.5 rounded-sm border border-outline-variant bg-surface-container-low p-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                      Highlight {n}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => removeHighlight(h.key)}
+                      aria-label={`Remove highlight ${n}`}
+                      className="text-[12px] font-semibold text-on-surface-variant hover:text-error focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                    >
+                      Remove
+                    </button>
+                  </div>
+
+                  <SyncField id={titleId} label="Title">
+                    <Input
+                      id={titleId}
+                      ref={(el) => {
+                        titleRefs.current.set(h.key, el);
+                      }}
+                      value={h.title}
+                      onChange={(e) => patchHighlight(h.key, { title: e.target.value })}
+                      maxLength={200}
+                      aria-label={`Highlight ${n} title for ${customer.name}`}
+                    />
+                  </SyncField>
+
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <SyncField id={riskId} label="Risk">
+                      <Textarea
+                        id={riskId}
+                        value={h.risk}
+                        onChange={(e) => patchHighlight(h.key, { risk: e.target.value })}
+                        aria-label={`Highlight ${n} risk for ${customer.name}`}
+                        className="min-h-16"
+                      />
+                    </SyncField>
+                    <SyncField id={actionId} label="Action">
+                      <Textarea
+                        id={actionId}
+                        value={h.action}
+                        onChange={(e) => patchHighlight(h.key, { action: e.target.value })}
+                        aria-label={`Highlight ${n} action for ${customer.name}`}
+                        className="min-h-16"
+                      />
+                    </SyncField>
+                  </div>
+
+                  {h.detailOpen ? (
+                    <SyncField id={detailId} label="Detail">
+                      <Textarea
+                        id={detailId}
+                        value={h.detail}
+                        onChange={(e) => patchHighlight(h.key, { detail: e.target.value })}
+                        aria-label={`Highlight ${n} detail for ${customer.name}`}
+                        className="min-h-[120px]"
+                      />
+                    </SyncField>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => patchHighlight(h.key, { detailOpen: true })}
+                      className={linkClass}
+                    >
+                      Add detail
+                    </button>
+                  )}
+                </div>
+              );
+            })}
+
+            <div className="flex flex-col items-start gap-1">
               <button
                 type="button"
-                onClick={requestDraft}
-                className="text-[12px] font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                onClick={addHighlight}
+                disabled={state.highlights.length >= MAX_HIGHLIGHTS}
+                className="flex items-center gap-1.5 rounded-sm border border-outline-variant px-2.5 py-1.5 text-[12px] font-semibold text-on-surface-variant hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               >
-                Draft from Mon–Wed notes
+                <span className="material-symbols-outlined text-[16px]" aria-hidden="true">
+                  add
+                </span>
+                Add highlight
               </button>
-            }
-          >
-            <Textarea
-              id={fieldId("highlight")}
-              value={state.highlight}
-              onChange={(e) => patch({ highlight: e.target.value })}
-              aria-label={`Highlight for ${customer.name}`}
-              className="min-h-[88px]"
-            />
-          </SyncField>
-
-          <SyncField id={fieldId("risk")} label="Risk">
-            <Textarea
-              id={fieldId("risk")}
-              value={state.risk}
-              onChange={(e) => patch({ risk: e.target.value })}
-              aria-label={`Risk for ${customer.name}`}
-            />
-          </SyncField>
-
-          <SyncField id={fieldId("action")} label="Action">
-            <Textarea
-              id={fieldId("action")}
-              value={state.action}
-              onChange={(e) => patch({ action: e.target.value })}
-              aria-label={`Action for ${customer.name}`}
-            />
-          </SyncField>
+              {state.highlights.length >= MAX_HIGHLIGHTS && (
+                <p className="text-[11px] text-on-surface-variant">20 highlights max.</p>
+              )}
+            </div>
+          </div>
         </div>
 
         <ConfirmModal
@@ -221,7 +399,7 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
             setConfirmRedraft(false);
           }}
           title="Draft from Mon–Wed notes"
-          body="Replace the Highlight with a draft from this week's notes?"
+          body="Replace the highlights with a draft from this week's notes?"
           confirmLabel="Draft"
           confirmTone="warning"
         />

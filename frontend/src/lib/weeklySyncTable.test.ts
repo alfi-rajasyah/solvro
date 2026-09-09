@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DailyReviewCustomer, WeeklyUpdate } from "./queries";
+import type { DailyReviewCustomer, WeeklyHighlight, WeeklyUpdate } from "./queries";
 import {
   buildSyncTable,
   hasManagerDecision,
@@ -11,6 +11,18 @@ import {
 
 let nextId = 1;
 
+function highlight(fields: Partial<WeeklyHighlight> = {}): WeeklyHighlight {
+  return {
+    id: nextId++,
+    position: 0,
+    title: "Highlight",
+    detail: null,
+    risk: null,
+    action: null,
+    ...fields,
+  };
+}
+
 function weeklyUpdate(fields: Partial<WeeklyUpdate> = {}): WeeklyUpdate {
   return {
     id: nextId++,
@@ -19,9 +31,7 @@ function weeklyUpdate(fields: Partial<WeeklyUpdate> = {}): WeeklyUpdate {
     status: "DRAFT",
     doneAt: null,
     category: null,
-    highlight: null,
-    risk: null,
-    action: null,
+    highlights: [],
     achievement: null,
     outstandingIssue: null,
     lessonLearned: null,
@@ -65,11 +75,11 @@ describe("hasTabUpdate", () => {
     expect(hasTabUpdate("reflection", c)).toBe(false);
   });
 
-  it("mid-week: true once the Mid-week form was saved, or any Mid-week field has text", () => {
+  it("mid-week: true once the Mid-week form was saved, any highlight exists, or category has text", () => {
     expect(hasTabUpdate("midweek", customer("Saved", { midweekSavedAt: "2026-08-26T09:00:00.000Z" }))).toBe(true);
-    expect(hasTabUpdate("midweek", customer("Risk", { risk: "Vendor delay" }))).toBe(true);
+    expect(hasTabUpdate("midweek", customer("Highlight", { highlights: [highlight()] }))).toBe(true);
     expect(hasTabUpdate("midweek", customer("Category", { category: "Onboarding" }))).toBe(true);
-    expect(hasTabUpdate("midweek", customer("Blank", { highlight: "   ", action: "" }))).toBe(false);
+    expect(hasTabUpdate("midweek", customer("Blank", { category: "   ", highlights: [] }))).toBe(false);
   });
 
   it("reflection: true once the week is done, or any Reflection field has text", () => {
@@ -84,7 +94,7 @@ describe("hasTabUpdate", () => {
   it("health alone never counts, and a Mid-week-only save is not a Reflection update", () => {
     const midweekOnly = customer("Midweek", {
       health: "AMBER",
-      highlight: "Kickoff",
+      highlights: [highlight({ title: "Kickoff" })],
       midweekSavedAt: "2026-08-26T09:00:00.000Z",
     });
     expect(hasTabUpdate("midweek", midweekOnly)).toBe(true);
@@ -148,12 +158,52 @@ describe("buildSyncTable", () => {
       customer("Acme", {
         category: "Onboarding",
         health: "AMBER",
-        highlight: "Kickoff done",
-        risk: "Vendor delay",
-        action: "Chase vendor",
+        highlights: [highlight({ title: "Kickoff done", risk: "Vendor delay", action: "Chase vendor" })],
       }),
     ]);
     expect(table.rows).toEqual([["Acme", "Amber", "Onboarding", "Kickoff done", "Vendor delay", "Chase vendor"]]);
+  });
+
+  it("renders one row per highlight, with the customer, health, and category repeated on each (D8)", () => {
+    const table = buildSyncTable("midweek", [
+      customer("Acme", {
+        category: "Onboarding",
+        health: "AMBER",
+        highlights: [
+          highlight({ title: "Server request", risk: "Vendor delay", action: "Chase vendor" }),
+          highlight({ title: "Remote trading test" }),
+        ],
+      }),
+    ]);
+    expect(table.rows).toEqual([
+      ["Acme", "Amber", "Onboarding", "Server request", "Vendor delay", "Chase vendor"],
+      ["Acme", "Amber", "Onboarding", "Remote trading test", "—", "—"],
+    ]);
+  });
+
+  it("joins a highlight's title and detail with a newline in the Highlight cell", () => {
+    const table = buildSyncTable("midweek", [
+      customer("Acme", {
+        highlights: [highlight({ title: "Server request", detail: "Waiting on vendor callback" })],
+      }),
+    ]);
+    expect(table.rows[0][3]).toBe("Server request\nWaiting on vendor callback");
+  });
+
+  it("treats a whitespace-only detail/risk/action as empty, same as every other cell", () => {
+    const table = buildSyncTable("midweek", [
+      customer("Acme", {
+        highlights: [highlight({ title: "Server request", detail: "   ", risk: "  ", action: "" })],
+      }),
+    ]);
+    expect(table.rows).toEqual([["Acme", "—", "—", "Server request", "—", "—"]]);
+  });
+
+  it("a customer with a saved category but no highlight gets one row with dashes in the highlight cells", () => {
+    const table = buildSyncTable("midweek", [
+      customer("Acme", { category: "Onboarding", health: "GREEN", highlights: [] }),
+    ]);
+    expect(table.rows).toEqual([["Acme", "Green", "Onboarding", "—", "—", "—"]]);
   });
 
   it("renders a full reflection row with no Health/Category cells even when the customer has them set", () => {
@@ -173,9 +223,9 @@ describe("buildSyncTable", () => {
     ]);
   });
 
-  it("renders — for null and whitespace-only fields, and for a customer with no update at all", () => {
+  it("renders — for null category/health and for a customer with no update at all", () => {
     const table = buildSyncTable("midweek", [
-      customer("Blank", { category: null, health: null, highlight: "   ", risk: "", action: undefined }),
+      customer("Blank", { category: null, health: null, highlights: [] }),
       customer("NoUpdate", null),
     ]);
     expect(table.rows).toEqual([

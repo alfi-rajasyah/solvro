@@ -1,7 +1,8 @@
 // Pure builders for the Weekly Sync page's "Copy as table" action
-// (docs/plans/weekly-sync-tables.md §4 "Weekly Sync page", D13). No React, no
-// network — `WeeklySync.tsx` calls these at click time and the Vitest suite
-// below exercises them in isolation.
+// (docs/plans/weekly-sync-tables.md §4 "Weekly Sync page", D13; row shape per
+// docs/plans/weekly-sync-highlight-rows.md D1/D8). No React, no network —
+// `WeeklySync.tsx` calls these at click time and the Vitest suite below
+// exercises them in isolation.
 //
 // Column order matches the two meeting tables exactly (plan D2), not the
 // on-page layout: Mid-week copies Customer, Health, Category, Highlight,
@@ -11,6 +12,12 @@
 // Reflection meeting doesn't re-discuss category). Status is never copied
 // on either tab (D13: only the sync fields are copied, daily notes never
 // are, and Status is a page-only affordance).
+//
+// A Mid-week row is a HIGHLIGHT now, not a customer (D1/D8): a customer with
+// N highlights produces N rows, Customer/Health/Category repeating on every
+// one (no `rowspan` — D8), and a customer with a saved Mid-week but no
+// highlight still gets one row with "—" in Highlight/Risk/Action. Reflection
+// stays one row per customer, unchanged.
 import type { DailyReviewCustomer, WeeklyHealth } from "./queries";
 
 export type WeeklySyncTab = "midweek" | "reflection";
@@ -45,8 +52,9 @@ function hasText(value: string | null | undefined): boolean {
 /**
  * True when `customer` has an update for `tab` this week — the Weekly Sync
  * page lists only these rows by default. Mid-week: the Mid-week form was
- * saved (`midweekSavedAt`) or any Mid-week text field has content.
- * Reflection: the week is DONE or any Reflection text field has content.
+ * saved (`midweekSavedAt`), the Category has text, or the week has at least
+ * one highlight. Reflection: the week is DONE or any Reflection text field
+ * has content.
  * Health alone never counts — it is set on Wednesday too, so counting it
  * would surface every Mid-week-only customer as an empty row on the
  * Reflection tab. A customer with no weekly-update row at all has no update
@@ -56,7 +64,7 @@ export function hasTabUpdate(tab: WeeklySyncTab, customer: DailyReviewCustomer):
   const u = customer.weeklyUpdate;
   if (!u) return false;
   if (tab === "midweek") {
-    return u.midweekSavedAt != null || [u.category, u.highlight, u.risk, u.action].some(hasText);
+    return u.midweekSavedAt != null || hasText(u.category) || u.highlights.length > 0;
   }
   return (
     u.status === "DONE" ||
@@ -99,17 +107,27 @@ function cellHealth(health: WeeklyHealth | null | undefined): string {
 export function buildSyncTable(tab: WeeklySyncTab, customers: DailyReviewCustomer[]): SyncTable {
   if (tab === "midweek") {
     const header = ["Customer", "Health", "Category", "Highlight", "Risk", "Action"];
-    const rows = customers.map((c) => {
+    const rows: string[][] = [];
+    for (const c of customers) {
       const u = c.weeklyUpdate;
-      return [
-        c.name,
-        cellHealth(u?.health),
-        cellText(u?.category),
-        cellText(u?.highlight),
-        cellText(u?.risk),
-        cellText(u?.action),
-      ];
-    });
+      const healthCell = cellHealth(u?.health);
+      const categoryCell = cellText(u?.category);
+      const highlights = u?.highlights ?? [];
+      if (highlights.length === 0) {
+        rows.push([c.name, healthCell, categoryCell, EM_DASH, EM_DASH, EM_DASH]);
+        continue;
+      }
+      for (const h of highlights) {
+        rows.push([
+          c.name,
+          healthCell,
+          categoryCell,
+          hasText(h.detail) ? `${h.title}\n${h.detail}` : h.title,
+          cellText(h.risk),
+          cellText(h.action),
+        ]);
+      }
+    }
     return { header, rows };
   }
 
