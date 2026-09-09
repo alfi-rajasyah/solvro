@@ -83,6 +83,33 @@ const weeklyUpdateParamSchema = z.object({
   weekStart: dayStringSchema,
 });
 
+// One Mid-week highlight row (D5/D6 in docs/plans/weekly-sync-highlight-rows.md):
+// title is one line, 1–200 characters after trim, no \r or \n. The 200 limit
+// counts code points (not UTF-16 units, what z.string().max() counts), to
+// match the migration's LEFT(first_line, 200), the VarChar(200) column, and
+// the frontend's cut() ([...s].slice(0, 200)) — a title cannot be rejected
+// here for exceeding a limit those never enforced in the first place.
+// Detail/risk/action follow the same ≤8000, trim-and-null-when-empty rule as
+// every other sync text field (normalizeText, applied when the row is
+// written).
+const highlightInputSchema = z.object({
+  title: z
+    .string()
+    .transform((s) => s.trim())
+    .pipe(
+      z
+        .string()
+        .min(1, "title is required")
+        .refine((s) => [...s].length <= 200, {
+          message: "title must be 200 characters or fewer",
+        })
+        .refine((s) => !/[\r\n]/.test(s), { message: "title must be one line" }),
+    ),
+  detail: z.string().max(8000).nullable().optional(),
+  risk: z.string().max(8000).nullable().optional(),
+  action: z.string().max(8000).nullable().optional(),
+});
+
 const saveWeeklyUpdateSchema = z.object({
   health: z.nativeEnum(WeeklyHealth).nullable().optional(),
   status: z.nativeEnum(WeeklyStatus).optional(),
@@ -95,9 +122,10 @@ const saveWeeklyUpdateSchema = z.object({
     .pipe(z.string().max(120))
     .nullable()
     .optional(),
-  highlight: z.string().max(8000).nullable().optional(),
-  risk: z.string().max(8000).nullable().optional(),
-  action: z.string().max(8000).nullable().optional(),
+  // Omitted = the stored list is untouched. Present (including `[]`) =
+  // replaces the whole list, in array order, in one transaction (D6 in
+  // docs/plans/weekly-sync-highlight-rows.md).
+  highlights: z.array(highlightInputSchema).max(20).optional(),
   achievement: z.string().max(8000).nullable().optional(),
   outstandingIssue: z.string().max(8000).nullable().optional(),
   lessonLearned: z.string().max(8000).nullable().optional(),
@@ -464,6 +492,18 @@ customersRouter.delete(
 );
 
 // ---- Weekly updates (per customer, Decision 2) ------------------------------
+// The Mid-week highlight list (D4/D6 in docs/plans/weekly-sync-highlight-rows.md):
+// present on a save replaces the whole list, in array order, inside one
+// transaction; omitted leaves it untouched; `[]` clears it. Every read of a
+// WeeklyUpdate row includes it ordered by position.
+
+const weeklyUpdateInclude = {
+  author: { select: { id: true, username: true } },
+  highlights: {
+    orderBy: { position: "asc" as const },
+    select: { id: true, position: true, title: true, detail: true, risk: true, action: true },
+  },
+} satisfies Prisma.WeeklyUpdateInclude;
 
 customersRouter.get(
   "/:id/weekly-updates",
@@ -479,7 +519,7 @@ customersRouter.get(
       where: { customerId: id },
       orderBy: { weekStart: "desc" },
       take: limit ?? 12,
-      include: { author: { select: { id: true, username: true } } },
+      include: weeklyUpdateInclude,
     });
     res.json(updates);
   },
@@ -511,9 +551,6 @@ customersRouter.put(
     // was omitted (leave unchanged), or becomes the trimmed string / `null`
     // otherwise — see normalizeText.
     const category = normalizeText(body.category);
-    const highlight = normalizeText(body.highlight);
-    const risk = normalizeText(body.risk);
-    const action = normalizeText(body.action);
     const achievement = normalizeText(body.achievement);
     const outstandingIssue = normalizeText(body.outstandingIssue);
     const lessonLearned = normalizeText(body.lessonLearned);
@@ -552,49 +589,67 @@ customersRouter.put(
     const doneAt =
       status === "DONE" ? (existing?.status === "DONE" ? existing.doneAt : new Date()) : null;
 
-    // Stamped whenever the body touches any Mid-week field (category,
-    // highlight, risk, action) — even a field sent as `null` counts, since
-    // this marks "the Mid-week form was saved this week", not "it has text".
-    const midweekTouched = [category, highlight, risk, action].some((v) => v !== undefined);
+    // Stamped whenever the body touches any Mid-week field (category or
+    // the highlight list) — even a field sent as `null`/`[]` counts, since
+    // this marks "the Mid-week form was saved this week", not "it has
+    // text".
+    const midweekTouched = category !== undefined || body.highlights !== undefined;
+    const highlights = body.highlights;
 
-    const updated = await prisma.weeklyUpdate.upsert({
-      where: { customerId_weekStart: { customerId: id, weekStart: weekStartDate } },
-      create: {
-        customerId: id,
-        weekStart: weekStartDate,
-        authorId: req.user!.sub,
-        health: body.health ?? null,
-        status,
-        doneAt,
-        category: category ?? null,
-        highlight: highlight ?? null,
-        risk: risk ?? null,
-        action: action ?? null,
-        achievement: achievement ?? null,
-        outstandingIssue: outstandingIssue ?? null,
-        lessonLearned: lessonLearned ?? null,
-        nextWeekFocus: nextWeekFocus ?? null,
-        managerDecision: managerDecision ?? null,
-        midweekSavedAt: midweekTouched ? new Date() : null,
-      },
-      update: {
-        authorId: req.user!.sub,
-        status,
-        doneAt,
-        ...(body.health !== undefined && { health: body.health }),
-        ...(category !== undefined && { category }),
-        ...(highlight !== undefined && { highlight }),
-        ...(risk !== undefined && { risk }),
-        ...(action !== undefined && { action }),
-        ...(achievement !== undefined && { achievement }),
-        ...(outstandingIssue !== undefined && { outstandingIssue }),
-        ...(lessonLearned !== undefined && { lessonLearned }),
-        ...(nextWeekFocus !== undefined && { nextWeekFocus }),
-        ...(managerDecision !== undefined && { managerDecision }),
-        ...(midweekTouched && { midweekSavedAt: new Date() }),
-      },
-      include: { author: { select: { id: true, username: true } } },
+    const result = await prisma.$transaction(async (tx) => {
+      const upserted = await tx.weeklyUpdate.upsert({
+        where: { customerId_weekStart: { customerId: id, weekStart: weekStartDate } },
+        create: {
+          customerId: id,
+          weekStart: weekStartDate,
+          authorId: req.user!.sub,
+          health: body.health ?? null,
+          status,
+          doneAt,
+          category: category ?? null,
+          achievement: achievement ?? null,
+          outstandingIssue: outstandingIssue ?? null,
+          lessonLearned: lessonLearned ?? null,
+          nextWeekFocus: nextWeekFocus ?? null,
+          managerDecision: managerDecision ?? null,
+          midweekSavedAt: midweekTouched ? new Date() : null,
+        },
+        update: {
+          authorId: req.user!.sub,
+          status,
+          doneAt,
+          ...(body.health !== undefined && { health: body.health }),
+          ...(category !== undefined && { category }),
+          ...(achievement !== undefined && { achievement }),
+          ...(outstandingIssue !== undefined && { outstandingIssue }),
+          ...(lessonLearned !== undefined && { lessonLearned }),
+          ...(nextWeekFocus !== undefined && { nextWeekFocus }),
+          ...(managerDecision !== undefined && { managerDecision }),
+          ...(midweekTouched && { midweekSavedAt: new Date() }),
+        },
+      });
+
+      if (highlights !== undefined) {
+        await tx.weeklyHighlight.deleteMany({ where: { weeklyUpdateId: upserted.id } });
+        if (highlights.length > 0) {
+          await tx.weeklyHighlight.createMany({
+            data: highlights.map((h, i) => ({
+              weeklyUpdateId: upserted.id,
+              position: i,
+              title: h.title,
+              detail: normalizeText(h.detail) ?? null,
+              risk: normalizeText(h.risk) ?? null,
+              action: normalizeText(h.action) ?? null,
+            })),
+          });
+        }
+      }
+
+      return tx.weeklyUpdate.findUniqueOrThrow({
+        where: { id: upserted.id },
+        include: weeklyUpdateInclude,
+      });
     });
-    res.status(existing ? 200 : 201).json(updated);
+    res.status(existing ? 200 : 201).json(result);
   },
 );
