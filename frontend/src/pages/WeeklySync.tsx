@@ -10,7 +10,7 @@ import { hasPermission, useAuth } from "@/lib/auth";
 import { weekNumberLabel } from "@/lib/dailyReviewStats";
 import { dateToDay } from "@/lib/dateField";
 import { formatWeekRange, parseWeekKey, shiftWeek, weekKeyOf } from "@/lib/isoWeek";
-import { type DailyReviewCustomer, useDailyReview } from "@/lib/queries";
+import { type DailyReviewCustomer, type WeeklyHighlight, useDailyReview } from "@/lib/queries";
 import {
   buildSyncTable,
   HEALTH_LABEL,
@@ -66,13 +66,16 @@ function computeDefaults(): { week: string; tab: WeeklySyncTab } {
   return { week: currentWeek, tab: "reflection" };
 }
 
-// Weekly Sync page (docs/plans/weekly-sync-tables.md §4, T6): a read-on-
-// Monday table view of the same `useDailyReview(week)` payload the Daily
-// Review page uses — one row per customer, Mid-week and Reflection tabs, and
-// a "Copy as table" action (D13) that writes both an HTML `<table>` and a
-// tab-separated fallback to the clipboard. The page owns layout, URL
-// week/tab state, and the click-to-open-modal wiring; the two sync modals
-// (T5) are reused as-is.
+// Weekly Sync page (docs/plans/weekly-sync-highlight-rows.md §4, T6): a
+// read-on-Monday table view of the same `useDailyReview(week)` payload the
+// Daily Review page uses. Mid-week is one row per highlight now (D1): a
+// customer renders as one block of grid rows, one per `weeklyUpdate
+// .highlights` entry (or a single dash row when there are none), with
+// Customer/Health/Status filled on the first row only. Reflection stays one
+// row per customer. A "Copy as table" action (D13) writes both an HTML
+// `<table>` and a tab-separated fallback to the clipboard. The page owns
+// layout, URL week/tab state, and the click-to-open-modal wiring; the two
+// sync modals (T5) are reused as-is.
 //
 // Each tab lists only the customers with an update for that tab this week
 // (`hasTabUpdate`). The rest are counted in a line under the table with a
@@ -174,7 +177,7 @@ export function WeeklySync() {
       } else {
         await navigator.clipboard.writeText(tsv);
       }
-      showCopyMessage(`Copied ${table.rows.length} rows`);
+      showCopyMessage(`Copied ${table.rows.length} ${table.rows.length === 1 ? "row" : "rows"}`);
     } catch {
       showCopyMessage("Copy failed");
     }
@@ -196,7 +199,7 @@ export function WeeklySync() {
         <div>
           <h1 className="font-display text-2xl font-bold text-on-surface">Weekly Sync</h1>
           <p className="text-sm text-on-surface-variant">
-            One row per customer with an update. Wednesday and Friday tables, read on Monday.
+            One row per highlight. Wednesday and Friday tables, read on Monday.
           </p>
         </div>
 
@@ -305,10 +308,9 @@ export function WeeklySync() {
                 <HeaderRow tab={tab} gridColsClass={gridColsClass} />
                 {tab === "midweek"
                   ? shown.map((c) => (
-                      <SyncRow
+                      <MidweekBlock
                         key={c.id}
                         customer={c}
-                        tab={tab}
                         gridColsClass={gridColsClass}
                         clickable={canWrite}
                         onOpen={openModalFor}
@@ -323,7 +325,6 @@ export function WeeklySync() {
                           <SyncRow
                             key={c.id}
                             customer={c}
-                            tab={tab}
                             gridColsClass={gridColsClass}
                             clickable={canWrite}
                             onOpen={openModalFor}
@@ -334,7 +335,6 @@ export function WeeklySync() {
                           <SyncRow
                             key={c.id}
                             customer={c}
-                            tab={tab}
                             gridColsClass={gridColsClass}
                             clickable={canWrite}
                             onOpen={openModalFor}
@@ -416,28 +416,153 @@ function GroupHeader({ label, amber }: { label: string; amber?: boolean }) {
   );
 }
 
-function Cell({ children }: { children: ReactNode }) {
+// Border treatment for a table cell: "outline" is the standard 1px divider
+// between customer blocks (unchanged), "faint" is the fainter divider used
+// between a customer's own highlight rows (surface-container, not
+// outline-variant — plan D1/§4), and "none" drops the top border entirely
+// for a continuation row's blank Customer/Health/Status cells.
+type CellBorder = "outline" | "faint" | "none";
+
+const CELL_BORDER_CLASS: Record<CellBorder, string> = {
+  outline: "border-t border-outline-variant",
+  faint: "border-t border-surface-container",
+  none: "border-t-0",
+};
+
+function Cell({ children, border = "outline" }: { children: ReactNode; border?: CellBorder }) {
   return (
-    <div className="whitespace-pre-wrap wrap-break-word border-t border-outline-variant px-3 py-2.5 text-sm text-on-surface">
+    <div
+      className={`whitespace-pre-wrap wrap-break-word ${CELL_BORDER_CLASS[border]} px-3 py-2.5 text-sm text-on-surface`}
+    >
       {children}
     </div>
   );
 }
 
-function TextCell({ value }: { value: string | null | undefined }) {
+function TextCell({ value, border }: { value: string | null | undefined; border?: CellBorder }) {
   const trimmed = value?.trim();
-  return <Cell>{trimmed ? value : <span className="text-on-surface-variant">—</span>}</Cell>;
+  return <Cell border={border}>{trimmed ? value : <span className="text-on-surface-variant">—</span>}</Cell>;
 }
 
-interface SyncRowProps {
+/** The Highlight cell: the title, plus a small "has detail" note glyph (native title tooltip) when `detail` is non-empty (plan D3/§4). No highlight → the same "—" fallback as any other text cell. */
+function HighlightCell({ highlight, border }: { highlight: WeeklyHighlight | null; border: CellBorder }) {
+  if (!highlight) return <TextCell value={undefined} border={border} />;
+  const hasDetail = Boolean(highlight.detail?.trim());
+  return (
+    <Cell border={border}>
+      {highlight.title}
+      {hasDetail && (
+        <span
+          role="img"
+          className="material-symbols-outlined ml-1.5 align-[-2px] text-[14px] text-on-surface-variant"
+          title={highlight.detail ?? undefined}
+          aria-label="Has detail"
+        >
+          notes
+        </span>
+      )}
+    </Cell>
+  );
+}
+
+interface MidweekBlockProps {
   customer: DailyReviewCustomer;
-  tab: WeeklySyncTab;
   gridColsClass: string;
   clickable: boolean;
   onOpen: (customer: DailyReviewCustomer) => void;
 }
 
-function SyncRow({ customer, tab, gridColsClass, clickable, onOpen }: SyncRowProps) {
+/**
+ * A Mid-week customer block (plan D1/§4): one wrapper `div` — click/keyboard
+ * target and `data-testid` live here, unchanged from the old single-row
+ * `SyncRow` — containing one `grid ${gridColsClass}` row per highlight (or a
+ * single row when there are none, matching the old dash-row behavior).
+ * Customer/Health/Status render on the first row only; continuation rows
+ * leave those three cells blank with no top border, while the
+ * Highlight/Risk/Action cells keep a (fainter) divider between highlights.
+ */
+function MidweekBlock({ customer, gridColsClass, clickable, onOpen }: MidweekBlockProps) {
+  const update = customer.weeklyUpdate;
+  const health = update?.health ?? null;
+  const category = update?.category?.trim() ? update.category : null;
+  const highlights = update?.highlights ?? [];
+  const rows: Array<WeeklyHighlight | null> = highlights.length > 0 ? highlights : [null];
+
+  function handleClick() {
+    if (clickable) onOpen(customer);
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (!clickable) return;
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onOpen(customer);
+    }
+  }
+
+  return (
+    <div
+      role={clickable ? "button" : undefined}
+      tabIndex={clickable ? 0 : undefined}
+      onClick={clickable ? handleClick : undefined}
+      onKeyDown={clickable ? handleKeyDown : undefined}
+      data-testid={`weekly-sync-row-${customer.id}`}
+      className={
+        clickable
+          ? "cursor-pointer hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          : undefined
+      }
+    >
+      {rows.map((highlight, index) => {
+        const isFirst = index === 0;
+        const rowBorder: CellBorder = isFirst ? "outline" : "faint";
+        return (
+          <div key={highlight?.id ?? `dash-${index}`} className={`grid ${gridColsClass}`}>
+            <Cell border={isFirst ? "outline" : "none"}>
+              {isFirst && (
+                <>
+                  <div className="font-semibold text-on-surface">{customer.name}</div>
+                  <div className="mt-0.5 text-[12px] text-on-surface-variant">{category ?? "—"}</div>
+                </>
+              )}
+            </Cell>
+            <Cell border={isFirst ? "outline" : "none"}>
+              {isFirst &&
+                (health ? (
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${HEALTH_CLASS[health]}`}>
+                    {HEALTH_LABEL[health]}
+                  </span>
+                ) : (
+                  <span className="text-on-surface-variant">—</span>
+                ))}
+            </Cell>
+            <HighlightCell highlight={highlight} border={rowBorder} />
+            <TextCell value={highlight?.risk} border={rowBorder} />
+            <TextCell value={highlight?.action} border={rowBorder} />
+            <Cell border={isFirst ? "outline" : "none"}>
+              {isFirst &&
+                (update?.midweekSavedAt ? (
+                  `Saved ${MIDWEEK_SAVED_FMT.format(new Date(update.midweekSavedAt))}`
+                ) : (
+                  <span className="text-on-surface-variant">Not filled</span>
+                ))}
+            </Cell>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+interface SyncRowProps {
+  customer: DailyReviewCustomer;
+  gridColsClass: string;
+  clickable: boolean;
+  onOpen: (customer: DailyReviewCustomer) => void;
+}
+
+/** A Reflection-tab row — one row per customer, unchanged (plan D10). */
+function SyncRow({ customer, gridColsClass, clickable, onOpen }: SyncRowProps) {
   const update = customer.weeklyUpdate;
   const health = update?.health ?? null;
   const category = update?.category?.trim() ? update.category : null;
@@ -482,34 +607,17 @@ function SyncRow({ customer, tab, gridColsClass, clickable, onOpen }: SyncRowPro
           <span className="text-on-surface-variant">—</span>
         )}
       </Cell>
-      {tab === "midweek" ? (
-        <>
-          <TextCell value={update?.highlight} />
-          <TextCell value={update?.risk} />
-          <TextCell value={update?.action} />
-          <Cell>
-            {update?.midweekSavedAt ? (
-              `Saved ${MIDWEEK_SAVED_FMT.format(new Date(update.midweekSavedAt))}`
-            ) : (
-              <span className="text-on-surface-variant">Not filled</span>
-            )}
-          </Cell>
-        </>
-      ) : (
-        <>
-          <TextCell value={update?.achievement} />
-          <TextCell value={update?.outstandingIssue} />
-          <TextCell value={update?.lessonLearned} />
-          <TextCell value={update?.nextWeekFocus} />
-          <TextCell value={update?.managerDecision} />
-          <Cell>
-            {(() => {
-              const badge = WEEKLY_STATUS_BADGE[update?.status ?? "NOT_STARTED"];
-              return <Badge variant={badge.variant}>{badge.label}</Badge>;
-            })()}
-          </Cell>
-        </>
-      )}
+      <TextCell value={update?.achievement} />
+      <TextCell value={update?.outstandingIssue} />
+      <TextCell value={update?.lessonLearned} />
+      <TextCell value={update?.nextWeekFocus} />
+      <TextCell value={update?.managerDecision} />
+      <Cell>
+        {(() => {
+          const badge = WEEKLY_STATUS_BADGE[update?.status ?? "NOT_STARTED"];
+          return <Badge variant={badge.variant}>{badge.label}</Badge>;
+        })()}
+      </Cell>
     </div>
   );
 }
