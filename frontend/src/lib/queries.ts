@@ -331,6 +331,28 @@ export interface DailyReviewOpsNote extends DailyReviewNote {
   title: string;
 }
 
+// One row of the Mid-week table (docs/plans/weekly-sync-highlight-rows.md
+// §2 D1/D2): `WeeklyUpdate.highlights` holds one of these per highlight,
+// ordered by `position`. Risk and Action live on the highlight, not on the
+// week — each highlight carries its own.
+export interface WeeklyHighlight {
+  id: number;
+  position: number;
+  title: string;
+  detail: string | null;
+  risk: string | null;
+  action: string | null;
+}
+
+// The save-side shape of a WeeklyHighlight — no `id`/`position` (the server
+// assigns `position` from list order on save; see SaveWeeklyUpdateInput).
+export interface WeeklyHighlightInput {
+  title: string;
+  detail?: string | null;
+  risk?: string | null;
+  action?: string | null;
+}
+
 export interface WeeklyUpdate {
   id: number;
   weekStart: string;
@@ -339,9 +361,9 @@ export interface WeeklyUpdate {
   doneAt: string | null;
   // Mid-week table fields (docs/plans/weekly-sync-tables.md §2 D2).
   category: string | null;
-  highlight: string | null;
-  risk: string | null;
-  action: string | null;
+  // One row per highlight (docs/plans/weekly-sync-highlight-rows.md D1),
+  // ordered by position — the Mid-week table lists one row per entry here.
+  highlights: WeeklyHighlight[];
   // Reflection table fields. `achievement` replaces the old free-text
   // `body` (D6 — the migration copied every existing `body` into this
   // column, then dropped `body`).
@@ -1851,22 +1873,24 @@ export function useDeleteCustomerNote(customerId: number) {
 // the text fields) clears it. This is what lets the Mid-week and Reflection
 // modals each save their own half of the row without clobbering the
 // other's unsaved work — a modal must only include the keys it actually
-// edits, never spread in the fields it doesn't own. `src/lib/api.ts`'s
-// `JSON.stringify(body)` drops any key whose value is `undefined`, so an
-// explicitly-`undefined` field and one never set on the object reach the
-// server identically (absent) and leave the stored value unchanged either
-// way; only `null` or a whitespace-only string actually clears a text field
-// (`normalizeText` in `backend/src/routes/customers.ts`). `status` is never
-// sent by the Mid-week modal — the backend defaults it to DRAFT on create
-// and otherwise leaves it alone.
+// edits, never spread in the fields it doesn't own. `highlights` is the
+// list the Mid-week form owns (docs/plans/weekly-sync-highlight-rows.md
+// D6): present replaces the week's highlights in list order (an empty array
+// clears them), omitted leaves the stored list untouched — the Reflection
+// modal never sends this key. `src/lib/api.ts`'s `JSON.stringify(body)`
+// drops any key whose value is `undefined`, so an explicitly-`undefined`
+// field and one never set on the object reach the server identically
+// (absent) and leave the stored value unchanged either way; only `null` or
+// a whitespace-only string actually clears a text field (`normalizeText` in
+// `backend/src/routes/customers.ts`). `status` is never sent by the
+// Mid-week modal — the backend defaults it to DRAFT on create and otherwise
+// leaves it alone.
 export interface SaveWeeklyUpdateInput {
   weekStart: string;
   health?: WeeklyHealth | null;
   status?: WeeklyStatus;
   category?: string | null;
-  highlight?: string | null;
-  risk?: string | null;
-  action?: string | null;
+  highlights?: WeeklyHighlightInput[];
   achievement?: string | null;
   outstandingIssue?: string | null;
   lessonLearned?: string | null;
