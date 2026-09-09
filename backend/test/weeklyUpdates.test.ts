@@ -225,7 +225,7 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     expect(list.body[1].weekStart.slice(0, 10)).toBe("2026-08-17");
   });
 
-  it("a partial save (only highlight) leaves a previously saved achievement, health and status unchanged", async () => {
+  it("a partial save (only category) leaves a previously saved achievement, health and status unchanged", async () => {
     const customerId = await createCustomer();
     const monday = "2026-08-24";
 
@@ -238,25 +238,25 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const partial = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ highlight: "New integration landed" });
+      .send({ category: "Integration" });
     expect(partial.status).toBe(200);
-    expect(partial.body.highlight).toBe("New integration landed");
+    expect(partial.body.category).toBe("Integration");
     expect(partial.body.achievement).toBe("Shipped the migration");
     expect(partial.body.health).toBe("GREEN");
     expect(partial.body.status).toBe("DRAFT");
   });
 
-  it("stores a whitespace-only risk as null and a padded category trimmed", async () => {
+  it("stores a whitespace-only achievement as null and a padded category trimmed", async () => {
     const customerId = await createCustomer();
     const monday = "2026-08-24";
 
     const res = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ category: "  Ops Review  ", risk: "   " });
+      .send({ category: "  Ops Review  ", achievement: "   " });
     expect(res.status).toBe(201);
     expect(res.body.category).toBe("Ops Review");
-    expect(res.body.risk).toBeNull();
+    expect(res.body.achievement).toBeNull();
   });
 
   it("rejects a category longer than 120 characters with 400", async () => {
@@ -296,10 +296,10 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const midweekTouch = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ action: null });
+      .send({ category: null });
     expect(midweekTouch.status).toBe(200);
     expect(midweekTouch.body.midweekSavedAt).not.toBeNull();
-    expect(midweekTouch.body.action).toBeNull();
+    expect(midweekTouch.body.category).toBeNull();
   });
 
   it("keeps DONE and its doneAt when a Mid-week save omits status", async () => {
@@ -318,13 +318,13 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     const midweekEdit = await request(app)
       .put(`/customers/${customerId}/weekly-updates/${monday}`)
       .set("Authorization", `Bearer ${token}`)
-      .send({ highlight: "Late Wednesday note" });
+      .send({ category: "Ops Review" });
     expect(midweekEdit.status).toBe(200);
     expect(midweekEdit.body.status).toBe("DONE");
     expect(midweekEdit.body.doneAt).toBe(doneAt);
   });
 
-  it("list endpoint returns all nine text fields and midweekSavedAt", async () => {
+  it("list endpoint returns all six text fields and midweekSavedAt", async () => {
     const customerId = await createCustomer();
     const monday = "2026-08-24";
 
@@ -333,9 +333,6 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
       .set("Authorization", `Bearer ${token}`)
       .send({
         category: "Ops",
-        highlight: "Highlight text",
-        risk: "Risk text",
-        action: "Action text",
         achievement: "Achievement text",
         outstandingIssue: "Outstanding text",
         lessonLearned: "Lesson text",
@@ -351,15 +348,13 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
     expect(list.body).toHaveLength(1);
     const row = list.body[0];
     expect(row.category).toBe("Ops");
-    expect(row.highlight).toBe("Highlight text");
-    expect(row.risk).toBe("Risk text");
-    expect(row.action).toBe("Action text");
     expect(row.achievement).toBe("Achievement text");
     expect(row.outstandingIssue).toBe("Outstanding text");
     expect(row.lessonLearned).toBe("Lesson text");
     expect(row.nextWeekFocus).toBe("Focus text");
     expect(row.managerDecision).toBe("Decision text");
     expect(row.midweekSavedAt).not.toBeNull();
+    expect(row.highlights).toEqual([]);
   });
 
   it("rejects DONE when achievement is stored null even with health present, and accepts it once achievement is supplied", async () => {
@@ -412,6 +407,235 @@ describe("PUT /customers/:id/weekly-updates/:weekStart", () => {
       .get(`/customers/${customerId}/notes`)
       .set("Authorization", `Bearer ${pending.token}`);
     expect(notesRes.status).toBe(403);
+  });
+});
+
+describe("PUT /customers/:id/weekly-updates/:weekStart — highlights", () => {
+  it("creates highlights with 2 items: positions 0/1 in order, trimmed text, empty detail stored as null", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const res = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        highlights: [
+          { title: "  Server request  ", detail: "   ", risk: "Latency spike", action: "Scale up" },
+          { title: "Remote trading test", detail: "Passed smoke", risk: null },
+        ],
+      });
+    expect(res.status).toBe(201);
+    expect(res.body.highlights).toHaveLength(2);
+    expect(res.body.highlights[0]).toMatchObject({
+      position: 0,
+      title: "Server request",
+      detail: null,
+      risk: "Latency spike",
+      action: "Scale up",
+    });
+    expect(res.body.highlights[1]).toMatchObject({
+      position: 1,
+      title: "Remote trading test",
+      detail: "Passed smoke",
+      risk: null,
+      action: null,
+    });
+    expect(res.body).not.toHaveProperty("highlight");
+    expect(res.body).not.toHaveProperty("risk");
+    expect(res.body).not.toHaveProperty("action");
+  });
+
+  it("a save that omits highlights leaves the previously saved list unchanged", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const created = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: "First" }, { title: "Second" }] });
+    expect(created.status).toBe(201);
+    expect(created.body.highlights).toHaveLength(2);
+
+    const omitted = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ achievement: "Some progress" });
+    expect(omitted.status).toBe(200);
+    expect(omitted.body.highlights).toHaveLength(2);
+    expect(omitted.body.highlights.map((h: { title: string }) => h.title)).toEqual([
+      "First",
+      "Second",
+    ]);
+  });
+
+  it("highlights: [] clears a previously saved list", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const created = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: "First" }, { title: "Second" }] });
+    expect(created.status).toBe(201);
+
+    const cleared = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [] });
+    expect(cleared.status).toBe(200);
+    expect(cleared.body.highlights).toEqual([]);
+  });
+
+  it("a save with 1 item replaces a previously saved list of 2", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const created = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: "First" }, { title: "Second" }] });
+    expect(created.status).toBe(201);
+
+    const replaced = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: "Only one" }] });
+    expect(replaced.status).toBe(200);
+    expect(replaced.body.highlights).toHaveLength(1);
+    expect(replaced.body.highlights[0]).toMatchObject({ position: 0, title: "Only one" });
+  });
+
+  it("rejects a highlight title longer than 200 characters with 400", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const res = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: "x".repeat(201) }] });
+    expect(res.status).toBe(400);
+  });
+
+  it("counts a highlight title by code points, not UTF-16 units: 200 code points (201 units via an emoji) is accepted and stored intact, 201 code points is rejected", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+    // "😀" is one code point but two UTF-16 units — 199 ASCII + one emoji is
+    // 200 code points ([...s].length) but 201 String#length units.
+    const title200CodePoints = "x".repeat(199) + "😀";
+    const accepted = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: title200CodePoints }] });
+    expect(accepted.status).toBe(201);
+    expect(accepted.body.highlights[0].title).toBe(title200CodePoints);
+
+    const title201CodePoints = "x".repeat(200) + "😀";
+    const rejected = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: title201CodePoints }] });
+    expect(rejected.status).toBe(400);
+  });
+
+  it("rejects a highlight title containing a newline with 400", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const res = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: "Line one\nLine two" }] });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects a whitespace-only highlight title with 400", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const res = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: "   " }] });
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects more than 20 highlights with 400", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+    const highlights = Array.from({ length: 21 }, (_, i) => ({ title: `Highlight ${i}` }));
+
+    const res = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights });
+    expect(res.status).toBe(400);
+  });
+
+  it("stamps midweekSavedAt when the body carries highlights alone, without category", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const reflectionOnly = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ achievement: "Shipped it" });
+    expect(reflectionOnly.status).toBe(201);
+    expect(reflectionOnly.body.midweekSavedAt).toBeNull();
+
+    const highlightTouch = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: "Ops note" }] });
+    expect(highlightTouch.status).toBe(200);
+    expect(highlightTouch.body.midweekSavedAt).not.toBeNull();
+  });
+
+  it("keeps DONE and its doneAt when a highlights-only save omits status", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const done = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ achievement: "Shipped this week", status: "DONE", health: "GREEN" });
+    expect(done.status).toBe(201);
+    expect(done.body.status).toBe("DONE");
+    const doneAt = done.body.doneAt;
+    expect(doneAt).not.toBeNull();
+
+    const highlightEdit = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ highlights: [{ title: "Server request" }] });
+    expect(highlightEdit.status).toBe(200);
+    expect(highlightEdit.body.status).toBe("DONE");
+    expect(highlightEdit.body.doneAt).toBe(doneAt);
+  });
+
+  it("list endpoint returns highlights ordered by position", async () => {
+    const customerId = await createCustomer();
+    const monday = "2026-08-24";
+
+    const saved = await request(app)
+      .put(`/customers/${customerId}/weekly-updates/${monday}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({
+        highlights: [
+          { title: "Server request", risk: "Latency spike" },
+          { title: "Remote trading test", action: "Scale up" },
+        ],
+      });
+    expect(saved.status).toBe(201);
+
+    const list = await request(app)
+      .get(`/customers/${customerId}/weekly-updates`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(list.status).toBe(200);
+    expect(list.body).toHaveLength(1);
+    expect(list.body[0].highlights).toEqual([
+      expect.objectContaining({ position: 0, title: "Server request", risk: "Latency spike" }),
+      expect.objectContaining({ position: 1, title: "Remote trading test", action: "Scale up" }),
+    ]);
   });
 });
 

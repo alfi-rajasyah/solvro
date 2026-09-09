@@ -451,32 +451,50 @@ model CustomerNote {
 // Weekly update per customer, drafted from that week's project + operations
 // notes. NOT_STARTED is the client-side state for "no row yet" — the enum
 // value exists so a saved update can be reset without deleting the row.
+// Mid-week highlights (one row per highlight, each with its own risk and
+// action) live in the child table WeeklyHighlight, not on this model.
 model WeeklyUpdate {
-  id                Int           @id @default(autoincrement())
-  customerId        Int           @map("customer_id")
-  customer          Customer      @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  weekStart         DateTime      @map("week_start") @db.Date
-  authorId          Int           @map("author_id")
-  author            User          @relation(fields: [authorId], references: [id])
-  category          String?       @db.VarChar(120)
-  highlight         String?       @db.Text
-  risk              String?       @db.Text
-  action            String?       @db.Text
-  achievement       String?       @db.Text
-  outstandingIssue  String?       @map("outstanding_issue") @db.Text
-  lessonLearned     String?       @map("lesson_learned") @db.Text
-  nextWeekFocus     String?       @map("next_week_focus") @db.Text
-  managerDecision   String?       @map("manager_decision") @db.Text
-  midweekSavedAt    DateTime?     @map("midweek_saved_at")
+  id                Int               @id @default(autoincrement())
+  customerId        Int               @map("customer_id")
+  customer          Customer          @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  weekStart         DateTime          @map("week_start") @db.Date
+  authorId          Int               @map("author_id")
+  author            User              @relation(fields: [authorId], references: [id])
+  category          String?           @db.VarChar(120)
+  highlights        WeeklyHighlight[]
+  achievement       String?           @db.Text
+  outstandingIssue  String?           @map("outstanding_issue") @db.Text
+  lessonLearned     String?           @map("lesson_learned") @db.Text
+  nextWeekFocus     String?           @map("next_week_focus") @db.Text
+  managerDecision   String?           @map("manager_decision") @db.Text
+  midweekSavedAt    DateTime?         @map("midweek_saved_at")
   health            WeeklyHealth?
-  status            WeeklyStatus  @default(DRAFT)
-  doneAt            DateTime?     @map("done_at")
-  createdAt         DateTime      @default(now()) @map("created_at")
-  updatedAt         DateTime      @updatedAt @map("updated_at")
+  status            WeeklyStatus      @default(DRAFT)
+  doneAt            DateTime?         @map("done_at")
+  createdAt         DateTime          @default(now()) @map("created_at")
+  updatedAt         DateTime          @updatedAt @map("updated_at")
 
   @@unique([customerId, weekStart])
   @@index([authorId])
   @@map("weekly_updates")
+}
+
+// One Mid-week highlight — one row of Monday's table. Risk and Action live
+// here, not on the week. `position` is the list order the form saved.
+model WeeklyHighlight {
+  id             Int          @id @default(autoincrement())
+  weeklyUpdateId Int          @map("weekly_update_id")
+  weeklyUpdate   WeeklyUpdate @relation(fields: [weeklyUpdateId], references: [id], onDelete: Cascade)
+  position       Int
+  title          String       @db.VarChar(200)
+  detail         String?      @db.Text
+  risk           String?      @db.Text
+  action         String?      @db.Text
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  @@unique([weeklyUpdateId, position])
+  @@map("weekly_highlights")
 }
 
 // Explicit, timestamped "reviewed this project today" mark — one per

@@ -22,16 +22,27 @@ import { apiBase, expect, loginViaUi, test } from "../fixtures/test";
 // the mobile project's CDP-emulated Chromium doesn't reliably grant
 // clipboard-read/clipboard-write, so only this second test skips there.
 //
+// The third test (docs/plans/weekly-sync-highlight-rows.md §5) drives the
+// Mid-week form's highlight rows (T5/T6): two highlights on one customer —
+// one with a Risk/Action and no Detail, one with a Detail and no Risk/
+// Action — saved, read back on the block (title/risk/action text, the
+// "Saved" stamp, exactly one "Has detail" note icon) and on a fresh page
+// load. Its own clipboard tail uses a mid-test `test.skip()` rather than a
+// fourth test file split: unlike the first test's row/group/count
+// mechanics, the save/read-back assertions ahead of it are this test's own
+// point (not a shared setup step other assertions build on), so a
+// "skipped" mobile report line costs nothing extra there.
+//
 // No DELETE endpoint exists for customers/projects (same shared-dev-DB
 // posture as daily-review.spec.ts's header comment — nothing here is torn
 // down afterwards), so every assertion below is either scoped to the test's
 // own customer id (the group-membership checks, the row text) or a delta
 // off a baseline read before that test's own save (the decision count),
-// never a hardcoded total. Both tests share the worker-scoped
+// never a hardcoded total. All three tests share the worker-scoped
 // `seededProject` fixture's underlying project (re-pointing it at their own
 // fresh customer via PATCH) — each test's assertions key off its own
-// customer id, so the second test moving the project to its own customer
-// doesn't disturb the first test's already-saved data.
+// customer id, so a later test moving the project to its own customer
+// doesn't disturb an earlier test's already-saved data.
 
 test.describe.configure({ mode: "serial" });
 
@@ -50,7 +61,7 @@ function parseDecisionCount(label: string): number {
  * Walks the direct children of `customerId`'s row's parent container (the
  * Weekly Sync table body — the header row, group-header rows, and
  * per-customer rows are all plain `<div>` siblings there, see
- * WeeklySync.tsx's `HeaderRow`/`GroupHeader`/`SyncRow`) in DOM order,
+ * WeeklySync.tsx's `HeaderRow`/`GroupHeader`/`SyncRow`/`MidweekBlock`) in DOM order,
  * tracking the most recently seen group-header text, and returns whichever
  * group label was current when the target row is reached. Returns null if
  * the row isn't found under either group (e.g. the Mid-week tab, which has
@@ -274,5 +285,120 @@ test.describe("Weekly Sync page", () => {
     const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
     expect(clipboardText).toContain(customer.name);
     expect(clipboardText).toContain(achievementText);
+  });
+
+  test("mid-week highlight rows: add, save, read back, and copy", async (
+    { page, context, seededProject },
+    testInfo,
+  ) => {
+    const { token, userId, projectId } = seededProject;
+    const base = apiBase(testInfo);
+
+    await loginViaUi(page);
+
+    const customer = await seedActiveCustomer(base, token, userId, projectId, "Weekly Sync Highlights Co");
+    const weekKey = await currentWeekKey(page);
+
+    const highlight1Title = `Server request ${customer.name}`;
+    const highlight1Risk = `Vendor delay ${customer.name}`;
+    const highlight1Action = `Chase vendor ${customer.name}`;
+    const highlight2Title = `Remote trading test ${customer.name}`;
+    const highlight2Detail = `Six functions still open ${customer.name}`;
+
+    // ------------------------------------------------------------------
+    // 1. Mid-week tab: the fresh customer has no update yet, so its block
+    //    is hidden until "Show them" lists it — one dash row, "Not filled".
+    // ------------------------------------------------------------------
+    await page.goto(`/weekly-sync?week=${weekKey}&tab=midweek`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(500);
+    await expect(page.getByRole("heading", { level: 1, name: "Weekly Sync" })).toBeVisible();
+
+    const row = page.getByTestId(`weekly-sync-row-${customer.id}`);
+    const hiddenToggle = page.getByTestId("weekly-sync-hidden-toggle");
+    await expect(row).toBeHidden();
+    await expect(hiddenToggle).toHaveText("Show them");
+    await hiddenToggle.click();
+    await expect(row).toBeVisible();
+    await expect(row.getByText("Not filled")).toBeVisible();
+
+    // ------------------------------------------------------------------
+    // 2. Click the block to open the Mid-week sync modal (MidweekSyncModal
+    //    .tsx). A fresh customer's `weeklyUpdate` is null, so `initialState`
+    //    opens the form with ONE blank highlight card already present
+    //    (never zero — an empty form with nothing to type into would be
+    //    worse) — fill Highlight 1's title/risk/action directly (no detail).
+    //    Add a second highlight, fill its title, open ITS OWN "Add detail"
+    //    link (scoped to its card's `midweek-highlight-2` test id — both
+    //    cards render an "Add detail" link until opened, so an unscoped
+    //    click would be ambiguous) and fill the detail; pick Amber.
+    // ------------------------------------------------------------------
+    await row.click();
+    const dialog = page.getByRole("dialog", {
+      name: new RegExp(`^Mid-week sync — ${customer.name}, week \\d+$`),
+    });
+    await expect(dialog).toBeVisible();
+
+    await dialog.getByLabel(`Highlight 1 title for ${customer.name}`).fill(highlight1Title);
+    await dialog.getByLabel(`Highlight 1 risk for ${customer.name}`).fill(highlight1Risk);
+    await dialog.getByLabel(`Highlight 1 action for ${customer.name}`).fill(highlight1Action);
+
+    await dialog.getByRole("button", { name: "Add highlight" }).click();
+    const highlight2TitleInput = dialog.getByLabel(`Highlight 2 title for ${customer.name}`);
+    await highlight2TitleInput.fill(highlight2Title);
+    const highlight2Block = dialog.getByTestId("midweek-highlight-2");
+    await highlight2Block.getByRole("button", { name: "Add detail" }).click();
+    await dialog.getByLabel(`Highlight 2 detail for ${customer.name}`).fill(highlight2Detail);
+
+    await dialog.getByRole("radio", { name: "Amber" }).click();
+    await dialog.getByRole("button", { name: "Save mid-week" }).click();
+    await expect(dialog).toBeHidden();
+
+    // ------------------------------------------------------------------
+    // 3. The block now carries both highlight rows — `expect.poll` because
+    //    the post-save refetch (React Query invalidation) can lag behind
+    //    the modal closing.
+    // ------------------------------------------------------------------
+    await expect.poll(async () => (await row.getByText(highlight1Title).count()) > 0).toBe(true);
+    await expect(row.getByText(highlight2Title)).toBeVisible();
+    await expect(row.getByText(highlight1Risk)).toBeVisible();
+    await expect(row.getByText(highlight1Action)).toBeVisible();
+    await expect(row.getByText(/^Saved /)).toBeVisible();
+    await expect(row.locator('[aria-label="Has detail"]')).toHaveCount(1);
+    await expect(row.getByText("Not filled")).toHaveCount(0);
+
+    // ------------------------------------------------------------------
+    // 4. A fresh page load starts with the toggle off — the block now
+    //    carries a Mid-week update, so it stays listed without the toggle.
+    // ------------------------------------------------------------------
+    await page.goto(`/weekly-sync?week=${weekKey}&tab=midweek`, { waitUntil: "networkidle" });
+    await page.waitForTimeout(500);
+    await expect(row).toBeVisible();
+    await expect(row.getByText(highlight1Title)).toBeVisible();
+    await expect(row.getByText(highlight2Title)).toBeVisible();
+
+    // ------------------------------------------------------------------
+    // 5. Copy as table (desktop only — the mobile project's CDP-emulated
+    //    Chromium doesn't reliably grant clipboard-read/clipboard-write,
+    //    same reason the second test skips there): both highlight titles,
+    //    the detail text, and the customer name (repeated once per
+    //    highlight row, D8) round-trip through the clipboard's text/plain
+    //    payload.
+    // ------------------------------------------------------------------
+    test.skip(
+      testInfo.project.name === "mobile",
+      "clipboard permissions are not granted in the CDP-emulated mobile project",
+    );
+
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: base });
+    const copyButton = page.getByTestId("weekly-sync-copy");
+    await expect(copyButton).toBeVisible();
+    await copyButton.click();
+    await expect(page.getByTestId("weekly-sync-copied")).toContainText("Copied");
+    const clipboardText = await page.evaluate(() => navigator.clipboard.readText());
+    expect(clipboardText).toContain(highlight1Title);
+    expect(clipboardText).toContain(highlight2Title);
+    expect(clipboardText).toContain(highlight2Detail);
+    const nameOccurrences = clipboardText.split(customer.name).length - 1;
+    expect(nameOccurrences).toBeGreaterThanOrEqual(2);
   });
 });

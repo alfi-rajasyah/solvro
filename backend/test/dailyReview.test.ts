@@ -503,9 +503,6 @@ describe("GET /daily-review — weeklyUpdate", () => {
         health: "GREEN",
         status: "DONE",
         category: "Onboarding",
-        highlight: "Kickoff went well",
-        risk: "Scope creep",
-        action: "Tighten the SOW",
         achievement: "Shipped milestone 1",
         outstandingIssue: "Waiting on legal sign-off",
         lessonLearned: "Loop in security earlier",
@@ -521,9 +518,7 @@ describe("GET /daily-review — weeklyUpdate", () => {
       health: "GREEN",
       status: "DONE",
       category: "Onboarding",
-      highlight: "Kickoff went well",
-      risk: "Scope creep",
-      action: "Tighten the SOW",
+      highlights: [],
       achievement: "Shipped milestone 1",
       outstandingIssue: "Waiting on legal sign-off",
       lessonLearned: "Loop in security earlier",
@@ -532,6 +527,11 @@ describe("GET /daily-review — weeklyUpdate", () => {
       midweekSavedAt: midweekSavedAt.toISOString(),
     });
     expect(cust.weeklyUpdate.body).toBeUndefined();
+    // The three old free-text columns are gone from the wire shape — a
+    // highlight is a `WeeklyHighlight` row now, not a field on the week.
+    expect(cust.weeklyUpdate.highlight).toBeUndefined();
+    expect(cust.weeklyUpdate.risk).toBeUndefined();
+    expect(cust.weeklyUpdate.action).toBeUndefined();
   });
 
   it("previousWeeklyUpdate is null when no row exists for the previous week", async () => {
@@ -589,6 +589,87 @@ describe("GET /daily-review — weeklyUpdate", () => {
     expect(Object.keys(cust.previousWeeklyUpdate).sort()).toEqual(
       ["managerDecision", "nextWeekFocus", "outstandingIssue", "weekStart"].sort(),
     );
+  });
+});
+
+describe("GET /daily-review — weeklyUpdate.highlights", () => {
+  it("comes back ordered by position (not insertion order), with exactly the six fields per item", async () => {
+    const tam = await createUserWithRole("TAM");
+    const customer = await createCustomer({ tamId: tam.userId, name: uniq("Highlights Customer") });
+    await createProject({ tamId: tam.userId, status: "ACTIVE", customerId: customer.id, name: "Highlights Proj" });
+    const weeklyUpdate = await prisma.weeklyUpdate.create({
+      data: {
+        customerId: customer.id,
+        weekStart: new Date("2026-08-24T00:00:00.000Z"),
+        authorId: tam.userId,
+        status: "DRAFT",
+      },
+    });
+    // Inserted out of order (position 1 first, then 0) to prove the response
+    // is sorted by `position`, not by creation/insertion order.
+    await prisma.weeklyHighlight.create({
+      data: {
+        weeklyUpdateId: weeklyUpdate.id,
+        position: 1,
+        title: "Second highlight",
+        detail: "Detail two",
+        risk: "Risk two",
+        action: "Action two",
+      },
+    });
+    const first = await prisma.weeklyHighlight.create({
+      data: {
+        weeklyUpdateId: weeklyUpdate.id,
+        position: 0,
+        title: "First highlight",
+        detail: null,
+        risk: null,
+        action: null,
+      },
+    });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    const cust = res.body.customers.find((c: any) => c.id === customer.id);
+    expect(cust.weeklyUpdate.highlights.map((h: any) => h.title)).toEqual([
+      "First highlight",
+      "Second highlight",
+    ]);
+    expect(cust.weeklyUpdate.highlights[0]).toEqual({
+      id: first.id,
+      position: 0,
+      title: "First highlight",
+      detail: null,
+      risk: null,
+      action: null,
+    });
+    expect(Object.keys(cust.weeklyUpdate.highlights[0]).sort()).toEqual(
+      ["id", "position", "title", "detail", "risk", "action"].sort(),
+    );
+  });
+
+  it("a customer without a weekly update still gives weeklyUpdate: null", async () => {
+    const tam = await createUserWithRole("TAM");
+    const withHighlights = await createCustomer({ tamId: tam.userId, name: uniq("Has Highlights") });
+    await createProject({ tamId: tam.userId, status: "ACTIVE", customerId: withHighlights.id, name: "Has Highlights Proj" });
+    const weeklyUpdate = await prisma.weeklyUpdate.create({
+      data: {
+        customerId: withHighlights.id,
+        weekStart: new Date("2026-08-24T00:00:00.000Z"),
+        authorId: tam.userId,
+        status: "DRAFT",
+      },
+    });
+    await prisma.weeklyHighlight.create({
+      data: { weeklyUpdateId: weeklyUpdate.id, position: 0, title: "Only highlight" },
+    });
+    const noUpdate = await createCustomer({ tamId: tam.userId, name: uniq("No Weekly Update") });
+    await createProject({ tamId: tam.userId, status: "ACTIVE", customerId: noUpdate.id, name: "No WU Proj" });
+
+    const res = await get(tam.token, { week: WEEK, today: TODAY });
+    const custWithHighlights = res.body.customers.find((c: any) => c.id === withHighlights.id);
+    const custNoUpdate = res.body.customers.find((c: any) => c.id === noUpdate.id);
+    expect(custWithHighlights.weeklyUpdate.highlights).toHaveLength(1);
+    expect(custNoUpdate.weeklyUpdate).toBeNull();
   });
 });
 

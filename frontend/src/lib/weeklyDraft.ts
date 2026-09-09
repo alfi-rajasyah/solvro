@@ -1,16 +1,24 @@
-// Drafts a customer's weekly-sync text from the week's daily notes
-// (docs/plans/weekly-sync-tables.md §4 "Draft helper", D11). Pure function —
-// no React, no network — so the Daily Review modals' "Draft from notes"
-// actions can call it directly and the Vitest suite below can exercise it in
-// isolation. `opts.throughDay`, when given, restricts BOTH project and
-// operations notes to `week.days` entries on or before that day (a plain
-// string compare on "yyyy-MM-dd" — the boundary day itself is kept): the
-// Mid-week modal passes `week.days[2]` so Highlight only drafts from
-// Mon-Wed notes, while the Reflection modal omits it so Weekly Achievement
-// keeps drafting from the full week, weekend notes included, exactly as
-// before.
+// Drafts a customer's weekly-sync content from the week's daily notes
+// (docs/plans/weekly-sync-highlight-rows.md §4 "Draft helper", D9). Pure
+// functions — no React, no network — so the Daily Review modals' "Draft
+// from notes" actions can call them directly and the Vitest suite below can
+// exercise them in isolation. `opts.throughDay`, when given, restricts BOTH
+// project and operations notes to `week.days` entries on or before that day
+// (a plain string compare on "yyyy-MM-dd" — the boundary day itself is
+// kept): the Mid-week modal passes `week.days[2]` so highlights only draft
+// from Mon-Wed notes, while the Reflection modal omits it so Weekly
+// Achievement keeps drafting from the full week, weekend notes included,
+// exactly as before. `draftWeeklyUpdate` still backs the Reflection form's
+// free-text draft; `draftWeeklyHighlights` is the Mid-week form's draft,
+// producing one `WeeklyHighlightInput` row per note (D9) instead of one
+// paragraph per project.
 import { dayFromIso } from "./dateField";
-import type { DailyReviewCustomer, DailyReviewNote, DailyReviewOpsNote } from "./queries";
+import type {
+  DailyReviewCustomer,
+  DailyReviewNote,
+  DailyReviewOpsNote,
+  WeeklyHighlightInput,
+} from "./queries";
 
 const WEEKDAY_ABBR = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -142,4 +150,93 @@ export function draftWeeklyUpdate(
   }
 
   return paragraphs.join("\n\n");
+}
+
+/** Cuts `s` to `max` code points (not UTF-16 code units), so a multi-byte
+ * character straddling the boundary is dropped whole rather than split into
+ * a lone surrogate — matching the migration's `LEFT(first_line, 200)`
+ * (Postgres counts characters, not UTF-16 units, for `text`). */
+function cut(s: string, max: number): string {
+  const codePoints = [...s];
+  return codePoints.length > max ? codePoints.slice(0, max).join("") : s;
+}
+
+/**
+ * Splits a note body into a one-line title and an optional detail — the
+ * same rule the `weekly_highlights` data-move migration applies to the old
+ * `WeeklyUpdate.highlight` text (docs/plans/weekly-sync-highlight-rows.md
+ * §2). Line endings are normalised first (`\r\n` and a lone `\r` both become
+ * `\n`, matching the migration's own normalisation), then each line is
+ * trimmed of surrounding spaces. The title is the first non-empty line, cut
+ * at 200 characters. Detail is everything after that line, trimmed, or
+ * `null` when empty — UNLESS the first line itself was longer than 200
+ * characters, in which case the title was cut short and detail becomes the
+ * full trimmed body instead, so nothing is silently lost.
+ */
+export function splitTitle(text: string): { title: string; detail: string | null } {
+  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  const trimmedLines = lines.map((l) => l.trim());
+  const firstIndex = trimmedLines.findIndex((l) => l.length > 0);
+  if (firstIndex === -1) return { title: "", detail: null };
+
+  const firstLine = trimmedLines[firstIndex];
+  if ([...firstLine].length > 200) {
+    const full = text.trim();
+    return { title: cut(firstLine, 200), detail: full.length > 0 ? full : null };
+  }
+
+  const rest = lines.slice(firstIndex + 1).join("\n").trim();
+  return { title: firstLine, detail: rest.length > 0 ? rest : null };
+}
+
+/** One `WeeklyHighlightInput` row for `note`, titled `prefix` + its own split title (D9). `prefix` never lands in `detail`: when the prefixed title has to be cut at 200, detail falls back to the note's full trimmed body instead of just the post-first-line remainder. */
+function highlightFromNote(note: { body: string }, prefix: string): WeeklyHighlightInput {
+  const split = splitTitle(note.body);
+  const prefixedTitle = prefix + split.title;
+  if ([...prefixedTitle].length > 200) {
+    const full = note.body.trim();
+    return { title: cut(prefixedTitle, 200), detail: full.length > 0 ? full : null };
+  }
+  return { title: prefixedTitle, detail: split.detail };
+}
+
+/**
+ * Drafts one Mid-week highlight per note in this week's project + operations
+ * notes (D9): day order, and within a day the customer's own project order
+ * first, then operations notes. A project note is titled
+ * `"<day label> <project name>: <first line>"`; an operations note
+ * `"<day label> [<note title>]: <first line>"` (`bracketFor`'s `[<title>]`
+ * moved next to the day label rather than the note body, since the day
+ * label + name/bracket together are now the WeeklyHighlight's `title`, not
+ * a plain-text prefix inside one long paragraph). Unlike `draftWeeklyUpdate`,
+ * same-day notes are never joined with " / " — each note is its own row.
+ * A customer with no notes in the drafted range drafts to `[]`.
+ */
+export function draftWeeklyHighlights(
+  customer: DailyReviewCustomer,
+  week: { days: string[] },
+  opts?: { throughDay?: string },
+): WeeklyHighlightInput[] {
+  const throughDay = opts?.throughDay;
+  const days = throughDay ? week.days.filter((d) => d <= throughDay) : week.days;
+
+  const projectDays = customer.projects.map((project) => ({
+    project,
+    byDay: groupNotesByDay(project.notes),
+  }));
+  const opsByDay = groupNotesByDay(customer.operationsNotes);
+
+  const highlights: WeeklyHighlightInput[] = [];
+  for (const day of days) {
+    const label = dayLabel(day);
+    for (const { project, byDay } of projectDays) {
+      for (const note of byDay.get(day) ?? []) {
+        highlights.push(highlightFromNote(note, `${label} ${project.name}: `));
+      }
+    }
+    for (const note of opsByDay.get(day) ?? []) {
+      highlights.push(highlightFromNote(note, `${label} ${bracketFor(note)}: `));
+    }
+  }
+  return highlights;
 }
