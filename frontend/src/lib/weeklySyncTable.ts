@@ -1,8 +1,9 @@
 // Pure builders for the Weekly Sync page's "Copy as table" action
-// (docs/plans/weekly-sync-tables.md §4 "Weekly Sync page", D13; row shape per
-// docs/plans/weekly-sync-highlight-rows.md D1/D8). No React, no network —
-// `WeeklySync.tsx` calls these at click time and the Vitest suite below
-// exercises them in isolation.
+// (docs/archive/plans/weekly-sync-tables.md §4 "Weekly Sync page", D13; row shapes
+// per docs/archive/plans/weekly-sync-highlight-rows.md D1/D8 (Mid-week) and
+// docs/archive/plans/weekly-sync-achievement-rows.md D1/D2/D10/D12 (Reflection)). No
+// React, no network — `WeeklySync.tsx` calls these at click time and the
+// Vitest suite below exercises them in isolation.
 //
 // Column order matches the two meeting tables exactly (plan D2), not the
 // on-page layout: Mid-week copies Customer, Health, Category, Highlight,
@@ -13,11 +14,13 @@
 // on either tab (D13: only the sync fields are copied, daily notes never
 // are, and Status is a page-only affordance).
 //
-// A Mid-week row is a HIGHLIGHT now, not a customer (D1/D8): a customer with
-// N highlights produces N rows, Customer/Health/Category repeating on every
-// one (no `rowspan` — D8), and a customer with a saved Mid-week but no
-// highlight still gets one row with "—" in Highlight/Risk/Action. Reflection
-// stays one row per customer, unchanged.
+// Neither tab's row is a customer anymore — it's an entry in a per-week
+// list, with Customer/Health/Category repeating on every row (no `rowspan`
+// — D8/D12): a Mid-week row is a HIGHLIGHT (a customer with N highlights
+// produces N rows, one with a saved Mid-week but no highlight still gets
+// one row with "—" in Highlight/Risk/Action), a Reflection row is an
+// ACHIEVEMENT (a customer with N achievements produces N rows, one with no
+// achievement still gets one row with "—" in the five text cells).
 import type { DailyReviewCustomer, WeeklyHealth } from "./queries";
 
 export type WeeklySyncTab = "midweek" | "reflection";
@@ -39,9 +42,9 @@ export const HEALTH_LABEL: Record<WeeklyHealth, string> = {
   RED: "Red",
 };
 
-/** True when `customer`'s current-week `managerDecision` is non-empty after trim (D10's pin condition). */
+/** True when any of `customer`'s current-week achievement rows has a non-empty `managerDecision` after trim (D10's pin condition). */
 export function hasManagerDecision(customer: DailyReviewCustomer): boolean {
-  return Boolean(customer.weeklyUpdate?.managerDecision?.trim());
+  return customer.weeklyUpdate?.achievements.some((a) => hasText(a.managerDecision)) ?? false;
 }
 
 /** True when `value` has content after trim — the same test the page's "—" fallback uses. */
@@ -53,8 +56,8 @@ function hasText(value: string | null | undefined): boolean {
  * True when `customer` has an update for `tab` this week — the Weekly Sync
  * page lists only these rows by default. Mid-week: the Mid-week form was
  * saved (`midweekSavedAt`), the Category has text, or the week has at least
- * one highlight. Reflection: the week is DONE or any Reflection text field
- * has content.
+ * one highlight. Reflection: the week is DONE or it has at least one
+ * achievement.
  * Health alone never counts — it is set on Wednesday too, so counting it
  * would surface every Mid-week-only customer as an empty row on the
  * Reflection tab. A customer with no weekly-update row at all has no update
@@ -66,10 +69,7 @@ export function hasTabUpdate(tab: WeeklySyncTab, customer: DailyReviewCustomer):
   if (tab === "midweek") {
     return u.midweekSavedAt != null || hasText(u.category) || u.highlights.length > 0;
   }
-  return (
-    u.status === "DONE" ||
-    [u.achievement, u.outstandingIssue, u.lessonLearned, u.nextWeekFocus, u.managerDecision].some(hasText)
-  );
+  return u.status === "DONE" || u.achievements.length > 0;
 }
 
 /**
@@ -139,17 +139,24 @@ export function buildSyncTable(tab: WeeklySyncTab, customers: DailyReviewCustome
     "Next week focus",
     "Need manager decision",
   ];
-  const rows = customers.map((c) => {
-    const u = c.weeklyUpdate;
-    return [
-      c.name,
-      cellText(u?.achievement),
-      cellText(u?.outstandingIssue),
-      cellText(u?.lessonLearned),
-      cellText(u?.nextWeekFocus),
-      cellText(u?.managerDecision),
-    ];
-  });
+  const rows: string[][] = [];
+  for (const c of customers) {
+    const achievements = c.weeklyUpdate?.achievements ?? [];
+    if (achievements.length === 0) {
+      rows.push([c.name, EM_DASH, EM_DASH, EM_DASH, EM_DASH, EM_DASH]);
+      continue;
+    }
+    for (const a of achievements) {
+      rows.push([
+        c.name,
+        hasText(a.detail) ? `${a.title}\n${a.detail}` : a.title,
+        cellText(a.outstandingIssue),
+        cellText(a.lessonLearned),
+        cellText(a.nextWeekFocus),
+        cellText(a.managerDecision),
+      ]);
+    }
+  }
   return { header, rows };
 }
 

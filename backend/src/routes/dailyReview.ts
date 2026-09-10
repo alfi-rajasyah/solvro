@@ -325,27 +325,45 @@ dailyReviewRouter.get(
             orderBy: { position: "asc" },
             select: { id: true, position: true, title: true, detail: true, risk: true, action: true },
           },
-          achievement: true,
-          outstandingIssue: true,
-          lessonLearned: true,
-          nextWeekFocus: true,
-          managerDecision: true,
+          // Reflection achievements: another relation `select` on this same
+          // batched findMany — one extra query for the whole page (same
+          // amortised-cost note as `highlights` above), not one per row.
+          achievements: {
+            orderBy: { position: "asc" },
+            select: {
+              id: true,
+              position: true,
+              title: true,
+              detail: true,
+              outstandingIssue: true,
+              lessonLearned: true,
+              nextWeekFocus: true,
+              managerDecision: true,
+            },
+          },
           midweekSavedAt: true,
           updatedAt: true,
           author: { select: { id: true, username: true } },
         },
       }),
-      // D9: last Friday's carry-over fields for the Mid-week modal — one
-      // extra batched findMany over the same customerIds, keeping the
-      // per-request query count fixed regardless of page size.
+      // D9/D11: last Friday's carry-over achievements for the Mid-week
+      // modal's "From last Friday" panel — one extra batched findMany over
+      // the same customerIds, keeping the per-request query count fixed
+      // regardless of page size.
       prisma.weeklyUpdate.findMany({
         where: { customerId: { in: customerIds }, weekStart: previousWeekStartDate },
         select: {
           customerId: true,
           weekStart: true,
-          outstandingIssue: true,
-          nextWeekFocus: true,
-          managerDecision: true,
+          achievements: {
+            orderBy: { position: "asc" },
+            select: {
+              title: true,
+              outstandingIssue: true,
+              nextWeekFocus: true,
+              managerDecision: true,
+            },
+          },
         },
       }),
     ]);
@@ -441,24 +459,26 @@ dailyReviewRouter.get(
               doneAt: weeklyUpdate.doneAt,
               category: weeklyUpdate.category,
               highlights: weeklyUpdate.highlights,
-              achievement: weeklyUpdate.achievement,
-              outstandingIssue: weeklyUpdate.outstandingIssue,
-              lessonLearned: weeklyUpdate.lessonLearned,
-              nextWeekFocus: weeklyUpdate.nextWeekFocus,
-              managerDecision: weeklyUpdate.managerDecision,
+              achievements: weeklyUpdate.achievements,
               midweekSavedAt: weeklyUpdate.midweekSavedAt,
               author: weeklyUpdate.author,
               updatedAt: weeklyUpdate.updatedAt,
             }
           : null,
-        // D9: last Friday's carry-over for the Mid-week modal — only the 3
-        // fields the modal reads, nothing else from the previous row.
+        // D9/D11: last Friday's carry-over for the Mid-week modal's "From
+        // last Friday" panel — only the achievement rows that still carry an
+        // open item (an outstanding issue, a next-week focus, or a decision)
+        // are worth showing; a row with none of the three (e.g. only a
+        // lesson learned) is filtered out here rather than on the client.
         previousWeeklyUpdate: previousWeeklyUpdate
           ? {
               weekStart: previousWeeklyUpdate.weekStart,
-              outstandingIssue: previousWeeklyUpdate.outstandingIssue,
-              nextWeekFocus: previousWeeklyUpdate.nextWeekFocus,
-              managerDecision: previousWeeklyUpdate.managerDecision,
+              achievements: previousWeeklyUpdate.achievements.filter(
+                (a) =>
+                  a.outstandingIssue !== null ||
+                  a.nextWeekFocus !== null ||
+                  a.managerDecision !== null,
+              ),
             }
           : null,
       };

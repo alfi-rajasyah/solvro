@@ -10,7 +10,12 @@ import { hasPermission, useAuth } from "@/lib/auth";
 import { weekNumberLabel } from "@/lib/dailyReviewStats";
 import { dateToDay } from "@/lib/dateField";
 import { formatWeekRange, parseWeekKey, shiftWeek, weekKeyOf } from "@/lib/isoWeek";
-import { type DailyReviewCustomer, type WeeklyHighlight, useDailyReview } from "@/lib/queries";
+import {
+  type DailyReviewCustomer,
+  type WeeklyAchievement,
+  type WeeklyHighlight,
+  useDailyReview,
+} from "@/lib/queries";
 import {
   buildSyncTable,
   HEALTH_LABEL,
@@ -46,7 +51,7 @@ const REFLECTION_HEADER = [
 ];
 
 /**
- * Default week/tab (docs/plans/weekly-sync-tables.md §4 "Weekly Sync page",
+ * Default week/tab (docs/archive/plans/weekly-sync-tables.md §4 "Weekly Sync page",
  * D8), computed from today's LOCAL calendar day: Monday opens on last week's
  * Reflection tab (the VP sync reads it); Tuesday–Thursday opens on the
  * current week's Mid-week tab; Friday–Sunday opens on the current week's
@@ -66,16 +71,17 @@ function computeDefaults(): { week: string; tab: WeeklySyncTab } {
   return { week: currentWeek, tab: "reflection" };
 }
 
-// Weekly Sync page (docs/plans/weekly-sync-highlight-rows.md §4, T6): a
-// read-on-Monday table view of the same `useDailyReview(week)` payload the
-// Daily Review page uses. Mid-week is one row per highlight now (D1): a
-// customer renders as one block of grid rows, one per `weeklyUpdate
-// .highlights` entry (or a single dash row when there are none), with
-// Customer/Health/Status filled on the first row only. Reflection stays one
-// row per customer. A "Copy as table" action (D13) writes both an HTML
-// `<table>` and a tab-separated fallback to the clipboard. The page owns
-// layout, URL week/tab state, and the click-to-open-modal wiring; the two
-// sync modals (T5) are reused as-is.
+// Weekly Sync page (docs/archive/plans/weekly-sync-highlight-rows.md §4, T6, and
+// docs/archive/plans/weekly-sync-achievement-rows.md §4, T6): a read-on-Monday table
+// view of the same `useDailyReview(week)` payload the Daily Review page
+// uses. Both tabs render a customer as one block of grid rows now (D1): a
+// customer renders one row per `weeklyUpdate.highlights` entry on Mid-week,
+// or one row per `weeklyUpdate.achievements` entry on Reflection (or a
+// single dash row when there are none either way), with Customer/Health/
+// Status filled on the first row only. A "Copy as table" action (D13) writes
+// both an HTML `<table>` and a tab-separated fallback to the clipboard. The
+// page owns layout, URL week/tab state, and the click-to-open-modal wiring;
+// the two sync modals (T5) are reused as-is.
 //
 // Each tab lists only the customers with an update for that tab this week
 // (`hasTabUpdate`). The rest are counted in a line under the table with a
@@ -199,7 +205,7 @@ export function WeeklySync() {
         <div>
           <h1 className="font-display text-2xl font-bold text-on-surface">Weekly Sync</h1>
           <p className="text-sm text-on-surface-variant">
-            One row per highlight. Wednesday and Friday tables, read on Monday.
+            One row per highlight and per achievement. Wednesday and Friday tables, read on Monday.
           </p>
         </div>
 
@@ -322,7 +328,7 @@ export function WeeklySync() {
                           <GroupHeader label={`Needs a manager decision · ${pinned.length}`} amber />
                         )}
                         {pinned.map((c) => (
-                          <SyncRow
+                          <ReflectionBlock
                             key={c.id}
                             customer={c}
                             gridColsClass={gridColsClass}
@@ -332,7 +338,7 @@ export function WeeklySync() {
                         ))}
                         {rest.length > 0 && <GroupHeader label={`Other customers · ${rest.length}`} />}
                         {rest.map((c) => (
-                          <SyncRow
+                          <ReflectionBlock
                             key={c.id}
                             customer={c}
                             gridColsClass={gridColsClass}
@@ -465,6 +471,51 @@ function HighlightCell({ highlight, border }: { highlight: WeeklyHighlight | nul
   );
 }
 
+interface BlockWrapperProps {
+  role: "button" | undefined;
+  tabIndex: number | undefined;
+  onClick: (() => void) | undefined;
+  onKeyDown: ((e: KeyboardEvent<HTMLDivElement>) => void) | undefined;
+  className: string | undefined;
+  "data-testid": string;
+}
+
+/**
+ * Shared click/keyboard wrapper props for a customer block on either tab
+ * (Mid-week's `MidweekBlock`, Reflection's `ReflectionBlock`) — same
+ * `role="button"`/`tabIndex`/Enter-Space contract and `data-testid`
+ * convention (plan D1/§4), spread onto each block's outer `div` so it stays
+ * a single direct child of the table container the e2e `groupContainingRow`
+ * walk relies on.
+ */
+function blockWrapperProps(
+  customer: DailyReviewCustomer,
+  clickable: boolean,
+  onOpen: (customer: DailyReviewCustomer) => void,
+): BlockWrapperProps {
+  function handleClick() {
+    onOpen(customer);
+  }
+
+  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onOpen(customer);
+    }
+  }
+
+  return {
+    role: clickable ? "button" : undefined,
+    tabIndex: clickable ? 0 : undefined,
+    onClick: clickable ? handleClick : undefined,
+    onKeyDown: clickable ? handleKeyDown : undefined,
+    className: clickable
+      ? "cursor-pointer hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+      : undefined,
+    "data-testid": `weekly-sync-row-${customer.id}`,
+  };
+}
+
 interface MidweekBlockProps {
   customer: DailyReviewCustomer;
   gridColsClass: string;
@@ -474,12 +525,12 @@ interface MidweekBlockProps {
 
 /**
  * A Mid-week customer block (plan D1/§4): one wrapper `div` — click/keyboard
- * target and `data-testid` live here, unchanged from the old single-row
- * `SyncRow` — containing one `grid ${gridColsClass}` row per highlight (or a
- * single row when there are none, matching the old dash-row behavior).
- * Customer/Health/Status render on the first row only; continuation rows
- * leave those three cells blank with no top border, while the
- * Highlight/Risk/Action cells keep a (fainter) divider between highlights.
+ * target and `data-testid` live here, via `blockWrapperProps` — containing
+ * one `grid ${gridColsClass}` row per highlight (or a single row when there
+ * are none, matching the old dash-row behavior). Customer/Health/Status
+ * render on the first row only; continuation rows leave those three cells
+ * blank with no top border, while the Highlight/Risk/Action cells keep a
+ * (fainter) divider between highlights.
  */
 function MidweekBlock({ customer, gridColsClass, clickable, onOpen }: MidweekBlockProps) {
   const update = customer.weeklyUpdate;
@@ -488,31 +539,8 @@ function MidweekBlock({ customer, gridColsClass, clickable, onOpen }: MidweekBlo
   const highlights = update?.highlights ?? [];
   const rows: Array<WeeklyHighlight | null> = highlights.length > 0 ? highlights : [null];
 
-  function handleClick() {
-    if (clickable) onOpen(customer);
-  }
-
-  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    if (!clickable) return;
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onOpen(customer);
-    }
-  }
-
   return (
-    <div
-      role={clickable ? "button" : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      onClick={clickable ? handleClick : undefined}
-      onKeyDown={clickable ? handleKeyDown : undefined}
-      data-testid={`weekly-sync-row-${customer.id}`}
-      className={
-        clickable
-          ? "cursor-pointer hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-          : undefined
-      }
-    >
+    <div {...blockWrapperProps(customer, clickable, onOpen)}>
       {rows.map((highlight, index) => {
         const isFirst = index === 0;
         const rowBorder: CellBorder = isFirst ? "outline" : "faint";
@@ -554,70 +582,97 @@ function MidweekBlock({ customer, gridColsClass, clickable, onOpen }: MidweekBlo
   );
 }
 
-interface SyncRowProps {
+/** The achievement title cell: the title, plus the same "has detail" note glyph as `HighlightCell` (native title tooltip), shown when `detail` is non-empty after trim (plan D3/§4). No achievement → the same "—" fallback as any other text cell. */
+function AchievementTitleCell({
+  achievement,
+  border,
+}: {
+  achievement: WeeklyAchievement | null;
+  border: CellBorder;
+}) {
+  if (!achievement) return <TextCell value={undefined} border={border} />;
+  const hasDetail = Boolean(achievement.detail?.trim());
+  return (
+    <Cell border={border}>
+      {achievement.title}
+      {hasDetail && (
+        <span
+          role="img"
+          className="material-symbols-outlined ml-1.5 align-[-2px] text-[14px] text-on-surface-variant"
+          title={achievement.detail ?? undefined}
+          aria-label="Has detail"
+        >
+          notes
+        </span>
+      )}
+    </Cell>
+  );
+}
+
+interface ReflectionBlockProps {
   customer: DailyReviewCustomer;
   gridColsClass: string;
   clickable: boolean;
   onOpen: (customer: DailyReviewCustomer) => void;
 }
 
-/** A Reflection-tab row — one row per customer, unchanged (plan D10). */
-function SyncRow({ customer, gridColsClass, clickable, onOpen }: SyncRowProps) {
+/**
+ * A Reflection customer block (plan D1/D2/§4, mirrors `MidweekBlock`): one
+ * wrapper `div` — click/keyboard target and `data-testid`, via
+ * `blockWrapperProps` — containing one `grid ${gridColsClass}` row per
+ * achievement (or a single dash row when there are none). Customer/Health/
+ * Status render on the first row only; continuation rows leave those three
+ * cells blank with no top border, while the five text cells keep a
+ * (fainter) divider between achievements. Pinning (D10) is decided by the
+ * caller via `hasManagerDecision`, which reads these same achievement rows.
+ */
+function ReflectionBlock({ customer, gridColsClass, clickable, onOpen }: ReflectionBlockProps) {
   const update = customer.weeklyUpdate;
   const health = update?.health ?? null;
   const category = update?.category?.trim() ? update.category : null;
-
-  function handleClick() {
-    if (clickable) onOpen(customer);
-  }
-
-  function handleKeyDown(e: KeyboardEvent<HTMLDivElement>) {
-    if (!clickable) return;
-    if (e.key === "Enter" || e.key === " ") {
-      e.preventDefault();
-      onOpen(customer);
-    }
-  }
+  const achievements = update?.achievements ?? [];
+  const rows: Array<WeeklyAchievement | null> = achievements.length > 0 ? achievements : [null];
 
   return (
-    <div
-      role={clickable ? "button" : undefined}
-      tabIndex={clickable ? 0 : undefined}
-      onClick={clickable ? handleClick : undefined}
-      onKeyDown={clickable ? handleKeyDown : undefined}
-      data-testid={`weekly-sync-row-${customer.id}`}
-      className={[
-        "grid",
-        gridColsClass,
-        clickable
-          ? "cursor-pointer hover:bg-surface-container-low focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-          : "",
-      ].join(" ")}
-    >
-      <Cell>
-        <div className="font-semibold text-on-surface">{customer.name}</div>
-        <div className="mt-0.5 text-[12px] text-on-surface-variant">{category ?? "—"}</div>
-      </Cell>
-      <Cell>
-        {health ? (
-          <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${HEALTH_CLASS[health]}`}>
-            {HEALTH_LABEL[health]}
-          </span>
-        ) : (
-          <span className="text-on-surface-variant">—</span>
-        )}
-      </Cell>
-      <TextCell value={update?.achievement} />
-      <TextCell value={update?.outstandingIssue} />
-      <TextCell value={update?.lessonLearned} />
-      <TextCell value={update?.nextWeekFocus} />
-      <TextCell value={update?.managerDecision} />
-      <Cell>
-        {(() => {
-          const badge = WEEKLY_STATUS_BADGE[update?.status ?? "NOT_STARTED"];
-          return <Badge variant={badge.variant}>{badge.label}</Badge>;
-        })()}
-      </Cell>
+    <div {...blockWrapperProps(customer, clickable, onOpen)}>
+      {rows.map((achievement, index) => {
+        const isFirst = index === 0;
+        const rowBorder: CellBorder = isFirst ? "outline" : "faint";
+        return (
+          <div key={achievement?.id ?? `dash-${index}`} className={`grid ${gridColsClass}`}>
+            <Cell border={isFirst ? "outline" : "none"}>
+              {isFirst && (
+                <>
+                  <div className="font-semibold text-on-surface">{customer.name}</div>
+                  <div className="mt-0.5 text-[12px] text-on-surface-variant">{category ?? "—"}</div>
+                </>
+              )}
+            </Cell>
+            <Cell border={isFirst ? "outline" : "none"}>
+              {isFirst &&
+                (health ? (
+                  <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${HEALTH_CLASS[health]}`}>
+                    {HEALTH_LABEL[health]}
+                  </span>
+                ) : (
+                  <span className="text-on-surface-variant">—</span>
+                ))}
+            </Cell>
+            <AchievementTitleCell achievement={achievement} border={rowBorder} />
+            <TextCell value={achievement?.outstandingIssue} border={rowBorder} />
+            <TextCell value={achievement?.lessonLearned} border={rowBorder} />
+            <TextCell value={achievement?.nextWeekFocus} border={rowBorder} />
+            <TextCell value={achievement?.managerDecision} border={rowBorder} />
+            <Cell border={isFirst ? "outline" : "none"}>
+              {isFirst &&
+                (() => {
+                  const badge = WEEKLY_STATUS_BADGE[update?.status ?? "NOT_STARTED"];
+                  return <Badge variant={badge.variant}>{badge.label}</Badge>;
+                })()}
+            </Cell>
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -1,5 +1,5 @@
 // Shared building blocks for the Weekly Sync row and its two form modals
-// (docs/plans/weekly-sync-tables.md §4 "Daily Review", T5): the
+// (docs/archive/plans/weekly-sync-tables.md §4 "Daily Review", T5): the
 // label/control/helper wrapper every Mid-week/Reflection field uses
 // (`SyncField`), and the Health radiogroup + its style map (`HEALTH_CLASS`,
 // `HealthButtonGroup`), reused as-is between `MidweekSyncModal.tsx` and

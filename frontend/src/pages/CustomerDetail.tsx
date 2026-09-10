@@ -646,18 +646,65 @@ function WeeklyUpdateRow({ update }: { update: WeeklyUpdate }) {
         </p>
       )}
 
-      <div className="mt-2 grid gap-x-5 gap-y-2.5 sm:grid-cols-2">
-        <WeeklyUpdateField label="Weekly achievement" value={update.achievement} isDone={isDone} />
-        <WeeklyUpdateField label="Outstanding issue" value={update.outstandingIssue} isDone={isDone} />
-        <WeeklyUpdateField label="Lesson learned" value={update.lessonLearned} isDone={isDone} />
-        <WeeklyUpdateField label="Next week focus" value={update.nextWeekFocus} isDone={isDone} />
-        <WeeklyUpdateField
-          label="Need manager decision"
-          value={update.managerDecision}
-          isDone={isDone}
-          spanBothColumns
-          labelClassName="text-chip-amber-text"
-        />
+      <div className="mt-2 flex flex-col gap-2.5">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+          Achievements · {update.achievements.length}
+        </p>
+        {update.achievements.length === 0 ? (
+          <p className="text-[13px] text-on-surface-variant">No achievements.</p>
+        ) : (
+          update.achievements.map((achievement, i) => (
+            <div
+              key={achievement.id}
+              className={
+                i === 0
+                  ? "flex flex-col gap-2"
+                  : "flex flex-col gap-2 border-t border-outline-variant/60 pt-2.5"
+              }
+            >
+              <div>
+                <p
+                  className={
+                    isDone
+                      ? "wrap-break-word text-sm text-on-surface"
+                      : "wrap-break-word text-sm text-on-surface-variant"
+                  }
+                >
+                  {achievement.title}
+                </p>
+                {achievement.detail && (
+                  <p className="whitespace-pre-wrap wrap-break-word text-[13px] text-on-surface-variant">
+                    {achievement.detail}
+                  </p>
+                )}
+              </div>
+              <div className="grid gap-x-5 gap-y-2.5 sm:grid-cols-2">
+                <WeeklyUpdateField
+                  label="Outstanding issue"
+                  value={achievement.outstandingIssue}
+                  isDone={isDone}
+                />
+                <WeeklyUpdateField
+                  label="Lesson learned"
+                  value={achievement.lessonLearned}
+                  isDone={isDone}
+                />
+                <WeeklyUpdateField
+                  label="Next week focus"
+                  value={achievement.nextWeekFocus}
+                  isDone={isDone}
+                />
+                <WeeklyUpdateField
+                  label="Need manager decision"
+                  value={achievement.managerDecision}
+                  isDone={isDone}
+                  spanBothColumns
+                  labelClassName="text-chip-amber-text"
+                />
+              </div>
+            </div>
+          ))
+        )}
       </div>
 
       {hasMidweekContent && (
