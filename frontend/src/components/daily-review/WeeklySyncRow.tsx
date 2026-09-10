@@ -1,4 +1,4 @@
-// Weekly sync row (docs/plans/weekly-sync-tables.md §4 "Daily Review",
+// Weekly sync row (docs/archive/plans/weekly-sync-tables.md §4 "Daily Review",
 // T5): replaces the old single free-text WeeklyUpdateBlock with a compact
 // status row plus two buttons that open the Mid-week and Reflection sync
 // modals (MidweekSyncModal.tsx / ReflectionSyncModal.tsx). The row itself

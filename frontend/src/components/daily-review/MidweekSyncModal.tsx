@@ -1,4 +1,4 @@
-// Mid-week sync modal (docs/plans/weekly-sync-highlight-rows.md §4 "Mid-week
+// Mid-week sync modal (docs/archive/plans/weekly-sync-highlight-rows.md §4 "Mid-week
 // form"): edits the Mid-week half of a customer's WeeklyUpdate row —
 // Category and one row per highlight (title, detail, risk, action) — plus
 // Health (Wednesday sets it; the Reflection modal can change it again on
@@ -240,18 +240,52 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
             </Alert>
           )}
 
-          {carryOver && (
+          {/* D11 in docs/archive/plans/weekly-sync-achievement-rows.md — carry-over panel: last Friday's achievement rows that still
+              carry an open item (an Outstanding issue, a Next week focus, or
+              a Manager decision) — read-only, one block per row, each
+              showing only the texts that row actually has. Hidden when last
+              week had no such row. */}
+          {carryOver && carryOver.achievements.length > 0 && (
             <div className="rounded-sm border border-outline-variant bg-surface-container p-3">
               <p className="mb-2 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
-                From last Friday · Week {carryOverWeekNumber}
+                From last Friday · Week {carryOverWeekNumber} · {carryOver.achievements.length}{" "}
+                {carryOver.achievements.length === 1 ? "item" : "items"}
               </p>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-[150px_1fr]">
-                <span className="text-[12px] font-semibold text-on-surface-variant">Outstanding issue</span>
-                <span className="text-sm text-on-surface">{carryOver.outstandingIssue || "None."}</span>
-                <span className="text-[12px] font-semibold text-on-surface-variant">Next week focus</span>
-                <span className="text-sm text-on-surface">{carryOver.nextWeekFocus || "None."}</span>
-                <span className="text-[12px] font-semibold text-on-surface-variant">Manager decision</span>
-                <span className="text-sm text-on-surface">{carryOver.managerDecision || "None."}</span>
+              <div className="flex flex-col gap-2">
+                {carryOver.achievements.map((a, index) => (
+                  <div
+                    key={index}
+                    className={
+                      index > 0
+                        ? "flex flex-col gap-1 border-t border-outline-variant pt-2"
+                        : "flex flex-col gap-1"
+                    }
+                  >
+                    <p className="text-[13px] font-semibold text-on-surface">{a.title}</p>
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-[150px_1fr]">
+                      {a.outstandingIssue && (
+                        <>
+                          <span className="text-[12px] font-semibold text-on-surface-variant">
+                            Outstanding issue
+                          </span>
+                          <span className="text-sm text-on-surface">{a.outstandingIssue}</span>
+                        </>
+                      )}
+                      {a.nextWeekFocus && (
+                        <>
+                          <span className="text-[12px] font-semibold text-on-surface-variant">Next week focus</span>
+                          <span className="text-sm text-on-surface">{a.nextWeekFocus}</span>
+                        </>
+                      )}
+                      {a.managerDecision && (
+                        <>
+                          <span className="text-[12px] font-semibold text-on-surface-variant">Manager decision</span>
+                          <span className="text-sm text-on-surface">{a.managerDecision}</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
           )}
