@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { DailyReviewCustomer, WeeklyHighlight, WeeklyUpdate } from "./queries";
+import type { DailyReviewCustomer, WeeklyAchievement, WeeklyHighlight, WeeklyUpdate } from "./queries";
 import {
   buildSyncTable,
   hasManagerDecision,
@@ -23,6 +23,20 @@ function highlight(fields: Partial<WeeklyHighlight> = {}): WeeklyHighlight {
   };
 }
 
+function achievement(fields: Partial<WeeklyAchievement> = {}): WeeklyAchievement {
+  return {
+    id: nextId++,
+    position: 0,
+    title: "Achievement",
+    detail: null,
+    outstandingIssue: null,
+    lessonLearned: null,
+    nextWeekFocus: null,
+    managerDecision: null,
+    ...fields,
+  };
+}
+
 function weeklyUpdate(fields: Partial<WeeklyUpdate> = {}): WeeklyUpdate {
   return {
     id: nextId++,
@@ -32,11 +46,7 @@ function weeklyUpdate(fields: Partial<WeeklyUpdate> = {}): WeeklyUpdate {
     doneAt: null,
     category: null,
     highlights: [],
-    achievement: null,
-    outstandingIssue: null,
-    lessonLearned: null,
-    nextWeekFocus: null,
-    managerDecision: null,
+    achievements: [],
     midweekSavedAt: null,
     author: { id: 1, username: "alfi" },
     updatedAt: "2026-08-24T00:00:00.000Z",
@@ -57,14 +67,28 @@ function customer(name: string, update: Partial<WeeklyUpdate> | null = {}): Dail
 }
 
 describe("hasManagerDecision", () => {
-  it("is false for null, missing, and whitespace-only decisions", () => {
+  it("is false for a customer with no update, no achievements, and an achievement with a null/whitespace-only decision", () => {
     expect(hasManagerDecision(customer("A", null))).toBe(false);
-    expect(hasManagerDecision(customer("B", { managerDecision: null }))).toBe(false);
-    expect(hasManagerDecision(customer("C", { managerDecision: "   " }))).toBe(false);
+    expect(hasManagerDecision(customer("B", { achievements: [] }))).toBe(false);
+    expect(
+      hasManagerDecision(customer("C", { achievements: [achievement({ managerDecision: null })] })),
+    ).toBe(false);
+    expect(
+      hasManagerDecision(customer("D", { achievements: [achievement({ managerDecision: "   " })] })),
+    ).toBe(false);
   });
 
-  it("is true for a non-empty decision", () => {
-    expect(hasManagerDecision(customer("D", { managerDecision: "Approve budget" }))).toBe(true);
+  it("is true when at least one achievement row has a non-empty decision, even among several without one", () => {
+    expect(
+      hasManagerDecision(
+        customer("E", {
+          achievements: [
+            achievement({ title: "One" }),
+            achievement({ title: "Two", managerDecision: "Approve budget" }),
+          ],
+        }),
+      ),
+    ).toBe(true);
   });
 });
 
@@ -82,13 +106,20 @@ describe("hasTabUpdate", () => {
     expect(hasTabUpdate("midweek", customer("Blank", { category: "   ", highlights: [] }))).toBe(false);
   });
 
-  it("reflection: true once the week is done, or any Reflection field has text", () => {
+  it("reflection: true once the week is done, or the week has at least one achievement", () => {
     expect(
-      hasTabUpdate("reflection", customer("Done", { status: "DONE", health: "GREEN", achievement: "Shipped" })),
+      hasTabUpdate(
+        "reflection",
+        customer("Done", { status: "DONE", health: "GREEN", achievements: [achievement()] }),
+      ),
     ).toBe(true);
-    expect(hasTabUpdate("reflection", customer("Focus", { nextWeekFocus: "Phase 2" }))).toBe(true);
-    expect(hasTabUpdate("reflection", customer("Decision", { managerDecision: "Approve" }))).toBe(true);
-    expect(hasTabUpdate("reflection", customer("Blank", { achievement: "  ", lessonLearned: null }))).toBe(false);
+    expect(
+      hasTabUpdate(
+        "reflection",
+        customer("Achievement", { achievements: [achievement({ nextWeekFocus: "Phase 2" })] }),
+      ),
+    ).toBe(true);
+    expect(hasTabUpdate("reflection", customer("Blank", { achievements: [] }))).toBe(false);
   });
 
   it("health alone never counts, and a Mid-week-only save is not a Reflection update", () => {
@@ -108,19 +139,21 @@ describe("hasTabUpdate", () => {
 describe("orderForTab", () => {
   it("keeps input order unchanged on the mid-week tab", () => {
     const customers = [
-      customer("Acme", { managerDecision: "Needs sign-off" }),
+      customer("Acme", { achievements: [achievement({ managerDecision: "Needs sign-off" })] }),
       customer("Globex"),
       customer("Initech"),
     ];
     expect(orderForTab("midweek", customers)).toEqual(customers);
   });
 
-  it("pins customers with a non-empty manager decision first on the reflection tab, each group in input order", () => {
+  it("pins customers with a non-empty manager decision (from any achievement row) first on the reflection tab, each group in input order", () => {
     const acme = customer("Acme");
-    const globex = customer("Globex", { managerDecision: "Approve extra budget" });
+    const globex = customer("Globex", { achievements: [achievement({ managerDecision: "Approve extra budget" })] });
     const initech = customer("Initech");
-    const umbrella = customer("Umbrella", { managerDecision: "  " }); // whitespace-only, not pinned
-    const soylent = customer("Soylent", { managerDecision: "Escalate to VP" });
+    const umbrella = customer("Umbrella", { achievements: [achievement({ managerDecision: "  " })] }); // whitespace-only, not pinned
+    const soylent = customer("Soylent", {
+      achievements: [achievement({ title: "One" }), achievement({ title: "Two", managerDecision: "Escalate to VP" })],
+    });
 
     const ordered = orderForTab("reflection", [acme, globex, initech, umbrella, soylent]);
 
@@ -128,7 +161,10 @@ describe("orderForTab", () => {
   });
 
   it("does not mutate the input array", () => {
-    const customers = [customer("Acme", { managerDecision: "x" }), customer("Globex")];
+    const customers = [
+      customer("Acme", { achievements: [achievement({ managerDecision: "x" })] }),
+      customer("Globex"),
+    ];
     const copy = [...customers];
     orderForTab("reflection", customers);
     expect(customers).toEqual(copy);
@@ -206,20 +242,49 @@ describe("buildSyncTable", () => {
     expect(table.rows).toEqual([["Acme", "Green", "Onboarding", "—", "—", "—"]]);
   });
 
-  it("renders a full reflection row with no Health/Category cells even when the customer has them set", () => {
+  it("renders two rows for two achievements, with the customer repeated on each (D12)", () => {
     const table = buildSyncTable("reflection", [
       customer("Acme", {
         category: "Onboarding",
         health: "GREEN",
-        achievement: "Shipped v1",
-        outstandingIssue: "None",
-        lessonLearned: "Start earlier",
-        nextWeekFocus: "Phase 2",
-        managerDecision: "Approve extra scope",
+        achievements: [
+          achievement({
+            title: "Shipped v1",
+            outstandingIssue: "None",
+            lessonLearned: "Start earlier",
+            nextWeekFocus: "Phase 2",
+            managerDecision: "Approve extra scope",
+          }),
+          achievement({ title: "Shipped v2" }),
+        ],
       }),
     ]);
     expect(table.rows).toEqual([
       ["Acme", "Shipped v1", "None", "Start earlier", "Phase 2", "Approve extra scope"],
+      ["Acme", "Shipped v2", "—", "—", "—", "—"],
+    ]);
+  });
+
+  it("joins an achievement's title and detail with a newline in the Weekly achievement cell, treating whitespace-only detail as empty", () => {
+    const withDetail = buildSyncTable("reflection", [
+      customer("Acme", { achievements: [achievement({ title: "Shipped v1", detail: "Went smoothly" })] }),
+    ]);
+    expect(withDetail.rows[0][1]).toBe("Shipped v1\nWent smoothly");
+
+    const blankDetail = buildSyncTable("reflection", [
+      customer("Acme", { achievements: [achievement({ title: "Shipped v1", detail: "   " })] }),
+    ]);
+    expect(blankDetail.rows[0][1]).toBe("Shipped v1");
+  });
+
+  it("a customer with no achievement gets one row with dashes in every reflection text cell", () => {
+    const table = buildSyncTable("reflection", [
+      customer("Acme", { achievements: [] }),
+      customer("NoUpdate", null),
+    ]);
+    expect(table.rows).toEqual([
+      ["Acme", "—", "—", "—", "—", "—"],
+      ["NoUpdate", "—", "—", "—", "—", "—"],
     ]);
   });
 
@@ -236,7 +301,7 @@ describe("buildSyncTable", () => {
 
   it("does not reorder — callers pass orderForTab's output when pinning is wanted", () => {
     const globex = customer("Globex");
-    const acme = customer("Acme", { managerDecision: "Escalate" });
+    const acme = customer("Acme", { achievements: [achievement({ managerDecision: "Escalate" })] });
     const table = buildSyncTable("reflection", [globex, acme]);
     expect(table.rows.map((r) => r[0])).toEqual(["Globex", "Acme"]);
   });
