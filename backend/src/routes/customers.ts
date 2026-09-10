@@ -83,7 +83,7 @@ const weeklyUpdateParamSchema = z.object({
   weekStart: dayStringSchema,
 });
 
-// One Mid-week highlight row (D5/D6 in docs/plans/weekly-sync-highlight-rows.md):
+// One Mid-week highlight row (D5/D6 in docs/archive/plans/weekly-sync-highlight-rows.md):
 // title is one line, 1–200 characters after trim, no \r or \n. The 200 limit
 // counts code points (not UTF-16 units, what z.string().max() counts), to
 // match the migration's LEFT(first_line, 200), the VarChar(200) column, and
@@ -110,6 +110,29 @@ const highlightInputSchema = z.object({
   action: z.string().max(8000).nullable().optional(),
 });
 
+// One Reflection achievement row (D5/D6 in docs/archive/plans/weekly-sync-achievement-rows.md):
+// same title rule as a highlight (trim, 1-200 code points, one line), and
+// the same ≤8000 trim-and-null-when-empty rule for its five texts.
+const achievementInputSchema = z.object({
+  title: z
+    .string()
+    .transform((s) => s.trim())
+    .pipe(
+      z
+        .string()
+        .min(1, "title is required")
+        .refine((s) => [...s].length <= 200, {
+          message: "title must be 200 characters or fewer",
+        })
+        .refine((s) => !/[\r\n]/.test(s), { message: "title must be one line" }),
+    ),
+  detail: z.string().max(8000).nullable().optional(),
+  outstandingIssue: z.string().max(8000).nullable().optional(),
+  lessonLearned: z.string().max(8000).nullable().optional(),
+  nextWeekFocus: z.string().max(8000).nullable().optional(),
+  managerDecision: z.string().max(8000).nullable().optional(),
+});
+
 const saveWeeklyUpdateSchema = z.object({
   health: z.nativeEnum(WeeklyHealth).nullable().optional(),
   status: z.nativeEnum(WeeklyStatus).optional(),
@@ -124,13 +147,11 @@ const saveWeeklyUpdateSchema = z.object({
     .optional(),
   // Omitted = the stored list is untouched. Present (including `[]`) =
   // replaces the whole list, in array order, in one transaction (D6 in
-  // docs/plans/weekly-sync-highlight-rows.md).
+  // docs/archive/plans/weekly-sync-highlight-rows.md).
   highlights: z.array(highlightInputSchema).max(20).optional(),
-  achievement: z.string().max(8000).nullable().optional(),
-  outstandingIssue: z.string().max(8000).nullable().optional(),
-  lessonLearned: z.string().max(8000).nullable().optional(),
-  nextWeekFocus: z.string().max(8000).nullable().optional(),
-  managerDecision: z.string().max(8000).nullable().optional(),
+  // Same replace-in-order contract as highlights, for the Reflection
+  // achievement list (D6 in docs/archive/plans/weekly-sync-achievement-rows.md).
+  achievements: z.array(achievementInputSchema).max(20).optional(),
 });
 
 // Every Mid-week/Reflection text field goes through this one normalisation:
@@ -492,16 +513,30 @@ customersRouter.delete(
 );
 
 // ---- Weekly updates (per customer, Decision 2) ------------------------------
-// The Mid-week highlight list (D4/D6 in docs/plans/weekly-sync-highlight-rows.md):
-// present on a save replaces the whole list, in array order, inside one
+// The Mid-week highlight list (D4/D6 in docs/archive/plans/weekly-sync-highlight-rows.md)
+// and the Reflection achievement list (D4/D6 in docs/archive/plans/weekly-sync-achievement-rows.md):
+// each present on a save replaces its whole list, in array order, inside one
 // transaction; omitted leaves it untouched; `[]` clears it. Every read of a
-// WeeklyUpdate row includes it ordered by position.
+// WeeklyUpdate row includes both, each ordered by position.
 
 const weeklyUpdateInclude = {
   author: { select: { id: true, username: true } },
   highlights: {
     orderBy: { position: "asc" as const },
     select: { id: true, position: true, title: true, detail: true, risk: true, action: true },
+  },
+  achievements: {
+    orderBy: { position: "asc" as const },
+    select: {
+      id: true,
+      position: true,
+      title: true,
+      detail: true,
+      outstandingIssue: true,
+      lessonLearned: true,
+      nextWeekFocus: true,
+      managerDecision: true,
+    },
   },
 } satisfies Prisma.WeeklyUpdateInclude;
 
@@ -551,16 +586,17 @@ customersRouter.put(
     // was omitted (leave unchanged), or becomes the trimmed string / `null`
     // otherwise — see normalizeText.
     const category = normalizeText(body.category);
-    const achievement = normalizeText(body.achievement);
-    const outstandingIssue = normalizeText(body.outstandingIssue);
-    const lessonLearned = normalizeText(body.lessonLearned);
-    const nextWeekFocus = normalizeText(body.nextWeekFocus);
-    const managerDecision = normalizeText(body.managerDecision);
 
     const weekStartDate = utcMidnightOfDayString(weekStart);
     const existing = await prisma.weeklyUpdate.findUnique({
       where: { customerId_weekStart: { customerId: id, weekStart: weekStartDate } },
-      select: { id: true, status: true, doneAt: true, health: true, achievement: true },
+      select: {
+        id: true,
+        status: true,
+        doneAt: true,
+        health: true,
+        _count: { select: { achievements: true } },
+      },
     });
 
     // An omitted `status` leaves the stored status unchanged (DRAFT on
@@ -568,18 +604,22 @@ customersRouter.put(
     // touch) a DONE row's status.
     const status = body.status ?? existing?.status ?? "DRAFT";
 
-    // An omitted `health`/`achievement` leaves the stored value unchanged
-    // (explicit `null` still clears it) — so the DONE completeness check
-    // looks at the EFFECTIVE value: what the body sends, else what's
-    // already there.
+    // An omitted `health` leaves the stored value unchanged (explicit
+    // `null` still clears it) — so the DONE completeness check looks at
+    // the EFFECTIVE value: what the body sends, else what's already there.
     const effectiveHealth = body.health !== undefined ? body.health : (existing?.health ?? null);
-    const effectiveAchievement =
-      achievement !== undefined ? achievement : (existing?.achievement ?? null);
-    if (status === "DONE" && (effectiveAchievement === null || effectiveHealth == null)) {
+    // Same effective-value pattern as health: the list the body sends when
+    // present, else the count already stored (D7 in
+    // docs/archive/plans/weekly-sync-achievement-rows.md).
+    const effectiveAchievementCount =
+      body.achievements !== undefined
+        ? body.achievements.length
+        : (existing?._count.achievements ?? 0);
+    if (status === "DONE" && (effectiveHealth == null || effectiveAchievementCount === 0)) {
       throw new HttpError(
         400,
         "weekly_update_incomplete",
-        "Marking a weekly update done requires health and Weekly Achievement to both be set",
+        "Marking a weekly update done requires health and at least one achievement",
       );
     }
 
@@ -595,6 +635,7 @@ customersRouter.put(
     // text".
     const midweekTouched = category !== undefined || body.highlights !== undefined;
     const highlights = body.highlights;
+    const achievements = body.achievements;
 
     const result = await prisma.$transaction(async (tx) => {
       const upserted = await tx.weeklyUpdate.upsert({
@@ -607,11 +648,6 @@ customersRouter.put(
           status,
           doneAt,
           category: category ?? null,
-          achievement: achievement ?? null,
-          outstandingIssue: outstandingIssue ?? null,
-          lessonLearned: lessonLearned ?? null,
-          nextWeekFocus: nextWeekFocus ?? null,
-          managerDecision: managerDecision ?? null,
           midweekSavedAt: midweekTouched ? new Date() : null,
         },
         update: {
@@ -620,11 +656,6 @@ customersRouter.put(
           doneAt,
           ...(body.health !== undefined && { health: body.health }),
           ...(category !== undefined && { category }),
-          ...(achievement !== undefined && { achievement }),
-          ...(outstandingIssue !== undefined && { outstandingIssue }),
-          ...(lessonLearned !== undefined && { lessonLearned }),
-          ...(nextWeekFocus !== undefined && { nextWeekFocus }),
-          ...(managerDecision !== undefined && { managerDecision }),
           ...(midweekTouched && { midweekSavedAt: new Date() }),
         },
       });
@@ -640,6 +671,24 @@ customersRouter.put(
               detail: normalizeText(h.detail) ?? null,
               risk: normalizeText(h.risk) ?? null,
               action: normalizeText(h.action) ?? null,
+            })),
+          });
+        }
+      }
+
+      if (achievements !== undefined) {
+        await tx.weeklyAchievement.deleteMany({ where: { weeklyUpdateId: upserted.id } });
+        if (achievements.length > 0) {
+          await tx.weeklyAchievement.createMany({
+            data: achievements.map((a, i) => ({
+              weeklyUpdateId: upserted.id,
+              position: i,
+              title: a.title,
+              detail: normalizeText(a.detail) ?? null,
+              outstandingIssue: normalizeText(a.outstandingIssue) ?? null,
+              lessonLearned: normalizeText(a.lessonLearned) ?? null,
+              nextWeekFocus: normalizeText(a.nextWeekFocus) ?? null,
+              managerDecision: normalizeText(a.managerDecision) ?? null,
             })),
           });
         }
