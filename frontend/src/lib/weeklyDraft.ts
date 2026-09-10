@@ -1,22 +1,23 @@
 // Drafts a customer's weekly-sync content from the week's daily notes
-// (docs/plans/weekly-sync-highlight-rows.md §4 "Draft helper", D9). Pure
+// (docs/archive/plans/weekly-sync-highlight-rows.md §4 "Draft helper" D9;
+// docs/archive/plans/weekly-sync-achievement-rows.md §4 "Draft helper" D9). Pure
 // functions — no React, no network — so the Daily Review modals' "Draft
-// from notes" actions can call them directly and the Vitest suite below can
-// exercise them in isolation. `opts.throughDay`, when given, restricts BOTH
-// project and operations notes to `week.days` entries on or before that day
-// (a plain string compare on "yyyy-MM-dd" — the boundary day itself is
-// kept): the Mid-week modal passes `week.days[2]` so highlights only draft
-// from Mon-Wed notes, while the Reflection modal omits it so Weekly
-// Achievement keeps drafting from the full week, weekend notes included,
-// exactly as before. `draftWeeklyUpdate` still backs the Reflection form's
-// free-text draft; `draftWeeklyHighlights` is the Mid-week form's draft,
-// producing one `WeeklyHighlightInput` row per note (D9) instead of one
-// paragraph per project.
+// from Mon–Wed notes"/"Draft from this week" actions can call them directly
+// and the Vitest suite below can exercise them in isolation.
+// `draftWeeklyHighlights` is the Mid-week form's draft: one
+// `WeeklyHighlightInput` row per note, `opts.throughDay` (the Mid-week
+// modal passes `week.days[2]`) restricting it to Mon-Wed notes only — a
+// plain string compare on "yyyy-MM-dd" that keeps the boundary day itself.
+// `draftWeeklyAchievements` is the Reflection form's draft: this week's
+// saved Mid-week highlights first (verbatim), then one
+// `WeeklyAchievementInput` row per Thursday-Sunday note — or, when there
+// are no saved highlights, per Monday-Sunday note instead — through the
+// same per-note rule `draftWeeklyHighlights` uses.
 import { dayFromIso } from "./dateField";
 import type {
   DailyReviewCustomer,
-  DailyReviewNote,
   DailyReviewOpsNote,
+  WeeklyAchievementInput,
   WeeklyHighlightInput,
 } from "./queries";
 
@@ -38,12 +39,13 @@ function dayLabel(day: string): string {
  * ISO instant (`"2026-08-24T00:00:00.000Z"`, see `backend/test/
  * projectReviews.test.ts`), NOT a bare "yyyy-MM-dd" day string — grouping on
  * the raw value would never match `week.days`' bare day strings in
- * `buildDayRows` below. `dayFromIso` extracts the calendar day for the map
- * key (it also accepts an already-bare day string unchanged, since it just
- * reads the first 10 characters — so a caller passing either shape groups
- * correctly); the full instant string is still what's compared for
- * ordering, since same-format ISO instants sort identically to their date
- * parts (all `T00:00:00.000Z`-suffixed).
+ * `draftWeeklyHighlights`/`draftWeeklyAchievements` below. `dayFromIso`
+ * extracts the calendar day for the map key (it also accepts an
+ * already-bare day string unchanged, since it just reads the first 10
+ * characters — so a caller passing either shape groups correctly); the
+ * full instant string is still what's compared for ordering, since
+ * same-format ISO instants sort identically to their date parts (all
+ * `T00:00:00.000Z`-suffixed).
  */
 function groupNotesByDay<T extends { id: number; noteDate: string }>(
   notes: T[],
@@ -62,94 +64,12 @@ function groupNotesByDay<T extends { id: number; noteDate: string }>(
 }
 
 /**
- * One row per day (in `days` order — Monday..Sunday) that has at least one
- * note; a day with no notes is skipped entirely. Multi-line bodies are
- * never touched, so their internal newlines survive unchanged.
- *
- * `bracketOf`, when given, tags each note with a bracket (project rows pass
- * none — they're never bracketed, note count notwithstanding):
- * - Exactly one note that day: the bracket sits between the day label and
- *   the colon, e.g. `"Mon 24 [SD-WAN]: body"` — unchanged from the
- *   single-note case.
- * - Two or more notes that day: there's no single slot for N different
- *   notes' brackets, so each moves onto its own body instead, joined with
- *   " / ": `"Mon 24: [SD-WAN] body-one / [Firewall] body-two"` (a
- *   `bracketOf` that returns "" for a given note omits that note's bracket
- *   prefix — `bracketFor` below never does, since title is required).
- */
-function buildDayRows<T extends { id: number; noteDate: string; body: string }>(
-  days: string[],
-  byDay: Map<string, T[]>,
-  bracketOf?: (note: T) => string,
-): string[] {
-  const rows: string[] = [];
-  for (const day of days) {
-    const dayNotes = byDay.get(day);
-    if (!dayNotes || dayNotes.length === 0) continue;
-    const label = dayLabel(day);
-    if (!bracketOf || dayNotes.length === 1) {
-      const bracket = bracketOf ? bracketOf(dayNotes[0]) : "";
-      const bodies = dayNotes.map((n) => n.body).join(" / ");
-      rows.push(bracket ? `${label} ${bracket}: ${bodies}` : `${label}: ${bodies}`);
-    } else {
-      const segments = dayNotes.map((n) => {
-        const bracket = bracketOf(n);
-        return bracket ? `${bracket} ${n.body}` : n.body;
-      });
-      rows.push(`${label}: ${segments.join(" / ")}`);
-    }
-  }
-  return rows;
-}
-
-/**
  * `[<title>]` — the title is required (1-120 chars, Decision 4), so this
  * always returns a non-empty bracket, unlike the earlier optional-service
  * version.
  */
 function bracketFor(note: DailyReviewOpsNote): string {
   return `[${note.title}]`;
-}
-
-/**
- * Drafts a customer's weekly-sync text from this week's project + operations
- * notes: one paragraph per project (customer's own project order, project
- * skipped entirely if it has zero notes this week), then one "Operations —"
- * paragraph if any operations notes exist this week. No trailing "next
- * week" line: the draft now lands in a single column (Highlight on
- * Wednesday, Weekly Achievement on Friday) that gets copied verbatim into
- * the meeting table, and "next week" is its own field (Next Week Focus) —
- * a stub belonged here only when the draft filled one free-text box.
- * Paragraphs are separated by a blank line; a customer with no notes at all
- * (in the drafted range) drafts to an empty string.
- */
-export function draftWeeklyUpdate(
-  customer: DailyReviewCustomer,
-  week: { days: string[] },
-  opts?: { throughDay?: string },
-): string {
-  const paragraphs: string[] = [];
-  const throughDay = opts?.throughDay;
-  const days = throughDay ? week.days.filter((d) => d <= throughDay) : week.days;
-
-  for (const project of customer.projects) {
-    const rows = buildDayRows<DailyReviewNote>(days, groupNotesByDay(project.notes));
-    if (rows.length === 0) continue;
-    paragraphs.push(`${project.name} — ${rows.join(" · ")}`);
-  }
-
-  if (customer.operationsNotes.length > 0) {
-    const rows = buildDayRows<DailyReviewOpsNote>(
-      days,
-      groupNotesByDay(customer.operationsNotes),
-      bracketFor,
-    );
-    if (rows.length > 0) {
-      paragraphs.push(`Operations — ${rows.join(" · ")}`);
-    }
-  }
-
-  return paragraphs.join("\n\n");
 }
 
 /** Cuts `s` to `max` code points (not UTF-16 code units), so a multi-byte
@@ -164,7 +84,7 @@ function cut(s: string, max: number): string {
 /**
  * Splits a note body into a one-line title and an optional detail — the
  * same rule the `weekly_highlights` data-move migration applies to the old
- * `WeeklyUpdate.highlight` text (docs/plans/weekly-sync-highlight-rows.md
+ * `WeeklyUpdate.highlight` text (docs/archive/plans/weekly-sync-highlight-rows.md
  * §2). Line endings are normalised first (`\r\n` and a lone `\r` both become
  * `\n`, matching the migration's own normalisation), then each line is
  * trimmed of surrounding spaces. The title is the first non-empty line, cut
@@ -189,8 +109,17 @@ export function splitTitle(text: string): { title: string; detail: string | null
   return { title: firstLine, detail: rest.length > 0 ? rest : null };
 }
 
-/** One `WeeklyHighlightInput` row for `note`, titled `prefix` + its own split title (D9). `prefix` never lands in `detail`: when the prefixed title has to be cut at 200, detail falls back to the note's full trimmed body instead of just the post-first-line remainder. */
-function highlightFromNote(note: { body: string }, prefix: string): WeeklyHighlightInput {
+/**
+ * Shared building block behind `highlightFromNote`/`achievementFromNote`:
+ * the `{ title, detail }` pair for `note`, titled `prefix` + its own split
+ * title (D9). `prefix` never lands in `detail`: when the prefixed title has
+ * to be cut at 200, detail falls back to the note's full trimmed body
+ * instead of just the post-first-line remainder.
+ */
+function draftedTitleAndDetail(
+  note: { body: string },
+  prefix: string,
+): { title: string; detail: string | null } {
   const split = splitTitle(note.body);
   const prefixedTitle = prefix + split.title;
   if ([...prefixedTitle].length > 200) {
@@ -198,6 +127,18 @@ function highlightFromNote(note: { body: string }, prefix: string): WeeklyHighli
     return { title: cut(prefixedTitle, 200), detail: full.length > 0 ? full : null };
   }
   return { title: prefixedTitle, detail: split.detail };
+}
+
+/** One `WeeklyHighlightInput` row for `note` — see `draftedTitleAndDetail`. */
+function highlightFromNote(note: { body: string }, prefix: string): WeeklyHighlightInput {
+  return draftedTitleAndDetail(note, prefix);
+}
+
+/** One `WeeklyAchievementInput` row for `note` — see `draftedTitleAndDetail`.
+ * The four Reflection-only texts (outstanding issue, lesson learned, next
+ * week focus, manager decision) are never set here. */
+function achievementFromNote(note: { body: string }, prefix: string): WeeklyAchievementInput {
+  return draftedTitleAndDetail(note, prefix);
 }
 
 /**
@@ -208,9 +149,9 @@ function highlightFromNote(note: { body: string }, prefix: string): WeeklyHighli
  * `"<day label> [<note title>]: <first line>"` (`bracketFor`'s `[<title>]`
  * moved next to the day label rather than the note body, since the day
  * label + name/bracket together are now the WeeklyHighlight's `title`, not
- * a plain-text prefix inside one long paragraph). Unlike `draftWeeklyUpdate`,
- * same-day notes are never joined with " / " — each note is its own row.
- * A customer with no notes in the drafted range drafts to `[]`.
+ * a plain-text prefix inside one long paragraph). Same-day notes are never
+ * joined with " / " — each note is its own row. A customer with no notes in
+ * the drafted range drafts to `[]`.
  */
 export function draftWeeklyHighlights(
   customer: DailyReviewCustomer,
@@ -239,4 +180,53 @@ export function draftWeeklyHighlights(
     }
   }
   return highlights;
+}
+
+/**
+ * Drafts a customer's Reflection achievement list for this week (D9 in
+ * docs/archive/plans/weekly-sync-achievement-rows.md): this week's saved Mid-week
+ * highlights first, in order, verbatim (title + detail copied, the four
+ * Reflection-only texts left unset), then one achievement per Thursday-
+ * Sunday note — day order, and within a day the customer's own project
+ * order first, then operations notes, through the same per-note rule
+ * `draftWeeklyHighlights` uses. A week with no saved highlights drafts from
+ * the WHOLE week (Monday-Sunday) instead, so a customer that skipped the
+ * Mid-week form still gets a full draft. A customer with neither highlights
+ * nor notes in the drafted range drafts to `[]`.
+ */
+export function draftWeeklyAchievements(
+  customer: DailyReviewCustomer,
+  week: { days: string[] },
+): WeeklyAchievementInput[] {
+  const highlights = customer.weeklyUpdate?.highlights ?? [];
+  const fromHighlights: WeeklyAchievementInput[] = highlights.map((h) => ({
+    title: h.title,
+    detail: h.detail,
+  }));
+
+  // week.days[0..2] is Mon-Wed (the Mid-week form's own drafting range) —
+  // when there are highlights, only Thu-Sun (index 3 onward) is new
+  // material; with none, draft the whole week instead.
+  const days = highlights.length > 0 ? week.days.slice(3) : week.days;
+
+  const projectDays = customer.projects.map((project) => ({
+    project,
+    byDay: groupNotesByDay(project.notes),
+  }));
+  const opsByDay = groupNotesByDay(customer.operationsNotes);
+
+  const fromNotes: WeeklyAchievementInput[] = [];
+  for (const day of days) {
+    const label = dayLabel(day);
+    for (const { project, byDay } of projectDays) {
+      for (const note of byDay.get(day) ?? []) {
+        fromNotes.push(achievementFromNote(note, `${label} ${project.name}: `));
+      }
+    }
+    for (const note of opsByDay.get(day) ?? []) {
+      fromNotes.push(achievementFromNote(note, `${label} ${bracketFor(note)}: `));
+    }
+  }
+
+  return [...fromHighlights, ...fromNotes];
 }

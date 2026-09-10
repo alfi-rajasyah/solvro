@@ -1,19 +1,21 @@
 import type { Page } from "@playwright/test";
 import { apiBase, expect, loginViaUi, test } from "../fixtures/test";
 
-// Weekly Sync page (docs/plans/weekly-sync-tables.md §4 "Weekly Sync page",
+// Weekly Sync page (docs/archive/plans/weekly-sync-tables.md §4 "Weekly Sync page",
 // T6; e2e task T8): two passes through the new /weekly-sync page.
 //
 // The first test drives the row/group/count mechanics on both Playwright
 // projects (desktop + mobile): a seeded customer with no update is hidden
 // from the Reflection tab until the "Show them" toggle lists the customers
-// without an update, where its row sits under "Other customers"; saving a
-// Need-manager-decision through the Reflection sync modal (reused from
-// Daily Review, T5) pins the row under "Needs a manager decision" and bumps
-// the tab's decision count; the row then carries the saved achievement
-// text and stays listed on a fresh page load (toggle off); and the Mid-week
-// tab hides the same customer again (no mid-week save happened) until the
-// toggle shows it as "Not filled".
+// without an update, where its row sits under "Other customers"; saving two
+// achievements — one with a Need-manager-decision — through the Reflection
+// sync modal (reused from Daily Review, T5; one row per achievement per
+// docs/archive/plans/weekly-sync-achievement-rows.md) pins the row under "Needs a
+// manager decision" and bumps the tab's decision count; the row then
+// carries both achievement titles as its own rows and stays listed on a
+// fresh page load (toggle off); and the Mid-week tab hides the same
+// customer again (no mid-week save happened) until the toggle shows it as
+// "Not filled".
 //
 // The second test is the "Copy as table" clipboard round-trip, split out on
 // its own (rather than a tail appended to the first test) so a mid-test
@@ -22,7 +24,7 @@ import { apiBase, expect, loginViaUi, test } from "../fixtures/test";
 // the mobile project's CDP-emulated Chromium doesn't reliably grant
 // clipboard-read/clipboard-write, so only this second test skips there.
 //
-// The third test (docs/plans/weekly-sync-highlight-rows.md §5) drives the
+// The third test (docs/archive/plans/weekly-sync-highlight-rows.md §5) drives the
 // Mid-week form's highlight rows (T5/T6): two highlights on one customer —
 // one with a Risk/Action and no Detail, one with a Detail and no Risk/
 // Action — saved, read back on the block (title/risk/action text, the
@@ -172,8 +174,9 @@ test.describe("Weekly Sync page", () => {
 
     // ------------------------------------------------------------------
     // 2. Click the row to open its Reflection sync modal (reused from
-    //    Daily Review); fill the achievement and a manager decision, pick
-    //    Green, Save draft.
+    //    Daily Review); fill Achievement 1's title and a manager decision,
+    //    add a second achievement and fill its title, pick Green, Save
+    //    draft.
     // ------------------------------------------------------------------
     await row.click();
     const dialog = page.getByRole("dialog", {
@@ -181,25 +184,29 @@ test.describe("Weekly Sync page", () => {
     });
     await expect(dialog).toBeVisible();
 
-    const achievementText = `Weekly achievement ${customer.name}`;
+    const achievement1Text = `Weekly achievement ${customer.name}`;
+    const achievement2Text = `Second achievement ${customer.name}`;
     const decisionText = `Need a call on renewal ${customer.name}`;
-    await dialog.getByLabel(`Weekly achievement for ${customer.name}`).fill(achievementText);
-    await dialog.getByLabel(`Need manager decision for ${customer.name}`).fill(decisionText);
+    await dialog.getByLabel(`Achievement 1 title for ${customer.name}`).fill(achievement1Text);
+    await dialog.getByLabel(`Achievement 1 need manager decision for ${customer.name}`).fill(decisionText);
+    await dialog.getByRole("button", { name: "Add achievement" }).click();
+    await dialog.getByLabel(`Achievement 2 title for ${customer.name}`).fill(achievement2Text);
     await dialog.getByRole("radio", { name: "Green" }).click();
     await dialog.getByRole("button", { name: "Save draft" }).click();
     await expect(dialog).toBeHidden();
 
     // ------------------------------------------------------------------
     // 3. The row now pins under "Needs a manager decision", the tab's
-    //    decision count is +1, and the achievement text is visible on the
-    //    row. `expect.poll` rather than a fixed wait: the post-save
-    //    refetch (React Query invalidation) can take longer than any
-    //    single guessed timeout, and a plain one-shot read of
-    //    `groupContainingRow` would otherwise race it.
+    //    decision count is +1, and both achievement titles are visible on
+    //    the row (one row per achievement, D1). `expect.poll` rather than a
+    //    fixed wait: the post-save refetch (React Query invalidation) can
+    //    take longer than any single guessed timeout, and a plain one-shot
+    //    read of `groupContainingRow` would otherwise race it.
     // ------------------------------------------------------------------
     await expect.poll(() => groupContainingRow(page, customer.id)).toBe("decision");
     await expect(reflectionTab).toHaveText(new RegExp(`Reflection · ${baseDecisionCount + 1} decisions?$`));
-    await expect(row.getByText(achievementText)).toBeVisible();
+    await expect(row.getByText(achievement1Text)).toBeVisible();
+    await expect(row.getByText(achievement2Text)).toBeVisible();
 
     // ------------------------------------------------------------------
     // 3b. A fresh page load starts with the toggle off — the row now
@@ -259,7 +266,7 @@ test.describe("Weekly Sync page", () => {
     await expect(dialog).toBeVisible();
 
     const achievementText = `Weekly achievement ${customer.name}`;
-    await dialog.getByLabel(`Weekly achievement for ${customer.name}`).fill(achievementText);
+    await dialog.getByLabel(`Achievement 1 title for ${customer.name}`).fill(achievementText);
     await dialog.getByRole("radio", { name: "Green" }).click();
     await dialog.getByRole("button", { name: "Save draft" }).click();
     await expect(dialog).toBeHidden();

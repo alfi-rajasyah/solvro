@@ -3,7 +3,7 @@ import { apiBase, expect, loginViaUi, test } from "../fixtures/test";
 import { createTask, isoDateOffset } from "../fixtures/seed";
 
 // Daily Review v2 (docs/plans/daily-review-v2-spec.md §9; weekly sync tables
-// per docs/plans/weekly-sync-tables.md): one end-to-end pass through the
+// per docs/archive/plans/weekly-sync-tables.md): one end-to-end pass through the
 // rewritten /daily-review page — a project note, an operations note, Mark
 // reviewed, an overdue-task status change, the Reflection sync modal's
 // draft/health/Mark-done cycle and the resulting collapsed group summary,
@@ -254,12 +254,27 @@ test.describe("Daily Review v2", () => {
       name: new RegExp(`^Reflection sync — ${customerName}, week \\d+$`),
     });
     await expect(reflectionDialog).toBeVisible();
-    await reflectionDialog.getByRole("button", { name: "Draft from this week's notes" }).click();
-    const weeklyTextarea = page.getByLabel(`Weekly achievement for ${customerName}`);
-    const draftValue = await weeklyTextarea.inputValue();
-    expect(draftValue).toContain(projectNoteBody);
-    expect(draftValue).toContain(opsNoteBody);
-    expect(draftValue).toContain(opsNoteTitle);
+    // The blank starter card holds no text, so "Draft from this week" applies
+    // straight away with no replace-confirm (ReflectionSyncModal.tsx's
+    // requestDraft). No Mid-week highlights were saved in this flow, so the
+    // draft falls back to the whole week (weeklyDraft.ts's
+    // draftWeeklyAchievements) rather than just Thursday-Sunday — Achievement
+    // 1 is always the project note (a customer's own projects draft before
+    // its operations notes on the same day); the operations note lands in
+    // whichever card follows it, titled with its "[<title>]" bracket
+    // followed by its body.
+    await reflectionDialog.getByRole("button", { name: "Draft from this week" }).click();
+    const achievement1TitleValue = await reflectionDialog
+      .getByLabel(`Achievement 1 title for ${customerName}`)
+      .inputValue();
+    expect(achievement1TitleValue).toContain(projectNoteBody);
+
+    const achievementTitleValues = await reflectionDialog
+      .getByLabel(new RegExp(`^Achievement \\d+ title for ${customerName}$`))
+      .evaluateAll((els) => els.map((el) => (el as HTMLInputElement).value));
+    const opsCardTitle = achievementTitleValues.find((v) => v.includes(`[${opsNoteTitle}]`));
+    expect(opsCardTitle, `card titles: ${achievementTitleValues.join(" | ")}`).toBeDefined();
+    expect(opsCardTitle).toContain(opsNoteBody);
 
     await reflectionDialog.getByRole("radio", { name: "Amber" }).click();
     await reflectionDialog.getByRole("button", { name: "Mark done" }).click();
@@ -273,7 +288,7 @@ test.describe("Daily Review v2", () => {
     // ------------------------------------------------------------------
     // 7. The customer name in the (now collapsed) group header links to
     //    /customers/:id — whose Weekly updates section lists Amber, Done,
-    //    and the achievement text (the project note body) drafted above.
+    //    and Achievement 1's title (drafted from the project note above).
     // ------------------------------------------------------------------
     await customerHeading.getByRole("link", { name: customerName }).click();
     await expect(page).toHaveURL(new RegExp(`/customers/${customer.id}$`));

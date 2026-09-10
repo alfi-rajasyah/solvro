@@ -80,10 +80,9 @@ function customer(overrides: Partial<DailyReviewCustomer> = {}): DailyReviewCust
   };
 }
 
-// Defaults to a DONE/GREEN row with only `achievement` set — the shape
-// every `weeklyUpdate:` fixture below needs; callers override the 1-2
-// fields that vary per test (e.g. `health`/`status`/`doneAt` for a DRAFT
-// row).
+// Defaults to a DONE/GREEN row with no achievements set — the shape every
+// `weeklyUpdate:` fixture below needs; callers override the 1-2 fields
+// that vary per test (e.g. `health`/`status`/`doneAt` for a DRAFT row).
 function weeklyUpdate(overrides: Partial<WeeklyUpdate> = {}): WeeklyUpdate {
   return {
     id: 1,
@@ -92,11 +91,7 @@ function weeklyUpdate(overrides: Partial<WeeklyUpdate> = {}): WeeklyUpdate {
     status: "DONE",
     category: null,
     highlights: [],
-    achievement: "x",
-    outstandingIssue: null,
-    lessonLearned: null,
-    nextWeekFocus: null,
-    managerDecision: null,
+    achievements: [],
     midweekSavedAt: null,
     doneAt: "2026-08-28T10:00:00.000Z",
     author: AUTHOR,

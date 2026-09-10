@@ -331,7 +331,7 @@ export interface DailyReviewOpsNote extends DailyReviewNote {
   title: string;
 }
 
-// One row of the Mid-week table (docs/plans/weekly-sync-highlight-rows.md
+// One row of the Mid-week table (docs/archive/plans/weekly-sync-highlight-rows.md
 // §2 D1/D2): `WeeklyUpdate.highlights` holds one of these per highlight,
 // ordered by `position`. Risk and Action live on the highlight, not on the
 // week — each highlight carries its own.
@@ -353,25 +353,52 @@ export interface WeeklyHighlightInput {
   action?: string | null;
 }
 
+// One Reflection achievement — one row of Monday's Reflection table
+// (docs/archive/plans/weekly-sync-achievement-rows.md §2 D1/D2): `WeeklyUpdate.
+// achievements` holds one of these per achievement, ordered by `position`.
+// Every Reflection text belongs to the row (D2); Health and Status stay on
+// the week, not the achievement.
+export interface WeeklyAchievement {
+  id: number;
+  position: number;
+  title: string;
+  detail: string | null;
+  outstandingIssue: string | null;
+  lessonLearned: string | null;
+  nextWeekFocus: string | null;
+  managerDecision: string | null;
+}
+
+// The save-side shape of a WeeklyAchievement — no `id`/`position` (the
+// server assigns `position` from list order on save; see
+// SaveWeeklyUpdateInput).
+export interface WeeklyAchievementInput {
+  title: string;
+  detail?: string | null;
+  outstandingIssue?: string | null;
+  lessonLearned?: string | null;
+  nextWeekFocus?: string | null;
+  managerDecision?: string | null;
+}
+
 export interface WeeklyUpdate {
   id: number;
   weekStart: string;
   health: WeeklyHealth | null;
   status: WeeklyStatus;
   doneAt: string | null;
-  // Mid-week table fields (docs/plans/weekly-sync-tables.md §2 D2).
+  // Mid-week table fields (docs/archive/plans/weekly-sync-tables.md §2 D2).
   category: string | null;
-  // One row per highlight (docs/plans/weekly-sync-highlight-rows.md D1),
+  // One row per highlight (docs/archive/plans/weekly-sync-highlight-rows.md D1),
   // ordered by position — the Mid-week table lists one row per entry here.
   highlights: WeeklyHighlight[];
-  // Reflection table fields. `achievement` replaces the old free-text
-  // `body` (D6 — the migration copied every existing `body` into this
-  // column, then dropped `body`).
-  achievement: string | null;
-  outstandingIssue: string | null;
-  lessonLearned: string | null;
-  nextWeekFocus: string | null;
-  managerDecision: string | null;
+  // One row per Reflection achievement (docs/archive/plans/weekly-sync-
+  // achievement-rows.md D1), ordered by position — the Reflection table lists one row
+  // per entry here. Replaces the five flat text fields (`achievement`,
+  // `outstandingIssue`, `lessonLearned`, `nextWeekFocus`, `managerDecision`)
+  // this row used to carry directly (D8 moved that data onto position-0
+  // achievement rows).
+  achievements: WeeklyAchievement[];
   // Stamped on every save that carries at least one Mid-week field —
   // drives "Mid-week saved {date}" on the Daily Review row and Weekly Sync
   // page.
@@ -380,13 +407,16 @@ export interface WeeklyUpdate {
   updatedAt: string;
 }
 
-// D9: last Friday's carry-over — only the 3 fields the Mid-week modal shows
-// read-only, never the full previous row.
+// D9/D11: last Friday's carry-over — only the achievement rows that still
+// carry an open item (an Outstanding issue, a Next week focus, or a
+// Manager decision), each with only the four fields the Mid-week modal's
+// "From last Friday" panel shows read-only, never the full previous row.
 export interface WeeklyUpdateCarryOver {
   weekStart: string;
-  outstandingIssue: string | null;
-  nextWeekFocus: string | null;
-  managerDecision: string | null;
+  achievements: Pick<
+    WeeklyAchievement,
+    "title" | "outstandingIssue" | "nextWeekFocus" | "managerDecision"
+  >[];
 }
 
 export interface DailyReviewProject {
@@ -1867,16 +1897,20 @@ export function useDeleteCustomerNote(customerId: number) {
 
 // ---- Weekly updates (per customer, Decision 2) -----------------------------
 
-// Every key but `weekStart` is optional (docs/plans/weekly-sync-tables.md
+// Every key but `weekStart` is optional (docs/archive/plans/weekly-sync-tables.md
 // §3 D12, the backend's partial-save contract): an OMITTED key leaves the
 // stored value unchanged, while `null` (or a whitespace-only string, for
 // the text fields) clears it. This is what lets the Mid-week and Reflection
 // modals each save their own half of the row without clobbering the
 // other's unsaved work — a modal must only include the keys it actually
 // edits, never spread in the fields it doesn't own. `highlights` is the
-// list the Mid-week form owns (docs/plans/weekly-sync-highlight-rows.md
+// list the Mid-week form owns (docs/archive/plans/weekly-sync-highlight-rows.md
 // D6): present replaces the week's highlights in list order (an empty array
 // clears them), omitted leaves the stored list untouched — the Reflection
+// modal never sends this key. `achievements` is the mirror list the
+// Reflection form owns (docs/archive/plans/weekly-sync-achievement-rows.md D6):
+// present replaces the week's achievements in list order (an empty array
+// clears them), omitted leaves the stored list untouched — the Mid-week
 // modal never sends this key. `src/lib/api.ts`'s `JSON.stringify(body)`
 // drops any key whose value is `undefined`, so an explicitly-`undefined`
 // field and one never set on the object reach the server identically
@@ -1891,11 +1925,7 @@ export interface SaveWeeklyUpdateInput {
   status?: WeeklyStatus;
   category?: string | null;
   highlights?: WeeklyHighlightInput[];
-  achievement?: string | null;
-  outstandingIssue?: string | null;
-  lessonLearned?: string | null;
-  nextWeekFocus?: string | null;
-  managerDecision?: string | null;
+  achievements?: WeeklyAchievementInput[];
 }
 
 // Plain mutation, no onMutate optimism (spec §6.1): the textarea already
