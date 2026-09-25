@@ -22,7 +22,7 @@ export function PipelineKpiBar({ deals, onFunnelStageClick }: PipelineKpiBarProp
 
   return (
     <div className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
         <KpiTile
           label="Total Pipeline"
           value={formatIDRCompact(kpis.totalPipelineValue)}
@@ -54,6 +54,18 @@ export function PipelineKpiBar({ deals, onFunnelStageClick }: PipelineKpiBarProp
           hint="managing deals"
           icon="group"
           tone="neutral"
+        />
+        {/* 2026-09-25 flow redesign (D1/§3.6): idle alerts are computed on
+            every read (`computeIdle`, backend/src/lib/pipelineSla.ts) from
+            `lastActivityAt`/`waitingInputSince` and the SLA table — never a
+            background job. This tile is the board-level rollup of
+            `computePipelineKpis`'s `idleWarning`/`idleCritical`. */}
+        <KpiTile
+          label="Idle alerts"
+          value={String(kpis.idleWarning + kpis.idleCritical)}
+          hint={`${kpis.idleCritical} critical · ${kpis.idleWarning} warning`}
+          icon="warning"
+          tone={kpis.idleCritical > 0 ? "rose" : "neutral"}
         />
       </div>
 
@@ -110,11 +122,9 @@ function KpiTile({ label, value, hint, icon, tone }: KpiTileProps) {
 // stage — the same "intensity ramp" pattern PRD §2.7 point 4 specs for the
 // Executive workload heatmap (`bg-primary/10..40`), reused here so a stage
 // reads as "further along the funnel" the same way across both surfaces.
-// HOLD breaks the ramp deliberately: it's not a funnel position, it's an
-// attention state, so it gets the same amber `StageChip`/DESIGN.md already
-// use for HOLD everywhere else instead of implying progress. DROP is
-// excluded from the funnel entirely (PRD §2.3) — its entry exists only so
-// this Record is total over `PipelineStage`.
+// The funnel is over the 6 `PipelineStage` members only (2026-09-25 flow
+// redesign, D2) — Won, Lost, Cancelled and Hold moved to `outcome`/
+// `statusTag` and are no longer stages a funnel bucket could hold.
 //
 // The ramp NUMBERS come from `STAGE_ALPHA` (lib/pipelineFormat.ts, finding
 // N2) — this table only translates them into the matching Tailwind class,
@@ -123,24 +133,20 @@ function KpiTile({ label, value, hint, icon, tone }: KpiTileProps) {
 // substring in this file.
 const ALPHA_TO_BG_PRIMARY_CLASS: Record<number, string> = {
   [STAGE_ALPHA.ASSESSMENT]: "bg-primary/20",
-  [STAGE_ALPHA.RFP]: "bg-primary/35",
+  [STAGE_ALPHA.TECHNICAL_CLARIFICATION]: "bg-primary/35",
   [STAGE_ALPHA.POC]: "bg-primary/50",
-  [STAGE_ALPHA.TECHNICAL_CLARIFICATION]: "bg-primary/65",
+  [STAGE_ALPHA.RFP]: "bg-primary/65",
   [STAGE_ALPHA.DELIVER_PROPOSAL]: "bg-primary/80",
-  [STAGE_ALPHA.WAITING_RESPONSE]: "bg-primary/90",
-  [STAGE_ALPHA.WON]: "bg-primary",
+  [STAGE_ALPHA.WAITING_RESPONSE]: "bg-primary/95",
 };
 
 const FUNNEL_FILL: Record<PipelineStage, string> = {
   ASSESSMENT: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.ASSESSMENT],
-  RFP: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.RFP],
-  POC: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.POC],
   TECHNICAL_CLARIFICATION: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.TECHNICAL_CLARIFICATION],
+  POC: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.POC],
+  RFP: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.RFP],
   DELIVER_PROPOSAL: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.DELIVER_PROPOSAL],
   WAITING_RESPONSE: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.WAITING_RESPONSE],
-  WON: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.WON],
-  DROP: "bg-chip-rose-text",
-  HOLD: "bg-chip-amber-text",
 };
 
 function FunnelStrip({
