@@ -55,7 +55,10 @@ export function PipelineOverviewPanel() {
 
 function PipelinePanelBody({ deals }: { deals: Opportunity[] }) {
   const kpis = computePipelineKpis(deals);
-  const holdCount = deals.filter((d) => d.stage === "HOLD").length;
+  // Hold is a `statusTag` on an otherwise-open deal now, not a stage
+  // (2026-09-25 flow redesign D2/D5) — `/close` clears the tag, so a HOLD
+  // tag never survives onto a closed deal without a separate outcome check.
+  const holdCount = deals.filter((d) => d.statusTag === "HOLD").length;
 
   return (
     <>
@@ -134,11 +137,13 @@ function Kpi({ label, value, hint, icon, tone }: KpiProps) {
 
 // Same alpha-ramp precedent PipelineKpiBar.tsx's `FUNNEL_FILL` (and PRD
 // §2.7 point 4's Executive workload heatmap) use: `bg-primary` alpha steps
-// read as "further along the funnel"; HOLD breaks the ramp as its own
-// amber attention state instead of implying progress. DROP is excluded
-// from `computePipelineKpis`'s funnel itself (PRD §2.3) — its entry here
-// exists only so this Record stays total over `PipelineStage`, matching
-// PipelineKpiBar.tsx's own documented reasoning verbatim.
+// read as "further along the funnel". `computePipelineKpis`'s `funnel`
+// already excludes closed deals by `outcome` (kpi.ts) — every stage this
+// panel ever receives is still active. Hold no longer breaks the ramp as
+// its own amber attention state: it's a `statusTag` on an otherwise-active
+// deal now (D2/D5, see the "On Hold" tile above), not a stage, and Won/
+// Lost/Cancelled were never stages either post-2026-09-25 flow redesign —
+// there's no terminal-state placeholder left to carry in this Record.
 //
 // The ramp NUMBERS come from `STAGE_ALPHA` (lib/pipelineFormat.ts, finding
 // N2) — this table only translates them into the matching Tailwind class,
@@ -146,27 +151,25 @@ function Kpi({ label, value, hint, icon, tone }: KpiProps) {
 // Tailwind's content scanner can still find each one as a literal
 // substring in this file. Same lookup shape as PipelineKpiBar.tsx's own
 // `ALPHA_TO_BG_PRIMARY_CLASS` — a parallel copy, not an import, per this
-// module's header comment ("copy, don't extract").
+// module's header comment ("copy, don't extract"). Shrunk to the 6 real
+// `PipelineStage` members and their new alpha numbers (D2's stage order;
+// `STAGE_ALPHA`'s own comment) by the flow redesign.
 const ALPHA_TO_BG_PRIMARY_CLASS: Record<number, string> = {
   [STAGE_ALPHA.ASSESSMENT]: "bg-primary/20",
-  [STAGE_ALPHA.RFP]: "bg-primary/35",
+  [STAGE_ALPHA.TECHNICAL_CLARIFICATION]: "bg-primary/35",
   [STAGE_ALPHA.POC]: "bg-primary/50",
-  [STAGE_ALPHA.TECHNICAL_CLARIFICATION]: "bg-primary/65",
+  [STAGE_ALPHA.RFP]: "bg-primary/65",
   [STAGE_ALPHA.DELIVER_PROPOSAL]: "bg-primary/80",
-  [STAGE_ALPHA.WAITING_RESPONSE]: "bg-primary/90",
-  [STAGE_ALPHA.WON]: "bg-primary",
+  [STAGE_ALPHA.WAITING_RESPONSE]: "bg-primary/95",
 };
 
 const STAGE_FILL: Record<PipelineStage, string> = {
   ASSESSMENT: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.ASSESSMENT],
-  RFP: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.RFP],
-  POC: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.POC],
   TECHNICAL_CLARIFICATION: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.TECHNICAL_CLARIFICATION],
+  POC: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.POC],
+  RFP: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.RFP],
   DELIVER_PROPOSAL: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.DELIVER_PROPOSAL],
   WAITING_RESPONSE: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.WAITING_RESPONSE],
-  WON: ALPHA_TO_BG_PRIMARY_CLASS[STAGE_ALPHA.WON],
-  DROP: "bg-chip-rose-text",
-  HOLD: "bg-chip-amber-text",
 };
 
 // Compact per-stage distribution — a smaller, non-interactive sibling of

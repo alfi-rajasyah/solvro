@@ -6,6 +6,7 @@ import { createApp } from "../src/app.js";
 import { prisma } from "../src/prisma.js";
 import { signToken } from "../src/http/auth.js";
 import { seedRoles } from "./testAuth.js";
+import { createWonOpportunity } from "./pipelineWonFixture.js";
 
 // POST /opportunities/:id/handoff — the native port's one-transaction
 // won-deal -> Solvro project handoff (M5.23). Mirrors opportunities.test.ts's
@@ -38,7 +39,7 @@ async function createUserWithPermissions(
 }
 
 // Full permission set a real SA Manager doing a handoff would need:
-// pipeline view/create (test setup: creating + moving the deal to WON) plus
+// pipeline view/create (test setup: creating + closing the deal as Won) plus
 // edit_all (deal-edit gate) and project:write (the other half of the
 // composed gate).
 async function createHandoffCapableUser(): Promise<{ userId: number; token: string }> {
@@ -95,13 +96,6 @@ async function activitiesFor(opportunityId: string) {
   });
 }
 
-// Creates a WON opportunity owned (picId) by `token`'s user, ready to hand off.
-async function createWonOpportunity(token: string, userId: number): Promise<string> {
-  const created = await createOpportunity(token, { picId: userId, stage: "WON" });
-  expect(created.status).toBe(201);
-  return created.body.id as string;
-}
-
 beforeAll(async () => {
   await seedRoles();
 });
@@ -111,7 +105,7 @@ describe("POST /opportunities/:id/handoff — happy path", () => {
     const sa = await createHandoffCapableUser();
     const tam = await createUserWithPermissions(["project:write"]);
     const customerId = await createCustomer();
-    const id = await createWonOpportunity(sa.token, sa.userId);
+    const id = await createWonOpportunity(app, sa.token, sa.userId);
 
     const res = await handoff(sa.token, id, {
       name: "Acme Rollout",
@@ -150,17 +144,19 @@ describe("POST /opportunities/:id/handoff — happy path", () => {
     const fetched = await getOpportunity(sa.token, id);
     expect(fetched.body.projectId).toBe(projectId);
 
-    // Activity written with the expected note and acting user.
+    // Activity written with the expected note and acting user — the second
+    // entry, after createWonOpportunity's own "Closed as Won" note.
     const activities = await activitiesFor(id);
-    expect(activities).toHaveLength(1);
-    expect(activities[0].note).toBe('Handed off to project "Acme Rollout"');
-    expect(activities[0].userId).toBe(sa.userId);
+    expect(activities).toHaveLength(2);
+    expect(activities[0].note).toBe("Closed as Won");
+    expect(activities[1].note).toBe('Handed off to project "Acme Rollout"');
+    expect(activities[1].userId).toBe(sa.userId);
   });
 
   it("defaults tamId to the caller, status to PLANNING, and excludeFromPortfolio to false when omitted — same defaults POST /projects applies", async () => {
     const sa = await createHandoffCapableUser();
     const customerId = await createCustomer();
-    const id = await createWonOpportunity(sa.token, sa.userId);
+    const id = await createWonOpportunity(app, sa.token, sa.userId);
 
     const res = await handoff(sa.token, id, { name: "Minimal Rollout", customerId });
 
@@ -181,7 +177,7 @@ describe("POST /opportunities/:id/handoff — error paths", () => {
     expect(res.status).toBe(404);
   });
 
-  it("409s (not_won) a deal that isn't in stage WON", async () => {
+  it("409s (not_won) a deal that hasn't been closed as Won", async () => {
     const sa = await createHandoffCapableUser();
     const customerId = await createCustomer();
     const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "ASSESSMENT" });
@@ -195,7 +191,7 @@ describe("POST /opportunities/:id/handoff — error paths", () => {
   it("409s (already_linked) a deal that already has a project", async () => {
     const sa = await createHandoffCapableUser();
     const customerId = await createCustomer();
-    const id = await createWonOpportunity(sa.token, sa.userId);
+    const id = await createWonOpportunity(app, sa.token, sa.userId);
 
     const first = await handoff(sa.token, id, { name: "First Project", customerId });
     expect(first.status).toBe(201);
@@ -221,7 +217,7 @@ describe("POST /opportunities/:id/handoff — error paths", () => {
     // changes here), deterministically regardless of exact interleaving.
     const sa = await createHandoffCapableUser();
     const customerId = await createCustomer();
-    const id = await createWonOpportunity(sa.token, sa.userId);
+    const id = await createWonOpportunity(app, sa.token, sa.userId);
 
     const attempts = await Promise.all(
       Array.from({ length: 5 }, (_, i) =>
@@ -257,7 +253,7 @@ describe("POST /opportunities/:id/handoff — error paths", () => {
       "pipeline:edit_own",
     ]);
     const customerId = await createCustomer();
-    const id = await createWonOpportunity(sa.token, sa.userId);
+    const id = await createWonOpportunity(app, sa.token, sa.userId);
 
     const res = await handoff(sa.token, id, { name: "No Project Write", customerId });
     expect(res.status).toBe(403);
@@ -272,7 +268,7 @@ describe("POST /opportunities/:id/handoff — error paths", () => {
     const owner = await createHandoffCapableUser();
     const outsider = await createUserWithPermissions(["pipeline:edit_own", "project:write"]);
     const customerId = await createCustomer();
-    const id = await createWonOpportunity(owner.token, owner.userId);
+    const id = await createWonOpportunity(app, owner.token, owner.userId);
 
     const res = await handoff(outsider.token, id, { name: "Not My Deal", customerId });
     expect(res.status).toBe(403);
@@ -287,7 +283,7 @@ describe("POST /opportunities/:id/handoff — error paths", () => {
   it("mirrors POST /projects's body validation for a malformed tamId (same 4xx both routes give)", async () => {
     const sa = await createHandoffCapableUser();
     const customerId = await createCustomer();
-    const id = await createWonOpportunity(sa.token, sa.userId);
+    const id = await createWonOpportunity(app, sa.token, sa.userId);
 
     const projectsRes = await createProject(sa.token, {
       name: "Bad Tam",

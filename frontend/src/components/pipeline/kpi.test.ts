@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import type { PipelineStage } from "@/lib/pipelineFormat";
-import { computePipelineKpis, daysUntilDeadline, isDealOverdue, probabilityTone } from "./kpi";
+import { computePipelineKpis, daysUntilDeadline, isActiveDeal, isDealOverdue, probabilityTone } from "./kpi";
 import type { PipelineBoardDeal } from "./adapter";
 
-type Deal = Pick<PipelineBoardDeal, "dealValue" | "stage" | "picId" | "deadline" | "wonAt">;
+type Deal = Pick<
+  PipelineBoardDeal,
+  "dealValue" | "stage" | "picId" | "deadline" | "wonAt" | "outcome" | "idle"
+>;
 
 function deal(overrides: Partial<Deal> = {}): Deal {
   return {
@@ -12,6 +15,8 @@ function deal(overrides: Partial<Deal> = {}): Deal {
     picId: null,
     deadline: null,
     wonAt: null,
+    outcome: null,
+    idle: { level: "none", days: 0, basis: null },
     ...overrides,
   };
 }
@@ -63,14 +68,26 @@ describe("probabilityTone", () => {
   });
 });
 
+describe("isActiveDeal", () => {
+  it("is true for a deal with no outcome", () => {
+    expect(isActiveDeal({ outcome: null })).toBe(true);
+  });
+
+  it("is false once a deal has any outcome (2026-09-25 flow redesign D5 — replaces the old terminal-stage check)", () => {
+    expect(isActiveDeal({ outcome: "WON" })).toBe(false);
+    expect(isActiveDeal({ outcome: "LOST" })).toBe(false);
+    expect(isActiveDeal({ outcome: "CANCELLED" })).toBe(false);
+  });
+});
+
 describe("computePipelineKpis", () => {
-  it("sums deal value across active (non-WON/DROP) deals only, for Total Pipeline", () => {
+  it("sums deal value across active (outcome === null) deals only, for Total Pipeline", () => {
     const kpis = computePipelineKpis(
       [
         deal({ stage: "ASSESSMENT", dealValue: 100 }),
         deal({ stage: "RFP", dealValue: 200 }),
-        deal({ stage: "WON", dealValue: 9_999 }),
-        deal({ stage: "DROP", dealValue: 9_999 }),
+        deal({ stage: "DELIVER_PROPOSAL", dealValue: 9_999, outcome: "WON" }),
+        deal({ stage: "ASSESSMENT", dealValue: 9_999, outcome: "CANCELLED" }),
       ],
       TODAY,
     );
@@ -85,9 +102,9 @@ describe("computePipelineKpis", () => {
         deal({ stage: "RFP", deadline: "2026-08-20" }), // +6d: soon only
         deal({ stage: "POC", deadline: "2026-09-30" }), // far: neither
         deal({ stage: "POC", deadline: null }), // no deadline: neither
-        // Terminal-stage deal with a near deadline must NOT count — Velora's
-        // own kpi-bar.tsx derives deadlineOpps from activeOpps, not the raw list.
-        deal({ stage: "WON", deadline: "2026-08-15" }),
+        // Closed deal with a near deadline must NOT count — mirrors Velora's
+        // own kpi-bar.tsx deriving deadlineOpps from activeOpps, not the raw list.
+        deal({ stage: "DELIVER_PROPOSAL", deadline: "2026-08-15", outcome: "WON" }),
       ],
       TODAY,
     );
@@ -95,7 +112,7 @@ describe("computePipelineKpis", () => {
     expect(kpis.deadlineCriticalCount).toBe(1);
   });
 
-  it("reads Won this month from wonAt, not updated_at/anything else", () => {
+  it("reads Won this month from wonAt/outcome, not updated_at/anything else", () => {
     const kpis = computePipelineKpis(
       [
         // Noon UTC, not month-midnight — a UTC calendar-day boundary
@@ -103,12 +120,14 @@ describe("computePipelineKpis", () => {
         // local calendar day (and month) west of UTC, flaking `isSameMonth`
         // under e.g. TZ=America/Los_Angeles. Noon UTC stays within the same
         // calendar day (and month) in every real-world UTC offset.
-        deal({ stage: "WON", dealValue: 1_000, wonAt: "2026-08-05T12:00:00.000Z" }),
-        deal({ stage: "WON", dealValue: 2_000, wonAt: "2026-08-13T23:00:00.000Z" }),
-        // Won last month — excluded even though it's still in WON.
-        deal({ stage: "WON", dealValue: 5_000, wonAt: "2026-07-15T12:00:00.000Z" }),
-        // WON with no wonAt (shouldn't happen post-M1, but must not throw/count).
-        deal({ stage: "WON", dealValue: 7_000, wonAt: null }),
+        deal({ dealValue: 1_000, outcome: "WON", wonAt: "2026-08-05T12:00:00.000Z" }),
+        deal({ dealValue: 2_000, outcome: "WON", wonAt: "2026-08-13T23:00:00.000Z" }),
+        // Won last month — excluded even though it's still WON.
+        deal({ dealValue: 5_000, outcome: "WON", wonAt: "2026-07-15T12:00:00.000Z" }),
+        // WON with no wonAt (shouldn't happen post-close, but must not throw/count).
+        deal({ dealValue: 7_000, outcome: "WON", wonAt: null }),
+        // Closed as LOST must never count toward "won", regardless of wonAt.
+        deal({ dealValue: 3_000, outcome: "LOST", wonAt: null }),
       ],
       TODAY,
     );
@@ -123,30 +142,49 @@ describe("computePipelineKpis", () => {
         deal({ stage: "RFP", picId: 1 }),
         deal({ stage: "RFP", picId: 2 }),
         deal({ stage: "ASSESSMENT", picId: null }),
-        // Terminal-stage PIC must not count.
-        deal({ stage: "WON", picId: 3 }),
+        // Closed-deal PIC must not count.
+        deal({ stage: "DELIVER_PROPOSAL", picId: 3, outcome: "WON" }),
       ],
       TODAY,
     );
     expect(kpis.activePicCount).toBe(2);
   });
 
-  it("funnel excludes DROP and counts every other stage, including zero-count ones", () => {
+  it("counts idle warning/critical among active deals only", () => {
     const kpis = computePipelineKpis(
-      [deal({ stage: "ASSESSMENT" }), deal({ stage: "ASSESSMENT" }), deal({ stage: "DROP" })],
+      [
+        deal({ idle: { level: "warning", days: 6, basis: "activity" } }),
+        deal({ idle: { level: "warning", days: 8, basis: "waiting" } }),
+        deal({ idle: { level: "critical", days: 15, basis: "waiting" } }),
+        deal({ idle: { level: "none", days: 1, basis: "activity" } }),
+        // Closed deal's idle is always "none" (server-computed) but even if
+        // it weren't, a closed deal must not count toward the alert tiles.
+        deal({ idle: { level: "critical", days: 30, basis: "waiting" }, outcome: "LOST" }),
+      ],
+      TODAY,
+    );
+    expect(kpis.idleWarning).toBe(2);
+    expect(kpis.idleCritical).toBe(1);
+  });
+
+  it("funnel covers all 6 stages, counting active deals only, including zero-count ones", () => {
+    const kpis = computePipelineKpis(
+      [
+        deal({ stage: "ASSESSMENT" }),
+        deal({ stage: "ASSESSMENT" }),
+        // Closed deal parked in ASSESSMENT must not inflate that column.
+        deal({ stage: "ASSESSMENT", outcome: "CANCELLED" }),
+      ],
       TODAY,
     );
     const stages = kpis.funnel.map((f) => f.stage);
-    expect(stages).not.toContain("DROP");
     expect(stages).toEqual([
       "ASSESSMENT",
-      "RFP",
-      "POC",
       "TECHNICAL_CLARIFICATION",
+      "POC",
+      "RFP",
       "DELIVER_PROPOSAL",
       "WAITING_RESPONSE",
-      "WON",
-      "HOLD",
     ] satisfies PipelineStage[]);
     expect(kpis.funnel.find((f) => f.stage === "ASSESSMENT")?.count).toBe(2);
     expect(kpis.funnel.find((f) => f.stage === "RFP")?.count).toBe(0);

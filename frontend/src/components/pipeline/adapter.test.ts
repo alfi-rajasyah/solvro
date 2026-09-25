@@ -19,14 +19,17 @@ function makeDeal(
     winProbability: 50,
     deadline: null,
     wonAt: null,
+    outcome: null,
+    projectId: null,
+    idle: { level: "none", days: 0, basis: null },
     ...overrides,
   };
 }
 
 describe("adapter — PIPELINE_STAGES", () => {
-  it("re-exports all 9 STAGE_ORDER members verbatim, in order (guard: every STAGE_ORDER member produces a column)", () => {
+  it("re-exports all 6 STAGE_ORDER members verbatim, in order (guard: every STAGE_ORDER member produces a column)", () => {
     expect(PIPELINE_STAGES).toEqual(STAGE_ORDER);
-    expect(PIPELINE_STAGES).toHaveLength(9);
+    expect(PIPELINE_STAGES).toHaveLength(6);
   });
 });
 
@@ -36,24 +39,21 @@ describe("adapter — projectToColumns", () => {
       makeDeal({ id: "b2", title: "B2", stage: "RFP", stageOrder: 1 }),
       makeDeal({ id: "a1", title: "A1", stage: "ASSESSMENT", stageOrder: 0 }),
       makeDeal({ id: "b1", title: "B1", stage: "RFP", stageOrder: 0 }),
-      makeDeal({ id: "w1", title: "W1", stage: "WON", stageOrder: 0 }),
+      makeDeal({ id: "w1", title: "W1", stage: "WAITING_RESPONSE", stageOrder: 0 }),
     ];
 
     const columns = projectToColumns(deals);
 
     expect(columns.ASSESSMENT.map((d) => d.id)).toEqual(["a1"]);
     expect(columns.RFP.map((d) => d.id)).toEqual(["b1", "b2"]);
-    expect(columns.WON.map((d) => d.id)).toEqual(["w1"]);
+    expect(columns.WAITING_RESPONSE.map((d) => d.id)).toEqual(["w1"]);
     // Untouched stages still present, as empty arrays.
     expect(columns.POC).toEqual([]);
     expect(columns.TECHNICAL_CLARIFICATION).toEqual([]);
     expect(columns.DELIVER_PROPOSAL).toEqual([]);
-    expect(columns.WAITING_RESPONSE).toEqual([]);
-    expect(columns.DROP).toEqual([]);
-    expect(columns.HOLD).toEqual([]);
   });
 
-  it("always includes all 9 PIPELINE_STAGES columns, empty arrays allowed, on an empty input (empty stages)", () => {
+  it("always includes all 6 PIPELINE_STAGES columns, empty arrays allowed, on an empty input (empty stages)", () => {
     const columns = projectToColumns([]);
     expect(Object.keys(columns).sort()).toEqual([...STAGE_ORDER].sort());
     for (const stage of STAGE_ORDER) {
@@ -94,7 +94,7 @@ describe("adapter — projectToColumns", () => {
 describe("adapter — sort helpers", () => {
   it("compareDealsByStageOrder / sortDealsCanonical produce the same canonical order projectToColumns relies on", () => {
     const shuffled = [
-      makeDeal({ id: "w1", title: "W1", stage: "WON", stageOrder: 4 }),
+      makeDeal({ id: "w1", title: "W1", stage: "WAITING_RESPONSE", stageOrder: 4 }),
       makeDeal({ id: "a1", title: "A1", stage: "ASSESSMENT", stageOrder: 0 }),
       makeDeal({ id: "d1", title: "D1", stage: "DELIVER_PROPOSAL", stageOrder: 3 }),
       makeDeal({ id: "b1", title: "B1", stage: "RFP", stageOrder: 1 }),

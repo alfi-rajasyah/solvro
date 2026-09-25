@@ -10,7 +10,13 @@
 // ports the stage/threshold vocabulary onto this repo's own `PipelineStage`
 // enum where Velora's ids differ (snake_case stage ids, no HOLD stage).
 import type { Tone } from "@/components/StatusChip";
-import { STAGE_LABELS, STAGE_ORDER, type PipelineStage } from "@/lib/pipelineFormat";
+import {
+  STAGE_LABELS,
+  STAGE_ORDER,
+  type PipelineOutcome,
+  type PipelineOutcomeReason,
+  type PipelineStage,
+} from "@/lib/pipelineFormat";
 import type { Opportunity } from "@/lib/queries";
 import { isActiveDeal } from "./kpi";
 
@@ -25,19 +31,25 @@ export interface StageFunnelBucket {
   value: number;
 }
 
-type FunnelDeal = Pick<Opportunity, "stage" | "dealValue">;
+type FunnelDeal = Pick<Opportunity, "stage" | "dealValue" | "outcome">;
 
 /**
  * Per-stage deal count + summed `dealValue`, in board order (`STAGE_ORDER`),
- * excluding DROP. Matches Velora's `ConversionFunnel` (excludes "lost") and
- * this directory's own `kpi.ts` funnel bucket
- * (`computePipelineKpis().funnel`, same DROP-only exclusion — HOLD and
- * zero-count stages stay in) — this function is that same shape with
- * `value` added, since the KPI bar's funnel strip only ever needed counts.
+ * over ACTIVE deals only (`outcome === null`, `isActiveDeal` from kpi.ts) —
+ * matches Velora's `ConversionFunnel` (excludes "lost") and this directory's
+ * own `kpi.ts` funnel bucket (`computePipelineKpis().funnel`, same
+ * active-only filter, zero-count stages stay in) — this function is that
+ * same shape with `value` added, since the KPI bar's funnel strip only ever
+ * needed counts. All 6 `STAGE_ORDER` stages are covered; there's no
+ * DROP/HOLD stage left to exclude post-2026-09-25 flow redesign, but a
+ * closed deal (Won/Lost/Cancelled) still needs excluding — it keeps the
+ * stage it stalled in, and would otherwise inflate that column's "still
+ * moving" count.
  */
 export function computeStageFunnel(deals: FunnelDeal[]): StageFunnelBucket[] {
-  return STAGE_ORDER.filter((stage) => stage !== "DROP").map((stage) => {
-    const inStage = deals.filter((d) => d.stage === stage);
+  const active = deals.filter(isActiveDeal);
+  return STAGE_ORDER.map((stage) => {
+    const inStage = active.filter((d) => d.stage === stage);
     return {
       stage,
       label: STAGE_LABELS[stage],
@@ -94,9 +106,13 @@ export interface PicLeaderboardRow {
   activeValue: number;
   wonCount: number;
   wonValue: number;
+  /** Closed, not Won — Lost or Cancelled (`outcome !== null && outcome !==
+   * "WON"`). Renamed from the pre-redesign "dropped" (there's no DROP stage
+   * anymore); feeds the analytics table's "Lost / Cancelled" column. */
+  lostOrCancelledCount: number;
   /**
-   * won / (won + dropped) * 100, rounded; 0 when there are no closed (won or
-   * dropped) deals yet. Matches VeloraApp's `WorkloadHeatmap` component's own
+   * won / (won + lostOrCancelled) * 100, rounded; 0 when there are no closed
+   * deals yet. Matches VeloraApp's `WorkloadHeatmap` component's own
    * `winRate` (../VeloraApp/components/admin/workload-heatmap.tsx:
    * `closedTotal > 0 ? Math.round((wonOpps.length / closedTotal) * 100) : 0`,
    * `closedTotal = won.length + lost.length`) — the sibling
@@ -108,19 +124,17 @@ export interface PicLeaderboardRow {
   winRatePct: number;
 }
 
-type LeaderboardDeal = Pick<Opportunity, "stage" | "dealValue" | "picId" | "pic">;
+type LeaderboardDeal = Pick<Opportunity, "dealValue" | "picId" | "pic" | "outcome">;
 
 /**
  * Per-PIC active/won counts + values and win rate, sorted by `wonValue`
  * descending (Velora's `Leaderboard`: "Top PIC by Won Value"), tiebroken by
  * `activeValue` descending then name ascending for a deterministic order.
  *
- * "Active" reuses `kpi.ts`'s `isActiveDeal` (not WON/DROP; HOLD counts as
- * active) — the same definition the KPI bar's "Active PICs" tile and the
- * board drag gating already use — rather than the narrower 6-stage set the
- * workload heatmap below uses for its columns. Two different "active"
- * definitions for two different surfaces, both intentional (see
- * `HEATMAP_STAGES`'s doc comment).
+ * "Active"/"won"/"lost or cancelled" all key off `outcome` now (2026-09-25
+ * flow redesign D5) rather than `stage` — `isActiveDeal` (kpi.ts) is the
+ * same "outcome === null" definition the KPI bar's "Active PICs" tile and
+ * the board drag gating already use.
  */
 export function computePicLeaderboard(deals: LeaderboardDeal[]): PicLeaderboardRow[] {
   const byPic = groupDealsByPic(deals);
@@ -128,9 +142,9 @@ export function computePicLeaderboard(deals: LeaderboardDeal[]): PicLeaderboardR
 
   for (const [picId, { picName, deals: picDeals }] of byPic) {
     const active = picDeals.filter(isActiveDeal);
-    const won = picDeals.filter((d) => d.stage === "WON");
-    const dropped = picDeals.filter((d) => d.stage === "DROP");
-    const closedTotal = won.length + dropped.length;
+    const won = picDeals.filter((d) => d.outcome === "WON");
+    const lostOrCancelled = picDeals.filter((d) => d.outcome !== null && d.outcome !== "WON");
+    const closedTotal = won.length + lostOrCancelled.length;
 
     rows.push({
       picId,
@@ -139,6 +153,7 @@ export function computePicLeaderboard(deals: LeaderboardDeal[]): PicLeaderboardR
       activeValue: active.reduce((sum, d) => sum + d.dealValue, 0),
       wonCount: won.length,
       wonValue: won.reduce((sum, d) => sum + d.dealValue, 0),
+      lostOrCancelledCount: lostOrCancelled.length,
       winRatePct: closedTotal > 0 ? Math.round((won.length / closedTotal) * 100) : 0,
     });
   }
@@ -242,17 +257,15 @@ function monthLabel(key: string): string {
 /**
  * The 6 "in-motion" stages the heatmap renders as columns — matches
  * Velora's `ACTIVE_STAGES` (../VeloraApp/components/admin/workload-heatmap.tsx)
- * and PRD §2.7 point 4 ("columns = the 6 active stages"). Deliberately
- * narrower than `kpi.ts`'s `isActiveDeal` (which also counts HOLD as
- * active): HOLD isn't a heatmap column, so a HOLD deal doesn't count toward
- * a PIC's `totalActive` here, even though it does count toward that same
- * PIC's `activeCount` in the leaderboard above. Two different "active"
- * definitions for two different surfaces, both intentional — documented so
- * the divergence reads as a decision, not a bug.
+ * and PRD §2.7 point 4 ("columns = the 6 active stages"). Now identical to
+ * the full `STAGE_ORDER`: the 2026-09-25 flow redesign moved Won, Lost,
+ * Cancelled and Hold off the stage enum entirely (see `pipelineFormat.ts`),
+ * so there's nothing left to filter out here. A deal tagged `statusTag:
+ * "HOLD"` still counts (Hold is a tag on an otherwise-active deal, not a
+ * terminal state) — only `outcome !== null` (closed) excludes a deal from
+ * `computeWorkloadHeatmap`'s per-stage counts below.
  */
-export const HEATMAP_STAGES: readonly PipelineStage[] = STAGE_ORDER.filter(
-  (stage) => stage !== "WON" && stage !== "DROP" && stage !== "HOLD",
-);
+export const HEATMAP_STAGES: readonly PipelineStage[] = STAGE_ORDER;
 
 export const OVERLOAD_THRESHOLD = 6;
 export const UNDERLOAD_THRESHOLD = 2;
@@ -268,24 +281,27 @@ export interface WorkloadHeatmapRow {
   byStage: { stage: PipelineStage; count: number }[];
 }
 
-type HeatmapDeal = Pick<Opportunity, "stage" | "picId" | "pic">;
+type HeatmapDeal = Pick<Opportunity, "stage" | "picId" | "pic" | "outcome">;
 
 /**
- * Per-PIC deal counts across `HEATMAP_STAGES`, with an overload/underload/
- * normal `status` (`OVERLOAD_THRESHOLD`/`UNDERLOAD_THRESHOLD`, matching
- * Velora's thresholds verbatim: overload strictly greater than 6, underload
- * strictly less than 2). Sorted overload-first, then normal, then
- * underload, tiebroken by `totalActive` descending then name ascending —
- * mirrors Velora's own sort (`workload-heatmap.tsx`'s `sorted` memo).
+ * Per-PIC deal counts across `HEATMAP_STAGES`, ACTIVE deals only
+ * (`outcome === null` — see `HEATMAP_STAGES`'s doc comment), with an
+ * overload/underload/normal `status` (`OVERLOAD_THRESHOLD`/
+ * `UNDERLOAD_THRESHOLD`, matching Velora's thresholds verbatim: overload
+ * strictly greater than 6, underload strictly less than 2). Sorted
+ * overload-first, then normal, then underload, tiebroken by `totalActive`
+ * descending then name ascending — mirrors Velora's own sort
+ * (`workload-heatmap.tsx`'s `sorted` memo).
  */
 export function computeWorkloadHeatmap(deals: HeatmapDeal[]): WorkloadHeatmapRow[] {
   const byPic = groupDealsByPic(deals);
   const rows: WorkloadHeatmapRow[] = [];
 
   for (const [picId, { picName, deals: picDeals }] of byPic) {
+    const active = picDeals.filter(isActiveDeal);
     const byStage = HEATMAP_STAGES.map((stage) => ({
       stage,
-      count: picDeals.filter((d) => d.stage === stage).length,
+      count: active.filter((d) => d.stage === stage).length,
     }));
     const totalActive = byStage.reduce((sum, s) => sum + s.count, 0);
     const status: WorkloadStatus =
@@ -331,8 +347,9 @@ export function workloadStatusTone(status: WorkloadStatus): Tone {
  * stages: it's only a dense 0..n-1 position WITHIN one stage's own sibling
  * list (see backend/src/routes/opportunities.ts's `stageSiblingIds`) — a
  * PIC's deals typically span several stages, so comparing raw `stageOrder`
- * values across them produced a meaningless interleave (e.g. a WON deal at
- * position 0 sorting ahead of an ASSESSMENT deal at position 5). The stage
+ * values across them produced a meaningless interleave (e.g. a
+ * WAITING_RESPONSE deal at position 0 sorting ahead of an ASSESSMENT deal at
+ * position 5). The stage
  * index goes first so the list groups by board column, same order the
  * board itself reads left to right, with `stageOrder` only breaking ties
  * *within* a stage — matching adapter.ts's own per-column
@@ -350,4 +367,94 @@ export function dealsForPic<D extends Pick<Opportunity, "picId" | "stage" | "sta
         a.stageOrder - b.stageOrder ||
         a.id.localeCompare(b.id),
     );
+}
+
+// ---------------------------------------------------------------------------
+// Close reasons + win rate (2026-09-25 flow redesign, §4.6)
+// ---------------------------------------------------------------------------
+
+export interface CloseReasonRow {
+  stage: PipelineStage;
+  /** LOST or CANCELLED only — a Won close carries no reason category
+   * (backend §3.5 rejects one). Included alongside `category` (not just
+   * folded into a single key) because `PipelineOutcomeReason`'s "OTHER"
+   * value is shared by both outcomes (`REASONS_BY_OUTCOME.LOST` and
+   * `.CANCELLED` each list it) — without `outcome` in the row/grouping key,
+   * a stage's LOST/OTHER and CANCELLED/OTHER deals would silently merge
+   * into one ambiguous row. */
+  outcome: Extract<PipelineOutcome, "LOST" | "CANCELLED">;
+  category: PipelineOutcomeReason;
+  count: number;
+  value: number;
+}
+
+type CloseReasonDeal = Pick<
+  Opportunity,
+  "stage" | "dealValue" | "outcome" | "outcomeReasonCategory" | "closedAt"
+>;
+
+/**
+ * One row per (stage, outcome, reason category) combination with at least
+ * one LOST or CANCELLED deal closed in `year` — a UTC calendar year; pass
+ * `new Date().getUTCFullYear()`, not the host's local year. Matches
+ * `computeMonthlyTrend`'s own TZ-stability approach below: both read the
+ * year straight off the first 4 characters of the ISO instant string
+ * (`closedAt.slice(0, 4)`) rather than routing through `new Date(iso)`'s
+ * LOCAL getters — same class of bug `monthKeyFromIso` documents for month
+ * bucketing, here for the year alone. Rows with no `outcomeReasonCategory`
+ * (shouldn't happen post-close, defensive) or no `closedAt` are skipped.
+ * Sorted board-stage order, then count descending. Feeds
+ * `PipelineAnalyticsSection.tsx`'s "Close reasons by stage" table (Stage,
+ * Outcome, Reason, Count, Value).
+ */
+export function computeCloseReasons(deals: CloseReasonDeal[], year: number): CloseReasonRow[] {
+  const buckets = new Map<string, CloseReasonRow>();
+
+  for (const deal of deals) {
+    if (deal.outcome !== "LOST" && deal.outcome !== "CANCELLED") continue;
+    if (deal.outcomeReasonCategory === null || deal.closedAt === null) continue;
+    if (Number(deal.closedAt.slice(0, 4)) !== year) continue;
+
+    const key = `${deal.stage}:${deal.outcome}:${deal.outcomeReasonCategory}`;
+    const existing = buckets.get(key);
+    if (existing) {
+      existing.count += 1;
+      existing.value += deal.dealValue;
+    } else {
+      buckets.set(key, {
+        stage: deal.stage,
+        outcome: deal.outcome,
+        category: deal.outcomeReasonCategory,
+        count: 1,
+        value: deal.dealValue,
+      });
+    }
+  }
+
+  return Array.from(buckets.values()).sort(
+    (a, b) => STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage) || b.count - a.count,
+  );
+}
+
+type WinRateDeal = Pick<Opportunity, "outcome" | "closedAt">;
+
+/**
+ * Win rate (won / closed, rounded to a whole percent — same rounding
+ * convention the name mirrors, `PicLeaderboardRow.winRatePct` above) for
+ * deals CLOSED in `year` — a UTC calendar year; pass
+ * `new Date().getUTCFullYear()`, not the host's local year (NOT
+ * `createdAt`, unlike `computeMonthlyTrend`'s trailing window: a deal's win
+ * rate belongs to the year it was DECIDED, not the year it entered the
+ * pipeline). Same string-slice year extraction as `computeCloseReasons`
+ * above (`closedAt.slice(0, 4)`, not `new Date(iso).getUTCFullYear()` — see
+ * that function's doc comment). 0 when nothing closed that year (avoids a
+ * 0/0 NaN).
+ */
+export function computeWinRatePct(deals: WinRateDeal[], year: number): number {
+  const closedThisYear = deals.filter(
+    (d) => d.outcome !== null && d.closedAt !== null && Number(d.closedAt.slice(0, 4)) === year,
+  );
+  if (closedThisYear.length === 0) return 0;
+  const won = closedThisYear.filter((d) => d.outcome === "WON").length;
+  return Math.round((won / closedThisYear.length) * 100);
 }

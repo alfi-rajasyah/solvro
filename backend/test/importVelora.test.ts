@@ -14,29 +14,35 @@ import {
 } from "../scripts/import-velora.js";
 
 describe("mapStageLiteral", () => {
-  it("maps all 9 current Velora stage literals onto PipelineStage", () => {
+  it("maps the 6 Solvro Pipeline stage literals onto PipelineStage (opportunity-flow-redesign D2)", () => {
     expect(mapStageLiteral("assessment")).toBe(PipelineStage.ASSESSMENT);
     expect(mapStageLiteral("rfp")).toBe(PipelineStage.RFP);
     expect(mapStageLiteral("poc")).toBe(PipelineStage.POC);
     expect(mapStageLiteral("technical_clarification")).toBe(PipelineStage.TECHNICAL_CLARIFICATION);
     expect(mapStageLiteral("deliver_proposal")).toBe(PipelineStage.DELIVER_PROPOSAL);
     expect(mapStageLiteral("waiting_response")).toBe(PipelineStage.WAITING_RESPONSE);
-    expect(mapStageLiteral("won")).toBe(PipelineStage.WON);
-    expect(mapStageLiteral("drop")).toBe(PipelineStage.DROP);
-    expect(mapStageLiteral("hold")).toBe(PipelineStage.HOLD);
+  });
+
+  it("returns undefined for won/drop/hold — no longer PipelineStage values; importOpportunities derives outcome/statusTag from them instead (D6)", () => {
+    expect(mapStageLiteral("won")).toBeUndefined();
+    expect(mapStageLiteral("drop")).toBeUndefined();
+    expect(mapStageLiteral("hold")).toBeUndefined();
   });
 
   it("is trim/case insensitive", () => {
     expect(mapStageLiteral("  ASSESSMENT  ")).toBe(PipelineStage.ASSESSMENT);
-    expect(mapStageLiteral("Hold")).toBe(PipelineStage.HOLD);
+    expect(mapStageLiteral("RFP")).toBe(PipelineStage.RFP);
   });
 
-  it("maps Velora's pre-rename legacy literals defensively", () => {
+  it("maps Velora's pre-rename legacy literals defensively for the still-open stages", () => {
     expect(mapStageLiteral("lead")).toBe(PipelineStage.ASSESSMENT);
     expect(mapStageLiteral("qualified")).toBe(PipelineStage.RFP);
     expect(mapStageLiteral("proposal")).toBe(PipelineStage.DELIVER_PROPOSAL);
     expect(mapStageLiteral("negotiation")).toBe(PipelineStage.WAITING_RESPONSE);
-    expect(mapStageLiteral("lost")).toBe(PipelineStage.DROP);
+  });
+
+  it("returns undefined for the 'lost' legacy alias — it normalizes to 'drop', no longer a PipelineStage", () => {
+    expect(mapStageLiteral("lost")).toBeUndefined();
   });
 
   it("returns undefined for an unrecognized literal", () => {

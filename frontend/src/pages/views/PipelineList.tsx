@@ -8,16 +8,6 @@
 // this file mirrors since PipelineList is a full-width view body, not a
 // tab-embedded panel like ProjectRisks).
 //
-// Self-contained like `SolvroPipelineKanban.tsx`/`PipelineQuarter.tsx`
-// (M3.14, read alongside this file — same self-contained-view precedent):
-// fetches its own data via `useOpportunities()` — the same query cache the
-// board reads (`pipelineKeys.list`) — rather than taking deals as a prop,
-// since the view switcher (`Pipeline.tsx`, wired in a later integration
-// task) mounts each view independently. No KPI bar here, matching
-// PipelineQuarter.tsx's identical call: PRD §2.4's "shared toolbar and KPI
-// bar stay mounted" implies that bar is hoisted to the Pipeline.tsx switcher
-// shell, not owned by each view body.
-//
 // Column set follows this task's dispatch brief, which combines PRD §2.4's
 // "List (from list-view.tsx)" spec with the reference app's actual behavior
 // where the two disagree — see this task's report for the full rationale:
@@ -30,18 +20,24 @@
 //   reference's actual combined cell rather than reading PRD §2.4's prose
 //   as two separate columns.
 // - Request date is included (per the dispatch brief) though neither PRD
-//   §2.4's text nor the reference lists it as a List column. Produk
-//   (`productSolution`) was initially dropped (M3.12) though PRD §2.4 lists
-//   it; the M3 integration task added it back (see the "productSolution"
-//   column below), placed right after Win% to match PRD §2.4's own
-//   Win%→Produk adjacency without reordering the already-shipped
-//   requestDate/deadline columns after it.
-// - Row click now opens the opportunity detail page (`/pipeline/:id`, PRD
-//   §2.5, M3.16) via `onRowClick` below — wired by the M3 integration task,
-//   same shape as Tasks.tsx's `onRowClick={(task) => setEditTask(task)}`.
-//   Still no separate row-hover edit action (PRD §2.4's "row-hover actions
-//   (open, edit)") — edit lives on the detail page's own Edit button
-//   (OpportunityDetail.tsx), out of this task's scope.
+//   §2.4's text nor the reference lists it as a List column.
+// - Row click opens the opportunity detail page (`/pipeline/:id`, PRD
+//   §2.5) via `onRowClick` below. Still no separate row-hover edit action
+//   (PRD §2.4's "row-hover actions (open, edit)") — edit lives on the
+//   detail page's own Edit button (OpportunityDetail.tsx), out of this
+//   task's scope.
+//
+// 2026-09-25 flow redesign (docs/plans/opportunity-flow-redesign.md §4.4,
+// D11): this view is no longer self-contained — Pipeline.tsx now owns the
+// single `useOpportunities()` fetch and the Active/Closed switch, passing
+// `deals` (already filtered to the active side or the closed side),
+// `closedView`, and (phase-review fix N3) `isLoading` down — threaded
+// straight to `DataGrid`'s own `isLoading`/`loadingMode="skeleton"`, which
+// is what makes each column's `meta.skeleton` actually render instead of a
+// blank grid before Pipeline.tsx's fetch resolves. Four new columns —
+// Outcome, Tag, Sub-status, Idle — surface the flow redesign's independent
+// attributes; a fifth, Closed, only appears while browsing the closed half
+// of the list.
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -53,7 +49,7 @@ import {
 } from "@tanstack/react-table";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { isDealOverdue, probabilityTone } from "@/components/pipeline/kpi";
-import { Alert, AlertDescription } from "@/components/reui/alert";
+import { IdleChip, OutcomeChip, SubStatusChip, TagChip } from "@/components/PipelineFlagChips";
 import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-grid";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
@@ -63,29 +59,39 @@ import { Chip } from "@/components/StatusChip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dayToDate } from "@/lib/dateField";
 import { formatIDR, formatPipelineDate, formatWinProbability, STAGE_ORDER } from "@/lib/pipelineFormat";
-import { type Opportunity, useOpportunities } from "@/lib/queries";
+import type { Opportunity } from "@/lib/queries";
 import { personNameSortingFn } from "@/lib/tableSort";
 
-// Stable empty-array constant (PRD §2.4: "`data:` gets a stable empty-array
-// constant") — same convention as Tasks.tsx's `EMPTY_TASKS`, avoiding a new
-// array identity on every render while the query is loading/undefined.
-const EMPTY_DEALS: Opportunity[] = [];
-
-export function PipelineList() {
-  const { data: deals, isLoading, isError, error } = useOpportunities();
-
-  if (isError) {
-    return (
-      <Alert variant="destructive">
-        <AlertDescription>Could not load the Pipeline list: {(error as Error).message}</AlertDescription>
-      </Alert>
-    );
-  }
-
-  return <PipelineListGrid deals={deals ?? EMPTY_DEALS} isLoading={isLoading} />;
+export interface PipelineListProps {
+  /** Already filtered by Pipeline.tsx's Active/Closed switch — the active
+   * half or the closed half, never the unfiltered full list. */
+  deals: Opportunity[];
+  /** True while browsing the closed half — adds the "Closed" date column. */
+  closedView: boolean;
+  /** Phase-review fix N3 — Pipeline.tsx's own `useOpportunities()` fetch is
+   * still in flight (`deals` is a stable empty array in that case). Threaded
+   * through to `DataGrid`'s own `isLoading`/`loadingMode="skeleton"`, which
+   * is what actually makes each column's `meta.skeleton` render instead of
+   * an empty grid before data lands. Defaults `false` so this component
+   * still renders standalone without a caller passing it. */
+  isLoading?: boolean;
 }
 
-function PipelineListGrid({ deals, isLoading }: { deals: Opportunity[]; isLoading: boolean }) {
+// id-ID day formatter for the `closedAt` ISO instant — same rationale as
+// DealCard.tsx's own `formatWonAt` (duplicated locally, not imported: that
+// helper is private to DealCard.tsx, same "copy, don't extract" precedent
+// every other Pipeline view in this directory already follows for its own
+// small formatters). `closedAt` is a real ISO instant (set by
+// POST /:id/close), not a plain "yyyy-MM-dd" day string, so
+// `formatPipelineDate`/`dayFromIso` (that pair's contract is plain calendar
+// days only) would misinterpret it.
+function formatClosedAt(closedAt: string): string {
+  return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(
+    new Date(closedAt),
+  );
+}
+
+export function PipelineList({ deals, closedView, isLoading = false }: PipelineListProps) {
   // No default TanStack sort — `deals` arrives pre-sorted `[{stage: "asc"},
   // {stageOrder: "asc"}]` from GET /opportunities (backend/src/routes/
   // opportunities.ts), the same board order the Kanban shows. PRD §2.4:
@@ -95,8 +101,8 @@ function PipelineListGrid({ deals, isLoading }: { deals: Opportunity[]; isLoadin
   const [sorting, setSorting] = useState<SortingState>([]);
   const navigate = useNavigate();
 
-  const columns = useMemo<ColumnDef<Opportunity>[]>(
-    () => [
+  const columns = useMemo<ColumnDef<Opportunity>[]>(() => {
+    const base: ColumnDef<Opportunity>[] = [
       {
         id: "opportunity",
         accessorKey: "title",
@@ -134,6 +140,39 @@ function PipelineListGrid({ deals, isLoading }: { deals: Opportunity[]; isLoadin
         header: ({ column }) => <DataGridColumnHeader column={column} title="Stage" />,
         cell: ({ row }) => <StageChip stage={row.original.stage} />,
         meta: { skeleton: <Skeleton className="h-5 w-24 rounded-full" /> },
+      },
+      {
+        id: "outcome",
+        // Empty string for an open deal (outcome === null) sorts before any
+        // outcome label ascending — same "" -> sorts-first convention the
+        // "pic" column below uses for an unassigned deal.
+        accessorFn: (row) => row.outcome ?? "",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Outcome" />,
+        cell: ({ row }) => (
+          <OutcomeChip outcome={row.original.outcome} reasonCategory={row.original.outcomeReasonCategory} />
+        ),
+        meta: { skeleton: <Skeleton className="h-5 w-20 rounded-full" /> },
+      },
+      {
+        id: "tag",
+        accessorFn: (row) => row.statusTag ?? "",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Tag" />,
+        cell: ({ row }) => <TagChip tag={row.original.statusTag} />,
+        meta: { skeleton: <Skeleton className="h-5 w-16 rounded-full" /> },
+      },
+      {
+        id: "subStatus",
+        accessorFn: (row) => row.subStatus ?? "",
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Sub-status" />,
+        cell: ({ row }) => <SubStatusChip subStatus={row.original.subStatus} idle={row.original.idle} />,
+        meta: { skeleton: <Skeleton className="h-5 w-28 rounded-full" /> },
+      },
+      {
+        id: "idle",
+        accessorFn: (row) => row.idle.days,
+        header: ({ column }) => <DataGridColumnHeader column={column} title="Idle" />,
+        cell: ({ row }) => <IdleChip idle={row.original.idle} />,
+        meta: { skeleton: <Skeleton className="h-5 w-20 rounded-full" /> },
       },
       {
         id: "dealValue",
@@ -249,9 +288,23 @@ function PipelineListGrid({ deals, isLoading }: { deals: Opportunity[]; isLoadin
         },
         meta: { skeleton: <Skeleton className="h-3.5 w-16" /> },
       },
-    ],
-    [],
-  );
+    ];
+
+    if (!closedView) return base;
+
+    const closedColumn: ColumnDef<Opportunity> = {
+      id: "closedAt",
+      accessorFn: (row) => (row.closedAt ? new Date(row.closedAt).getTime() : Number.POSITIVE_INFINITY),
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Closed" />,
+      cell: ({ row }) => (
+        <span className="font-mono text-[12px] text-on-surface-variant">
+          {row.original.closedAt ? formatClosedAt(row.original.closedAt) : "—"}
+        </span>
+      ),
+      meta: { skeleton: <Skeleton className="h-3.5 w-16" /> },
+    };
+    return [...base, closedColumn];
+  }, [closedView]);
 
   const table = useReactTable({
     data: deals,
@@ -273,10 +326,9 @@ function PipelineListGrid({ deals, isLoading }: { deals: Opportunity[]; isLoadin
       recordCount={deals.length}
       isLoading={isLoading}
       loadingMode="skeleton"
-      emptyMessage="No opportunities match yet."
-      // Row click -> opportunity detail (M3 integration; M3.12's dispatch
-      // brief originally left this seam unwired pending OpportunityDetail).
-      // Same shape as Tasks.tsx's `onRowClick={(task) => setEditTask(task)}`.
+      emptyMessage={closedView ? "No closed deals match yet." : "No opportunities match yet."}
+      // Row click -> opportunity detail. Same shape as Tasks.tsx's
+      // `onRowClick={(task) => setEditTask(task)}`.
       onRowClick={(deal) => navigate(`/pipeline/${deal.id}`)}
       tableLayout={{
         dense: true,

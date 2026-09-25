@@ -3,24 +3,27 @@
 // frontend/src/components/kanban-v2/adapter.ts (the project-tasks board on
 // the same vendored engine, reui/kanban.tsx) — same shape of exports
 // (a canonical comparator, a sort helper, a `projectToColumns` pure
-// projection), scoped to the Pipeline module's 9 `PipelineStage` columns
+// projection), scoped to the Pipeline module's 6 `PipelineStage` columns
 // instead of the task board's 3 `TaskStatus` columns.
 //
 // Type-only dependency note (M2.9 dispatch): this module deliberately does
 // NOT import `Opportunity` from `@/lib/queries` (M2.6's hooks task ran in
 // parallel with this one). `PipelineBoardDeal` below is a local structural
-// type declaring only the fields this adapter/commitMapper actually touch.
-// Field set and casing match `serializeOpportunity`
+// type declaring only the fields this adapter/commitMapper/boardLogic
+// actually touch. Field set and casing match `serializeOpportunity`
 // (backend/src/routes/opportunities.ts) verbatim, so the real hook-fetched
 // DTO satisfies this interface structurally, without a cast.
 
-import { STAGE_ORDER, type PipelineStage } from "@/lib/pipelineFormat";
+import { STAGE_ORDER, type IdleState, type PipelineOutcome, type PipelineStage } from "@/lib/pipelineFormat";
 
 /**
  * Minimal structural shape of an Opportunity DTO this module needs.
  * `id` is a UUID string (`Opportunity.id` in schema.prisma), unlike Task's
  * numeric id — the canonical comparator below tiebreaks with a string
- * compare accordingly.
+ * compare accordingly. `outcome`/`projectId`/`idle` were added for the
+ * 2026-09-25 flow redesign — `boardLogic.ts`'s `canDragDeal`/`canCloseDeal`/
+ * `canReopenDeal` gate on the first two, and `kpi.ts`'s `isActiveDeal`/
+ * `computePipelineKpis` need `outcome`/`idle` respectively.
  */
 export interface PipelineBoardDeal {
   id: string;
@@ -34,23 +37,25 @@ export interface PipelineBoardDeal {
   winProbability: number;
   deadline: string | null;
   wonAt: string | null;
+  outcome: PipelineOutcome | null;
+  projectId: number | null;
+  idle: IdleState;
 }
 
 /**
- * Board column order, left to right — ALL 9 `STAGE_ORDER` members
- * (ASSESSMENT..HOLD), re-exported under a kanban-v2-style name
+ * Board column order, left to right — the 6 `STAGE_ORDER` members
+ * (ASSESSMENT..WAITING_RESPONSE), re-exported under a kanban-v2-style name
  * (`KANBAN_STATUSES`'s counterpart) so commitMapper.ts and the board UI task
  * share one source of truth for "what is a valid kanban container id".
  *
- * This adapter maps all 9 stages unconditionally, by design (M2.9 dispatch)
- * — see this task's report for the board-UI-level finding: Velora's own
- * Kanban view (../VeloraApp components/kanban/board.tsx, read-only
- * reference) also renders all 9 `STAGES` as columns with no hide/toggle on
- * the board itself. Velora's Swimlane view (a different view mode,
- * components/kanban/swimlane-view.tsx) is the one that filters out DROP
- * (`SWIMLANE_STAGES = STAGES.filter((s) => s.id !== "drop")`) — that's a
- * board-UI (M2.10) concern for a swimlane-equivalent surface, if one is ever
- * built, not something this adapter should bake in.
+ * Won, Lost, Cancelled and Hold are no longer stages (the 2026-09-25 flow
+ * redesign moved them onto `outcome`/`statusTag` — see `pipelineFormat.ts`),
+ * so there's no longer a 7th/8th/9th column to filter in or out here: this
+ * adapter maps exactly `STAGE_ORDER`, unconditionally. A closed deal
+ * (`outcome !== null`) keeps the stage it stalled in and drops off the
+ * default board instead (D11, `Pipeline.tsx`'s Active/Closed switch) — the
+ * container passing this adapter its deal list is expected to have already
+ * filtered to active deals for the Kanban/Swimlane/Quarter views.
  */
 export const PIPELINE_STAGES: readonly PipelineStage[] = STAGE_ORDER;
 
@@ -78,9 +83,9 @@ export type DealVisibilityPredicate = (deal: PipelineBoardDeal) => boolean;
  * `Record<PipelineStage, PipelineBoardDeal[]>` shaped for ReUI Kanban's
  * `value` prop.
  *
- * - All 9 `PIPELINE_STAGES` columns are always present, empty arrays
+ * - All 6 `PIPELINE_STAGES` columns are always present, empty arrays
  *   allowed — mirrors kanban-v2's TODO/IN_PROGRESS/DONE guarantee,
- *   generalized to 9 stages, so the vendored Kanban never sees a missing
+ *   generalized to 6 stages, so the vendored Kanban never sees a missing
  *   column key.
  * - Ordering within a column: `stageOrder` ascending, `id` ascending
  *   tiebreak — same comparator `compareDealsByStageOrder` exports.

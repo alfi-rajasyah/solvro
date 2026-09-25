@@ -73,24 +73,69 @@ enum WeeklyStatus {
   DONE
 }
 
-// Pipeline module (native port of Velora). All 9 stages of the reference
-// app's live schema are represented here (an earlier 6-value version of
-// this enum omitted poc/technical_clarification/hold, which would have
-// forced a value-translation step for those rows on import). DB labels are
-// @map'd to Velora's lowercase literals verbatim, so the one-time data
-// import can copy the `stage` column as-is. Enum ORDER is load-bearing: the
-// opportunity list route sorts `stage: "asc"`, and Postgres orders enum
-// values by declaration order, so this order IS the board's column order.
+// Pipeline module (native port of Velora). Mirrors the 2026-09-25 opportunity
+// flow spec, not "all 9 stages of the reference app" (an earlier version of
+// this comment): the 3 terminal / parked states that used to be stages here
+// (won, drop, hold) moved to `Opportunity.outcome` and `Opportunity.statusTag`
+// below — a closed or held deal keeps whichever of these 6 stages it stalled
+// in (opportunity_flow_redesign migration backfills the split). DB labels
+// stay @map'd to Velora's lowercase literals verbatim for the 6 survivors.
+// Enum ORDER is load-bearing: the opportunity list route sorts `stage: "asc"`,
+// and Postgres orders enum values by declaration order, so this order IS the
+// board's column order.
 enum PipelineStage {
   ASSESSMENT              @map("assessment")
-  RFP                     @map("rfp")
-  POC                     @map("poc")
   TECHNICAL_CLARIFICATION @map("technical_clarification")
+  POC                     @map("poc")
+  RFP                     @map("rfp")
   DELIVER_PROPOSAL        @map("deliver_proposal")
   WAITING_RESPONSE        @map("waiting_response")
-  WON                     @map("won")
-  DROP                    @map("drop")
-  HOLD                    @map("hold")
+}
+
+// This enum and the three below it (PipelineStatusTag, PipelineOutcome,
+// PipelineOutcomeReason) are brand-new to Solvro too, so PipelineImportStatus's
+// comment below would suggest UPPERCASE labels — deliberate exception: they
+// stay lowercase (matching PipelineStage's @maps) so raw SQL / psql output
+// reads consistently across all the Opportunity enums, including the
+// opportunity_flow_redesign migration's own backfill literals ('won',
+// 'hold', 'progress', ...).
+//
+// Sales-input gate on an open deal, independent of stage — written only by
+// PATCH /opportunities/:id (routes/opportunities.ts). Null on a Waiting
+// Response deal and on any closed deal.
+enum PipelineSubStatus {
+  PROGRESS            @map("progress")
+  WAITING_SALES_INPUT @map("waiting_sales_input")
+}
+
+// Parked / at-risk flag on an open deal, independent of stage and
+// subStatus — written only by PATCH /opportunities/:id.
+enum PipelineStatusTag {
+  HOLD    @map("hold")
+  DELAYED @map("delayed")
+}
+
+// Terminal result of a deal. Set once by POST /opportunities/:id/close,
+// cleared by POST /opportunities/:id/reopen. The stage a deal reached is
+// never reset on close (D5) — see Opportunity.stage / closedAt below.
+enum PipelineOutcome {
+  WON       @map("won")
+  LOST      @map("lost")
+  CANCELLED @map("cancelled")
+}
+
+// Close reason category. routes/opportunities.ts's REASONS_BY_OUTCOME
+// restricts LOST to PRICE/COMPETITOR/TECHNICAL/OTHER and CANCELLED to
+// BUDGET_WITHDRAWN/PROJECT_CANCELLED/LOST_CONTACT/OTHER; WON never carries
+// a reason.
+enum PipelineOutcomeReason {
+  PRICE             @map("price")
+  COMPETITOR        @map("competitor")
+  TECHNICAL         @map("technical")
+  BUDGET_WITHDRAWN  @map("budget_withdrawn")
+  PROJECT_CANCELLED @map("project_cancelled")
+  LOST_CONTACT      @map("lost_contact")
+  OTHER             @map("other")
 }
 
 // Brand-new to Solvro (nothing has imported into it yet), so it follows the
@@ -555,27 +600,47 @@ model Opportunity {
   leadSource      String?               @map("lead_source")
   winProbability  Int                   @default(50) @map("win_probability")
   stageOrder      Int                   @default(0) @map("stage_order")
-  // Set only on transition into WON, cleared on leaving it — a route
-  // concern (the stage-transition handler in routes/opportunities.ts),
-  // never a schema default. Backs the board KPI's "Won this month" tile.
-  wonAt           DateTime?             @map("won_at")
-  // Records the stage a deal was in immediately before entering HOLD, so
-  // leaving HOLD can restore it — same route-concern pattern as wonAt: set
-  // on transition into HOLD, cleared on leaving it, never a schema default.
-  // Divergence from the reference: Velora's pre_hold_stage is free TEXT;
-  // here it's typed against PipelineStage since HOLD can only be entered
-  // from one of the 9 known stages.
-  preHoldStage    PipelineStage?        @map("pre_hold_stage")
+  // Sales-input gate, independent of stage — written only by PATCH
+  // /opportunities/:id (routes/opportunities.ts). Null on Waiting Response
+  // and on any closed deal.
+  subStatus             PipelineSubStatus?     @map("sub_status")
+  // Set when subStatus transitions into WAITING_SALES_INPUT, cleared when
+  // it leaves — a route concern (PATCH /opportunities/:id), never a schema
+  // default. Feeds the "waiting" basis of computeIdle (lib/pipelineSla.ts).
+  waitingInputSince     DateTime?              @map("waiting_input_since")
+  // Parked / at-risk flag, independent of stage and subStatus — written
+  // only by PATCH /opportunities/:id.
+  statusTag             PipelineStatusTag?     @map("status_tag")
+  // Terminal result — written only by POST /opportunities/:id/close and
+  // cleared by POST /opportunities/:id/reopen. The stage is never reset on
+  // close (D5): a closed deal keeps the stage it stalled in.
+  outcome               PipelineOutcome?
+  outcomeReasonCategory PipelineOutcomeReason? @map("outcome_reason_category")
+  outcomeReason         String?                @map("outcome_reason")
+  // Set only on /close, cleared on /reopen — a route concern, never a
+  // schema default.
+  closedAt              DateTime?              @map("closed_at")
+  // Set only on transition into WON (via /close), cleared on leaving it
+  // (via /reopen) — a route concern (routes/opportunities.ts), never a
+  // schema default. Backs the board KPI's "Won this month" tile, the trend
+  // chart and DealCard.
+  wonAt                 DateTime?              @map("won_at")
+  // Bumped by every writer (routes/opportunities.ts's /move, /close,
+  // /reopen, PATCH; opportunityItems.ts's note/link create+patch+delete;
+  // import on insert) — the "activity" basis of computeIdle
+  // (lib/pipelineSla.ts) whenever subStatus isn't WAITING_SALES_INPUT.
+  lastActivityAt        DateTime               @default(now()) @map("last_activity_at")
   // Won-deal handoff link — replaces the PRD's cross-DB soft link.
-  projectId       Int?                  @unique @map("project_id")
-  project         Project?              @relation(fields: [projectId], references: [id], onDelete: SetNull)
-  createdAt       DateTime              @default(now()) @map("created_at")
-  updatedAt       DateTime              @updatedAt @map("updated_at")
-  activities      OpportunityActivity[]
-  links           OpportunityLink[]
+  projectId             Int?                   @unique @map("project_id")
+  project               Project?               @relation(fields: [projectId], references: [id], onDelete: SetNull)
+  createdAt             DateTime               @default(now()) @map("created_at")
+  updatedAt             DateTime               @updatedAt @map("updated_at")
+  activities            OpportunityActivity[]
+  links                 OpportunityLink[]
 
   @@index([stage])
   @@index([picId])
+  @@index([outcome])
   @@map("opportunities")
 }
 

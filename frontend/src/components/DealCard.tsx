@@ -34,6 +34,7 @@ import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AssigneeAvatar } from "./AssigneeAvatar";
 import { Modal } from "./Modal";
+import { OutcomeChip } from "./PipelineFlagChips";
 import { StageChip } from "./StageChip";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
@@ -76,7 +77,9 @@ export function DealCard({ projectId }: DealCardProps) {
 // "yyyy-MM-dd" UTC-midnight day strings only (Opportunity.deadline/
 // requestDate, DateField's own convention), while `wonAt` is a real ISO
 // instant (a Prisma DateTime, set to `new Date()` at the moment a deal
-// enters WON — backend/src/routes/opportunities.ts's POST /:id/move).
+// enters WON — backend/src/routes/opportunities.ts's POST /:id/close, the
+// one Close action for Won/Lost/Cancelled; a deal is never "moved into WON"
+// anymore, since Won stopped being a stage, 2026-09-25 flow redesign D5).
 // Feeding an instant through `dayFromIso` would misinterpret it as a plain
 // day string and silently render the wrong calendar date around midnight
 // in any timezone away from the exact moment `wonAt` was recorded in UTC.
@@ -107,7 +110,13 @@ function DealCardInner({ projectId }: DealCardProps) {
             <span className="truncate font-display text-sm font-semibold text-on-surface">
               {deal.title}
             </span>
+            {/* The stage at close (D5: locked, never reset by /close) plus
+                the outcome — a handed-off deal is always Won (the backend's
+                /handoff route refuses anything else), but this renders
+                whatever `outcome` the API actually returns rather than
+                assuming it. */}
             <StageChip stage={deal.stage} />
+            <OutcomeChip outcome={deal.outcome} reasonCategory={deal.outcomeReasonCategory} />
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-on-surface-variant">
             <span className="font-mono text-primary">{formatIDR(deal.dealValue)}</span>

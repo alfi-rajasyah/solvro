@@ -12,6 +12,7 @@ import { Link } from "react-router-dom";
 import { dealsForPic } from "@/components/pipeline/analytics";
 import { EmptyState } from "@/components/EmptyState";
 import { Modal } from "@/components/Modal";
+import { OutcomeChip } from "@/components/PipelineFlagChips";
 import { StageChip } from "@/components/StageChip";
 import { formatIDRCompact } from "@/lib/pipelineFormat";
 import type { Opportunity } from "@/lib/queries";
@@ -56,6 +57,9 @@ export function PicDrillDownModal({ picId, picName, deals, onClose }: PicDrillDo
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <StageChip stage={deal.stage} />
+                  {/* D5: the stage stays whatever it was at close — the
+                      outcome chip renders nothing on an open deal. */}
+                  <OutcomeChip outcome={deal.outcome} reasonCategory={deal.outcomeReasonCategory} />
                   <span className="font-mono text-xs font-semibold text-on-surface">
                     {formatIDRCompact(deal.dealValue)}
                   </span>

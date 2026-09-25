@@ -175,6 +175,10 @@ test.describe("Pipeline opportunity form — desktop", () => {
     await dialog.getByLabel("Customer").fill(customer);
     // Plain number — no thousands separators; the input is `type="number"`.
     await dialog.getByLabel("Deal value (IDR)").fill("150000000");
+    // 2026-09-25 flow redesign (D2): the stage select lists exactly the 6
+    // `PipelineStage` values (STAGE_ORDER, pipelineFormat.ts) — Won/Drop/Hold
+    // left the enum and are never create-time stage options anymore.
+    await expect(dialog.getByLabel("Stage").locator("option")).toHaveCount(6);
     await dialog.getByLabel("Stage").selectOption("RFP");
     await dialog.getByLabel("Win probability (%)").fill("42");
 
@@ -366,8 +370,24 @@ test.describe("Pipeline import — desktop", () => {
       "Lead Source",
       "Activity Log",
     ];
-    // Row 1: genuinely valid, new — imports.
-    const validRow = [validTitle, validCompany, "125000000", "assessment", "", "", "ERP Rollout", "65", "", ""];
+    // Row 1: genuinely valid, new — imports. Stage cell deliberately matches
+    // the downloaded template's own example row verbatim ("Technical
+    // Clarification", title case with a space — PipelineImportDialog.tsx's
+    // `downloadTemplate`), proving the parser (importParse.ts's
+    // `parseImportRow`, trim/lowercase/underscore) accepts that literal
+    // format, not just the lowercase-with-underscore one the other rows use.
+    const validRow = [
+      validTitle,
+      validCompany,
+      "125000000",
+      "Technical Clarification",
+      "",
+      "",
+      "ERP Rollout",
+      "65",
+      "",
+      "",
+    ];
     // Row 2: missing Title — caught by the CLIENT-side parse (importParse.ts's
     // `parseImportRow`), never reaches the server at all.
     const missingTitleRow = ["", missingTitleCompany, "", "assessment", "", "", "", "", "", ""];
@@ -383,6 +403,22 @@ test.describe("Pipeline import — desktop", () => {
     await page.getByRole("button", { name: "Import" }).click();
     const dialog = page.getByRole("dialog", { name: "Import opportunities" });
     await expect(dialog).toBeVisible();
+
+    // 2026-09-25 flow redesign (D9): the upload step's "Valid stages" chips
+    // are `IMPORTABLE_STAGES` (importParse.ts) — exactly the 6
+    // `PipelineStage` values, lowercased; Won/Drop/Hold are no longer
+    // importable (rejected the same way any unrecognized literal is).
+    await expect(dialog.getByText("Valid stages", { exact: true })).toBeVisible();
+    for (const stage of [
+      "assessment",
+      "technical_clarification",
+      "poc",
+      "rfp",
+      "deliver_proposal",
+      "waiting_response",
+    ]) {
+      await expect(dialog.getByText(stage, { exact: true })).toBeVisible();
+    }
 
     const downloadPromise = page.waitForEvent("download");
     await dialog.getByRole("button", { name: "Download template" }).click();
@@ -434,7 +470,9 @@ test.describe("Pipeline import — desktop", () => {
     await dialog.getByRole("button", { name: "Done" }).click();
     await expect(dialog).toBeHidden();
 
-    await expect(stageColumn(page, "ASSESSMENT").getByRole("link", { name: validTitle })).toBeVisible();
+    await expect(
+      stageColumn(page, "TECHNICAL_CLARIFICATION").getByRole("link", { name: validTitle }),
+    ).toBeVisible();
   });
 });
 

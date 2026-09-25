@@ -3,7 +3,15 @@ import { apiRequest } from "./api";
 import { useAuth, type Role } from "./auth";
 import { dateToDay, dayFromIso, isoFromDay } from "./dateField";
 import { parseWeekKey } from "./isoWeek";
-import type { PipelineStage } from "./pipelineFormat";
+import { ownerOf } from "./pipelineFormat";
+import type {
+  IdleState,
+  PipelineOutcome,
+  PipelineOutcomeReason,
+  PipelineStage,
+  PipelineStatusTag,
+  PipelineSubStatus,
+} from "./pipelineFormat";
 
 export type ProjectStatus =
   | "PLANNING"
@@ -2390,6 +2398,33 @@ export interface Opportunity {
   customerName: string;
   dealValue: number;
   stage: PipelineStage;
+  // SA-driven sub-status while the deal sits in an SA-owned stage — forced
+  // null on WAITING_RESPONSE (client owns it, per `owner` below) and on a
+  // closed deal (`outcome !== null`). Route-owned: PATCH /:id (subStatus
+  // field) and POST /:id/move (forced null/PROGRESS on a transition in/out
+  // of WAITING_RESPONSE) — never client-writable on create or via /close.
+  subStatus: PipelineSubStatus | null;
+  // ISO instant the SA last flagged "Waiting for Sales input" — null unless
+  // `subStatus === "WAITING_SALES_INPUT"`. Route-owned (PATCH /:id only);
+  // feeds `computeIdle`'s "waiting" basis on the backend
+  // (backend/src/lib/pipelineSla.ts).
+  waitingInputSince: string | null;
+  // Independent of stage/subStatus — a deal can be tagged Hold or Delayed in
+  // any open stage without losing its place on the board (D5/D2). Cleared by
+  // /close, refused by PATCH once the deal is closed.
+  statusTag: PipelineStatusTag | null;
+  outcome: PipelineOutcome | null;
+  outcomeReasonCategory: PipelineOutcomeReason | null;
+  outcomeReason: string | null;
+  // ISO instant set by POST /:id/close (every outcome) and cleared by
+  // POST /:id/reopen. Distinct from `wonAt` below (WON-only, kept for the
+  // KPI bar / trend chart / DealCard, which predate the close/reopen flow).
+  closedAt: string | null;
+  // ISO instant bumped by every writer (§3.7 of the flow-redesign plan):
+  // /move, /close, /reopen, PATCH /:id (any accepted field), a new activity
+  // note, a link create/patch/delete, and set on insert by create/import.
+  // Feeds `computeIdle`'s "activity" basis on the backend.
+  lastActivityAt: string;
   picId: number | null;
   pic: OpportunityPic | null;
   // Plain calendar day ("yyyy-MM-dd"), never an ISO instant — same DateField
@@ -2402,7 +2437,15 @@ export interface Opportunity {
   winProbability: number;
   stageOrder: number;
   wonAt: string | null;
-  preHoldStage: PipelineStage | null;
+  // Derived, never stored (D3) — "client" only while `stage ===
+  // "WAITING_RESPONSE"`, else "sa". Computed server-side by the serializer
+  // on every read; `lib/pipelineFormat.ts`'s `ownerOf` is the pure mirror
+  // `useMoveOpportunity`'s optimistic write uses below.
+  owner: "sa" | "client";
+  // Computed on every read from `lastActivityAt`/`waitingInputSince` and the
+  // SLA table (backend/src/lib/pipelineSla.ts) — never a stored column or a
+  // background job (D1).
+  idle: IdleState;
   projectId: number | null;
   createdAt: string;
   updatedAt: string;
@@ -2517,6 +2560,13 @@ export interface UpdateOpportunityInput {
   productSolution?: string;
   leadSource?: string | null;
   winProbability?: number;
+  // The Waiting-for-Sales-input / Hold / Delayed toggles on the card menu
+  // and detail page (OpportunityCard.tsx/OpportunityDetail.tsx) — both
+  // nullable so a caller can clear them. Rejected by the backend once the
+  // deal is closed (400 `deal_closed`) or, for `subStatus`, while the deal
+  // sits in WAITING_RESPONSE (400 `sub_status_not_allowed`).
+  subStatus?: PipelineSubStatus | null;
+  statusTag?: PipelineStatusTag | null;
 }
 
 export function useUpdateOpportunity() {
@@ -2527,6 +2577,11 @@ export function useUpdateOpportunity() {
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: pipelineKeys.list });
       qc.invalidateQueries({ queryKey: pipelineKeys.detail(updated.id) });
+      // A subStatus/statusTag transition writes an activity note (backend
+      // §3.3) — invalidate the feed too, not just list/detail, so the card
+      // menu's Waiting-for-Sales-input/Hold/Delayed toggles refresh
+      // OpportunityDetail's timeline without a second unrelated write.
+      qc.invalidateQueries({ queryKey: pipelineKeys.activities(updated.id) });
     },
   });
 }
@@ -2546,6 +2601,56 @@ export function useAssignOpportunity() {
   return useMutation({
     mutationFn: ({ id, picId }: { id: string; picId: number }) =>
       apiRequest<Opportunity>(`/opportunities/${id}/assign`, { method: "POST", body: { picId } }),
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: pipelineKeys.list });
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(updated.id) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.activities(updated.id) });
+    },
+  });
+}
+
+export interface CloseOpportunityInput {
+  id: string;
+  outcome: PipelineOutcome;
+  // Required for LOST/CANCELLED (from `REASONS_BY_OUTCOME`, pipelineFormat.ts),
+  // rejected by the backend for WON (400 `reason_not_allowed`).
+  reasonCategory?: PipelineOutcomeReason;
+  reason?: string;
+}
+
+// D5: one Close action for Won/Lost/Cancelled — POST /opportunities/:id/close.
+// The stage/stageOrder never change; the backend clears subStatus/statusTag/
+// waitingInputSince and stamps closedAt (+ wonAt for WON) in one transaction.
+// Not optimistic (CloseDealDialog is a dialog submit, same as
+// useAssignOpportunity/useHandoffOpportunity below) — invalidates list +
+// this deal's own detail/activities explicitly, the same enumerate-every-key
+// convention useAssignOpportunity/useDeleteOpportunity/useMoveOpportunity use.
+export function useCloseOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, outcome, reasonCategory, reason }: CloseOpportunityInput) =>
+      apiRequest<Opportunity>(`/opportunities/${id}/close`, {
+        method: "POST",
+        body: { outcome, reasonCategory, reason },
+      }),
+    onSuccess: (updated) => {
+      qc.invalidateQueries({ queryKey: pipelineKeys.list });
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(updated.id) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.activities(updated.id) });
+    },
+  });
+}
+
+// D5: POST /opportunities/:id/reopen, no body — keeps the stage, clears
+// outcome/reason/closedAt/wonAt, restores subStatus to PROGRESS (or null on
+// WAITING_RESPONSE). Refused by the backend once the deal already has a
+// linked project (409 `handed_off`) — `canReopenDeal` (boardLogic.ts) is the
+// matching proactive UI gate.
+export function useReopenOpportunity() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiRequest<Opportunity>(`/opportunities/${id}/reopen`, { method: "POST" }),
     onSuccess: (updated) => {
       qc.invalidateQueries({ queryKey: pipelineKeys.list });
       qc.invalidateQueries({ queryKey: pipelineKeys.detail(updated.id) });
@@ -2638,6 +2743,10 @@ export interface MoveOpportunityInput {
   id: string;
   stage: PipelineStage;
   stageOrder: number;
+  // Required by the backend only for the Technical Clarification -> RFP
+  // jump (D4, `isSkipJump` in pipelineFormat.ts) — 400 `skip_reason_required`
+  // without it on that one transition. Stored in the move's activity note.
+  reason?: string;
 }
 
 /**
@@ -2700,23 +2809,54 @@ export function reorderOpportunitiesLocally(
   });
 }
 
+/**
+ * Mirrors the `owner`/`subStatus`/`waitingInputSince` side effect of a REAL
+ * stage transition (backend/src/routes/opportunities.ts's POST /:id/move
+ * §3.4) — extracted as its own pure function (beside `reorderOpportunitiesLocally`
+ * above, same "pure helper + colocated test coverage" split) so
+ * `useMoveOpportunity`'s optimistic write and `queries.reorder.test.ts` can
+ * both exercise it without a QueryClient. Only meaningful for a real
+ * transition (`fromStage !== toStage`); the caller below only invokes it
+ * then — a same-stage reorder never touches these fields. Entering
+ * WAITING_RESPONSE clears subStatus/waitingInputSince (the client owns the
+ * deal now, no SA sub-status applies); leaving it resets subStatus to
+ * PROGRESS. `owner` always follows `ownerOf(toStage)`.
+ */
+export function applyMoveSideEffects<
+  T extends Pick<Opportunity, "owner" | "subStatus" | "waitingInputSince">,
+>(deal: T, fromStage: PipelineStage, toStage: PipelineStage): T {
+  const enteringWaitingResponse = toStage === "WAITING_RESPONSE";
+  const leavingWaitingResponse = fromStage === "WAITING_RESPONSE";
+  return {
+    ...deal,
+    owner: ownerOf(toStage),
+    subStatus: enteringWaitingResponse
+      ? null
+      : leavingWaitingResponse
+        ? "PROGRESS"
+        : deal.subStatus,
+    waitingInputSince:
+      enteringWaitingResponse || leavingWaitingResponse ? null : deal.waitingInputSince,
+  };
+}
+
 // The board drag mutation. Optimistic per the house pattern (see
 // useUpdateTask above): onMutate cancels + snapshots the list and
 // optimistically rewrites the moved deal's stage/stageOrder (and resequences
 // stage-siblings the same dense way the server does) — on a REAL stage
 // change (not a same-stage reorder), it also mirrors the server's
-// wonAt/preHoldStage bookkeeping (POST /:id/move in
-// backend/src/routes/opportunities.ts, finding N3) so the optimistic write
-// doesn't visibly diverge from the eventual server response for the moment
-// between commit and invalidation. onError rolls back,
-// onSettled invalidates the list so the server's authoritative order lands.
+// owner/subStatus/waitingInputSince bookkeeping (POST /:id/move in
+// backend/src/routes/opportunities.ts §3.4) so the optimistic write doesn't
+// visibly diverge from the eventual server response for the moment between
+// commit and invalidation. onError rolls back, onSettled invalidates the
+// list so the server's authoritative order lands.
 export function useMoveOpportunity() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, stage, stageOrder }: MoveOpportunityInput) =>
+    mutationFn: ({ id, stage, stageOrder, reason }: MoveOpportunityInput) =>
       apiRequest<Opportunity>(`/opportunities/${id}/move`, {
         method: "POST",
-        body: { stage, stageOrder },
+        body: { stage, stageOrder, reason },
       }),
     onMutate: async ({ id, stage, stageOrder }) => {
       await qc.cancelQueries({ queryKey: pipelineKeys.list });
@@ -2725,26 +2865,16 @@ export function useMoveOpportunity() {
         const current = prev.find((o) => o.id === id);
         const reordered = reorderOpportunitiesLocally(prev, id, stage, stageOrder);
         // Bookkeeping mirror of the server's own POST /:id/move transaction
-        // (backend/src/routes/opportunities.ts, finding N3) — deliberately
-        // done HERE, in the caller, rather than inside
-        // reorderOpportunitiesLocally itself: that function stays a pure
-        // repositioning helper (ordering only), while wonAt/preHoldStage are
-        // a business-rule side effect of a REAL stage transition, keyed off
-        // `current`'s pre-move stage (only known here, before reordering).
+        // (backend/src/routes/opportunities.ts §3.4) — `applyMoveSideEffects`
+        // above, keyed off `current`'s pre-move stage (only known here,
+        // before reordering). Deliberately called HERE rather than folded
+        // into `reorderOpportunitiesLocally` itself, which stays a pure
+        // repositioning helper (ordering only).
         const next =
           current && current.stage !== stage
-            ? reordered.map((o) => {
-                if (o.id !== id) return o;
-                const enteringWon = stage === "WON";
-                const leavingWon = current.stage === "WON";
-                const enteringHold = stage === "HOLD";
-                const leavingHold = current.stage === "HOLD";
-                return {
-                  ...o,
-                  wonAt: enteringWon ? new Date().toISOString() : leavingWon ? null : o.wonAt,
-                  preHoldStage: enteringHold ? current.stage : leavingHold ? null : o.preHoldStage,
-                };
-              })
+            ? reordered.map((o) =>
+                o.id === id ? applyMoveSideEffects(o, current.stage, stage) : o,
+              )
             : reordered;
         qc.setQueryData<Opportunity[]>(pipelineKeys.list, next);
       }
@@ -2763,8 +2893,8 @@ export function useMoveOpportunity() {
     // server logs an OpportunityActivity on a real stage change (POST
     // /:id/move, backend/src/routes/opportunities.ts) — without these two
     // explicit calls, a detail-page stage change wouldn't refresh its own
-    // wonAt/preHoldStage or activity feed until something else happened to
-    // invalidate them.
+    // owner/subStatus/waitingInputSince or activity feed until something
+    // else happened to invalidate them.
     onSettled: (_data, _err, { id }) => {
       qc.invalidateQueries({ queryKey: pipelineKeys.list });
       qc.invalidateQueries({ queryKey: pipelineKeys.detail(id) });

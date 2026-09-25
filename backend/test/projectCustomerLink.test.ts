@@ -5,6 +5,7 @@ import { createApp } from "../src/app.js";
 import { prisma } from "../src/prisma.js";
 import { signToken } from "../src/http/auth.js";
 import { seedRoles, createAdminAndToken, createUserWithRole } from "./testAuth.js";
+import { createWonOpportunity } from "./pipelineWonFixture.js";
 
 // Customer Visibility (docs/plans/customer-visibility-spec.md §5.5,
 // Decision 7): POST /projects, PATCH /projects/:id (when customerId is
@@ -39,7 +40,7 @@ function patchProject(token: string, id: number, body: Record<string, unknown>) 
 }
 
 // Mirrors opportunityHandoff.test.ts's local permission-set helper — a
-// handoff caller needs the pipeline half (create + move to WON) plus the
+// handoff caller needs the pipeline half (create + close as Won) plus the
 // project:write half the handoff route checks explicitly.
 let roleCounter = 0;
 async function createUserWithPermissions(
@@ -69,15 +70,6 @@ async function createHandoffCapableUser(): Promise<{ userId: number; token: stri
     "pipeline:edit_all",
     "project:write",
   ]);
-}
-
-async function createWonOpportunity(token: string, userId: number): Promise<string> {
-  const created = await request(app)
-    .post("/opportunities")
-    .set("Authorization", `Bearer ${token}`)
-    .send({ title: "Link Deal", customerName: "Acme Corp", picId: userId, stage: "WON" });
-  expect(created.status).toBe(201);
-  return created.body.id as string;
 }
 
 function handoff(token: string, id: string, body: Record<string, unknown>) {
@@ -175,7 +167,7 @@ describe("POST /opportunities/:id/handoff — customer visibility (Decision 7)",
     const owner = await createUserWithRole("TAM");
     const sa = await createHandoffCapableUser();
     const hiddenCustomerId = await createCustomer(owner.userId);
-    const id = await createWonOpportunity(sa.token, sa.userId);
+    const id = await createWonOpportunity(app, sa.token, sa.userId, "Link Deal");
 
     const res = await handoff(sa.token, id, {
       name: "Should Fail Handoff",
@@ -193,7 +185,7 @@ describe("POST /opportunities/:id/handoff — customer visibility (Decision 7)",
   it("succeeds for a visible (unowned) customerId", async () => {
     const sa = await createHandoffCapableUser();
     const visibleCustomerId = await createCustomer(null);
-    const id = await createWonOpportunity(sa.token, sa.userId);
+    const id = await createWonOpportunity(app, sa.token, sa.userId, "Link Deal");
 
     const res = await handoff(sa.token, id, {
       name: "Should Succeed Handoff",

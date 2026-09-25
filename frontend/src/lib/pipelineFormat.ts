@@ -9,57 +9,41 @@ import { dayToDate } from "./dateField";
 /**
  * Pipeline stage enum, matching `backend/prisma/schema.prisma`'s
  * `PipelineStage` — the API speaks these uppercase enum strings verbatim.
- * Defined here since this is the first Pipeline frontend module that needs
- * it; M2's hooks task (`src/lib/queries.ts`) re-exports/consumes it rather
- * than redeclaring it.
+ * Rebuilt 2026-09-25 for the opportunity flow redesign (VP spec,
+ * docs/archive/plans/opportunity-flow-redesign.md D2): 6 values, in the spec's
+ * order. `WON`, `DROP` and `HOLD` are no longer stages — a deal that's Won,
+ * Lost, Cancelled or on Hold keeps the stage it stalled in; see `PipelineOutcome`
+ * and `PipelineStatusTag` below for where those states actually live now.
  */
 export type PipelineStage =
   | "ASSESSMENT"
-  | "RFP"
-  | "POC"
   | "TECHNICAL_CLARIFICATION"
+  | "POC"
+  | "RFP"
   | "DELIVER_PROPOSAL"
-  | "WAITING_RESPONSE"
-  | "WON"
-  | "DROP"
-  | "HOLD";
+  | "WAITING_RESPONSE";
 
 /** Display label per stage, for board columns, chips, and detail surfaces. */
 export const STAGE_LABELS: Record<PipelineStage, string> = {
   ASSESSMENT: "Assessment",
-  RFP: "RFP",
-  POC: "PoC",
   TECHNICAL_CLARIFICATION: "Technical Clarification",
+  POC: "PoC",
+  RFP: "RFP",
   DELIVER_PROPOSAL: "Delivered Proposal",
   WAITING_RESPONSE: "Waiting Response",
-  WON: "Won",
-  DROP: "Drop",
-  HOLD: "Hold",
 };
 
-/** Board column order, left to right — matches PRD §2.2/§2.3 and the
- * reference app's live schema (VeloraApp/scripts/migrate.mjs), which is
- * also the backend `PipelineStage` Prisma enum's declaration order. */
+/** Board column order, left to right — matches the flow spec's order (D2)
+ * and the backend `PipelineStage` Prisma enum's declaration order; the list
+ * route sorts `stage asc`, so this order is load-bearing on both sides. */
 export const STAGE_ORDER: PipelineStage[] = [
   "ASSESSMENT",
-  "RFP",
-  "POC",
   "TECHNICAL_CLARIFICATION",
+  "POC",
+  "RFP",
   "DELIVER_PROPOSAL",
   "WAITING_RESPONSE",
-  "WON",
-  "DROP",
-  "HOLD",
 ];
-
-/**
- * Stages that end a deal's lifecycle — no further drag/board transitions
- * expected. Single source of truth shared by board-drag gating
- * (`components/pipeline/boardLogic.ts`'s `needsTerminalConfirm`) and KPI
- * "active deal" math (`components/pipeline/kpi.ts`'s `isActiveDeal`), which
- * previously each declared their own identical copy.
- */
-export const TERMINAL_STAGES: readonly PipelineStage[] = ["WON", "DROP"];
 
 /**
  * Single source of truth for the "how far along the funnel" alpha ramp
@@ -67,29 +51,158 @@ export const TERMINAL_STAGES: readonly PipelineStage[] = ["WON", "DROP"];
  * accent token — `PipelineKpiBar.tsx`'s `FunnelStrip`,
  * `PipelineOverviewPanel.tsx`'s `StageDistribution`, and
  * `PipelineAnalyticsSection.tsx`'s conversion-funnel chart each previously
- * hand-declared an identical copy of these same seven numbers (finding
- * N2). `DROP`/`HOLD` carry a `0` placeholder only so this Record stays
- * total over `PipelineStage` — neither stage renders via this alpha ramp at
- * all: all three call sites give DROP/HOLD their own dedicated rose/amber
- * tone instead of a `primary` alpha step, matching `StageChip`'s treatment
- * of those two stages everywhere else in the app. Tailwind-class consumers
- * (PipelineKpiBar.tsx, PipelineOverviewPanel.tsx) can't derive their class
- * strings from this at runtime — Tailwind's content scanner only detects
- * literal `bg-primary/NN` substrings, not string-interpolated ones — so
- * those two sites keep a small local `alpha -> literal class` lookup keyed
- * off these same numbers instead. This Record is the one place the
- * *numbers* themselves live.
+ * hand-declared an identical copy of these same numbers (finding N2).
+ * Shrunk to the 6 real stages by the 2026-09-25 flow redesign — `WON`/
+ * `DROP`/`HOLD` never had a real ramp step (they rendered via their own
+ * dedicated rose/amber tone instead, matching `StageChip`), and now aren't
+ * `PipelineStage` members at all, so there's nothing left to placeholder.
+ * Tailwind-class consumers (PipelineKpiBar.tsx, PipelineOverviewPanel.tsx)
+ * can't derive their class strings from this at runtime — Tailwind's
+ * content scanner only detects literal `bg-primary/NN` substrings, not
+ * string-interpolated ones — so those two sites keep a small local
+ * `alpha -> literal class` lookup keyed off these same numbers instead.
+ * This Record is the one place the *numbers* themselves live.
  */
 export const STAGE_ALPHA: Record<PipelineStage, number> = {
   ASSESSMENT: 0.2,
-  RFP: 0.35,
+  TECHNICAL_CLARIFICATION: 0.35,
   POC: 0.5,
-  TECHNICAL_CLARIFICATION: 0.65,
+  RFP: 0.65,
   DELIVER_PROPOSAL: 0.8,
-  WAITING_RESPONSE: 0.9,
-  WON: 1,
-  DROP: 0,
-  HOLD: 0,
+  WAITING_RESPONSE: 0.95,
+};
+
+// ─────────────────────────────────────────────────────────────────────────
+// Sub-status / tag / outcome — the flow redesign's independent attributes
+// (docs/archive/plans/opportunity-flow-redesign.md §1 D2/§2.1). A deal's stage no
+// longer encodes whether it's parked (statusTag), waiting on the Sales team
+// (subStatus) or decided (outcome) — those are separate fields the API
+// serializes alongside `stage`, mirrored here as their own enums/label maps
+// so `PipelineFlagChips.tsx`/`CloseDealDialog.tsx`/`OpportunityDetail.tsx`
+// share one source of truth with the backend's Prisma enums (schema.prisma).
+// ─────────────────────────────────────────────────────────────────────────
+
+export type PipelineSubStatus = "PROGRESS" | "WAITING_SALES_INPUT";
+export type PipelineStatusTag = "HOLD" | "DELAYED";
+export type PipelineOutcome = "WON" | "LOST" | "CANCELLED";
+export type PipelineOutcomeReason =
+  | "PRICE"
+  | "COMPETITOR"
+  | "TECHNICAL"
+  | "BUDGET_WITHDRAWN"
+  | "PROJECT_CANCELLED"
+  | "LOST_CONTACT"
+  | "OTHER";
+
+/** `computeIdle`'s (backend/src/lib/pipelineSla.ts) three alert levels. */
+export type IdleLevel = "none" | "warning" | "critical";
+
+/**
+ * `Opportunity.idle`'s shape (D1) — computed server-side on every read from
+ * `lastActivityAt`/`waitingInputSince` and the SLA table, never stored or
+ * client-computed. One source of truth for the field's shape, used by
+ * `queries.ts` (`Opportunity.idle`), `adapter.ts` (`PipelineBoardDeal.idle`)
+ * and `PipelineFlagChips.tsx`'s `SubStatusChip`/`IdleChip` props, instead of
+ * each redeclaring the same object type literally.
+ */
+export interface IdleState {
+  level: IdleLevel;
+  days: number;
+  /** Which SLA clock produced `level`/`days` — "waiting" while
+   * `subStatus === "WAITING_SALES_INPUT"`, "activity" otherwise; `null` on a
+   * closed deal (`level` is always "none" there). */
+  basis: "waiting" | "activity" | null;
+}
+
+export const SUB_STATUS_LABELS: Record<PipelineSubStatus, string> = {
+  PROGRESS: "In progress",
+  WAITING_SALES_INPUT: "Waiting Sales input",
+};
+
+export const TAG_LABELS: Record<PipelineStatusTag, string> = {
+  HOLD: "Hold",
+  DELAYED: "Delayed",
+};
+
+export const OUTCOME_LABELS: Record<PipelineOutcome, string> = {
+  WON: "Won",
+  LOST: "Lost",
+  CANCELLED: "Cancelled",
+};
+
+export const OUTCOME_REASON_LABELS: Record<PipelineOutcomeReason, string> = {
+  PRICE: "Price",
+  COMPETITOR: "Competitor",
+  TECHNICAL: "Technical",
+  BUDGET_WITHDRAWN: "Budget withdrawn",
+  PROJECT_CANCELLED: "Project cancelled",
+  LOST_CONTACT: "Lost contact",
+  OTHER: "Other",
+};
+
+/**
+ * The reason categories `POST /:id/close` accepts per outcome (backend
+ * §3.5) — mirrored here so `CloseDealDialog.tsx`'s "Reason category" select
+ * offers exactly the set the server will accept, and the backend stays the
+ * one place that actually enforces it. `WON` is empty: a Won close takes no
+ * category (the backend 400s `reason_not_allowed` if one is sent).
+ */
+export const REASONS_BY_OUTCOME: Record<PipelineOutcome, PipelineOutcomeReason[]> = {
+  WON: [],
+  LOST: ["PRICE", "COMPETITOR", "TECHNICAL", "OTHER"],
+  CANCELLED: ["BUDGET_WITHDRAWN", "PROJECT_CANCELLED", "LOST_CONTACT", "OTHER"],
+};
+
+/** True once a deal has been closed (Won, Lost or Cancelled) — D5: the stage
+ * is locked at that point, never reset. Structural over `outcome` alone so
+ * both `Opportunity` (queries.ts) and `PipelineBoardDeal` (adapter.ts)
+ * satisfy it without a cast. */
+export function isClosed(deal: { outcome: PipelineOutcome | null }): boolean {
+  return deal.outcome !== null;
+}
+
+/** The one stage jump that requires a reason (D4): Technical Clarification
+ * skipping straight to RFP, bypassing PoC. */
+export function isSkipJump(from: PipelineStage, to: PipelineStage): boolean {
+  return from === "TECHNICAL_CLARIFICATION" && to === "RFP";
+}
+
+export type DealOwner = "sa" | "client";
+
+/** Derived "who owns the next move" (D3) — `client` only while the deal
+ * sits in Waiting Response, `sa` for every other stage. The API computes and
+ * returns this itself (`Opportunity.owner`, never a stored column); this
+ * pure mirror lets the board's optimistic move write keep it in sync
+ * without waiting on the round trip (see `queries.ts`'s `useMoveOpportunity`). */
+export function ownerOf(stage: PipelineStage): DealOwner {
+  return stage === "WAITING_RESPONSE" ? "client" : "sa";
+}
+
+/**
+ * Display-only mirror of `backend/src/lib/pipelineSla.ts`'s `PIPELINE_SLA`
+ * (flow spec §7) — the backend is authoritative (it's what `computeIdle`
+ * actually reads to derive `Opportunity.idle` on every response, D1: no
+ * job, no stored alert). This copy only feeds `OpportunityDetail.tsx`'s
+ * "SLA for this stage" caption; keep both tables in sync by hand if the
+ * spec's numbers ever change.
+ */
+export interface PipelineSlaHint {
+  /** Working days before a WAITING_RESPONSE deal's "waiting" idle basis
+   * warns — `null` for every SA-owned stage (they use the "activity" basis
+   * instead; see `idleWarningDays`). */
+  waitingDays: number | null;
+  idleWarningDays: number;
+  /** `null` = no critical threshold for this stage's basis. */
+  idleCriticalDays: number | null;
+}
+
+export const PIPELINE_SLA_HINT: Record<PipelineStage, PipelineSlaHint> = {
+  ASSESSMENT: { waitingDays: 2, idleWarningDays: 5, idleCriticalDays: null },
+  TECHNICAL_CLARIFICATION: { waitingDays: 2, idleWarningDays: 5, idleCriticalDays: null },
+  POC: { waitingDays: 3, idleWarningDays: 7, idleCriticalDays: null },
+  RFP: { waitingDays: 2, idleWarningDays: 5, idleCriticalDays: null },
+  DELIVER_PROPOSAL: { waitingDays: 3, idleWarningDays: 7, idleCriticalDays: null },
+  WAITING_RESPONSE: { waitingDays: null, idleWarningDays: 7, idleCriticalDays: 14 },
 };
 
 /**

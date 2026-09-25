@@ -15,22 +15,20 @@ function deal(overrides: Partial<SwimlaneDeal> & Pick<SwimlaneDeal, "id" | "stag
     picId: null,
     pic: null,
     deadline: null,
+    outcome: null,
     ...overrides,
   };
 }
 
 describe("SWIMLANE_STAGES", () => {
-  it("excludes DROP and nothing else — 8 stages (PRD §2.4: columns = stages minus drop)", () => {
-    expect(SWIMLANE_STAGES).not.toContain("DROP");
+  it("is the full 6-stage board order — nothing left to exclude post-2026-09-25 redesign", () => {
     expect(SWIMLANE_STAGES).toEqual([
       "ASSESSMENT",
-      "RFP",
-      "POC",
       "TECHNICAL_CLARIFICATION",
+      "POC",
+      "RFP",
       "DELIVER_PROPOSAL",
       "WAITING_RESPONSE",
-      "WON",
-      "HOLD",
     ]);
   });
 });
@@ -40,7 +38,7 @@ describe("groupIntoLanes", () => {
     const deals = [
       deal({ id: "1", stage: "RFP", picId: 2, pic: { id: 2, username: "Zoe" } }),
       deal({ id: "2", stage: "ASSESSMENT", picId: 1, pic: { id: 1, username: "Amir" } }),
-      deal({ id: "3", stage: "WON", picId: 1, pic: { id: 1, username: "Amir" } }),
+      deal({ id: "3", stage: "WAITING_RESPONSE", picId: 1, pic: { id: 1, username: "Amir" } }),
     ];
 
     const lanes = groupIntoLanes(deals);
@@ -53,7 +51,7 @@ describe("groupIntoLanes", () => {
   it("buckets a null picId into a single 'Unassigned' lane", () => {
     const deals = [
       deal({ id: "1", stage: "RFP", picId: null, pic: null }),
-      deal({ id: "2", stage: "HOLD", picId: null, pic: null }),
+      deal({ id: "2", stage: "POC", picId: null, pic: null }),
     ];
 
     const lanes = groupIntoLanes(deals);
@@ -81,7 +79,7 @@ describe("groupIntoLanes", () => {
   it("preserves input order within a lane and does not mutate the input array", () => {
     const deals = [
       deal({ id: "b", stage: "RFP", picId: 1, pic: { id: 1, username: "Amir" } }),
-      deal({ id: "a", stage: "WON", picId: 1, pic: { id: 1, username: "Amir" } }),
+      deal({ id: "a", stage: "WAITING_RESPONSE", picId: 1, pic: { id: 1, username: "Amir" } }),
     ];
     const snapshot = [...deals];
 
@@ -104,75 +102,92 @@ describe("dealsInCell", () => {
       pic: { id: 1, username: "Amir" },
       deals: [
         deal({ id: "1", stage: "RFP" }),
-        deal({ id: "2", stage: "WON" }),
+        deal({ id: "2", stage: "WAITING_RESPONSE" }),
         deal({ id: "3", stage: "RFP" }),
       ],
     };
 
     expect(dealsInCell(lane, "RFP").map((d) => d.id)).toEqual(["1", "3"]);
-    expect(dealsInCell(lane, "HOLD")).toEqual([]);
+    expect(dealsInCell(lane, "POC")).toEqual([]);
   });
 });
 
 describe("laneSummary", () => {
-  it("excludes WON deals from the count and value sum (mirrors reference's activeOpps)", () => {
+  it("sums active (open) deals in the lane", () => {
     const lane = {
       picId: 1,
       picName: "Amir",
       pic: { id: 1, username: "Amir" },
       deals: [
         deal({ id: "1", stage: "RFP", dealValue: 100 }),
-        deal({ id: "2", stage: "WON", dealValue: 999 }),
-        deal({ id: "3", stage: "HOLD", dealValue: 50 }),
+        deal({ id: "2", stage: "WAITING_RESPONSE", dealValue: 250 }),
+        deal({ id: "3", stage: "POC", dealValue: 50 }),
       ],
     };
 
-    expect(laneSummary(lane)).toEqual({ count: 2, total: 150 });
+    expect(laneSummary(lane)).toEqual({ count: 3, total: 400 });
   });
 
-  it("returns zeroes for a lane with no active deals", () => {
-    const lane = {
-      picId: 1,
-      picName: "Amir",
-      pic: { id: 1, username: "Amir" },
-      deals: [deal({ id: "1", stage: "WON", dealValue: 500 })],
-    };
-
-    expect(laneSummary(lane)).toEqual({ count: 0, total: 0 });
-  });
-
-  // A DROP deal never reaches a lane in practice today (PipelineSwimlane.tsx
-  // filters it out of `allDeals` before calling `groupIntoLanes`), but
-  // `groupIntoLanes` itself doesn't filter by stage — this exercises
-  // `laneSummary`'s own `isActiveDeal` exclusion as the independent safety
-  // net its doc comment describes, in case a DROP deal ever did land here.
-  it("excludes DROP deals from the count and value sum, same as WON", () => {
+  it("excludes a closed deal from the count and value sum, even though groupIntoLanes doesn't filter by outcome (S6: second, independent safety net)", () => {
     const lane = {
       picId: 1,
       picName: "Amir",
       pic: { id: 1, username: "Amir" },
       deals: [
         deal({ id: "1", stage: "RFP", dealValue: 100 }),
-        deal({ id: "2", stage: "DROP", dealValue: 999 }),
+        deal({ id: "2", stage: "DELIVER_PROPOSAL", dealValue: 999, outcome: "WON" }),
+        deal({ id: "3", stage: "ASSESSMENT", dealValue: 50, outcome: "CANCELLED" }),
       ],
     };
 
     expect(laneSummary(lane)).toEqual({ count: 1, total: 100 });
   });
+
+  it("returns zeroes for a lane with no deals", () => {
+    const lane = {
+      picId: 1,
+      picName: "Amir",
+      pic: { id: 1, username: "Amir" },
+      deals: [],
+    };
+
+    expect(laneSummary(lane)).toEqual({ count: 0, total: 0 });
+  });
+
+  it("returns zeroes for a lane whose only deals are closed", () => {
+    const lane = {
+      picId: 1,
+      picName: "Amir",
+      pic: { id: 1, username: "Amir" },
+      deals: [deal({ id: "1", stage: "DELIVER_PROPOSAL", dealValue: 500, outcome: "WON" })],
+    };
+
+    expect(laneSummary(lane)).toEqual({ count: 0, total: 0 });
+  });
 });
 
 describe("stageSummaries", () => {
-  it("sums count + value per stage across all lanes, INCLUDING won", () => {
+  it("sums count + value per stage across all lanes", () => {
     const lanes = groupIntoLanes([
       deal({ id: "1", stage: "RFP", dealValue: 100, picId: 1, pic: { id: 1, username: "Amir" } }),
       deal({ id: "2", stage: "RFP", dealValue: 200, picId: 2, pic: { id: 2, username: "Zoe" } }),
-      deal({ id: "3", stage: "WON", dealValue: 999, picId: 1, pic: { id: 1, username: "Amir" } }),
+      deal({
+        id: "3",
+        stage: "WAITING_RESPONSE",
+        dealValue: 999,
+        picId: 1,
+        pic: { id: 1, username: "Amir" },
+      }),
     ]);
 
     const summaries = stageSummaries(lanes);
 
     expect(summaries.find((s) => s.stage === "RFP")).toEqual({ stage: "RFP", count: 2, total: 300 });
-    expect(summaries.find((s) => s.stage === "WON")).toEqual({ stage: "WON", count: 1, total: 999 });
+    expect(summaries.find((s) => s.stage === "WAITING_RESPONSE")).toEqual({
+      stage: "WAITING_RESPONSE",
+      count: 1,
+      total: 999,
+    });
     expect(summaries.find((s) => s.stage === "ASSESSMENT")).toEqual({
       stage: "ASSESSMENT",
       count: 0,
