@@ -311,3 +311,61 @@ describe("links", () => {
     });
   });
 });
+
+// opportunity-flow-redesign §3.7: a note or a link write is deal activity
+// same as a stage move or a PATCH, so lastActivityAt bumps in the same
+// transaction as each one — read straight off the row (not the API
+// response, since these routes don't echo the parent Opportunity).
+describe("lastActivityAt bumps (§3.7)", () => {
+  async function lastActivityAtOf(opportunityId: string): Promise<Date> {
+    const row = await prisma.opportunity.findUniqueOrThrow({
+      where: { id: opportunityId },
+      select: { lastActivityAt: true },
+    });
+    return row.lastActivityAt;
+  }
+
+  it("bumps on a new activity note", async () => {
+    const viewer = await createViewer();
+    const opportunity = await createOpportunity();
+    const before = await lastActivityAtOf(opportunity.id);
+
+    const res = await request(app)
+      .post(`/opportunities/${opportunity.id}/activities`)
+      .set("Authorization", `Bearer ${viewer.token}`)
+      .send({ note: "Touching base" });
+    expect(res.status).toBe(201);
+
+    const after = await lastActivityAtOf(opportunity.id);
+    expect(after.getTime()).toBeGreaterThanOrEqual(before.getTime());
+  });
+
+  it("bumps on link create, patch, and delete", async () => {
+    const owner = await createOwnerCapableUser();
+    const opportunity = await createOpportunity({ picId: owner.userId });
+    const beforeCreate = await lastActivityAtOf(opportunity.id);
+
+    const created = await request(app)
+      .post(`/opportunities/${opportunity.id}/links`)
+      .set("Authorization", `Bearer ${owner.token}`)
+      .send({ label: "Doc", url: "https://example.com/doc" });
+    expect(created.status).toBe(201);
+    const afterCreate = await lastActivityAtOf(opportunity.id);
+    expect(afterCreate.getTime()).toBeGreaterThanOrEqual(beforeCreate.getTime());
+
+    const patched = await request(app)
+      .patch(`/opportunities/${opportunity.id}/links/${created.body.id}`)
+      .set("Authorization", `Bearer ${owner.token}`)
+      .send({ label: "Renamed doc" });
+    expect(patched.status).toBe(200);
+    const afterPatch = await lastActivityAtOf(opportunity.id);
+    expect(afterPatch.getTime()).toBeGreaterThanOrEqual(afterCreate.getTime());
+
+    const deleted = await request(app)
+      .delete(`/opportunities/${opportunity.id}/links/${created.body.id}`)
+      .set("Authorization", `Bearer ${owner.token}`);
+    expect(deleted.status).toBe(204);
+    const afterDelete = await lastActivityAtOf(opportunity.id);
+    expect(afterDelete.getTime()).toBeGreaterThanOrEqual(afterPatch.getTime());
+  });
+});

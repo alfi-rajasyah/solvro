@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
-import { PipelineStage } from "@prisma/client";
+import { PipelineOutcome, PipelineOutcomeReason, PipelineStage, PipelineStatusTag, PipelineSubStatus } from "@prisma/client";
 import type { Opportunity, Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { hasPermission, requireAuth, requirePermission } from "../http/auth.js";
@@ -9,6 +9,7 @@ import { validate } from "../http/validate.js";
 import { isValidDayString, utcMidnightOfDayString } from "../lib/dateBoundary.js";
 import { isCustomerVisible } from "../lib/visibility.js";
 import { assertCanAssignOpportunity, assertCanWriteOpportunity, PIC_SELECT } from "../lib/pipelineAccess.js";
+import { computeIdle } from "../lib/pipelineSla.js";
 import { logger } from "../logger.js";
 // Anti-drift seam (finding S6): the handoff body is byte-for-byte the same
 // shape as a plain project create, so this reuses routes/projects.ts's own
@@ -40,8 +41,10 @@ const picIdField = z.number().int().positive().nullable();
 // `.strict()` on create too (symmetry with update): `stage` is the one
 // writable field this schema exposes (POST /:id/move owns transitions
 // thereafter); everything else outside the listed fields — notably
-// `stageOrder` and `preHoldStage`, both server-computed/route-owned — 400s
-// instead of silently no-op'ing.
+// `stageOrder`, `outcome`, `outcomeReasonCategory`, `outcomeReason`,
+// `closedAt`, `wonAt`, `subStatus`, `statusTag`, `waitingInputSince`, and
+// `lastActivityAt`, all server-computed/route-owned — 400s instead of
+// silently no-op'ing.
 const createOpportunitySchema = z
   .object({
     title: z.string().min(1).max(200),
@@ -58,10 +61,13 @@ const createOpportunitySchema = z
   })
   .strict();
 
-// `.strict()`: stage (and stageOrder, preHoldStage) changes are rejected
-// here rather than silently dropped — POST /:id/move is the ONLY writer of
-// stage changes (and the HOLD/preHoldStage pair that comes with them), so a
-// client that sends `stage` in a PATCH body gets a 400, not a no-op.
+// `.strict()`: stage (and stageOrder, outcome*, closedAt, wonAt,
+// waitingInputSince, lastActivityAt) changes are rejected here rather than
+// silently dropped — POST /:id/move is the ONLY writer of stage changes and
+// POST /:id/close + /:id/reopen are the only writers of the outcome group,
+// so a client that sends any of those in a PATCH body gets a 400, not a
+// no-op. `subStatus`/`statusTag` ARE writable here (§3.3) — PATCH is their
+// one writer, gated by the rules right below this schema.
 const updateOpportunitySchema = z
   .object({
     title: z.string().min(1).max(200).optional(),
@@ -74,13 +80,68 @@ const updateOpportunitySchema = z
     productSolution: z.string().max(500).optional(),
     leadSource: z.string().max(200).nullable().optional(),
     winProbability: z.number().int().min(0).max(100).optional(),
+    subStatus: z.enum(["PROGRESS", "WAITING_SALES_INPUT"]).nullable().optional(),
+    statusTag: z.enum(["HOLD", "DELAYED"]).nullable().optional(),
   })
   .strict();
 
+// `reason` is required only for the Technical Clarification -> RFP jump
+// (D4, enforced in the handler below, not here — the requirement is
+// conditional on the CURRENT stage, which the schema can't see). Any other
+// transition may carry a reason too; it's simply not surfaced in the
+// activity note.
 const moveOpportunitySchema = z.object({
   stage: z.nativeEnum(PipelineStage),
   stageOrder: z.number().int().min(0),
+  reason: z.string().min(1).max(500).optional(),
 });
+
+// `.strict()`: outcome + the optional reason pair is the entire writable
+// surface (§3.5) — WON never carries a reason, LOST/CANCELLED each restrict
+// to their own REASONS_BY_OUTCOME subset (checked in the handler, since Zod
+// can't express "valid values depend on another field" cleanly here).
+const closeOpportunitySchema = z
+  .object({
+    outcome: z.nativeEnum(PipelineOutcome),
+    reasonCategory: z.nativeEnum(PipelineOutcomeReason).optional(),
+    // `.min(1)` (N7 fix, phase review): without it an empty string passed
+    // the schema and would have been stored/appended to the activity note
+    // as a "given" note — `undefined` (the field omitted) is still the only
+    // way to close with no note, same as `moveOpportunitySchema`'s `reason`.
+    reason: z.string().min(1).max(500).optional(),
+  })
+  .strict();
+
+// Close-reason categories allowed per outcome (§3.5) — exported so the
+// frontend's CloseDealDialog mirrors this exact list instead of
+// re-deriving it and drifting.
+export const REASONS_BY_OUTCOME: Record<"LOST" | "CANCELLED", PipelineOutcomeReason[]> = {
+  LOST: [
+    PipelineOutcomeReason.PRICE,
+    PipelineOutcomeReason.COMPETITOR,
+    PipelineOutcomeReason.TECHNICAL,
+    PipelineOutcomeReason.OTHER,
+  ],
+  CANCELLED: [
+    PipelineOutcomeReason.BUDGET_WITHDRAWN,
+    PipelineOutcomeReason.PROJECT_CANCELLED,
+    PipelineOutcomeReason.LOST_CONTACT,
+    PipelineOutcomeReason.OTHER,
+  ],
+};
+
+// Human-readable labels for the activity-note text ("Closed as Lost
+// (Competitor)") — the reason categories a Close can carry, keyed the same
+// way STAGE_LABELS keys PipelineStage below.
+const OUTCOME_REASON_LABELS: Record<PipelineOutcomeReason, string> = {
+  PRICE: "Price",
+  COMPETITOR: "Competitor",
+  TECHNICAL: "Technical",
+  BUDGET_WITHDRAWN: "Budget withdrawn",
+  PROJECT_CANCELLED: "Project cancelled",
+  LOST_CONTACT: "Lost contact",
+  OTHER: "Other",
+};
 
 // `.strict()`: the only writable field is the new PIC — this route exists
 // specifically to hand a PIC to an unassigned deal (docs/plans/
@@ -108,11 +169,13 @@ const IMPORT_ROW_CAP = 500;
 // spaces -> underscores — so "Deliver Proposal", "DELIVER_PROPOSAL", and
 // " deliver_proposal " all resolve to the same literal. Mirrored here.
 //
-// Deliberately only 8 entries, not all 9 PipelineStage values: the oracle's
-// own VALID_STAGES list excludes "hold" — HOLD is reachable only via
-// POST /:id/move from an existing stage (see the schema comment on
-// Opportunity.preHoldStage), never a row's starting stage, so it isn't a
-// valid import target either.
+// 6 entries — exactly the stages PipelineStage has (D2). Won, Drop and Hold
+// are no longer stages (D5/D12: they're an `outcome`/`statusTag` on top of
+// whichever of these 6 stages the deal reached), so a "Won"/"Drop"/"Hold"
+// row is rejected with the same invalid-stage message any other
+// unrecognized literal gets (D9) — there's no createable-but-not-importable
+// carve-out to track here anymore, unlike this map's old 8-of-9 HOLD
+// exclusion.
 const IMPORT_STAGE_MAP: Record<string, PipelineStage> = {
   assessment: PipelineStage.ASSESSMENT,
   rfp: PipelineStage.RFP,
@@ -120,8 +183,6 @@ const IMPORT_STAGE_MAP: Record<string, PipelineStage> = {
   technical_clarification: PipelineStage.TECHNICAL_CLARIFICATION,
   deliver_proposal: PipelineStage.DELIVER_PROPOSAL,
   waiting_response: PipelineStage.WAITING_RESPONSE,
-  won: PipelineStage.WON,
-  drop: PipelineStage.DROP,
 };
 
 function normalizeStageLiteral(raw: string): PipelineStage | undefined {
@@ -214,9 +275,6 @@ const STAGE_LABELS: Record<PipelineStage, string> = {
   TECHNICAL_CLARIFICATION: "Technical Clarification",
   DELIVER_PROPOSAL: "Delivered Proposal",
   WAITING_RESPONSE: "Waiting Response",
-  WON: "Won",
-  DROP: "Drop",
-  HOLD: "Hold",
 };
 
 type OpportunityWithPic = Opportunity & {
@@ -229,16 +287,28 @@ type OpportunityWithPic = Opportunity & {
  * BigInt. `deadline`/`requestDate` are plain calendar days (`@db.Date`, "no
  * instant conversion" per the schema comment) — re-deriving the UTC
  * date-part keeps the wire contract a bare "yyyy-MM-dd" day string rather
- * than a full ISO instant. `preHoldStage` needs no conversion (plain enum,
- * already part of `...o`). Every response funnels through this one helper
- * so these conversions never drift out of sync across handlers.
+ * than a full ISO instant. `waitingInputSince`/`closedAt`/`lastActivityAt`
+ * need no such conversion — they're real instants, so `...o`'s plain `Date`
+ * values already serialize as ISO 8601 strings through `res.json`'s
+ * `JSON.stringify` (same as `createdAt`/`updatedAt`/`wonAt` always have).
+ * `outcome`, `outcomeReasonCategory`, `outcomeReason`, `subStatus`,
+ * `statusTag` pass through unchanged too. Adds two DERIVED fields no column
+ * backs: `owner` (D3 — "client" only while the deal sits in Waiting
+ * Response, "sa" otherwise) and `idle` (§3.6's `computeIdle`, D1: computed
+ * fresh on every read, never a stored/cron-maintained flag). `now` is
+ * optional so a list response can compute it once and pass the same instant
+ * to every row instead of each row racing its own `Date.now()`. Every
+ * response funnels through this one helper so these conversions never drift
+ * out of sync across handlers.
  */
-function serializeOpportunity(o: OpportunityWithPic) {
+function serializeOpportunity(o: OpportunityWithPic, now: Date = new Date()) {
   return {
     ...o,
     dealValue: Number(o.dealValue),
     deadline: o.deadline ? o.deadline.toISOString().slice(0, 10) : null,
     requestDate: o.requestDate ? o.requestDate.toISOString().slice(0, 10) : null,
+    owner: o.stage === PipelineStage.WAITING_RESPONSE ? "client" : "sa",
+    idle: computeIdle(o, now),
   };
 }
 
@@ -313,11 +383,15 @@ opportunitiesRouter.use(requireAuth);
 // docs/plans/pipeline-native-port-plan.md). Board column order: stage, then
 // stageOrder within it.
 opportunitiesRouter.get("/", requirePermission("pipeline:view"), async (_req, res) => {
+  // One `now` shared across every row's `idle` computation (§3.1) — so a
+  // slow query can't leave two rows in the same response disagreeing about
+  // what "now" was.
+  const now = new Date();
   const opportunities = await prisma.opportunity.findMany({
     orderBy: [{ stage: "asc" }, { stageOrder: "asc" }],
     include: { pic: { select: PIC_SELECT } },
   });
-  res.json(opportunities.map((o) => serializeOpportunity(o as OpportunityWithPic)));
+  res.json(opportunities.map((o) => serializeOpportunity(o as OpportunityWithPic, now)));
 });
 
 // Import history for the Admin > Pipeline tab (M4.19). Lives on this
@@ -366,6 +440,13 @@ opportunitiesRouter.post(
       title: body.title,
       customerName: body.customerName,
       stage,
+      // New rows start PROGRESS unless created straight into Waiting
+      // Response, where there's no Sales-input gate to start in progress
+      // (owner is already "client" from square one) — mirrors PATCH's own
+      // sub_status_not_allowed rule. `lastActivityAt` starts at creation
+      // time, same as any other writer bump (§3.7).
+      subStatus: stage === PipelineStage.WAITING_RESPONSE ? null : PipelineSubStatus.PROGRESS,
+      lastActivityAt: new Date(),
     };
     if (body.dealValue !== undefined) data.dealValue = toDealValue(body.dealValue);
     // `disconnect` isn't a valid nested-write action on create (there's
@@ -387,15 +468,6 @@ opportunitiesRouter.post(
     if (body.productSolution !== undefined) data.productSolution = body.productSolution;
     if (body.leadSource !== undefined) data.leadSource = body.leadSource;
     if (body.winProbability !== undefined) data.winProbability = body.winProbability;
-    // Creating directly into WON is a real flow (the PRD's per-column "+"
-    // lets an SA add a deal straight into any column, including Won) so it
-    // gets the same wonAt bookkeeping POST /:id/move does on a transition
-    // into WON (finding S2).
-    if (stage === PipelineStage.WON) data.wonAt = new Date();
-    // Creating directly into HOLD, by contrast, has no "prior stage" to
-    // record — HOLD is normally only reached via /move from an existing
-    // stage — so preHoldStage is deliberately left null here (the schema
-    // default), same as any other creation path.
 
     // New card lands at the BOTTOM of its stage (MAX(stageOrder)+1
     // semantics) — matches the reference's
@@ -543,13 +615,14 @@ opportunitiesRouter.post(
             leadSource: raw.leadSource?.trim() || null,
             winProbability: winProbabilityRaw,
             stageOrder,
+            // Same subStatus/lastActivityAt bookkeeping POST "/" applies
+            // (§3.2) — an imported row follows the exact same creation rule
+            // as the per-column "+" create.
+            subStatus: stage === PipelineStage.WAITING_RESPONSE ? null : PipelineSubStatus.PROGRESS,
+            lastActivityAt: new Date(),
           };
           if (picId !== null) data.pic = { connect: { id: picId } };
           if (deadlineRaw) data.deadline = utcMidnightOfDayString(deadlineRaw);
-          // Same wonAt bookkeeping POST "/" applies when created directly
-          // into WON (finding S2) — an import row landing straight in Won
-          // is the same real flow as the per-column "+" create.
-          if (stage === PipelineStage.WON) data.wonAt = new Date();
 
           const opportunity = await tx.opportunity.create({ data });
 
@@ -604,6 +677,14 @@ opportunitiesRouter.post(
   },
 );
 
+// subStatus/statusTag rules (§3.3): both are refused outright on a closed
+// deal (400 deal_closed — reopen it first, D5), and a non-null subStatus is
+// refused on a Waiting Response deal (400 sub_status_not_allowed — there's
+// no Sales-input gate to track while the deal sits with the client, D3).
+// Real transitions (not "same value again") bump waitingInputSince and log
+// one of the fixed activity notes; plain field edits (title, value, ...)
+// still write no note, as before. Wrapped in one transaction with the
+// update so the row change and its note are atomic.
 opportunitiesRouter.patch(
   "/:id",
   validate("params", idParamSchema),
@@ -613,6 +694,13 @@ opportunitiesRouter.patch(
     const body = req.body as z.infer<typeof updateOpportunitySchema>;
     const current = await findOpportunityOr404(id);
     assertCanWriteOpportunity(req.user!, "edit", current);
+
+    if ((body.subStatus !== undefined || body.statusTag !== undefined) && current.outcome !== null) {
+      throw new HttpError(400, "deal_closed", "Reopen the deal first");
+    }
+    if (body.subStatus != null && current.stage === PipelineStage.WAITING_RESPONSE) {
+      throw new HttpError(400, "sub_status_not_allowed", "Sub-status doesn't apply to a Waiting Response deal");
+    }
 
     const data: Prisma.OpportunityUpdateInput = {};
     if (body.title !== undefined) data.title = body.title;
@@ -636,24 +724,75 @@ opportunitiesRouter.patch(
     if (body.leadSource !== undefined) data.leadSource = body.leadSource;
     if (body.winProbability !== undefined) data.winProbability = body.winProbability;
 
-    const updated = await prisma.opportunity.update({
-      where: { id },
-      data,
-      include: { pic: { select: PIC_SELECT } },
+    // Real transitions only — repeating the same value is a true no-op: no
+    // field write, no waitingInputSince churn, no note.
+    const notes: string[] = [];
+    if (body.subStatus !== undefined && body.subStatus !== current.subStatus) {
+      data.subStatus = body.subStatus;
+      if (body.subStatus === PipelineSubStatus.WAITING_SALES_INPUT) {
+        data.waitingInputSince = new Date();
+        notes.push("Waiting for Sales input");
+      } else {
+        data.waitingInputSince = null;
+        notes.push("Input received");
+      }
+    }
+    if (body.statusTag !== undefined && body.statusTag !== current.statusTag) {
+      data.statusTag = body.statusTag;
+      // A tag-to-tag swap (Hold <-> Delayed) logs BOTH the old tag's
+      // clearing note and the new tag's entering note, in that order (N5
+      // fix, phase review) — checking `current` and `body` independently
+      // (rather than one `if`/`else if` chain) means a swap naturally falls
+      // through both checks instead of the old code's chain treating a
+      // non-null `body.statusTag` as "only entering" and silently dropping
+      // the clearing note for whichever tag the deal already carried.
+      if (current.statusTag === PipelineStatusTag.HOLD) notes.push("Hold released");
+      if (current.statusTag === PipelineStatusTag.DELAYED) notes.push("Delay cleared");
+      if (body.statusTag === PipelineStatusTag.HOLD) notes.push("Put on hold");
+      if (body.statusTag === PipelineStatusTag.DELAYED) notes.push("Marked as delayed");
+    }
+
+    // Bump lastActivityAt on any accepted field (§3.7) — but only if this
+    // PATCH actually changes something; an empty/no-op body shouldn't make
+    // the deal look freshly touched.
+    if (Object.keys(data).length > 0) data.lastActivityAt = new Date();
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.opportunity.update({
+        where: { id },
+        data,
+        include: { pic: { select: PIC_SELECT } },
+      });
+      for (const note of notes) {
+        await tx.opportunityActivity.create({
+          data: { opportunityId: id, userId: req.user!.sub, note },
+        });
+      }
+      return result;
     });
+
     res.json(serializeOpportunity(updated));
   },
 );
 
-// The ONLY writer of stage changes. One transaction: resequence siblings in
-// the old/new stage (dense 0..n-1 each), set/clear `wonAt` on a real
-// transition into/out of WON, set/clear `preHoldStage` on a real transition
-// into/out of HOLD (mirrors the reference's cron-driven auto-hold/restore —
-// VeloraApp/lib/run-auto-hold-cron.ts — except here /move is the single
-// writer for both manual and would-be-automated hold transitions, so the
-// invariant is enforced on every stage change, not only the cron path), and
-// log an OpportunityActivity — but only on an actual stage change, never a
-// same-stage reorder.
+// The ONLY writer of stage changes. Any stage may move to any stage (D4, no
+// forward-only enforcement); the one guarded transition is Technical
+// Clarification -> RFP, which 400s (`skip_reason_required`) without a
+// `reason` — the spec's PoC-skip — and carries that reason into the
+// activity note. A closed deal (`outcome !== null`) 409s (`closed`): D5
+// locks the stage a deal reached at close, so moving it makes no sense
+// until POST /:id/reopen clears the outcome. One transaction: resequence
+// siblings in the old/new stage (dense 0..n-1 each) and bookkeep
+// subStatus/waitingInputSince on a real transition into/out of Waiting
+// Response (D3's derived `owner` flips with the stage, so there's no
+// Sales-input gate to track while the deal sits with the client). A
+// same-stage reorder is NOT activity (D15, phase review finding SF2):
+// dragging a card one slot within its column writes no note AND does not
+// bump `lastActivityAt` — only an actual stage change does either. The
+// wonAt/preHoldStage bookkeeping this comment used to describe (mirroring
+// the reference's cron-driven auto-hold/restore) is gone along with
+// WON/HOLD leaving PipelineStage — see POST /:id/close and PATCH's
+// statusTag handling instead.
 opportunitiesRouter.post(
   "/:id/move",
   validate("params", idParamSchema),
@@ -664,6 +803,16 @@ opportunitiesRouter.post(
     const current = await findOpportunityOr404(id);
     assertCanWriteOpportunity(req.user!, "edit", current);
 
+    if (current.outcome !== null) {
+      throw new HttpError(409, "closed", "Reopen the deal first");
+    }
+
+    const isSkipJump =
+      current.stage === PipelineStage.TECHNICAL_CLARIFICATION && body.stage === PipelineStage.RFP;
+    if (isSkipJump && !body.reason) {
+      throw new HttpError(400, "skip_reason_required", "A reason is required to skip PoC");
+    }
+
     const sameStage = current.stage === body.stage;
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -672,19 +821,25 @@ opportunitiesRouter.post(
       }
       const finalStageOrder = await insertAtStage(tx, body.stage, id, body.stageOrder);
 
-      const enteringWon = body.stage === PipelineStage.WON && current.stage !== PipelineStage.WON;
-      const leavingWon = body.stage !== PipelineStage.WON && current.stage === PipelineStage.WON;
-      const enteringHold = body.stage === PipelineStage.HOLD && current.stage !== PipelineStage.HOLD;
-      const leavingHold = body.stage !== PipelineStage.HOLD && current.stage === PipelineStage.HOLD;
+      const enteringWaitingResponse =
+        body.stage === PipelineStage.WAITING_RESPONSE && current.stage !== PipelineStage.WAITING_RESPONSE;
+      const leavingWaitingResponse =
+        body.stage !== PipelineStage.WAITING_RESPONSE && current.stage === PipelineStage.WAITING_RESPONSE;
 
       const data: Prisma.OpportunityUncheckedUpdateInput = {
         stage: body.stage,
         stageOrder: finalStageOrder,
       };
-      if (enteringWon) data.wonAt = new Date();
-      if (leavingWon) data.wonAt = null;
-      if (enteringHold) data.preHoldStage = current.stage;
-      if (leavingHold) data.preHoldStage = null;
+      // D15: a same-stage reorder isn't activity — only a real stage change
+      // bumps lastActivityAt (same gate the note below uses).
+      if (!sameStage) data.lastActivityAt = new Date();
+      if (enteringWaitingResponse) {
+        data.subStatus = null;
+        data.waitingInputSince = null;
+      }
+      if (leavingWaitingResponse) {
+        data.subStatus = PipelineSubStatus.PROGRESS;
+      }
 
       const result = await tx.opportunity.update({
         where: { id },
@@ -693,12 +848,11 @@ opportunitiesRouter.post(
       });
 
       if (!sameStage) {
+        const note = isSkipJump
+          ? `Moved from Technical Clarification to RFP, PoC skipped: ${body.reason}`
+          : `Moved from ${STAGE_LABELS[current.stage]} to ${STAGE_LABELS[body.stage]}`;
         await tx.opportunityActivity.create({
-          data: {
-            opportunityId: id,
-            userId: req.user!.sub,
-            note: `Moved from ${STAGE_LABELS[current.stage]} to ${STAGE_LABELS[body.stage]}`,
-          },
+          data: { opportunityId: id, userId: req.user!.sub, note },
         });
       }
 
@@ -708,6 +862,128 @@ opportunitiesRouter.post(
     res.json(serializeOpportunity(updated));
   },
 );
+
+// --- POST /:id/close ---------------------------------------------------------
+//
+// One Close deal action for Won/Lost/Cancelled (D5) — the stage the deal
+// reached is never reset; only the outcome group changes. WON never carries
+// a reason (400 reason_not_allowed if one is sent); LOST/CANCELLED each
+// require a category from their own REASONS_BY_OUTCOME subset (400
+// reason_required / reason_category_invalid) plus an optional free-text
+// note, appended to the activity text only when actually given. Already
+// closed -> 409 already_closed (reopen first). One transaction: set the
+// outcome group + closedAt/wonAt, clear the open-deal flags
+// (subStatus/waitingInputSince/statusTag — a closed deal tracks none of
+// them), bump lastActivityAt, and log the note.
+opportunitiesRouter.post(
+  "/:id/close",
+  validate("params", idParamSchema),
+  validate("body", closeOpportunitySchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const body = req.body as z.infer<typeof closeOpportunitySchema>;
+    const current = await findOpportunityOr404(id);
+    assertCanWriteOpportunity(req.user!, "edit", current);
+
+    if (current.outcome !== null) {
+      throw new HttpError(409, "already_closed", "This deal is already closed");
+    }
+
+    let note: string;
+    if (body.outcome === PipelineOutcome.WON) {
+      if (body.reasonCategory !== undefined || body.reason !== undefined) {
+        throw new HttpError(400, "reason_not_allowed", "A deal closed as Won doesn't take a reason");
+      }
+      note = "Closed as Won";
+    } else {
+      const outcomeLabel = body.outcome === PipelineOutcome.LOST ? "Lost" : "Cancelled";
+      if (body.reasonCategory === undefined) {
+        throw new HttpError(400, "reason_required", `A reason category is required to close as ${outcomeLabel}`);
+      }
+      const allowed = REASONS_BY_OUTCOME[body.outcome];
+      if (!allowed.includes(body.reasonCategory)) {
+        throw new HttpError(
+          400,
+          "reason_category_invalid",
+          `"${OUTCOME_REASON_LABELS[body.reasonCategory]}" isn't a valid reason for ${outcomeLabel}`,
+        );
+      }
+      note = `Closed as ${outcomeLabel} (${OUTCOME_REASON_LABELS[body.reasonCategory]})`;
+      if (body.reason) note += `: ${body.reason}`;
+    }
+
+    const now = new Date();
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.opportunity.update({
+        where: { id },
+        data: {
+          outcome: body.outcome,
+          outcomeReasonCategory: body.reasonCategory ?? null,
+          outcomeReason: body.reason ?? null,
+          closedAt: now,
+          wonAt: body.outcome === PipelineOutcome.WON ? now : null,
+          subStatus: null,
+          waitingInputSince: null,
+          statusTag: null,
+          lastActivityAt: now,
+        },
+        include: { pic: { select: PIC_SELECT } },
+      });
+      await tx.opportunityActivity.create({
+        data: { opportunityId: id, userId: req.user!.sub, note },
+      });
+      return result;
+    });
+
+    res.json(serializeOpportunity(updated));
+  },
+);
+
+// --- POST /:id/reopen --------------------------------------------------------
+//
+// Undoes POST /:id/close (D5): clears the outcome group (outcome,
+// outcomeReasonCategory, outcomeReason, closedAt, wonAt), restores subStatus
+// (PROGRESS on an open-funnel stage, null on Waiting Response — the same
+// split /move's entering/leavingWaitingResponse branches apply), bumps
+// lastActivityAt, and logs "Reopened". Not closed -> 409 not_closed. Already
+// handed off to a project -> 409 handed_off: the handoff is a one-way door
+// (see POST /:id/handoff's own doc comment on why there's no unlink route),
+// so there is nothing coherent left to reopen.
+opportunitiesRouter.post("/:id/reopen", validate("params", idParamSchema), async (req, res) => {
+  const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+  const current = await findOpportunityOr404(id);
+  assertCanWriteOpportunity(req.user!, "edit", current);
+
+  if (current.outcome === null) {
+    throw new HttpError(409, "not_closed", "This deal isn't closed");
+  }
+  if (current.projectId !== null) {
+    throw new HttpError(409, "handed_off", "This deal already became a project");
+  }
+
+  const now = new Date();
+  const updated = await prisma.$transaction(async (tx) => {
+    const result = await tx.opportunity.update({
+      where: { id },
+      data: {
+        outcome: null,
+        outcomeReasonCategory: null,
+        outcomeReason: null,
+        closedAt: null,
+        wonAt: null,
+        subStatus: current.stage === PipelineStage.WAITING_RESPONSE ? null : PipelineSubStatus.PROGRESS,
+        lastActivityAt: now,
+      },
+      include: { pic: { select: PIC_SELECT } },
+    });
+    await tx.opportunityActivity.create({
+      data: { opportunityId: id, userId: req.user!.sub, note: "Reopened" },
+    });
+    return result;
+  });
+
+  res.json(serializeOpportunity(updated));
+});
 
 // The one writer of a PIC on an unassigned deal for `pipeline:edit_own`
 // holders (docs/plans/claim-unassigned-deals.md D1/D2/D4) — PATCH keeps
@@ -756,9 +1032,12 @@ opportunitiesRouter.post(
     }
 
     const updated = await prisma.$transaction(async (tx) => {
+      // lastActivityAt bumps here too (§3.7) — only reached once the
+      // no-op short-circuit above has ruled out "same PIC again", so this
+      // transaction only ever runs on a real PIC change.
       const result = await tx.opportunity.update({
         where: { id },
-        data: { pic: { connect: { id: pic.id } } },
+        data: { pic: { connect: { id: pic.id } }, lastActivityAt: new Date() },
         include: { pic: { select: PIC_SELECT } },
       });
 
@@ -832,8 +1111,8 @@ opportunitiesRouter.post(
       throw new HttpError(403, "forbidden", "Missing permission: project:write");
     }
 
-    if (current.stage !== PipelineStage.WON) {
-      throw new HttpError(409, "not_won", "Only a deal in stage WON can be handed off to a project");
+    if (current.outcome !== PipelineOutcome.WON) {
+      throw new HttpError(409, "not_won", "Only a deal closed as Won can be handed off to a project");
     }
     if (current.projectId !== null) {
       throw new HttpError(409, "already_linked", "This deal is already linked to a project");
@@ -877,7 +1156,7 @@ opportunitiesRouter.post(
       // here rolls back the whole transaction — including the project just
       // created above — so no orphaned, unlinked project is left behind.
       const linked = await tx.opportunity.updateMany({
-        where: { id, projectId: null, stage: PipelineStage.WON },
+        where: { id, projectId: null, outcome: PipelineOutcome.WON },
         data: { projectId: project.id },
       });
       if (linked.count === 0) {
@@ -885,12 +1164,12 @@ opportunitiesRouter.post(
         // with another request that committed in between (finding N7):
         // re-read the row inside this same transaction to report which
         // guard actually lost the race, rather than always assuming
-        // already_linked — a concurrent move OUT of WON is just as
+        // already_linked — a concurrent /reopen away from Won is just as
         // possible as a concurrent handoff by another caller, and the two
         // deserve their own distinct 409 codes same as the eager checks do.
         const latest = await tx.opportunity.findUniqueOrThrow({ where: { id } });
-        if (latest.stage !== PipelineStage.WON) {
-          throw new HttpError(409, "not_won", "Only a deal in stage WON can be handed off to a project");
+        if (latest.outcome !== PipelineOutcome.WON) {
+          throw new HttpError(409, "not_won", "Only a deal closed as Won can be handed off to a project");
         }
         throw new HttpError(409, "already_linked", "This deal was handed off by another request");
       }

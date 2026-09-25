@@ -129,18 +129,31 @@ describe("POST /opportunities/import — valid rows", () => {
     expect(second?.stageOrder).toBe(before + 1);
   });
 
-  it("stamps wonAt for a row imported directly into won — mirrors POST / create's rule", async () => {
+  it("starts subStatus PROGRESS and lastActivityAt set for a row imported into an open stage — mirrors POST / create's rule", async () => {
     const importer = await createImporter();
     const res = await importRows(importer.token, [
-      { title: "ImpTest Won Deal", customerName: "ImpTest Won Co", stage: "won" },
+      { title: "ImpTest Open Deal", customerName: "ImpTest Open Co", stage: "assessment" },
     ]);
     expect(res.status).toBe(200);
     expect(res.body.validCount).toBe(1);
 
     const id = res.body.results[0].id as string;
     const created = await prisma.opportunity.findUnique({ where: { id } });
-    expect(created?.stage).toBe("WON");
-    expect(created?.wonAt).not.toBeNull();
+    expect(created?.subStatus).toBe("PROGRESS");
+    expect(created?.lastActivityAt).not.toBeNull();
+  });
+
+  it("starts subStatus null for a row imported directly into waiting_response", async () => {
+    const importer = await createImporter();
+    const res = await importRows(importer.token, [
+      { title: "ImpTest WR Deal", customerName: "ImpTest WR Co", stage: "waiting_response" },
+    ]);
+    expect(res.status).toBe(200);
+    expect(res.body.validCount).toBe(1);
+
+    const id = res.body.results[0].id as string;
+    const created = await prisma.opportunity.findUnique({ where: { id } });
+    expect(created?.subStatus).toBeNull();
   });
 
   it("stores an optional activityLog as an OpportunityActivity attributed to the importing user", async () => {
@@ -187,13 +200,22 @@ describe("POST /opportunities/import — invalid rows", () => {
     expect(res.body.results[0].reason).toMatch(/Invalid stage/);
   });
 
-  it("rejects 'hold' as an import stage — reachable only via /move, never a row's starting stage", async () => {
+  it("rejects 'won', 'drop', and 'hold' as import stages — they're an outcome/statusTag now, never a stage (D9)", async () => {
     const importer = await createImporter();
     const res = await importRows(importer.token, [
+      { title: "ImpTest Won Deal", customerName: "ImpTest Won Co", stage: "won" },
+      { title: "ImpTest Drop Deal", customerName: "ImpTest Drop Co", stage: "drop" },
       { title: "ImpTest Hold Deal", customerName: "ImpTest Hold Co", stage: "hold" },
     ]);
     expect(res.status).toBe(200);
-    expect(res.body.results[0].status).toBe("invalid");
+    expect(res.body.invalidCount).toBe(3);
+    for (const result of res.body.results) {
+      expect(result.status).toBe("invalid");
+      // The message lists exactly the 6 stages IMPORT_STAGE_MAP now has.
+      expect(result.reason).toMatch(
+        /Invalid stage ".*" — must be one of: assessment, rfp, poc, technical_clarification, deliver_proposal, waiting_response/,
+      );
+    }
   });
 
   it("accepts a stage literal case- and spacing-insensitively, same as the reference client", async () => {

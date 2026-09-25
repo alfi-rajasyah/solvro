@@ -79,6 +79,11 @@ opportunityItemsRouter.get(
 // pipeline:view (not an edit permission) is deliberate: logging an activity
 // note is collaboration on a deal, not editing it — anyone who can see the
 // board can leave a note. Flagged for review per the dispatch brief.
+//
+// Bumps the opportunity's lastActivityAt in the same transaction
+// (opportunity-flow-redesign §3.7) — a manual note is exactly the kind of
+// activity the "activity" basis of computeIdle (lib/pipelineSla.ts) exists
+// to track, same as the link writes below.
 opportunityItemsRouter.post(
   "/:opportunityId/activities",
   requirePermission("pipeline:view"),
@@ -88,9 +93,16 @@ opportunityItemsRouter.post(
     const { opportunityId } = req.params as unknown as z.infer<typeof opportunityIdParamSchema>;
     const { note } = req.body as z.infer<typeof createActivitySchema>;
     await ensureOpportunityExists(opportunityId);
-    const activity = await prisma.opportunityActivity.create({
-      data: { opportunityId, userId: req.user!.sub, note },
-      include: { user: { select: PIC_SELECT } },
+    const activity = await prisma.$transaction(async (tx) => {
+      const created = await tx.opportunityActivity.create({
+        data: { opportunityId, userId: req.user!.sub, note },
+        include: { user: { select: PIC_SELECT } },
+      });
+      await tx.opportunity.update({
+        where: { id: opportunityId },
+        data: { lastActivityAt: new Date() },
+      });
+      return created;
     });
     res.status(201).json(activity);
   },
@@ -111,6 +123,9 @@ opportunityItemsRouter.get(
   },
 );
 
+// lastActivityAt bumps in the same transaction as the link create/patch/
+// delete below (§3.7, same reasoning as the activity-note POST above) —
+// adding, editing, or removing a link is deal activity same as a note.
 opportunityItemsRouter.post(
   "/:opportunityId/links",
   validate("params", opportunityIdParamSchema),
@@ -119,8 +134,12 @@ opportunityItemsRouter.post(
     const { opportunityId } = req.params as unknown as z.infer<typeof opportunityIdParamSchema>;
     const body = req.body as z.infer<typeof createLinkSchema>;
     await ensureOpportunityEditable(req.user!, opportunityId);
-    const link = await prisma.opportunityLink.create({
-      data: { opportunityId, label: body.label, url: body.url },
+    const link = await prisma.$transaction(async (tx) => {
+      const created = await tx.opportunityLink.create({
+        data: { opportunityId, label: body.label, url: body.url },
+      });
+      await tx.opportunity.update({ where: { id: opportunityId }, data: { lastActivityAt: new Date() } });
+      return created;
     });
     res.status(201).json(link);
   },
@@ -141,7 +160,11 @@ opportunityItemsRouter.patch(
     if (!link || link.opportunityId !== opportunityId) {
       throw new HttpError(404, "not_found", "Link not found");
     }
-    const updated = await prisma.opportunityLink.update({ where: { id: linkId }, data: body });
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.opportunityLink.update({ where: { id: linkId }, data: body });
+      await tx.opportunity.update({ where: { id: opportunityId }, data: { lastActivityAt: new Date() } });
+      return result;
+    });
     res.json(updated);
   },
 );
@@ -159,7 +182,10 @@ opportunityItemsRouter.delete(
     if (!link || link.opportunityId !== opportunityId) {
       throw new HttpError(404, "not_found", "Link not found");
     }
-    await prisma.opportunityLink.delete({ where: { id: linkId } });
+    await prisma.$transaction(async (tx) => {
+      await tx.opportunityLink.delete({ where: { id: linkId } });
+      await tx.opportunity.update({ where: { id: opportunityId }, data: { lastActivityAt: new Date() } });
+    });
     res.status(204).end();
   },
 );
