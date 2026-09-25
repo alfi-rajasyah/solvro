@@ -1,5 +1,12 @@
 import { fileURLToPath } from "node:url";
-import { PrismaClient, PipelineStage } from "@prisma/client";
+import {
+  PrismaClient,
+  PipelineStage,
+  PipelineOutcome,
+  PipelineOutcomeReason,
+  PipelineStatusTag,
+  PipelineSubStatus,
+} from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { utcMidnightOfDayString } from "../src/lib/dateBoundary.js";
 
@@ -17,8 +24,11 @@ import { utcMidnightOfDayString } from "../src/lib/dateBoundary.js";
  *                           unmatched profile maps to `null`, and every
  *                           opportunity/activity that referenced it imports
  *                           PIC-less / author-less. Collected in the report.
- *   - `opportunities`    -> `Opportunity` verbatim (same id, stage literals
- *                           mapped onto the PipelineStage enum, BigInt-safe
+ *   - `opportunities`    -> `Opportunity` verbatim (same id, the 6 open
+ *                           stage literals mapped onto the PipelineStage
+ *                           enum; won/drop/hold map onto outcome/statusTag
+ *                           instead, per the opportunity-flow-redesign D6
+ *                           backfill — see STAGE_MAP below, BigInt-safe
  *                           deal_value, createdAt/updatedAt preserved,
  *                           stage_order preserved as-is — never resequenced).
  *   - `activity_logs`    -> `OpportunityActivity` verbatim.
@@ -71,12 +81,13 @@ const DEFAULT_VELORA_DATABASE_URL = "postgresql://velora:velora_dev@postgres:543
 // import them without ever opening a DB connection — same discipline
 // scripts/normalize-day-dates.ts follows for `roundToUtcMidnight`.
 
-// Velora's current schema (migrate.mjs) is a 9-literal lowercase CHECK
-// constraint; this mirrors routes/opportunities.ts's IMPORT_STAGE_MAP but
-// includes "hold" (that map deliberately excludes it — HOLD isn't a valid
-// *import target* for the spreadsheet importer, but it's a perfectly normal
-// row state in a live Velora export, so this migration script must handle
-// it).
+// Velora's current schema (migrate.mjs) is still a 9-literal lowercase CHECK
+// constraint, but the redesigned PipelineStage enum (opportunity-flow-
+// redesign, 2026-09-25) only has the 6 open funnel stages — "won"/"drop"/
+// "hold" are no longer stages here, they're a derived outcome/statusTag.
+// This mirrors routes/opportunities.ts's IMPORT_STAGE_MAP (6 entries); the
+// won/drop/hold branch lives in importOpportunities below, per D6's backfill
+// mapping (mirrors the opportunity_flow_redesign migration's SQL backfill).
 const STAGE_MAP: Record<string, PipelineStage> = {
   assessment: PipelineStage.ASSESSMENT,
   rfp: PipelineStage.RFP,
@@ -84,9 +95,6 @@ const STAGE_MAP: Record<string, PipelineStage> = {
   technical_clarification: PipelineStage.TECHNICAL_CLARIFICATION,
   deliver_proposal: PipelineStage.DELIVER_PROPOSAL,
   waiting_response: PipelineStage.WAITING_RESPONSE,
-  won: PipelineStage.WON,
-  drop: PipelineStage.DROP,
-  hold: PipelineStage.HOLD,
 };
 
 // Velora's own migrate.mjs (scripts/migrate.mjs, lines ~62-74) carries a
@@ -102,10 +110,22 @@ const LEGACY_STAGE_ALIASES: Record<string, string> = {
   lost: "drop",
 };
 
-export function mapStageLiteral(raw: string): PipelineStage | undefined {
+/**
+ * Applies LEGACY_STAGE_ALIASES without doing the PipelineStage lookup —
+ * shared by mapStageLiteral (below) and the won/drop/hold branch in
+ * importOpportunities, which needs the normalized literal itself (not a
+ * PipelineStage — "won"/"drop"/"hold" no longer map to one).
+ */
+function normalizeStageLiteral(raw: string): string {
   const normalized = raw.trim().toLowerCase();
-  const canonical = LEGACY_STAGE_ALIASES[normalized] ?? normalized;
-  return STAGE_MAP[canonical];
+  return LEGACY_STAGE_ALIASES[normalized] ?? normalized;
+}
+
+/** Undefined for "won"/"drop"/"hold" (and anything unrecognized) — those are
+ * no longer PipelineStage values; importOpportunities handles them via
+ * normalizeStageLiteral instead. */
+export function mapStageLiteral(raw: string): PipelineStage | undefined {
+  return STAGE_MAP[normalizeStageLiteral(raw)];
 }
 
 /** UTC-midnight `Date` for a "yyyy-MM-dd" day string, or `null` through. */
@@ -443,21 +463,34 @@ async function fetchSourceOpportunities(velora: PrismaClient): Promise<SourceOpp
  * connect/disconnect buys an interactive route doesn't apply to this
  * internal batch script, so there's no downside to the scalar form here.
  */
+/** Derived from the source row's stage literal by importOpportunities'
+ * won/drop/hold branch (D6's backfill mapping) — replaces the old
+ * `preHoldStage` parameter now that PipelineStage no longer has WON/DROP/
+ * HOLD values. */
+interface DerivedOpportunityFields {
+  outcome: PipelineOutcome | null;
+  outcomeReasonCategory: PipelineOutcomeReason | null;
+  outcomeReason: string | null;
+  statusTag: PipelineStatusTag | null;
+  subStatus: PipelineSubStatus | null;
+  closedAt: Date | null;
+}
+
 function buildOpportunityData(
   row: SourceOpportunityRow,
   stage: PipelineStage,
   picId: number | null,
-  preHoldStage: PipelineStage | null,
+  derived: DerivedOpportunityFields,
 ): Prisma.OpportunityUncheckedCreateInput {
   // Velora has no won_at column (confirmed against both
   // VeloraApp/scripts/migrate.mjs and VeloraApp/docker/init.sql —
   // VeloraApp's own components/kanban/kpi-bar.tsx documents the same gap:
   // "uses updated_at as proxy for won_at ... Acceptable until a won_at
-  // field is added"). Mirrored here for historical WON deals so Solvro's
+  // field is added"). Mirrored here for historical Won deals so Solvro's
   // "Won this month" KPI has something to work with; same caveat the
   // source app already accepts (a deal edited after being won carries the
   // later updatedAt). Flagged in the dispatch report as an explicit call.
-  const wonAt = stage === PipelineStage.WON ? row.updated_at : null;
+  const wonAt = derived.outcome === PipelineOutcome.WON ? row.updated_at : null;
   return {
     id: row.id,
     title: row.title,
@@ -472,8 +505,17 @@ function buildOpportunityData(
     leadSource: row.lead_source,
     winProbability: row.win_probability,
     stageOrder: row.stage_order,
-    preHoldStage,
+    outcome: derived.outcome,
+    outcomeReasonCategory: derived.outcomeReasonCategory,
+    outcomeReason: derived.outcomeReason,
+    statusTag: derived.statusTag,
+    subStatus: derived.subStatus,
+    closedAt: derived.closedAt,
     wonAt,
+    // D14 (minimal edit): plain updated_at, not the migration's
+    // GREATEST(updated_at, newest activity note) — this script has no
+    // note-based backfill (see the Won/Drop/Hold branches above).
+    lastActivityAt: row.updated_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -500,37 +542,75 @@ async function importOpportunities(
   for (const batch of chunk(rows, OPP_BATCH_SIZE)) {
     const existingIds = await existingOpportunityIds(prisma, batch.map((r) => r.id));
 
-    const valid: { row: SourceOpportunityRow; stage: PipelineStage; picId: number | null; preHoldStage: PipelineStage | null }[] =
-      [];
+    const valid: {
+      row: SourceOpportunityRow;
+      stage: PipelineStage;
+      picId: number | null;
+      derived: DerivedOpportunityFields;
+    }[] = [];
     for (const row of batch) {
-      const stage = mapStageLiteral(row.stage);
-      if (!stage) {
-        report.opportunities.failed += 1;
-        report.hasHardFailure = true;
-        report.failedOpportunities.push({
-          id: row.id,
-          title: row.title,
-          reason: `unrecognized stage literal "${row.stage}"`,
-        });
-        continue;
-      }
+      const normalizedLiteral = normalizeStageLiteral(row.stage);
+      let stage: PipelineStage;
+      let outcome: PipelineOutcome | null = null;
+      let outcomeReasonCategory: PipelineOutcomeReason | null = null;
+      let outcomeReason: string | null = null;
+      let statusTag: PipelineStatusTag | null = null;
 
-      let preHoldStage: PipelineStage | null = null;
-      if (row.pre_hold_stage) {
-        const mapped = mapStageLiteral(row.pre_hold_stage);
-        if (mapped) {
-          preHoldStage = mapped;
+      if (normalizedLiteral === "won") {
+        // D6 fallback — this per-row script has no "last 'Moved from X to
+        // Won' note" recovery (that only runs in the opportunity_flow_
+        // redesign migration's SQL backfill), so every imported Won deal
+        // lands on Delivered Proposal.
+        stage = PipelineStage.DELIVER_PROPOSAL;
+        outcome = PipelineOutcome.WON;
+      } else if (normalizedLiteral === "drop") {
+        // D14 (minimal edit): same "no note-based recovery in this script"
+        // call as Won above — every imported Drop deal lands on Assessment,
+        // never the migration's "last 'Moved from X to Drop' note" recovery.
+        stage = PipelineStage.ASSESSMENT;
+        outcome = PipelineOutcome.CANCELLED;
+        outcomeReasonCategory = PipelineOutcomeReason.OTHER;
+        outcomeReason = "Backfilled from Drop";
+      } else if (normalizedLiteral === "hold") {
+        // D14 (minimal edit): pre_hold_stage is checked (below), but — same
+        // as Won/Drop — there's no note-based recovery fallback here; a Hold
+        // row with neither a usable pre_hold_stage nor a mapping falls
+        // straight to Assessment, skipping the migration's note scan.
+        let preHold: PipelineStage | undefined;
+        if (row.pre_hold_stage) {
+          preHold = mapStageLiteral(row.pre_hold_stage);
+          if (!preHold) {
+            report.holdWarnings.push({
+              id: row.id,
+              title: row.title,
+              issue: `unmapped pre_hold_stage literal "${row.pre_hold_stage}"`,
+            });
+          }
         } else {
-          report.holdWarnings.push({
+          report.holdWarnings.push({ id: row.id, title: row.title, issue: "HOLD deal missing pre_hold_stage" });
+        }
+        stage = preHold ?? PipelineStage.ASSESSMENT;
+        statusTag = PipelineStatusTag.HOLD;
+      } else {
+        const mapped = mapStageLiteral(row.stage);
+        if (!mapped) {
+          report.opportunities.failed += 1;
+          report.hasHardFailure = true;
+          report.failedOpportunities.push({
             id: row.id,
             title: row.title,
-            issue: `unmapped pre_hold_stage literal "${row.pre_hold_stage}"`,
+            reason: `unrecognized stage literal "${row.stage}"`,
           });
+          continue;
         }
+        stage = mapped;
       }
-      if (stage === PipelineStage.HOLD && preHoldStage === null) {
-        report.holdWarnings.push({ id: row.id, title: row.title, issue: "HOLD deal missing pre_hold_stage" });
-      }
+
+      const closedAt = outcome !== null ? row.updated_at : null;
+      // Every open row not on Waiting Response starts in PROGRESS — mirrors
+      // the migration's D6 backfill (§2.3 step 2's sub_status rule).
+      const subStatus =
+        outcome === null && stage !== PipelineStage.WAITING_RESPONSE ? PipelineSubStatus.PROGRESS : null;
 
       // Field-length audit (see ImportReport.lengthWarnings): report, never
       // truncate — bounds mirror routes/opportunities.ts's update schema.
@@ -552,15 +632,20 @@ async function importOpportunities(
       }
 
       const picId = row.pic_id ? profileMap.get(row.pic_id) ?? null : null;
-      valid.push({ row, stage, picId, preHoldStage });
+      valid.push({
+        row,
+        stage,
+        picId,
+        derived: { outcome, outcomeReasonCategory, outcomeReason, statusTag, subStatus, closedAt },
+      });
     }
 
     if (valid.length === 0) continue;
 
     try {
       await prisma.$transaction(
-        valid.map(({ row, stage, picId, preHoldStage }) => {
-          const { id, ...update } = buildOpportunityData(row, stage, picId, preHoldStage);
+        valid.map(({ row, stage, picId, derived }) => {
+          const { id, ...update } = buildOpportunityData(row, stage, picId, derived);
           return prisma.opportunity.upsert({
             where: { id: row.id },
             create: { id, ...update },

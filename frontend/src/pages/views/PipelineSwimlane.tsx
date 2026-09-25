@@ -1,20 +1,23 @@
 // Pipeline "Swimlane" view (PRD §2.4, M3.13) — one row per PIC, one column
-// per pipeline stage (minus DROP), read-only. Ported from Velora's
-// `swimlane-view.tsx` (../VeloraApp components/kanban/swimlane-view.tsx,
-// read-only reference) onto Technical Precision tokens; grouping/aggregation
-// itself lives in the pure, vitest-covered `components/pipeline/
-// swimlaneLogic.ts` (colocated with this module's other pure Pipeline
-// logic — boardLogic.ts/kpi.ts/adapter.ts/quarterLogic.ts — rather than
-// under pages/views/, same split quarterLogic.ts documents for M3.14).
+// per pipeline stage, read-only. Ported from Velora's `swimlane-view.tsx`
+// (../VeloraApp components/kanban/swimlane-view.tsx, read-only reference)
+// onto Technical Precision tokens; grouping/aggregation itself lives in the
+// pure, vitest-covered `components/pipeline/swimlaneLogic.ts` (colocated
+// with this module's other pure Pipeline logic — boardLogic.ts/kpi.ts/
+// adapter.ts/quarterLogic.ts — rather than under pages/views/, same split
+// quarterLogic.ts documents for M3.14).
 //
-// Self-contained like SolvroPipelineKanban.tsx/PipelineQuarter.tsx/
-// PipelineList.tsx (the three sibling views this milestone already
-// shipped): fetches its own data via useOpportunities() rather than taking
-// deals as a prop, since the view switcher (Pipeline.tsx, wired in a later
-// integration task) mounts each view independently. No KPI bar here, same
-// call PipelineQuarter.tsx/PipelineList.tsx already made: PRD §2.4's
-// "shared toolbar and KPI bar stay mounted" implies that bar is hoisted to
-// the Pipeline.tsx switcher shell, not owned by each view body.
+// Self-contained like PipelineQuarter.tsx (its own closest sibling, per the
+// 2026-09-25 flow redesign — SolvroPipelineKanban.tsx/PipelineList.tsx now
+// take `deals` as a prop from Pipeline.tsx instead, since their own Active/
+// Closed switch needs one shared source of truth for the filter, D11):
+// fetches its own data via useOpportunities() rather than taking deals as a
+// prop, since the view switcher (Pipeline.tsx) mounts each view
+// independently and this view's own scope never changes with that switch
+// (see the "Column set" paragraph below). No KPI bar here, same call
+// PipelineQuarter.tsx already makes: PRD §2.4's "shared toolbar and KPI bar
+// stay mounted" implies that bar is hoisted to the Pipeline.tsx switcher
+// shell, not owned by each view body.
 //
 // Read-only: no drag — the reference's swimlane-view.tsx has no DnD
 // wiring at all (plain onClick-to-edit cards, no drag library import),
@@ -23,20 +26,13 @@
 // via `useNavigate` (M3 integration); no drag means no click-vs-drag guard
 // is needed here, unlike OpportunityCard.tsx's board usage.
 //
-// Column set: SWIMLANE_STAGES (swimlaneLogic.ts) — 8 stages, all of
-// PIPELINE_STAGES minus DROP. This is a DEVIATION from the reference's
-// literal render, not from its stated rule: the reference's own filter
-// (`STAGES.filter(s => s.id !== "drop")`) computes 8 stages against its
-// current `STAGES` array, but its grid template hardcodes
-// `repeat(5, 1fr)` — a leftover from an earlier, smaller `STAGES` array
-// (its in-file comment "5 stage" is stale, and poc/technical_clarification/
-// hold silently overflow the template into unstyled implicit grid tracks
-// today). PRD §2.4 independently states the intended rule with no "5"
-// qualifier ("columns = stages minus drop"). This view mirrors the stated
-// rule + the reference's actual filter predicate, renders all 8 columns
-// with a correctly-sized template, and does NOT reproduce the reference's
-// template/comment staleness. See swimlaneLogic.ts's header comment and
-// this task's report for the full verification.
+// Column set: SWIMLANE_STAGES (swimlaneLogic.ts) — the full 6-stage board
+// (2026-09-25 flow redesign, D2/D11: Won, Lost, Cancelled and Hold moved off
+// the stage enum entirely, so there's no longer a DROP-only exclusion to
+// apply here). Row scope: only ACTIVE deals (`outcome === null`) ever reach
+// a lane — Swimlane always shows the active list regardless of the Kanban/
+// List Active/Closed switch (D11); the one-line "Active deals" caption below
+// the header row says so explicitly.
 //
 // Cell choice: a local `SwimlaneCard` (title + compact value), not
 // `OpportunityCard`. The dispatch brief scoped cell density to "title +
@@ -136,27 +132,28 @@ export function PipelineSwimlane() {
     return <EmptySwimlaneState />;
   }
 
-  // DROP deals never appear in a lane's stage cells (DROP isn't one of
-  // SWIMLANE_STAGES), but groupIntoLanes itself doesn't filter by stage — a
-  // DROP deal for a PIC would otherwise still land in that lane's
-  // `deals` array and skew `laneSummary`'s active-deal count/total (see
-  // swimlaneLogic.ts's `laneSummary` doc comment). Filtering here, before
-  // grouping, is what actually keeps DROP out of every lane.
-  const lanes = groupIntoLanes(allDeals.filter((d) => d.stage !== "DROP"));
+  // `groupIntoLanes` doesn't filter by outcome itself (swimlaneLogic.ts's own
+  // header comment) — a closed deal would otherwise still land in its PIC's
+  // lane and skew `laneSummary`'s count/total. Filtering here, before
+  // grouping, is what actually keeps closed deals out of every lane (D11).
+  const activeDeals = allDeals.filter((d) => d.outcome === null);
+  const lanes = groupIntoLanes(activeDeals);
   const columnTotals = stageSummaries(lanes);
 
   return (
-    <div
-      className="max-h-[calc(100vh-280px)] overflow-auto rounded-sm border border-outline-variant bg-surface-container-lowest"
-      role="table"
-      aria-label="Opportunities by PIC and stage"
-    >
+    <div className="space-y-2">
+      <p className="text-xs text-on-surface-variant">Active deals</p>
       <div
-        className="grid"
-        style={{
-          gridTemplateColumns: `${LANE_COLUMN_WIDTH} repeat(${SWIMLANE_STAGES.length}, minmax(${STAGE_COLUMN_MIN_WIDTH}, 1fr))`,
-        }}
+        className="max-h-[calc(100vh-280px)] overflow-auto rounded-sm border border-outline-variant bg-surface-container-lowest"
+        role="table"
+        aria-label="Opportunities by PIC and stage"
       >
+        <div
+          className="grid"
+          style={{
+            gridTemplateColumns: `${LANE_COLUMN_WIDTH} repeat(${SWIMLANE_STAGES.length}, minmax(${STAGE_COLUMN_MIN_WIDTH}, 1fr))`,
+          }}
+        >
         {/* Header row — wrapped in `role="row"` (`display: contents` keeps
             its children direct grid participants, so CSS Grid auto-
             placement is unaffected) so the outer `role="table"` owns actual
@@ -204,6 +201,7 @@ export function PipelineSwimlane() {
             <LaneRow key={lane.picId ?? "unassigned"} lane={lane} summary={summary} />
           );
         })}
+        </div>
       </div>
     </div>
   );

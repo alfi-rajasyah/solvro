@@ -3,18 +3,19 @@
 // behavior reference per CLAUDE.md) metric-for-metric, with one deliberate
 // deviation the PRD calls for: "Won this month" reads the real `wonAt`
 // column (PRD §4.2's schema delta, settled 2026-08-14) instead of Velora's
-// `updated_at` proxy — `wonAt` is set/cleared only on an actual WON
-// transition (backend/src/routes/opportunities.ts's POST /:id/move), so it
-// can't drift the way an edited-after-won deal would under `updated_at`.
+// `updated_at` proxy — `wonAt` is set/cleared only by `POST /:id/close` with
+// outcome WON (backend/src/routes/opportunities.ts) and cleared by
+// `/reopen`, so it can't drift the way an edited-after-won deal would under
+// `updated_at`.
 //
 // Takes `PipelineBoardDeal` (adapter.ts) rather than the full `Opportunity`
 // DTO — every field these functions touch (dealValue/stage/picId/deadline/
-// wonAt) is already on that structural type, and `Opportunity` satisfies it
-// structurally (adapter.ts's own doc comment), so the board container can
-// pass its query data straight through with no cast.
+// wonAt/outcome/idle) is already on that structural type, and `Opportunity`
+// satisfies it structurally (adapter.ts's own doc comment), so the board
+// container can pass its query data straight through with no cast.
 import type { Tone } from "@/components/StatusChip";
 import { dateToDay, dayToDate } from "@/lib/dateField";
-import { TERMINAL_STAGES, type PipelineStage } from "@/lib/pipelineFormat";
+import type { PipelineStage } from "@/lib/pipelineFormat";
 import { PIPELINE_STAGES, type PipelineBoardDeal } from "./adapter";
 
 /**
@@ -32,13 +33,19 @@ export function probabilityTone(p: number): Tone {
   return "rose";
 }
 
-type Deal = Pick<PipelineBoardDeal, "dealValue" | "stage" | "picId" | "deadline" | "wonAt">;
+type Deal = Pick<
+  PipelineBoardDeal,
+  "dealValue" | "stage" | "picId" | "deadline" | "wonAt" | "outcome" | "idle"
+>;
 
-/** A deal is "active" for KPI purposes when it's not resting in a terminal
- * stage — mirrors Velora's `activeOpps` filter (`stage !== "won" && stage
- * !== "drop"`). */
-export function isActiveDeal(deal: Pick<Deal, "stage">): boolean {
-  return !TERMINAL_STAGES.includes(deal.stage);
+/** A deal is "active" for KPI purposes when it hasn't been closed yet
+ * (2026-09-25 flow redesign D5) — `outcome === null`. Replaces the old
+ * terminal-stage check (`stage !== "won" && stage !== "drop"`, mirroring
+ * Velora's `activeOpps`): Won/Lost/Cancelled are no longer stages, and a
+ * closed deal keeps whatever stage it stalled in, so stage membership can
+ * no longer answer "is this deal still moving". */
+export function isActiveDeal(deal: Pick<Deal, "outcome">): boolean {
+  return deal.outcome === null;
 }
 
 /**
@@ -96,9 +103,17 @@ export interface PipelineKpis {
   wonThisMonthValue: number;
   wonThisMonthCount: number;
   activePicCount: number;
-  /** Per-stage counts excluding DROP (PRD §2.3 point 5), in `PIPELINE_STAGES`
-   * order — that order already excludes nothing but DROP itself once
-   * filtered, so no re-sorting is needed. */
+  /** Active deals whose `idle.level` is "warning"/"critical" — feeds the KPI
+   * bar's 5th tile, "Idle alerts" (§4.4). */
+  idleWarning: number;
+  idleCritical: number;
+  /** Per-stage counts of ACTIVE deals only, in `PIPELINE_STAGES` (board)
+   * order — all 6 stages, none excluded (there's no DROP/HOLD stage left to
+   * filter out post-2026-09-25 redesign). A closed deal keeps the stage it
+   * stalled in but is excluded here the same way it's excluded from
+   * `activeDealCount`/`totalPipelineValue` above — otherwise a Won deal
+   * parked in DELIVER_PROPOSAL would inflate that column's "still moving"
+   * count. */
   funnel: FunnelBucket[];
 }
 
@@ -116,17 +131,24 @@ export function computePipelineKpis(deals: Deal[], now: Date = new Date()): Pipe
   );
   const deadlineCritical = deadlineSoon.filter((d) => daysUntilDeadline(d.deadline!, now) <= 3);
 
+  // "Won this month" reads ALL deals (not just active — a Won deal is never
+  // active), same as before the redesign; only the "won" test itself moved
+  // from a stage check to `outcome === "WON"`.
   const wonThisMonth = deals.filter(
-    (d) => d.stage === "WON" && d.wonAt !== null && isSameMonth(new Date(d.wonAt), now),
+    (d) => d.outcome === "WON" && d.wonAt !== null && isSameMonth(new Date(d.wonAt), now),
   );
 
   const activePicCount = new Set(
     active.filter((d) => d.picId !== null).map((d) => d.picId),
   ).size;
 
-  const funnel: FunnelBucket[] = PIPELINE_STAGES.filter((stage) => stage !== "DROP").map(
-    (stage) => ({ stage, count: deals.filter((d) => d.stage === stage).length }),
-  );
+  const idleWarning = active.filter((d) => d.idle.level === "warning").length;
+  const idleCritical = active.filter((d) => d.idle.level === "critical").length;
+
+  const funnel: FunnelBucket[] = PIPELINE_STAGES.map((stage) => ({
+    stage,
+    count: active.filter((d) => d.stage === stage).length,
+  }));
 
   return {
     totalPipelineValue,
@@ -136,6 +158,8 @@ export function computePipelineKpis(deals: Deal[], now: Date = new Date()): Pipe
     wonThisMonthValue: wonThisMonth.reduce((sum, d) => sum + d.dealValue, 0),
     wonThisMonthCount: wonThisMonth.length,
     activePicCount,
+    idleWarning,
+    idleCritical,
     funnel,
   };
 }

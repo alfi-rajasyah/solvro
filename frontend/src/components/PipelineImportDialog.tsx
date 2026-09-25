@@ -47,7 +47,7 @@ function downloadTemplate() {
       "Implementasi ERP",
       "PT. Maju Jaya",
       "500000000",
-      "assessment",
+      "Technical Clarification",
       "",
       "30/06/2026",
       "ERP Implementation",

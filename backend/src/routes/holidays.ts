@@ -1,32 +1,13 @@
 import { Router } from "express";
-import Holidays from "date-holidays";
 import { z } from "zod";
 import { requireAuth } from "../http/auth.js";
 import { validate } from "../http/validate.js";
+import { getHolidaysForYear } from "../lib/holidays.js";
 
-interface Holiday {
-  date: string;
-  name: string;
-  type: string;
-}
-
-const cache = new Map<number, Holiday[]>();
-const hd = new Holidays("ID");
-
-function getHolidaysForYear(year: number): Holiday[] {
-  const cached = cache.get(year);
-  if (cached) return cached;
-  const raw = hd.getHolidays(year) ?? [];
-  const list: Holiday[] = raw
-    .filter((h) => h.type === "public")
-    .map((h) => ({
-      date: h.date.slice(0, 10),
-      name: h.name,
-      type: h.type,
-    }));
-  cache.set(year, list);
-  return list;
-}
+// getHolidaysForYear (the date-holidays("ID") instance + its per-year cache)
+// moved to lib/holidays.ts (opportunity-flow-redesign, D8) so
+// lib/workingDays.ts's `workingDaysBetween` can import the same holiday
+// source this route already served — see that file's header comment.
 
 const querySchema = z.object({
   year: z.coerce

@@ -14,6 +14,7 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     "pipeline:edit_own",
     "pipeline:delete_own",
   ],
+  SALES: ["pipeline:view"],
   TAM: ["project:read", "project:write", "task:read", "task:write"],
   STAKEHOLDER: ["project:read", "project:view-all"],
   PENDING: [],

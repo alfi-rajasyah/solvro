@@ -83,6 +83,13 @@ function moveOpportunity(token: string, id: string, body: Record<string, unknown
     .send(body);
 }
 
+function closeOpportunity(token: string, id: string, body: Record<string, unknown>) {
+  return request(app)
+    .post(`/opportunities/${id}/close`)
+    .set("Authorization", `Bearer ${token}`)
+    .send(body);
+}
+
 function deleteOpportunity(token: string, id: string) {
   return request(app).delete(`/opportunities/${id}`).set("Authorization", `Bearer ${token}`);
 }
@@ -106,46 +113,37 @@ beforeAll(async () => {
 });
 
 describe("POST /opportunities/:id/move — stage transitions", () => {
-  it("sets wonAt on a move into WON and logs a human-readable activity", async () => {
+  it("moves between any two of the 6 stages (D4, no forward-only enforcement) and logs a human-readable activity", async () => {
     const sa = await createSaLikeUser();
     const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "ASSESSMENT" });
     expect(created.status).toBe(201);
     const id = created.body.id as string;
 
-    const moved = await moveOpportunity(sa.token, id, { stage: "WON", stageOrder: 0 });
+    // ASSESSMENT -> RFP: not the guarded TC -> RFP jump, so no reason needed.
+    const moved = await moveOpportunity(sa.token, id, { stage: "RFP", stageOrder: 0 });
     expect(moved.status).toBe(200);
-    expect(moved.body.stage).toBe("WON");
-    expect(moved.body.wonAt).not.toBeNull();
+    expect(moved.body.stage).toBe("RFP");
 
     const activities = await activitiesFor(id);
     expect(activities).toHaveLength(1);
-    expect(activities[0].note).toBe("Moved from Assessment to Won");
+    expect(activities[0].note).toBe("Moved from Assessment to RFP");
     expect(activities[0].userId).toBe(sa.userId);
+
+    // Backward move (D4's default: backward moves allowed).
+    const movedBack = await moveOpportunity(sa.token, id, { stage: "ASSESSMENT", stageOrder: 0 });
+    expect(movedBack.status).toBe(200);
+    expect(movedBack.body.stage).toBe("ASSESSMENT");
+    const activitiesAfter = await activitiesFor(id);
+    expect(activitiesAfter).toHaveLength(2);
+    expect(activitiesAfter[1].note).toBe("Moved from RFP to Assessment");
   });
 
-  it("clears wonAt on a move out of WON and logs another activity", async () => {
+  it("a same-stage reorder logs no activity and leaves lastActivityAt untouched (D15)", async () => {
     const sa = await createSaLikeUser();
-    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "ASSESSMENT" });
-    const id = created.body.id as string;
-    await moveOpportunity(sa.token, id, { stage: "WON", stageOrder: 0 });
-
-    const movedOut = await moveOpportunity(sa.token, id, { stage: "RFP", stageOrder: 0 });
-    expect(movedOut.status).toBe(200);
-    expect(movedOut.body.stage).toBe("RFP");
-    expect(movedOut.body.wonAt).toBeNull();
-
-    const activities = await activitiesFor(id);
-    expect(activities).toHaveLength(2);
-    expect(activities[1].note).toBe("Moved from Won to RFP");
-  });
-
-  it("a same-stage reorder does not touch wonAt and logs no activity", async () => {
-    const sa = await createSaLikeUser();
-    // POC rather than RFP: RFP already carries residual rows from this
-    // describe block's own earlier "clears wonAt" test (it moves an
-    // opportunity INTO Rfp and leaves it there) — bottom-append semantics
-    // (S6) make a fresh stage's absolute stageOrder assertions the only
-    // reliable ones in a suite that shares one DB across `it` blocks.
+    // POC: untouched by any earlier test in this describe block — bottom-
+    // append semantics (S6) make a fresh stage's absolute stageOrder
+    // assertions the only reliable ones in a suite that shares one DB
+    // across `it` blocks.
     const first = await createOpportunity(sa.token, { picId: sa.userId, stage: "POC" });
     const second = await createOpportunity(sa.token, { picId: sa.userId, stage: "POC" });
     const firstId = first.body.id as string;
@@ -155,11 +153,14 @@ describe("POST /opportunities/:id/move — stage transitions", () => {
     expect((await getOpportunity(sa.token, firstId)).body.stageOrder).toBe(0);
     expect((await getOpportunity(sa.token, secondId)).body.stageOrder).toBe(1);
 
+    const before = await getOpportunity(sa.token, secondId);
     const reordered = await moveOpportunity(sa.token, secondId, { stage: "POC", stageOrder: 0 });
     expect(reordered.status).toBe(200);
     expect(reordered.body.stage).toBe("POC");
-    expect(reordered.body.wonAt).toBeNull();
     expect(reordered.body.stageOrder).toBe(0);
+    // D15: a same-stage reorder isn't activity — lastActivityAt stays
+    // exactly what it was before the reorder.
+    expect(reordered.body.lastActivityAt).toBe(before.body.lastActivityAt);
 
     const activities = await activitiesFor(secondId);
     expect(activities).toHaveLength(0);
@@ -167,6 +168,101 @@ describe("POST /opportunities/:id/move — stage transitions", () => {
     // The sibling list re-packed dense 0..1 with second now on top and
     // first pushed down.
     expect((await getOpportunity(sa.token, firstId)).body.stageOrder).toBe(1);
+  });
+});
+
+describe("POST /opportunities/:id/move — Technical Clarification -> RFP skip-reason (D4)", () => {
+  it("400s (skip_reason_required) without a reason", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, {
+      picId: sa.userId,
+      stage: "TECHNICAL_CLARIFICATION",
+    });
+    const id = created.body.id as string;
+
+    const res = await moveOpportunity(sa.token, id, { stage: "RFP", stageOrder: 0 });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("skip_reason_required");
+
+    const unchanged = await getOpportunity(sa.token, id);
+    expect(unchanged.body.stage).toBe("TECHNICAL_CLARIFICATION");
+  });
+
+  it("200s with a reason and carries it into the activity note", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, {
+      picId: sa.userId,
+      stage: "TECHNICAL_CLARIFICATION",
+    });
+    const id = created.body.id as string;
+
+    const res = await moveOpportunity(sa.token, id, {
+      stage: "RFP",
+      stageOrder: 0,
+      reason: "Client skipped PoC — budget already approved",
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.stage).toBe("RFP");
+
+    const activities = await activitiesFor(id);
+    expect(activities).toHaveLength(1);
+    expect(activities[0].note).toBe(
+      "Moved from Technical Clarification to RFP, PoC skipped: Client skipped PoC — budget already approved",
+    );
+  });
+
+  it("does not require a reason for any other transition, including RFP -> Technical Clarification", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+
+    const res = await moveOpportunity(sa.token, id, { stage: "TECHNICAL_CLARIFICATION", stageOrder: 0 });
+    expect(res.status).toBe(200);
+  });
+});
+
+describe("POST /opportunities/:id/move — Waiting Response subStatus bookkeeping (D3)", () => {
+  it("clears subStatus and waitingInputSince on entering Waiting Response", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+    expect(created.body.subStatus).toBe("PROGRESS");
+
+    const patched = await patchOpportunity(sa.token, id, { subStatus: "WAITING_SALES_INPUT" });
+    expect(patched.status).toBe(200);
+    expect(patched.body.waitingInputSince).not.toBeNull();
+
+    const moved = await moveOpportunity(sa.token, id, { stage: "WAITING_RESPONSE", stageOrder: 0 });
+    expect(moved.status).toBe(200);
+    expect(moved.body.subStatus).toBeNull();
+    expect(moved.body.waitingInputSince).toBeNull();
+    expect(moved.body.owner).toBe("client");
+  });
+
+  it("sets subStatus back to PROGRESS on leaving Waiting Response", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
+    const id = created.body.id as string;
+    expect(created.body.subStatus).toBeNull();
+
+    const moved = await moveOpportunity(sa.token, id, { stage: "DELIVER_PROPOSAL", stageOrder: 0 });
+    expect(moved.status).toBe(200);
+    expect(moved.body.subStatus).toBe("PROGRESS");
+    expect(moved.body.owner).toBe("sa");
+  });
+});
+
+describe("POST /opportunities/:id/move — closed deals (D5)", () => {
+  it("409s (closed) a move on a deal already closed", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
+    const id = created.body.id as string;
+    const closed = await closeOpportunity(sa.token, id, { outcome: "WON" });
+    expect(closed.status).toBe(200);
+
+    const res = await moveOpportunity(sa.token, id, { stage: "ASSESSMENT", stageOrder: 0 });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("closed");
   });
 });
 
@@ -218,33 +314,180 @@ describe("PATCH /opportunities/:id — edit_own / edit_all gate", () => {
   });
 });
 
+describe("PATCH /opportunities/:id — subStatus (§3.3)", () => {
+  it("sets waitingInputSince and writes 'Waiting for Sales input' on a real transition into WAITING_SALES_INPUT", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+    expect(created.body.subStatus).toBe("PROGRESS");
+    expect(created.body.waitingInputSince).toBeNull();
+
+    const res = await patchOpportunity(sa.token, id, { subStatus: "WAITING_SALES_INPUT" });
+    expect(res.status).toBe(200);
+    expect(res.body.subStatus).toBe("WAITING_SALES_INPUT");
+    expect(res.body.waitingInputSince).not.toBeNull();
+
+    const activities = await activitiesFor(id);
+    expect(activities).toHaveLength(1);
+    expect(activities[0].note).toBe("Waiting for Sales input");
+  });
+
+  it("clears waitingInputSince and writes 'Input received' on a real transition back to PROGRESS", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+    await patchOpportunity(sa.token, id, { subStatus: "WAITING_SALES_INPUT" });
+
+    const res = await patchOpportunity(sa.token, id, { subStatus: "PROGRESS" });
+    expect(res.status).toBe(200);
+    expect(res.body.subStatus).toBe("PROGRESS");
+    expect(res.body.waitingInputSince).toBeNull();
+
+    const activities = await activitiesFor(id);
+    expect(activities).toHaveLength(2);
+    expect(activities[1].note).toBe("Input received");
+  });
+
+  it("repeating the same subStatus is a true no-op — no note written", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+
+    const res = await patchOpportunity(sa.token, id, { subStatus: "PROGRESS" });
+    expect(res.status).toBe(200);
+    const activities = await activitiesFor(id);
+    expect(activities).toHaveLength(0);
+  });
+
+  it("400s (sub_status_not_allowed) setting a non-null subStatus on a Waiting Response deal", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
+    const id = created.body.id as string;
+
+    const res = await patchOpportunity(sa.token, id, { subStatus: "WAITING_SALES_INPUT" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("sub_status_not_allowed");
+  });
+
+  it("400s (deal_closed) setting subStatus on a closed deal", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+    const closed = await closeOpportunity(sa.token, id, { outcome: "WON" });
+    expect(closed.status).toBe(200);
+
+    const res = await patchOpportunity(sa.token, id, { subStatus: "WAITING_SALES_INPUT" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("deal_closed");
+  });
+});
+
+describe("PATCH /opportunities/:id — statusTag (§3.3)", () => {
+  it("writes 'Put on hold' / 'Hold released' around a HOLD transition", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+
+    const held = await patchOpportunity(sa.token, id, { statusTag: "HOLD" });
+    expect(held.status).toBe(200);
+    expect(held.body.statusTag).toBe("HOLD");
+
+    const released = await patchOpportunity(sa.token, id, { statusTag: null });
+    expect(released.status).toBe(200);
+    expect(released.body.statusTag).toBeNull();
+
+    const activities = await activitiesFor(id);
+    expect(activities.map((a) => a.note)).toEqual(["Put on hold", "Hold released"]);
+  });
+
+  it("writes 'Marked as delayed' / 'Delay cleared' around a DELAYED transition", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+
+    const delayed = await patchOpportunity(sa.token, id, { statusTag: "DELAYED" });
+    expect(delayed.status).toBe(200);
+
+    const cleared = await patchOpportunity(sa.token, id, { statusTag: null });
+    expect(cleared.status).toBe(200);
+
+    const activities = await activitiesFor(id);
+    expect(activities.map((a) => a.note)).toEqual(["Marked as delayed", "Delay cleared"]);
+  });
+
+  it("a Hold -> Delayed swap writes both 'Hold released' and 'Marked as delayed', in that order (N5)", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+    await patchOpportunity(sa.token, id, { statusTag: "HOLD" });
+
+    const swapped = await patchOpportunity(sa.token, id, { statusTag: "DELAYED" });
+    expect(swapped.status).toBe(200);
+    expect(swapped.body.statusTag).toBe("DELAYED");
+
+    const activities = await activitiesFor(id);
+    expect(activities.map((a) => a.note)).toEqual(["Put on hold", "Hold released", "Marked as delayed"]);
+  });
+
+  it("a Delayed -> Hold swap writes both 'Delay cleared' and 'Put on hold', in that order (N5)", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+    await patchOpportunity(sa.token, id, { statusTag: "DELAYED" });
+
+    const swapped = await patchOpportunity(sa.token, id, { statusTag: "HOLD" });
+    expect(swapped.status).toBe(200);
+    expect(swapped.body.statusTag).toBe("HOLD");
+
+    const activities = await activitiesFor(id);
+    expect(activities.map((a) => a.note)).toEqual(["Marked as delayed", "Delay cleared", "Put on hold"]);
+  });
+
+  it("400s (deal_closed) setting statusTag on a closed deal", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+    await closeOpportunity(sa.token, id, { outcome: "WON" });
+
+    const res = await patchOpportunity(sa.token, id, { statusTag: "HOLD" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("deal_closed");
+  });
+});
+
 describe("DELETE /opportunities/:id — closes the stage-order gap it leaves (S4)", () => {
   it("re-packs the stage densely after deleting a middle sibling, so the next create/import lands last", async () => {
     const sa = await createSaLikeUser();
-    // WAITING_RESPONSE: untouched by any earlier test in this file.
+    // Reads the current count first rather than assuming WAITING_RESPONSE is
+    // untouched — this describe block runs after several earlier tests in
+    // this file that create/move rows into WAITING_RESPONSE (D3's owner/
+    // subStatus coverage), so an absolute 0/1/2 assumption would be exactly
+    // the order-dependent trap docs/ISSUES.md:196 flagged for a different
+    // stage/test (fix direction generalized here too).
+    const before = await prisma.opportunity.count({ where: { stage: "WAITING_RESPONSE" } });
     const first = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
     const middle = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
     const last = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
     const firstId = first.body.id as string;
     const middleId = middle.body.id as string;
     const lastId = last.body.id as string;
-    // Appended at the bottom in creation order: first=0, middle=1, last=2.
-    expect((await getOpportunity(sa.token, firstId)).body.stageOrder).toBe(0);
-    expect((await getOpportunity(sa.token, middleId)).body.stageOrder).toBe(1);
-    expect((await getOpportunity(sa.token, lastId)).body.stageOrder).toBe(2);
+    // Appended at the bottom in creation order: first, middle, last.
+    expect((await getOpportunity(sa.token, firstId)).body.stageOrder).toBe(before);
+    expect((await getOpportunity(sa.token, middleId)).body.stageOrder).toBe(before + 1);
+    expect((await getOpportunity(sa.token, lastId)).body.stageOrder).toBe(before + 2);
 
     const deleted = await deleteOpportunity(sa.token, middleId);
     expect(deleted.status).toBe(204);
 
-    // Without the gap-close, `last` would still sit at stageOrder 2 (a hole
-    // at 1) and a naive count()-based append would hand the next row that
-    // same slot 2, colliding with `last`.
-    expect((await getOpportunity(sa.token, firstId)).body.stageOrder).toBe(0);
-    expect((await getOpportunity(sa.token, lastId)).body.stageOrder).toBe(1);
+    // Without the gap-close, `last` would still sit at its old stageOrder (a
+    // hole where `middle` was) and a naive count()-based append would hand
+    // the next row that same slot, colliding with `last`.
+    expect((await getOpportunity(sa.token, firstId)).body.stageOrder).toBe(before);
+    expect((await getOpportunity(sa.token, lastId)).body.stageOrder).toBe(before + 1);
 
     const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
     expect(created.status).toBe(201);
-    expect(created.body.stageOrder).toBe(2);
+    expect(created.body.stageOrder).toBe(before + 2);
 
     const imported = await request(app)
       .post("/opportunities/import")
@@ -261,7 +504,7 @@ describe("DELETE /opportunities/:id — closes the stage-order gap it leaves (S4
     expect(imported.status).toBe(200);
     expect(imported.body.validCount).toBe(1);
     const importedId = imported.body.results[0].id as string;
-    expect((await getOpportunity(sa.token, importedId)).body.stageOrder).toBe(3);
+    expect((await getOpportunity(sa.token, importedId)).body.stageOrder).toBe(before + 3);
   });
 });
 
@@ -347,6 +590,26 @@ describe("GET /opportunities — list + view gate", () => {
     );
     expect(found?.pic).toEqual({ id: sa.userId, username: expect.any(String), avatarUrl: null });
   });
+
+  it("serializes owner per stage and an idle object on both list and detail (§3.1, D3, §3.6)", async () => {
+    const sa = await createSaLikeUser();
+    const saOwned = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const clientOwned = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
+
+    const list = await request(app).get("/opportunities").set("Authorization", `Bearer ${sa.token}`);
+    expect(list.status).toBe(200);
+    const rows = list.body as { id: string; owner: string; idle: { level: string; days: number; basis: unknown } }[];
+    const saRow = rows.find((o) => o.id === saOwned.body.id);
+    const clientRow = rows.find((o) => o.id === clientOwned.body.id);
+    expect(saRow?.owner).toBe("sa");
+    expect(clientRow?.owner).toBe("client");
+    expect(saRow?.idle).toMatchObject({ level: expect.any(String), days: expect.any(Number) });
+    expect(clientRow?.idle).toMatchObject({ level: expect.any(String), days: expect.any(Number) });
+
+    const detail = await getOpportunity(sa.token, saOwned.body.id as string);
+    expect(detail.body.owner).toBe("sa");
+    expect(detail.body.idle).toMatchObject({ level: "none", days: 0 });
+  });
 });
 
 describe("POST /opportunities/:id/move — permission gate", () => {
@@ -401,18 +664,60 @@ describe("createOpportunitySchema / updateOpportunitySchema — server-only fiel
     expect(res.status).toBe(400);
   });
 
-  it("400s a create body containing preHoldStage — never client-writable, same as stage on PATCH", async () => {
+  it("400s a create body containing outcome — never client-writable, close/reopen own it", async () => {
     const sa = await createSaLikeUser();
-    const res = await createOpportunity(sa.token, { preHoldStage: "RFP" });
+    const res = await createOpportunity(sa.token, { outcome: "WON" });
     expect(res.status).toBe(400);
   });
 
-  it("400s a PATCH body containing preHoldStage", async () => {
+  it("400s a create body containing statusTag", async () => {
+    const sa = await createSaLikeUser();
+    const res = await createOpportunity(sa.token, { statusTag: "HOLD" });
+    expect(res.status).toBe(400);
+  });
+
+  it("400s a PATCH body containing outcome — POST /:id/close is the one writer", async () => {
     const sa = await createSaLikeUser();
     const created = await createOpportunity(sa.token, { picId: sa.userId });
     const id = created.body.id as string;
 
-    const res = await patchOpportunity(sa.token, id, { preHoldStage: "RFP" });
+    const res = await patchOpportunity(sa.token, id, { outcome: "WON" });
+    expect(res.status).toBe(400);
+  });
+
+  it("400s a PATCH body containing closedAt", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId });
+    const id = created.body.id as string;
+
+    const res = await patchOpportunity(sa.token, id, { closedAt: new Date().toISOString() });
+    expect(res.status).toBe(400);
+  });
+
+  it("400s a PATCH body containing wonAt", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId });
+    const id = created.body.id as string;
+
+    const res = await patchOpportunity(sa.token, id, { wonAt: new Date().toISOString() });
+    expect(res.status).toBe(400);
+  });
+
+  it("400s a PATCH body containing waitingInputSince", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId });
+    const id = created.body.id as string;
+
+    const res = await patchOpportunity(sa.token, id, { waitingInputSince: new Date().toISOString() });
+    expect(res.status).toBe(400);
+  });
+
+  it("400s a PATCH body containing lastActivityAt", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId });
+    const id = created.body.id as string;
+
+    const res = await patchOpportunity(sa.token, id, { lastActivityAt: new Date().toISOString() });
     expect(res.status).toBe(400);
   });
 });
@@ -436,94 +741,73 @@ describe("Permission gates on single-opportunity / create routes", () => {
 });
 
 describe("POST /opportunities/:id/move — cross-stage repacking", () => {
-  it("repacks the SOURCE stage densely (0..n-1) after a cross-stage move", async () => {
+  it("repacks the SOURCE stage densely after a cross-stage move (relative order — docs/ISSUES.md:196)", async () => {
     const sa = await createSaLikeUser();
-    // DELIVER_PROPOSAL / WAITING_RESPONSE: untouched by any earlier test in
-    // this file, so their sibling counts are exclusively this test's own.
+    // Asserts RELATIVE order among this test's own three rows, not absolute
+    // stageOrder — a full gates.sh run shares one `solvro_test` DB across
+    // every test file, so DELIVER_PROPOSAL's absolute sibling count can be
+    // shifted by another file's rows landing in it first (docs/ISSUES.md
+    // line 196, opportunities.test.ts:439 in the pre-redesign file).
+    const before = await prisma.opportunity.count({ where: { stage: "DELIVER_PROPOSAL" } });
     const a = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });
     const b = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });
     const c = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });
     const aId = a.body.id as string;
     const bId = b.body.id as string;
     const cId = c.body.id as string;
-    // Appended at the bottom in creation order: a=0, b=1, c=2.
-    expect((await getOpportunity(sa.token, aId)).body.stageOrder).toBe(0);
-    expect((await getOpportunity(sa.token, bId)).body.stageOrder).toBe(1);
-    expect((await getOpportunity(sa.token, cId)).body.stageOrder).toBe(2);
+    // Appended at the bottom in creation order: a, b, c land consecutively.
+    expect((await getOpportunity(sa.token, aId)).body.stageOrder).toBe(before);
+    expect((await getOpportunity(sa.token, bId)).body.stageOrder).toBe(before + 1);
+    expect((await getOpportunity(sa.token, cId)).body.stageOrder).toBe(before + 2);
 
     // Move the middle one out of DELIVER_PROPOSAL entirely.
     const moved = await moveOpportunity(sa.token, bId, { stage: "WAITING_RESPONSE", stageOrder: 0 });
     expect(moved.status).toBe(200);
 
-    // The remaining DELIVER_PROPOSAL siblings (a, c) are re-packed dense 0..1.
-    expect((await getOpportunity(sa.token, aId)).body.stageOrder).toBe(0);
-    expect((await getOpportunity(sa.token, cId)).body.stageOrder).toBe(1);
+    // The remaining DELIVER_PROPOSAL siblings (a, c) are re-packed densely,
+    // a still immediately ahead of c.
+    const aOrder = (await getOpportunity(sa.token, aId)).body.stageOrder as number;
+    const cOrder = (await getOpportunity(sa.token, cId)).body.stageOrder as number;
+    expect(cOrder).toBe(aOrder + 1);
   });
 });
 
-describe("POST /opportunities/:id/move — HOLD / preHoldStage bookkeeping", () => {
-  it("sets preHoldStage on a move into HOLD and clears it on a move out", async () => {
+describe("POST /opportunities — create directly into Waiting Response (D3)", () => {
+  it("starts subStatus null (no Sales-input gate while the deal sits with the client)", async () => {
     const sa = await createSaLikeUser();
-    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
-    const id = created.body.id as string;
-
-    const intoHold = await moveOpportunity(sa.token, id, { stage: "HOLD", stageOrder: 0 });
-    expect(intoHold.status).toBe(200);
-    expect(intoHold.body.stage).toBe("HOLD");
-    expect(intoHold.body.preHoldStage).toBe("RFP");
-
-    const outOfHold = await moveOpportunity(sa.token, id, { stage: "POC", stageOrder: 0 });
-    expect(outOfHold.status).toBe(200);
-    expect(outOfHold.body.stage).toBe("POC");
-    expect(outOfHold.body.preHoldStage).toBeNull();
-  });
-
-  it("a same-stage reorder within HOLD does not touch preHoldStage", async () => {
-    const sa = await createSaLikeUser();
-    const first = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
-    const second = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
-    const firstId = first.body.id as string;
-    const secondId = second.body.id as string;
-    await moveOpportunity(sa.token, firstId, { stage: "HOLD", stageOrder: 0 });
-    await moveOpportunity(sa.token, secondId, { stage: "HOLD", stageOrder: 1 });
-
-    const reordered = await moveOpportunity(sa.token, secondId, { stage: "HOLD", stageOrder: 0 });
-    expect(reordered.status).toBe(200);
-    expect(reordered.body.stage).toBe("HOLD");
-    expect(reordered.body.preHoldStage).toBe("RFP");
-  });
-});
-
-describe("POST /opportunities — create directly into WON / HOLD", () => {
-  it("sets wonAt when created with stage WON", async () => {
-    const sa = await createSaLikeUser();
-    const created = await createOpportunity(sa.token, { stage: "WON" });
+    const created = await createOpportunity(sa.token, { stage: "WAITING_RESPONSE" });
     expect(created.status).toBe(201);
-    expect(created.body.stage).toBe("WON");
-    expect(created.body.wonAt).not.toBeNull();
+    expect(created.body.stage).toBe("WAITING_RESPONSE");
+    expect(created.body.subStatus).toBeNull();
+    expect(created.body.owner).toBe("client");
   });
 
-  it("leaves wonAt and preHoldStage null when created directly into HOLD", async () => {
+  it("starts subStatus PROGRESS and owner sa on any other stage", async () => {
     const sa = await createSaLikeUser();
-    const created = await createOpportunity(sa.token, { stage: "HOLD" });
+    const created = await createOpportunity(sa.token, { stage: "POC" });
     expect(created.status).toBe(201);
-    expect(created.body.stage).toBe("HOLD");
-    expect(created.body.wonAt).toBeNull();
-    expect(created.body.preHoldStage).toBeNull();
+    expect(created.body.subStatus).toBe("PROGRESS");
+    expect(created.body.owner).toBe("sa");
+    expect(created.body.lastActivityAt).not.toBeNull();
   });
 });
 
 describe("POST /opportunities — append-at-bottom ordering", () => {
   it("appends new opportunities at the bottom of their stage, in creation order", async () => {
     const sa = await createSaLikeUser();
-    // DROP: untouched by any earlier test in this file.
-    const a = await createOpportunity(sa.token, { stage: "DROP", title: "A" });
-    const b = await createOpportunity(sa.token, { stage: "DROP", title: "B" });
-    const c = await createOpportunity(sa.token, { stage: "DROP", title: "C" });
+    // TECHNICAL_CLARIFICATION: untouched by any straightforward-append test
+    // earlier in this file (it's used elsewhere only as the CURRENT stage in
+    // the skip-reason describe block, which moves rows OUT of it, never
+    // appends INTO it) — reads the current count first anyway, same
+    // discipline as the cross-stage repacking test above.
+    const before = await prisma.opportunity.count({ where: { stage: "TECHNICAL_CLARIFICATION" } });
+    const a = await createOpportunity(sa.token, { stage: "TECHNICAL_CLARIFICATION", title: "A" });
+    const b = await createOpportunity(sa.token, { stage: "TECHNICAL_CLARIFICATION", title: "B" });
+    const c = await createOpportunity(sa.token, { stage: "TECHNICAL_CLARIFICATION", title: "C" });
 
-    expect((await getOpportunity(sa.token, a.body.id as string)).body.stageOrder).toBe(0);
-    expect((await getOpportunity(sa.token, b.body.id as string)).body.stageOrder).toBe(1);
-    expect((await getOpportunity(sa.token, c.body.id as string)).body.stageOrder).toBe(2);
+    expect((await getOpportunity(sa.token, a.body.id as string)).body.stageOrder).toBe(before);
+    expect((await getOpportunity(sa.token, b.body.id as string)).body.stageOrder).toBe(before + 1);
+    expect((await getOpportunity(sa.token, c.body.id as string)).body.stageOrder).toBe(before + 2);
   });
 });
 
@@ -686,5 +970,34 @@ describe("POST /opportunities/:id/assign", () => {
 
     const deleted = await deleteOpportunity(sa.token, id);
     expect(deleted.status).toBe(403);
+  });
+});
+
+describe("lastActivityAt bumps (§3.7)", () => {
+  it("bumps on /move, PATCH, and /close; stays put on a repeat /assign to the same PIC", async () => {
+    const sa = await createSaLikeUser();
+    const manager = await createManagerLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "ASSESSMENT" });
+    const id = created.body.id as string;
+    const afterCreate = created.body.lastActivityAt as string;
+
+    const moved = await moveOpportunity(sa.token, id, { stage: "RFP", stageOrder: 0 });
+    expect(Date.parse(moved.body.lastActivityAt)).toBeGreaterThanOrEqual(Date.parse(afterCreate));
+
+    const patched = await patchOpportunity(sa.token, id, { title: "Bumped by PATCH" });
+    expect(Date.parse(patched.body.lastActivityAt)).toBeGreaterThanOrEqual(Date.parse(moved.body.lastActivityAt));
+
+    // edit_all (not edit_own — D1 only lets edit_own claim an UNASSIGNED
+    // deal) repeats the same picId on an already-assigned deal, D6's true
+    // no-op path.
+    const reAssigned = await assignOpportunity(manager.token, id, { picId: sa.userId });
+    expect(reAssigned.status).toBe(200);
+    // Same PIC again is a true no-op (D6) — the row isn't written at all, so
+    // lastActivityAt (like updatedAt) stays exactly what PATCH last set.
+    expect(reAssigned.body.lastActivityAt).toBe(patched.body.lastActivityAt);
+
+    const closed = await closeOpportunity(sa.token, id, { outcome: "WON" });
+    expect(closed.status).toBe(200);
+    expect(Date.parse(closed.body.lastActivityAt)).toBeGreaterThanOrEqual(Date.parse(reAssigned.body.lastActivityAt));
   });
 });

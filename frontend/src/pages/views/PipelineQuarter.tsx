@@ -8,13 +8,20 @@
 // pure Pipeline logic — boardLogic.ts/kpi.ts/adapter.ts — rather than under
 // pages/views/, per that directory's established split).
 //
-// Self-contained like SolvroPipelineKanban.tsx: fetches its own data via
-// useOpportunities() rather than taking deals as a prop, since the view
-// switcher (Pipeline.tsx, wired in a later task) mounts each view
-// independently. No KPI bar here — the reference's quarter-view.tsx has
-// none either; PRD §2.4's "shared toolbar and KPI bar stay mounted" implies
-// that bar is hoisted to the Pipeline.tsx switcher shell, not owned by each
-// view body.
+// Self-contained: fetches its own data via useOpportunities() rather than
+// taking deals as a prop, since the view switcher (Pipeline.tsx) mounts each
+// view independently — unlike SolvroPipelineKanban.tsx/PipelineList.tsx,
+// which the 2026-09-25 flow redesign converted to a `deals` prop for their
+// own Active/Closed switch (D11); this view's own scope never changes with
+// that switch (see "Row scope" below), so there's nothing to plumb through.
+// No KPI bar here — the reference's quarter-view.tsx has none either; PRD
+// §2.4's "shared toolbar and KPI bar stay mounted" implies that bar is
+// hoisted to the Pipeline.tsx switcher shell, not owned by each view body.
+//
+// Row scope (2026-09-25 flow redesign, D11): only ACTIVE deals
+// (`outcome === null`) ever reach a quarter column — this view always shows
+// the active list regardless of the Kanban/List Active/Closed switch; the
+// one-line "Active deals" caption above the columns says so explicitly.
 //
 // Read-only: no drag (PRD §2.4 "No drag in this view"). Per-card onClick
 // navigates to `/pipeline/:id` (OpportunityDetail, M3.16) — wired via
@@ -97,17 +104,22 @@ export function PipelineQuarter() {
     );
   }
 
-  const allDeals = deals ?? [];
+  // Only ACTIVE deals ever reach a quarter column (D11) — this view always
+  // shows the active list regardless of the Kanban/List Active/Closed
+  // switch; see this file's header comment.
+  const activeDeals = (deals ?? []).filter((d) => d.outcome === null);
 
-  if (allDeals.length === 0) {
+  if (activeDeals.length === 0) {
     return <EmptyQuarterState />;
   }
 
-  const columns = groupByQuarter(allDeals, currentYear);
+  const columns = groupByQuarter(activeDeals, currentYear);
 
   return (
-    <div className="flex gap-4 overflow-x-auto pb-2">
-      {QUARTER_ORDER.map((id) => {
+    <div className="space-y-2">
+      <p className="text-xs text-on-surface-variant">Active deals</p>
+      <div className="flex gap-4 overflow-x-auto pb-2">
+        {QUARTER_ORDER.map((id) => {
         const columnDeals = columns[id];
         const columnValue = columnDeals.reduce((sum, d) => sum + d.dealValue, 0);
         const accent = QUARTER_ACCENT[id];
@@ -141,7 +153,8 @@ export function PipelineQuarter() {
             </div>
           </div>
         );
-      })}
+        })}
+      </div>
     </div>
   );
 }

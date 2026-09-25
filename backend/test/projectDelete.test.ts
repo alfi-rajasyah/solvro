@@ -4,6 +4,7 @@ import request from "supertest";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/prisma.js";
 import { createAdminAndToken, createUserWithRole, seedRoles } from "./testAuth.js";
+import { createWonOpportunity } from "./pipelineWonFixture.js";
 
 // DELETE /projects/:id — hard delete behind project:write and the visibility
 // filter. The schema cascades the project's children; a won deal linked
@@ -83,12 +84,9 @@ describe("DELETE /projects/:id", () => {
 
   it("clears the handoff link on a won deal but keeps the deal", async () => {
     const customerId = await createCustomer();
-    const created = await request(app)
-      .post("/opportunities")
-      .set("Authorization", `Bearer ${admin.token}`)
-      .send({ title: "Deal", customerName: "Acme Corp", picId: admin.userId, stage: "WON" });
-    expect(created.status).toBe(201);
-    const opportunityId = created.body.id as string;
+    // Won is an outcome set by POST /opportunities/:id/close, not a
+    // creatable stage (opportunity-flow-redesign D5).
+    const opportunityId = await createWonOpportunity(app, admin.token, admin.userId, "Deal");
 
     const handoff = await request(app)
       .post(`/opportunities/${opportunityId}/handoff`)

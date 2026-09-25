@@ -16,11 +16,14 @@
 // client-side preview before it ever leaves the browser.
 import { STAGE_ORDER, type PipelineStage } from "@/lib/pipelineFormat";
 
-// Stages the import template accepts — mirrors the reference's
-// `VALID_STAGES` and backend/src/routes/opportunities.ts's own rule that
-// HOLD is reached only through the board's move flow, never on create (and
-// by extension, import).
-export const IMPORTABLE_STAGES: PipelineStage[] = STAGE_ORDER.filter((s) => s !== "HOLD");
+// Stages the import template accepts — every `PipelineStage` (D9, the
+// 2026-09-25 flow redesign). A "Won"/"Drop"/"Hold" row is rejected the same
+// way an unrecognized stage token always was (the generic "Invalid stage"
+// error below): Won/Lost/Cancelled/Hold aren't `PipelineStage` values at
+// all anymore (see `pipelineFormat.ts`), so there's no dedicated filter left
+// to apply here — mirrors backend/src/routes/opportunities.ts's own
+// `IMPORT_STAGE_MAP`, which shrank to the same 6 labels.
+export const IMPORTABLE_STAGES: PipelineStage[] = STAGE_ORDER;
 
 // Mirrors backend/src/routes/opportunities.ts's `IMPORT_ROW_CAP` — the
 // server 400s the whole call above this, so the dialog caps what it sends

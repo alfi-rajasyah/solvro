@@ -14,6 +14,9 @@ function makeDeal(
     winProbability: 50,
     deadline: null,
     wonAt: null,
+    outcome: null,
+    projectId: null,
+    idle: { level: "none", days: 0, basis: null },
     ...overrides,
   };
 }
@@ -108,26 +111,26 @@ describe("commitMapper — cross-column drop index math", () => {
 
   it("drag onto the tail of a cross-column stage appends at the committed last index", () => {
     const A1 = makeDeal({ id: "a1", title: "A1", stage: "ASSESSMENT", stageOrder: 0 });
-    const W1 = makeDeal({ id: "w1", title: "W1", stage: "WON", stageOrder: 0 });
-    const W2 = makeDeal({ id: "w2", title: "W2", stage: "WON", stageOrder: 1 });
+    const W1 = makeDeal({ id: "w1", title: "W1", stage: "WAITING_RESPONSE", stageOrder: 0 });
+    const W2 = makeDeal({ id: "w2", title: "W2", stage: "WAITING_RESPONSE", stageOrder: 1 });
     const previousValue = groupedAll([A1, W1, W2]);
     const committedValue = {
       ...previousValue,
       ASSESSMENT: [],
-      WON: [W1, W2, A1],
+      WAITING_RESPONSE: [W1, W2, A1],
     };
     const meta: PipelineCommitMetaLike = {
       kind: "item",
       activeContainer: "ASSESSMENT",
       activeIndex: 0,
-      overContainer: "WON",
+      overContainer: "WAITING_RESPONSE",
       overIndex: 2,
       previousValue,
     };
 
     expect(mapCommitToMove(committedValue, meta)).toEqual({
       opportunityId: "a1",
-      stage: "WON",
+      stage: "WAITING_RESPONSE",
       stageOrder: 2,
     });
   });
