@@ -5,29 +5,60 @@
 // loading/404 gate -> content, back affordance to the list route.
 //
 // Edit affordance (M3 integration): opens `OpportunityFormModal` in edit
-// mode, gated on `canEditDeal` (same `canDragDeal` gate the board's drag
-// handle and the StageChip menu below already use) — see the header's Edit
-// button and the modal mount near the bottom of this component.
+// mode, gated on `canEditDealFields` (boardLogic.ts, D16) — the plain
+// ownership check with NO outcome clause: the backend still accepts a
+// plain-field `PATCH /:id` (title, value, customer, …) on a closed deal,
+// refusing only `subStatus`/`statusTag` there (`deal_closed`, §3.3), so the
+// Edit button stays available after Close/Reopen. This is deliberately a
+// DIFFERENT gate from `canEditDeal` (`canDragDeal`) below, which the stage
+// menu and the flag toggles/Close button use and which locks out entirely
+// once `outcome !== null` — see the header's Edit button and the modal
+// mount near the bottom of this component.
 //
 // Assign PIC affordance (claim-unassigned-deals plan, D1/D2): an unassigned
 // deal is locked for `pipeline:edit_own` holders — no drag, edit, stage
 // change, link or delete — until it has a PIC. This button, gated on
 // `canAssignThisDeal`, is the one exception; it opens `AssignPicModal`.
-// Once assigned, the deal's normal own-rules (canEditDeal/canDeleteThisDeal
-// above) take over — an `edit_all` holder reassigns an already-assigned
-// deal through Edit, not through this button.
+// Once assigned, the deal's normal own-rules (canEditDealFields/
+// canEditDeal/canDeleteThisDeal above) take over — an `edit_all` holder
+// reassigns an already-assigned deal through Edit, not through this button.
+//
+// Flag toggles / Close / Reopen (2026-09-25 opportunity flow redesign,
+// docs/plans/opportunity-flow-redesign.md §4.5): `canEditDeal` (`canDragDeal`)
+// now doubles as "the deal is open AND I can edit it" (D5 — a closed deal is
+// locked, stage-wise, never reset), so it also gates the three flag toggles
+// — Waiting for Sales input/Input received (hidden on Waiting Response),
+// Hold/Release hold, Mark delayed/Clear delayed — and the Close deal button.
+// The toggles PATCH a single field through `useUpdateOpportunity`; Close
+// opens `CloseDealDialog`, which owns its own `POST /:id/close` call end to
+// end. Once a deal is closed (`outcome !== null`), its stage chip becomes
+// read-only (a `lock` glyph replaces the menu), the flag toggles and Close
+// disappear, and `canReopenDeal` gates a Reopen button instead (refused once
+// the deal already has a linked project).
 import { useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { AssignPicModal } from "@/components/AssignPicModal";
+import { CloseDealDialog } from "@/components/CloseDealDialog";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { HandoffProjectModal } from "@/components/DealCard";
+import { MoveReasonModal } from "@/components/MoveReasonModal";
 import { OpportunityFormModal } from "@/components/OpportunityFormModal";
 import {
+  IdleChip,
+  OutcomeChip,
+  OwnerChip,
+  SubStatusChip,
+  TagChip,
+} from "@/components/PipelineFlagChips";
+import {
   canAssignDeal,
+  canCloseDeal,
   canDeleteDeal,
   canDragDeal,
-  needsTerminalConfirm,
+  canEditDealFields,
+  canHandoffDeal,
+  canReopenDeal,
 } from "@/components/pipeline/boardLogic";
 import { probabilityTone } from "@/components/pipeline/kpi";
 import { Alert, AlertAction, AlertDescription } from "@/components/reui/alert";
@@ -51,6 +82,10 @@ import {
   formatIDR,
   formatPipelineDate,
   formatWinProbability,
+  isSkipJump,
+  OUTCOME_LABELS,
+  OUTCOME_REASON_LABELS,
+  PIPELINE_SLA_HINT,
   STAGE_LABELS,
   STAGE_ORDER,
   type PipelineStage,
@@ -64,6 +99,8 @@ import {
   useOpportunity,
   useOpportunityActivities,
   useOpportunityLinks,
+  useReopenOpportunity,
+  useUpdateOpportunity,
   useUpdateOpportunityLink,
   type Opportunity,
   type OpportunityActivity,
@@ -115,6 +152,67 @@ function relativeTime(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+// Short Indonesian-locale date for an ISO INSTANT (`closedAt`/
+// `lastActivityAt`/`waitingInputSince`) — verbatim copy of DealCard.tsx's
+// private `formatWonAt` (not exported there, same reason it isn't here):
+// these three fields are real Prisma DateTime instants, not the plain
+// "yyyy-MM-dd" day strings `formatPipelineDate` (pipelineFormat.ts) is
+// contracted to — feeding an instant through that helper would misinterpret
+// it as a bare day string and silently render the wrong calendar date around
+// midnight in any timezone away from the exact moment it was recorded in UTC.
+function formatInstantDate(iso: string): string {
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  }).format(new Date(iso));
+}
+
+// Display text for `PIPELINE_SLA_HINT`'s per-stage row (pipelineFormat.ts) —
+// Waiting Response has no waiting-basis SLA (its owner is the client, not an
+// SA sub-status), so it reads "no waiting SLA" plus its activity-basis
+// warning/critical thresholds instead of the "N wd waiting" every SA-owned
+// stage gets.
+function slaHintCaption(stage: PipelineStage): string {
+  const hint = PIPELINE_SLA_HINT[stage];
+  if (hint.waitingDays === null) {
+    const critical = hint.idleCriticalDays !== null ? `, ${hint.idleCriticalDays} wd critical` : "";
+    return `no waiting SLA · ${hint.idleWarningDays} wd idle${critical}`;
+  }
+  return `${hint.waitingDays} wd waiting, ${hint.idleWarningDays} wd idle`;
+}
+
+// Finds the acting user's name on the latest "Closed as …" activity entry,
+// for the closed-deal header caption ("Closed {date} by {user}"). Reads off
+// the activities feed this page already loads for the Activity section
+// (cheap — no extra request) rather than adding a dedicated lookup; returns
+// null (caption omits "by {user}") when the feed hasn't loaded yet or simply
+// carries no such entry.
+function closedByUsername(activities: OpportunityActivity[] | undefined): string | null {
+  if (!activities) return null;
+  const closeEntries = activities.filter((a) => a.note.startsWith("Closed as "));
+  if (closeEntries.length === 0) return null;
+  const latest = closeEntries.reduce((a, b) =>
+    new Date(a.createdAt) > new Date(b.createdAt) ? a : b,
+  );
+  return latest.user?.username ?? null;
+}
+
+// Header caption, below the chips row — two different lines depending on
+// whether the deal is still open (D1's idle alert is computed server-side;
+// this just mirrors the SLA table for display, see PIPELINE_SLA_HINT's doc
+// comment) or closed (D5: the outcome note, plus who closed it when cheap to
+// know).
+function detailCaption(deal: Opportunity, closedBy: string | null): string {
+  if (deal.outcome !== null) {
+    const dateText = deal.closedAt ? formatInstantDate(deal.closedAt) : "—";
+    const parts = [closedBy ? `Closed ${dateText} by ${closedBy}` : `Closed ${dateText}`];
+    if (deal.outcomeReason) parts.push(deal.outcomeReason);
+    return parts.join(" · ");
+  }
+  return `Last activity ${formatInstantDate(deal.lastActivityAt)} · SLA for this stage: ${slaHintCaption(deal.stage)}`;
+}
+
 export function OpportunityDetail() {
   const { id } = useParams<{ id: string }>();
   const dealId = id ?? null;
@@ -126,6 +224,8 @@ export function OpportunityDetail() {
   const links = useOpportunityLinks(dealId);
 
   const moveOpportunity = useMoveOpportunity();
+  const updateOpportunity = useUpdateOpportunity();
+  const reopenOpportunity = useReopenOpportunity();
   const deleteOpportunity = useDeleteOpportunity();
   // Constructed with `id ?? ""` — these mutation hooks take a plain string
   // (no `enabled` gate like the query hooks above), but every path that can
@@ -137,16 +237,20 @@ export function OpportunityDetail() {
   const updateLink = useUpdateOpportunityLink(id ?? "");
   const deleteLink = useDeleteOpportunityLink(id ?? "");
 
-  const [pendingStage, setPendingStage] = useState<PipelineStage | null>(null);
+  // The one gated stage jump (D4): Technical Clarification -> RFP requires a
+  // reason. Holds the TARGET stage while `MoveReasonModal` collects it; every
+  // other stage pick moves immediately without this detour.
+  const [pendingMoveReasonStage, setPendingMoveReasonStage] = useState<PipelineStage | null>(null);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [assignOpen, setAssignOpen] = useState(false);
+  const [closeDealOpen, setCloseDealOpen] = useState(false);
   // Post-won handoff offer (PRD §2.10, M5.24): a transient nudge shown
-  // right after THIS SESSION's own move into WON succeeds — separate from
+  // right after THIS SESSION's own Close-as-Won succeeds — separate from
   // the persistent "Create project" button below, which covers the case
   // where this banner was dismissed or the deal was already WON on load
-  // (see that button's own `stage === "WON" && !projectId` gate — the offer
-  // must not evaporate just because this one-shot banner was closed).
+  // (see that button's own `outcome === "WON" && !projectId` gate — the
+  // offer must not evaporate just because this one-shot banner was closed).
   const [justWonOffer, setJustWonOffer] = useState(false);
   const [handoffOpen, setHandoffOpen] = useState(false);
 
@@ -179,6 +283,22 @@ export function OpportunityDetail() {
   }
 
   const canEditDeal = canDragDeal(user, deal);
+  // The plain-field-edit gate (D16) — NO outcome clause, unlike `canEditDeal`
+  // above: the backend keeps accepting a plain-field PATCH on a closed deal
+  // (only subStatus/statusTag are refused there), so Edit stays reachable
+  // after Close/Reopen even though the stage menu, the flag toggles and
+  // Close all lock out via `canEditDeal`/`canCloseDeal`.
+  const canEditFieldsThisDeal = canEditDealFields(user, deal);
+  const canCloseThisDeal = canCloseDeal(user, deal);
+  // Also reused below to gate the persistent "Create project" button once a
+  // WON deal is closed: `canEditDeal`/`canDragDeal` always return false once
+  // ANY deal is closed (D5), so they can no longer stand in for "do I have
+  // edit rights on this deal" post-close the way they could pre-redesign.
+  // `canReopenDeal`'s own shape — edit rights AND closed AND no linked
+  // project yet — happens to be exactly the precondition a handoff needs
+  // too, so it does double duty here rather than adding a second helper to
+  // boardLogic.ts for the same boolean.
+  const canReopenThisDeal = canReopenDeal(user, deal);
   const canDeleteThisDeal = canDeleteDeal(user, deal);
   // Shows only on an unassigned deal — an `edit_all` holder reassigns an
   // already-assigned deal through Edit, not through this button (D4).
@@ -186,43 +306,76 @@ export function OpportunityDetail() {
 
   function handleSelectStage(stage: PipelineStage) {
     if (!deal || stage === deal.stage) return;
-    if (needsTerminalConfirm(stage, deal.stage)) {
-      setPendingStage(stage);
+    if (isSkipJump(deal.stage, stage)) {
+      setPendingMoveReasonStage(stage);
       return;
     }
     moveOpportunity.mutate({ id: deal.id, stage, stageOrder: APPEND_TO_STAGE });
   }
 
-  // Mirrors SolvroPipelineKanban.tsx's handleConfirmMove: async
-  // mutateAsync, stays "busy" until it settles, closes the modal either
-  // way — a failed move surfaces via the isError Alert below (the
-  // mutation's own onError already rolled back any optimistic write).
-  async function handleConfirmStage() {
-    if (!deal || !pendingStage) return;
-    const targetStage = pendingStage;
+  // Mirrors SolvroPipelineKanban.tsx's equivalent handler: async
+  // mutateAsync, closes the modal either way once it settles — a failed
+  // move surfaces via the isError Alert below (the mutation's own onError
+  // already rolled back any optimistic write).
+  async function handleConfirmSkipMove(reason: string) {
+    if (!deal || !pendingMoveReasonStage) return;
     try {
       await moveOpportunity.mutateAsync({
         id: deal.id,
-        stage: targetStage,
+        stage: pendingMoveReasonStage,
         stageOrder: APPEND_TO_STAGE,
+        reason,
       });
-      // Only a REAL entry into WON offers the handoff — reordering an
-      // already-WON deal never reaches here (handleSelectStage's own
-      // `stage === deal.stage` guard above short-circuits a same-stage
-      // pick before pendingStage is ever set). Same two-part gate as the
-      // persistent button below: project:write AND deal-edit rights
-      // (`canEditDeal`) — the backend's POST /:id/handoff checks
-      // `assertCanWriteOpportunity(user, "edit", deal)` in addition to
-      // project:write, so a project:write holder who isn't this deal's own
-      // PIC and lacks pipeline:edit_all would 403 on submit; no point
-      // nudging toward a form that's guaranteed to fail.
-      if (targetStage === "WON" && hasPermission(user, "project:write") && canEditDeal) {
-        setJustWonOffer(true);
-      }
     } catch {
       // Surfaced via the isError Alert below.
     } finally {
-      setPendingStage(null);
+      setPendingMoveReasonStage(null);
+    }
+  }
+
+  function handleToggleWaitingInput() {
+    if (!deal) return;
+    const next = deal.subStatus === "WAITING_SALES_INPUT" ? "PROGRESS" : "WAITING_SALES_INPUT";
+    updateOpportunity.mutate({ id: deal.id, patch: { subStatus: next } });
+  }
+
+  function handleToggleHold() {
+    if (!deal) return;
+    updateOpportunity.mutate({
+      id: deal.id,
+      patch: { statusTag: deal.statusTag === "HOLD" ? null : "HOLD" },
+    });
+  }
+
+  function handleToggleDelayed() {
+    if (!deal) return;
+    updateOpportunity.mutate({
+      id: deal.id,
+      patch: { statusTag: deal.statusTag === "DELAYED" ? null : "DELAYED" },
+    });
+  }
+
+  // `onClosed` callback for `CloseDealDialog` — uses the mutation's own
+  // fresh return value (`updated`), never the stale `deal`/`canEditDeal`
+  // closed over at render time: by the moment this fires, `deal.outcome` is
+  // no longer null, so `canDragDeal`/`canEditDeal` would already read false
+  // regardless of the actual pre-close permission check.
+  function handleDealClosed(updated: Opportunity) {
+    if (
+      updated.outcome === "WON" &&
+      hasPermission(user, "project:write") &&
+      canReopenDeal(user, updated)
+    ) {
+      setJustWonOffer(true);
+    }
+  }
+
+  async function handleReopen() {
+    if (!deal) return;
+    try {
+      await reopenOpportunity.mutateAsync(deal.id);
+    } catch {
+      // Surfaced via the isError Alert below.
     }
   }
 
@@ -239,6 +392,8 @@ export function OpportunityDetail() {
     }
   }
 
+  const caption = detailCaption(deal, closedByUsername(activities.data));
+
   return (
     <div className="space-y-6">
       <div>
@@ -254,12 +409,27 @@ export function OpportunityDetail() {
           <div className="min-w-0">
             <div className="mb-1 flex flex-wrap items-center gap-2">
               <h1 className="truncate font-display text-h2 text-on-surface">{deal.title}</h1>
-              <StageMenu stage={deal.stage} canEdit={canEditDeal} onSelect={handleSelectStage} />
+              <StageMenu
+                stage={deal.stage}
+                canEdit={canEditDeal}
+                closed={deal.outcome !== null}
+                onSelect={handleSelectStage}
+              />
             </div>
             <p className="text-sm text-on-surface-variant">{deal.customerName}</p>
+
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <OwnerChip owner={deal.owner} showSa />
+              <SubStatusChip subStatus={deal.subStatus} idle={deal.idle} />
+              <TagChip tag={deal.statusTag} />
+              <IdleChip idle={deal.idle} />
+              <OutcomeChip outcome={deal.outcome} reasonCategory={deal.outcomeReasonCategory} />
+            </div>
+
+            <p className="mt-1.5 text-[12px] text-on-surface-variant">{caption}</p>
           </div>
 
-          <div className="flex shrink-0 items-center gap-3">
+          <div className="flex flex-wrap shrink-0 items-center gap-3">
             {/* `font-mono`, not `text-data-mono` (N4): `text-data-mono`
                 carries its own fixed 13px font-size token, which conflicts
                 with `text-lg` here — `font-mono` applies only the
@@ -267,15 +437,21 @@ export function OpportunityDetail() {
             <span className="font-mono text-lg text-primary">{formatIDR(deal.dealValue)}</span>
             {/* Persistent handoff affordance (PRD §2.10) — deliberately NOT
                 gated on the transient `justWonOffer` banner below: it must
-                stay available for as long as `stage === "WON" && !projectId`
-                holds, including a fresh page load on an already-WON deal or
-                after the banner's own Dismiss. Already-linked WON deals get
-                a plain link to the project instead — no permission gate on
-                that one, since following a link isn't a write. Gated on
-                `project:write` AND `canEditDeal` — see handleConfirmStage's
-                matching gate above for why both are needed (the backend's
-                POST /:id/handoff enforces both). */}
-            {deal.stage === "WON" && deal.projectId && (
+                stay available for as long as `outcome === "WON" &&
+                !projectId` holds, including a fresh page load on an
+                already-WON deal or after the banner's own Dismiss.
+                Already-linked WON deals get a plain link to the project
+                instead — no permission gate on that one, since following a
+                link isn't a write. Gated on `project:write` AND
+                `canHandoffDeal` (edit rights + Won + no project) —
+                phase-review fix SF3: `canReopenThisDeal` (edit + CLOSED +
+                no project) happened to share the "closed, no project" half
+                of this shape by coincidence, not by contract, and a plain
+                `project:write` + `canReopenDeal` combo let an edit_own
+                holder see (and 403 on) this button for a colleague's Won
+                deal — `canHandoffDeal` is the dedicated gate mirroring the
+                backend's own `POST /:id/handoff` ownership + outcome check. */}
+            {deal.outcome === "WON" && deal.projectId && (
               <Link
                 to={`/projects/${deal.projectId}`}
                 className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
@@ -284,10 +460,7 @@ export function OpportunityDetail() {
                 View project
               </Link>
             )}
-            {deal.stage === "WON" &&
-              !deal.projectId &&
-              hasPermission(user, "project:write") &&
-              canEditDeal && (
+            {hasPermission(user, "project:write") && canHandoffDeal(user, deal) && (
               <button
                 type="button"
                 onClick={() => setHandoffOpen(true)}
@@ -297,6 +470,74 @@ export function OpportunityDetail() {
                 Create project
               </button>
             )}
+
+            {canEditDeal && deal.stage !== "WAITING_RESPONSE" && (
+              <button
+                type="button"
+                onClick={handleToggleWaitingInput}
+                disabled={updateOpportunity.isPending}
+                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-base">
+                  {deal.subStatus === "WAITING_SALES_INPUT" ? "check_circle" : "schedule"}
+                </span>
+                {deal.subStatus === "WAITING_SALES_INPUT" ? "Input received" : "Waiting for Sales input"}
+              </button>
+            )}
+            {/* Hold and Delayed share one `statusTag` column (D16, N5): while
+                one is set, only ITS OWN clear action shows — the other
+                setter would silently overwrite the active tag, so it's
+                hidden rather than offered. Both setters show together only
+                when neither tag is active. Mirrors the board card menu's
+                same rule (OpportunityCard.tsx). */}
+            {canEditDeal && deal.statusTag !== "DELAYED" && (
+              <button
+                type="button"
+                onClick={handleToggleHold}
+                disabled={updateOpportunity.isPending}
+                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-base">
+                  {deal.statusTag === "HOLD" ? "play_circle" : "pause_circle"}
+                </span>
+                {deal.statusTag === "HOLD" ? "Release hold" : "Hold"}
+              </button>
+            )}
+            {canEditDeal && deal.statusTag !== "HOLD" && (
+              <button
+                type="button"
+                onClick={handleToggleDelayed}
+                disabled={updateOpportunity.isPending}
+                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-base">
+                  {deal.statusTag === "DELAYED" ? "event_available" : "event"}
+                </span>
+                {deal.statusTag === "DELAYED" ? "Clear delayed" : "Mark delayed"}
+              </button>
+            )}
+            {canCloseThisDeal && (
+              <button
+                type="button"
+                onClick={() => setCloseDealOpen(true)}
+                className="inline-flex items-center gap-1 rounded-sm border border-error px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-error hover:bg-error/10"
+              >
+                <span className="material-symbols-outlined text-base">flag</span>
+                Close deal
+              </button>
+            )}
+            {canReopenThisDeal && (
+              <button
+                type="button"
+                onClick={handleReopen}
+                disabled={reopenOpportunity.isPending}
+                className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-primary hover:bg-primary/10 disabled:opacity-50"
+              >
+                <span className="material-symbols-outlined text-base">restart_alt</span>
+                Reopen
+              </button>
+            )}
+
             {canAssignThisDeal && (
               <button
                 type="button"
@@ -307,7 +548,7 @@ export function OpportunityDetail() {
                 Assign PIC
               </button>
             )}
-            {canEditDeal && (
+            {canEditFieldsThisDeal && (
               <button
                 type="button"
                 onClick={() => setEditOpen(true)}
@@ -338,6 +579,20 @@ export function OpportunityDetail() {
           </AlertDescription>
         </Alert>
       )}
+      {updateOpportunity.isError && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Could not update the deal: {(updateOpportunity.error as Error).message}
+          </AlertDescription>
+        </Alert>
+      )}
+      {reopenOpportunity.isError && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Could not reopen the deal: {(reopenOpportunity.error as Error).message}
+          </AlertDescription>
+        </Alert>
+      )}
       {deleteOpportunity.isError && (
         <Alert variant="destructive">
           <AlertDescription>
@@ -347,9 +602,9 @@ export function OpportunityDetail() {
       )}
 
       {/* Non-blocking inline offer, not a modal ambush (PRD §2.10) — only
-          for as long as this deal has no linked project yet; a second stage
-          change on an already-linked deal (extremely unlikely — WON is
-          terminal, see STAGE_MENU) wouldn't re-show a stale offer. */}
+          for as long as this deal has no linked project yet; a second Close
+          on an already-linked deal can't happen (Close is gone once a deal
+          is closed) so this wouldn't re-show a stale offer. */}
       {justWonOffer && !deal.projectId && (
         <Alert variant="success">
           <AlertDescription>Deal won — create the delivery project?</AlertDescription>
@@ -401,23 +656,13 @@ export function OpportunityDetail() {
         </div>
       </div>
 
-      {pendingStage && (
-        <ConfirmModal
-          open
-          onClose={() => setPendingStage(null)}
-          onConfirm={handleConfirmStage}
-          title={pendingStage === "WON" ? "Mark opportunity as Won?" : "Drop this opportunity?"}
-          body={
-            <>
-              Move <strong>{deal.title}</strong> to <strong>{STAGE_LABELS[pendingStage]}</strong>?
-              This records a stage change on the deal's activity log.
-            </>
-          }
-          confirmLabel={pendingStage === "WON" ? "Mark as Won" : "Move to Drop"}
-          confirmTone={pendingStage === "WON" ? "primary" : "warning"}
-          busy={moveOpportunity.isPending}
-        />
-      )}
+      <MoveReasonModal
+        open={pendingMoveReasonStage !== null}
+        onClose={() => setPendingMoveReasonStage(null)}
+        onConfirm={handleConfirmSkipMove}
+        dealTitle={deal.title}
+        busy={moveOpportunity.isPending}
+      />
 
       <ConfirmModal
         open={confirmDeleteOpen}
@@ -438,6 +683,13 @@ export function OpportunityDetail() {
 
       <AssignPicModal open={assignOpen} onClose={() => setAssignOpen(false)} opportunity={deal} />
 
+      <CloseDealDialog
+        deal={deal}
+        open={closeDealOpen}
+        onClose={() => setCloseDealOpen(false)}
+        onClosed={handleDealClosed}
+      />
+
       <HandoffProjectModal open={handoffOpen} onClose={() => setHandoffOpen(false)} deal={deal} />
     </div>
   );
@@ -446,12 +698,31 @@ export function OpportunityDetail() {
 function StageMenu({
   stage,
   canEdit,
+  closed,
   onSelect,
 }: {
   stage: PipelineStage;
   canEdit: boolean;
+  closed: boolean;
   onSelect: (stage: PipelineStage) => void;
 }) {
+  // A closed deal's stage is locked (D5) — no menu at all, edit rights or
+  // not, plus a `lock` glyph so it reads differently from the plain
+  // view-only chip below.
+  if (closed) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        <StageChip stage={stage} />
+        <span
+          className="material-symbols-outlined text-[15px] text-on-surface-variant"
+          aria-hidden="true"
+        >
+          lock
+        </span>
+      </span>
+    );
+  }
+
   // View-only callers (no pipeline:edit_own/edit_all on this deal, mirrors
   // canDragDeal's board gate) get the plain chip, no dropdown affordance.
   if (!canEdit) return <StageChip stage={stage} />;
@@ -516,18 +787,6 @@ function MetaGrid({ deal }: { deal: Opportunity }) {
         Details
       </h2>
 
-      {/* Held-from cue — PRD §2.3/§2.5, same treatment as OpportunityCard's
-          board-card cue. No auto-restore hint here: v1 dropped the auto-hold
-          cron entirely (docs/plans/pipeline-native-port-plan.md, resolved
-          question 4) — HOLD is a manual stage like any other now, so there
-          is no "adding activity restores this deal" mechanism to advertise. */}
-      {deal.stage === "HOLD" && deal.preHoldStage && (
-        <div className="flex items-center gap-1.5 rounded-sm bg-chip-amber-bg px-3 py-2 text-[12px] font-semibold text-chip-amber-text">
-          <span className="material-symbols-outlined text-[16px]">pause_circle</span>
-          Held from {STAGE_LABELS[deal.preHoldStage]}
-        </div>
-      )}
-
       <div className="grid gap-x-6 gap-y-3 sm:grid-cols-2">
         <MetaItem icon="person" label="PIC">
           <span className="flex items-center gap-2">
@@ -552,6 +811,32 @@ function MetaGrid({ deal }: { deal: Opportunity }) {
         <MetaItem icon="inventory_2" label="Product / Solution">
           {deal.productSolution || "—"}
         </MetaItem>
+        {/* Open + waiting on the client (D3/D10): the SA is waiting for the
+            Sales team to clear the flag — see SubStatusChip in the header. */}
+        {deal.outcome === null &&
+          deal.subStatus === "WAITING_SALES_INPUT" &&
+          deal.waitingInputSince && (
+          <MetaItem icon="schedule" label="Waiting on Sales since">
+            {formatInstantDate(deal.waitingInputSince)}
+          </MetaItem>
+        )}
+        {/* Closed (D5): the stage never resets, so it's shown here as history
+            alongside the outcome and when it closed. */}
+        {deal.outcome !== null && (
+          <>
+            <MetaItem icon="flag" label="Stage at close">
+              {STAGE_LABELS[deal.stage]}
+            </MetaItem>
+            <MetaItem icon="check_circle" label="Outcome">
+              {deal.outcomeReasonCategory
+                ? `${OUTCOME_LABELS[deal.outcome]} · ${OUTCOME_REASON_LABELS[deal.outcomeReasonCategory]}`
+                : OUTCOME_LABELS[deal.outcome]}
+            </MetaItem>
+            <MetaItem icon="event_available" label="Closed">
+              {deal.closedAt ? formatInstantDate(deal.closedAt) : "—"}
+            </MetaItem>
+          </>
+        )}
       </div>
 
       {deal.description && (
