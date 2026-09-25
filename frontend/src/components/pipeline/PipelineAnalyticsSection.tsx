@@ -46,17 +46,21 @@ import {
 } from "@tanstack/react-table";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import {
+  computeCloseReasons,
   computeMonthlyTrend,
   computePicLeaderboard,
   computeStageFunnel,
+  computeWinRatePct,
   computeWorkloadHeatmap,
   HEATMAP_STAGES,
   workloadStatusTone,
+  type CloseReasonRow,
   type MonthlyTrendPoint,
   type PicLeaderboardRow,
   type StageFunnelBucket,
   type WorkloadHeatmapRow,
 } from "@/components/pipeline/analytics";
+import { OutcomeChip } from "@/components/PipelineFlagChips";
 import { PicDrillDownModal } from "@/components/pipeline/PicDrillDownModal";
 import { EmptyState } from "@/components/EmptyState";
 import { Alert, AlertDescription } from "@/components/reui/alert";
@@ -64,8 +68,15 @@ import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-gr
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
+import { StageChip } from "@/components/StageChip";
 import { Chip } from "@/components/StatusChip";
-import { formatIDRCompact, STAGE_ALPHA, STAGE_LABELS, type PipelineStage } from "@/lib/pipelineFormat";
+import {
+  formatIDRCompact,
+  OUTCOME_REASON_LABELS,
+  STAGE_ALPHA,
+  STAGE_LABELS,
+  type PipelineStage,
+} from "@/lib/pipelineFormat";
 import { useOpportunities, type Opportunity } from "@/lib/queries";
 
 const PANEL_CLASS = "rounded-sm border border-outline-variant bg-surface-container-lowest p-4";
@@ -136,6 +147,12 @@ function AnalyticsBody({
   const leaderboard = computePicLeaderboard(deals);
   const trend = computeMonthlyTrend(deals);
   const heatmap = computeWorkloadHeatmap(deals);
+  // Current UTC calendar year — matches `computeCloseReasons`/`computeWinRatePct`'s
+  // own `closedAt`-year bucketing (analytics.ts), same TZ-stable convention
+  // `computeMonthlyTrend` above already uses for its month bucketing.
+  const year = new Date().getUTCFullYear();
+  const closeReasons = computeCloseReasons(deals, year);
+  const winRate = computeWinRatePct(deals, year);
 
   return (
     <div className="space-y-4">
@@ -146,6 +163,7 @@ function AnalyticsBody({
       <PicPerformancePanel rows={leaderboard} onSelectPic={onSelectPic} />
       <TrendPanel trend={trend} />
       <WorkloadHeatmapPanel rows={heatmap} onSelectPic={onSelectPic} />
+      <CloseReasonsPanel rows={closeReasons} winRate={winRate} year={year} />
     </div>
   );
 }
@@ -158,23 +176,21 @@ function AnalyticsBody({
 // alpha steps as PipelineKpiBar.tsx's `FUNNEL_FILL` / PipelineOverviewPanel
 // .tsx's `STAGE_FILL`, now all three sourced from the single `STAGE_ALPHA`
 // ramp (lib/pipelineFormat.ts, finding N2) instead of three independent
-// hardcoded copies of the same seven numbers. Unlike those two Tailwind-
-// class sites, these are plain runtime-interpolated CSS strings (not
-// scanned/purged by Tailwind), so they can reference `STAGE_ALPHA` directly
-// with no literal-class lookup indirection needed. DROP's/HOLD's entries
-// exist only so the Record stays total over `PipelineStage` (the funnel
-// itself excludes DROP) — same documented reasoning those two files
-// already use.
+// hardcoded copies of the same numbers. Unlike those two Tailwind-class
+// sites, these are plain runtime-interpolated CSS strings (not scanned/
+// purged by Tailwind), so they can reference `STAGE_ALPHA` directly with no
+// literal-class lookup indirection needed. Shrunk to the 6 real
+// `PipelineStage` members by the 2026-09-25 flow redesign — Won, Lost,
+// Cancelled and Hold are no longer stages (`STAGE_ALPHA`'s own comment),
+// and `computeStageFunnel` already excludes closed deals by `outcome`, so
+// there's no terminal-state placeholder left to carry in this Record.
 const STAGE_FILL: Record<PipelineStage, string> = {
   ASSESSMENT: `rgb(var(--primary) / ${STAGE_ALPHA.ASSESSMENT})`,
-  RFP: `rgb(var(--primary) / ${STAGE_ALPHA.RFP})`,
-  POC: `rgb(var(--primary) / ${STAGE_ALPHA.POC})`,
   TECHNICAL_CLARIFICATION: `rgb(var(--primary) / ${STAGE_ALPHA.TECHNICAL_CLARIFICATION})`,
+  POC: `rgb(var(--primary) / ${STAGE_ALPHA.POC})`,
+  RFP: `rgb(var(--primary) / ${STAGE_ALPHA.RFP})`,
   DELIVER_PROPOSAL: `rgb(var(--primary) / ${STAGE_ALPHA.DELIVER_PROPOSAL})`,
   WAITING_RESPONSE: `rgb(var(--primary) / ${STAGE_ALPHA.WAITING_RESPONSE})`,
-  WON: "rgb(var(--primary))",
-  DROP: "rgb(var(--rose-text))",
-  HOLD: "rgb(var(--amber-text))",
 };
 
 function StageFunnelPanel({ funnel }: { funnel: StageFunnelBucket[] }) {
@@ -342,6 +358,18 @@ function PicPerformancePanel({
       header: ({ column }) => <DataGridColumnHeader column={column} title="Won value" />,
       cell: ({ row }) => (
         <span className="font-mono tabular-nums text-primary">{formatIDRCompact(row.original.wonValue)}</span>
+      ),
+      meta: { headerClassName: "text-right", cellClassName: "text-right" },
+    },
+    {
+      // Renamed from the pre-redesign "Dropped" column (`lostOrCancelledCount`'s
+      // own doc comment, analytics.ts) — there's no DROP stage anymore, so this
+      // now covers both LOST and CANCELLED outcomes together.
+      id: "lostOrCancelled",
+      accessorKey: "lostOrCancelledCount",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Lost / Cancelled" />,
+      cell: ({ row }) => (
+        <span className="tabular-nums text-on-surface-variant">{row.original.lostOrCancelledCount}</span>
       ),
       meta: { headerClassName: "text-right", cellClassName: "text-right" },
     },
@@ -535,5 +563,102 @@ function WorkloadHeatmapPanel({
         </div>
       )}
     </section>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// 5. Close reasons by stage + win rate (2026-09-25 flow redesign, §4.6)
+// ─────────────────────────────────────────────────────────────────────────
+
+function CloseReasonsPanel({
+  rows,
+  winRate,
+  year,
+}: {
+  rows: CloseReasonRow[];
+  winRate: number;
+  year: number;
+}) {
+  const columns: ColumnDef<CloseReasonRow>[] = [
+    {
+      id: "stage",
+      accessorKey: "stage",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Stage" />,
+      enableSorting: false,
+      cell: ({ row }) => <StageChip stage={row.original.stage} />,
+    },
+    {
+      id: "outcome",
+      accessorKey: "outcome",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Outcome" />,
+      enableSorting: false,
+      // `reasonCategory: null` so the chip renders the bare outcome ("Lost"/
+      // "Cancelled") — the Reason column below already carries the category.
+      cell: ({ row }) => <OutcomeChip outcome={row.original.outcome} reasonCategory={null} />,
+    },
+    {
+      id: "reason",
+      accessorKey: "category",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Reason" />,
+      cell: ({ row }) => (
+        <span className="text-on-surface-variant">{OUTCOME_REASON_LABELS[row.original.category]}</span>
+      ),
+    },
+    {
+      id: "count",
+      accessorKey: "count",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Count" />,
+      cell: ({ row }) => <span className="tabular-nums">{row.original.count}</span>,
+      meta: { headerClassName: "text-right", cellClassName: "text-right" },
+    },
+    {
+      id: "value",
+      accessorKey: "value",
+      header: ({ column }) => <DataGridColumnHeader column={column} title="Value" />,
+      cell: ({ row }) => (
+        <span className="font-mono tabular-nums">{formatIDRCompact(row.original.value)}</span>
+      ),
+      meta: { headerClassName: "text-right", cellClassName: "text-right" },
+    },
+  ];
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    getRowId: (row) => `${row.stage}:${row.outcome}:${row.category}`,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  });
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-3">
+      <section className={`${PANEL_CLASS} lg:col-span-2`}>
+        <h3 className={`${PANEL_HEADING} mb-3`}>Close reasons by stage — {year}</h3>
+        {rows.length === 0 ? (
+          <EmptyState
+            icon="fact_check"
+            message={`No deals closed as Lost or Cancelled in ${year} yet.`}
+          />
+        ) : (
+          <DataGrid
+            table={table}
+            recordCount={rows.length}
+            tableLayout={{ dense: true, rowBorder: true, headerBorder: true, headerBackground: false, width: "auto" }}
+            tableClassNames={{ header: "bg-surface-container-low" }}
+          >
+            <DataGridContainer className="rounded-sm border border-outline-variant bg-surface-container-lowest">
+              <DataGridScrollArea>
+                <DataGridTable />
+              </DataGridScrollArea>
+            </DataGridContainer>
+          </DataGrid>
+        )}
+      </section>
+      <section className={PANEL_CLASS}>
+        <h3 className={`${PANEL_HEADING} mb-3`}>Win rate — {year}</h3>
+        <p className="font-mono text-4xl font-bold tabular-nums text-primary">{winRate}%</p>
+        <p className="mt-1 text-[11px] text-on-surface-variant">Won ÷ closed deals, {year}</p>
+      </section>
+    </div>
   );
 }
