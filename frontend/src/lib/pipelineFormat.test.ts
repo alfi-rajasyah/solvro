@@ -4,9 +4,13 @@ import {
   formatIDRCompact,
   formatPipelineDate,
   formatWinProbability,
+  isClosed,
+  isSkipJump,
+  ownerOf,
+  REASONS_BY_OUTCOME,
   STAGE_LABELS,
   STAGE_ORDER,
-  TERMINAL_STAGES,
+  type PipelineOutcome,
   type PipelineStage,
 } from "./pipelineFormat";
 
@@ -100,31 +104,25 @@ describe("formatWinProbability", () => {
 describe("STAGE_LABELS / STAGE_ORDER completeness", () => {
   const EXPECTED: Record<PipelineStage, string> = {
     ASSESSMENT: "Assessment",
-    RFP: "RFP",
-    POC: "PoC",
     TECHNICAL_CLARIFICATION: "Technical Clarification",
+    POC: "PoC",
+    RFP: "RFP",
     DELIVER_PROPOSAL: "Delivered Proposal",
     WAITING_RESPONSE: "Waiting Response",
-    WON: "Won",
-    DROP: "Drop",
-    HOLD: "Hold",
   };
 
-  it("has exactly the 9 PipelineStage enum members as keys, with the expected labels", () => {
+  it("has exactly the 6 PipelineStage enum members as keys, with the expected labels (2026-09-25 flow redesign, D2)", () => {
     expect(STAGE_LABELS).toEqual(EXPECTED);
   });
 
-  it("orders the board with exactly the same 9 stages, no duplicates, matching the PRD order", () => {
+  it("orders the board with exactly the same 6 stages, no duplicates, matching the flow spec's order", () => {
     expect(STAGE_ORDER).toEqual([
       "ASSESSMENT",
-      "RFP",
-      "POC",
       "TECHNICAL_CLARIFICATION",
+      "POC",
+      "RFP",
       "DELIVER_PROPOSAL",
       "WAITING_RESPONSE",
-      "WON",
-      "DROP",
-      "HOLD",
     ]);
     expect(new Set(STAGE_ORDER).size).toBe(STAGE_ORDER.length);
   });
@@ -134,9 +132,61 @@ describe("STAGE_LABELS / STAGE_ORDER completeness", () => {
   });
 });
 
-describe("TERMINAL_STAGES", () => {
-  it("is exactly WON and DROP, the single source of truth for both boardLogic.ts and kpi.ts", () => {
-    expect(TERMINAL_STAGES).toEqual(["WON", "DROP"]);
+describe("REASONS_BY_OUTCOME", () => {
+  it("is empty for WON (the backend rejects a reason category on a Won close)", () => {
+    expect(REASONS_BY_OUTCOME.WON).toEqual([]);
+  });
+
+  it("lists LOST's 4 categories", () => {
+    expect(REASONS_BY_OUTCOME.LOST).toEqual(["PRICE", "COMPETITOR", "TECHNICAL", "OTHER"]);
+  });
+
+  it("lists CANCELLED's 4 categories", () => {
+    expect(REASONS_BY_OUTCOME.CANCELLED).toEqual([
+      "BUDGET_WITHDRAWN",
+      "PROJECT_CANCELLED",
+      "LOST_CONTACT",
+      "OTHER",
+    ]);
+  });
+});
+
+describe("isClosed", () => {
+  it("is true once a deal has any outcome", () => {
+    (["WON", "LOST", "CANCELLED"] as PipelineOutcome[]).forEach((outcome) => {
+      expect(isClosed({ outcome })).toBe(true);
+    });
+  });
+
+  it("is false for an open deal (outcome null)", () => {
+    expect(isClosed({ outcome: null })).toBe(false);
+  });
+});
+
+describe("isSkipJump", () => {
+  it("is true only for Technical Clarification -> RFP (D4)", () => {
+    expect(isSkipJump("TECHNICAL_CLARIFICATION", "RFP")).toBe(true);
+  });
+
+  it("is false for every other stage pair, including the reverse direction", () => {
+    expect(isSkipJump("RFP", "TECHNICAL_CLARIFICATION")).toBe(false);
+    expect(isSkipJump("ASSESSMENT", "RFP")).toBe(false);
+    expect(isSkipJump("POC", "RFP")).toBe(false);
+    expect(isSkipJump("TECHNICAL_CLARIFICATION", "POC")).toBe(false);
+  });
+});
+
+describe("ownerOf", () => {
+  it("is 'client' only for WAITING_RESPONSE", () => {
+    expect(ownerOf("WAITING_RESPONSE")).toBe("client");
+  });
+
+  it("is 'sa' for every other stage", () => {
+    expect(ownerOf("ASSESSMENT")).toBe("sa");
+    expect(ownerOf("TECHNICAL_CLARIFICATION")).toBe("sa");
+    expect(ownerOf("POC")).toBe("sa");
+    expect(ownerOf("RFP")).toBe("sa");
+    expect(ownerOf("DELIVER_PROPOSAL")).toBe("sa");
   });
 });
 

@@ -48,7 +48,11 @@ const TASK_LABEL: Record<TaskStatus, string> = {
   DONE: "Done",
 };
 
-const CHIP_BASE =
+// Exported (2026-09-25 flow-redesign review finding S4) so
+// `PipelineFlagChips.tsx`'s `OwnerChip` — the one flag chip rendered as an
+// outline rather than a solid tone — can compose the same base sizing/type
+// instead of keeping a second, hand-copied string in sync by hand.
+export const CHIP_BASE =
   "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-display text-[11px] font-semibold leading-[18px]";
 
 export function ProjectStatusChip({ status }: { status: ProjectStatus }) {

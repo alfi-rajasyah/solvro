@@ -8,20 +8,14 @@ import {
 } from "./importParse";
 
 describe("IMPORTABLE_STAGES", () => {
-  it("excludes HOLD — reachable only via the board's move flow, never on import", () => {
-    expect(IMPORTABLE_STAGES).not.toContain("HOLD");
-  });
-
-  it("includes every other PipelineStage", () => {
+  it("is every PipelineStage — all 6 funnel stages, in board order (D9)", () => {
     expect(IMPORTABLE_STAGES).toEqual([
       "ASSESSMENT",
-      "RFP",
-      "POC",
       "TECHNICAL_CLARIFICATION",
+      "POC",
+      "RFP",
       "DELIVER_PROPOSAL",
       "WAITING_RESPONSE",
-      "WON",
-      "DROP",
     ]);
   });
 });
@@ -226,11 +220,20 @@ describe("parseImportRow", () => {
     expect(row.errors.some((e) => e.startsWith('Invalid stage "not_a_stage"'))).toBe(true);
   });
 
-  it("rejects 'hold' as an import-time stage (reachable only via the board's move flow)", () => {
+  it("rejects 'hold' as an import-time stage (D9: Hold is a status tag, not a stage, post-redesign)", () => {
     const cells = [...validCells];
     cells[3] = "hold";
     const row = parseImportRow(cells, 0, noPics);
     expect(row.status).toBe("invalid");
+  });
+
+  it("rejects 'won'/'drop' as import-time stages (D9: outcomes, not stages, post-redesign)", () => {
+    for (const token of ["won", "drop"]) {
+      const cells = [...validCells];
+      cells[3] = token;
+      const row = parseImportRow(cells, 0, noPics);
+      expect(row.status).toBe("invalid");
+    }
   });
 
   it("normalizes a stage token regardless of case/spacing", () => {
