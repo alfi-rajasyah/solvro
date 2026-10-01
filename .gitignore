@@ -42,17 +42,22 @@ e2e/blob-report/
 .idea/
 *.log
 
-# --- Local-only agent workflow layer — never pushed (see CLAUDE.md Map) ---
-# CLAUDE.md is unanchored on purpose: it also covers the backend/, frontend/,
-# and e2e/ area contract files.
-CLAUDE.md
-.claude/
+# --- Tool caches (never pushed) ---
 .understand-anything/
 .superpowers/
-# ALL of docs/ is local-only: planning pipeline, reference material, archive,
-# DESIGN.md / CONFIGURATION.md / ISSUES.md. One rule, so a newly created docs
-# subfolder can never leak by omission.
-docs/
+
+# --- Claude Code runtime state; the workflow files in .claude/, every CLAUDE.md
+# and docs/ are tracked (see CLAUDE.md Map) ---
+.claude/worktrees/
+.claude/scheduled_tasks.lock
+.claude/scheduled_tasks.json
+.claude/routines/.state/
+.claude/checkpoints/
+.claude/mailbox/
+.claude/agent-registry.json
+.claude/agent-memory-local
+.claude/first-run
+.claude/assistant-daemon-state.json
 
 # New UI/ — local-only design reference (the Figma PDF is 163 MB, over
 # GitHub's 100 MB limit; the HTMLs are dev-only previews, not a build target).
