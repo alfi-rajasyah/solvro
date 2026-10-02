@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-10-02 — Claude Code subagents move to the 5.5 models
+
+- **`.claude/agents/solvro-implementor.md`**, **`.claude/agents/solvro-docs-keeper.md`** — `model` changes from `claude-sonnet-5` to `claude-sonnet-5-5`.
+- **`.claude/agents/solvro-reviewer.md`** — `model` changes from `claude-opus-5` to `claude-opus-5-5`.
+- **`CLAUDE.md`** — the agent table shows the new models. The model tiers are unchanged: Sonnet writes code and docs, Opus reviews.
+
 ### Changed — 2026-10-01 — The project's workflow files and docs are tracked in git
 
 - **`.gitignore`** — the block that ignored every `CLAUDE.md`, `.claude/` and `docs/` is removed, so a fresh clone carries the project contract, the design system, the plans, the reference material and the quality-gate script. Before this they existed on one machine only, with no history. Only Claude Code's runtime state under `.claude/` (worktrees, scheduled-task state, checkpoints, mailbox) and the tool caches `.understand-anything/` and `.superpowers/` stay ignored. `docker-compose.yml`, the root `.env.example` and every `.env` stay untracked.
