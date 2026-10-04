@@ -1,6 +1,6 @@
 # Port plan: bring the customer edition's features into Solvro Internal
 
-**Status:** decisions answered 2026-10-04 (section 10); implementation starts with PR 0 on the user's go.
+**Status:** decisions answered 2026-10-04 (section 10). Handed off for implementation as **one PR** — see section 4a and the handoff prompt `docs/prompts/solvro-cust-port.md`.
 **Source repo:** `alfi-rajasyah/solvro-cust` @ `develop 127f316` (92 commits). **Target:** this repo @ `develop 154b42f`.
 **Research:** ten reports in [`solvro-cust-port/`](solvro-cust-port/) (4,652 lines). This file is the summary and the decision register; the reports hold the file-level detail.
 
@@ -85,6 +85,12 @@ PR 0 is new. PRs 1–13 are from the strategy report.
 **Heaviest integration work:** PR 7 (UI pass) and PR 9 (members; the `lib/visibility.ts` merge). **New design work, not a port:** the Pipeline part of PR 11.
 
 Every PR touches spine files, so every PR gets the reviewer pass and one full `gates.sh` run. Every commit and PR waits for the user's approval.
+
+## 4a. Delivery shape (user decision 2026-10-04): one branch, one PR
+
+The 14 PRs above become **14 squash commits on one branch `port/solvro-cust`**, in the same order, each gates-green before the next, and **one PR into `develop` merged with a merge commit** (commits kept for bisecting). PR 7 gains a follow-up commit 7b that applies the UI pass to the Pipeline pages (decision U-1). The fresh implementation session works from `docs/prompts/solvro-cust-port.md`, which carries the user's approvals for commits, the six guardrail edits, and the PR, plus four extra decisions (merge mode, autonomy, M-4 backfill rule, I-8 iTop Docker attempt time-boxed to 1 hour).
+
+Trade-off accepted: one review of about 47k lines instead of 14 smaller reviews; CI runs on the whole branch; a regression is found by bisecting the 14 commits.
 
 ## 5. Cross-cutting rules for every PR
 
