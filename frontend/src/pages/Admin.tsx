@@ -10,6 +10,7 @@ import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { Modal } from "@/components/Modal";
 import { Chip } from "@/components/StatusChip";
 import { Tabs } from "@/components/Tabs";
+import { ItopTab } from "@/components/admin/ItopTab";
 import { ApiError } from "@/lib/api";
 import {
   type AdminProject,
@@ -42,7 +43,7 @@ import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type Tab = "users" | "roles" | "signin" | "projects" | "pipeline";
+type Tab = "users" | "roles" | "signin" | "projects" | "pipeline" | "itop";
 
 const TAB_ITEMS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: "users", label: "Users" },
@@ -50,6 +51,7 @@ const TAB_ITEMS: ReadonlyArray<{ key: Tab; label: string }> = [
   { key: "signin", label: "Sign-in" },
   { key: "projects", label: "Project Override" },
   { key: "pipeline", label: "Pipeline" },
+  { key: "itop", label: "iTop" },
 ];
 
 // Domain regex matches the backend validator (PATCH /admin/settings/auth).
@@ -90,6 +92,7 @@ export function Admin() {
         {tab === "signin" && <SignInTab />}
         {tab === "projects" && <ProjectsTab />}
         {tab === "pipeline" && <PipelineTab />}
+        {tab === "itop" && <ItopTab />}
       </div>
     </div>
   );
