@@ -41,6 +41,8 @@ Treat the reports as research, not orders: where a report proposes its own task 
 cd /home/solvro-internal/solvro
 git fetch origin
 git switch -c port/solvro-cust origin/develop
+# If docs/plans/solvro-cust-port-plan.md is missing on develop, the plan PR is not merged yet:
+#   git merge --no-edit origin/docs/solvro-cust-port-plan
 
 # Customer edition: local clone with full history (clone it if missing; no network git in loops)
 [ -d ../solvro-cust ] || git clone https://github.com/alfi-rajasyah/solvro-cust ../solvro-cust
