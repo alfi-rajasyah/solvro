@@ -2,9 +2,10 @@ import "express-async-errors";
 import express, { type Express } from "express";
 import cors from "cors";
 import helmet from "helmet";
-import { pinoHttp } from "pino-http";
+import type { Logger } from "pino";
 import { env } from "./env.js";
-import { logger } from "./logger.js";
+import { logger as defaultLogger } from "./logger.js";
+import { createRequestLogger } from "./http/requestLogger.js";
 import { errorHandler, notFoundHandler } from "./http/errors.js";
 import { healthRouter } from "./routes/health.js";
 import { authRouter } from "./routes/auth.js";
@@ -27,7 +28,12 @@ import { opportunityItemsRouter } from "./routes/opportunityItems.js";
 import { dailyReviewRouter } from "./routes/dailyReview.js";
 import { notesRouter } from "./routes/notes.js";
 
-export function createApp(): Express {
+export interface CreateAppOptions {
+  /** Request logger override — tests capture log lines through it. */
+  logger?: Logger;
+}
+
+export function createApp(opts: CreateAppOptions = {}): Express {
   const app = express();
 
   app.disable("x-powered-by");
@@ -41,7 +47,8 @@ export function createApp(): Express {
       credentials: false,
     }),
   );
-  app.use(pinoHttp({ logger }));
+  // Secrets are scrubbed before any request line is written (http/requestLogger.ts).
+  app.use(createRequestLogger(opts.logger ?? defaultLogger));
   app.use(express.json({ limit: "1mb" }));
 
   app.use("/health", healthRouter);

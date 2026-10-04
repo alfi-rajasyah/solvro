@@ -246,6 +246,8 @@ Login supports two paths, both minting the same `{sub, role, permissions}` JWT: 
 - **Shared logger**: imported from [backend/src/logger.ts](backend/src/logger.ts) — never `new Logger()` ad hoc.
 - **Level**: controlled by `LOG_LEVEL` env (default `info`; the dev compose stack sets `debug`).
 - **Format**: JSON in prod (default pino), pretty in dev if pino-pretty is wired.
+- **Redaction**: request lines go through [backend/src/http/requestLogger.ts](backend/src/http/requestLogger.ts), which masks the `Authorization`, `X-Solvro-Webhook-Secret`, `Cookie` and `Set-Cookie` headers and replaces the token segment of any `/share/<token>` URL or Referer with `[redacted]`. Every line also carries `clientIp` (Express's `req.ip`).
+- **Ops step after upgrading to this version — rotate `JWT_SECRET` once.** Before the redaction existed, every authenticated request wrote its full bearer token to the backend's stdout / `docker logs`. Anyone who kept those logs holds tokens that stay valid for `JWT_EXPIRES_IN` (default 8h) after they were written, and the old logs stay readable. Generate a fresh value (`openssl rand -hex 48`), replace `JWT_SECRET` in the deployment's `.env` (prod: the file `setup.sh` wrote), restart the backend, and clear or rotate the retained container logs. Every user is signed out once and signs back in.
 
 ### 2.11 — Frontend storage & client-side state
 

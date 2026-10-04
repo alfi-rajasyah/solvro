@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-10-04 — Request logs no longer contain bearer tokens or other secrets
+
+- **`backend/src/http/requestLogger.ts`** (new), **`backend/src/app.ts`** — the `pino-http` request middleware now runs every request through a redacting serializer before a line is written: the `Authorization`, `X-Solvro-Webhook-Secret`, `Cookie` and `Set-Cookie` headers are replaced with `[redacted]`, and the token segment of any `/share/<token>` path is masked in the URL and the Referer. Each line also records `clientIp`. Why: pino's default request serializer logs every header, so until now every authenticated request wrote its full JWT (valid for `JWT_EXPIRES_IN`) to the backend's stdout and `docker logs`. `createApp` accepts an optional `{ logger }` so tests can capture the lines.
+- **`backend/test/requestLogger.test.ts`** (new) — asserts that a bearer token, a webhook secret, a cookie and a share token never appear in the captured log output, and that `remoteAddress`, `remotePort` and `clientIp` still do.
+- **`docs/CONFIGURATION.md`** — §2.10 documents the redaction and the one-time operations step that follows this change: rotate `JWT_SECRET` and clear retained logs, because tokens written before the fix stay valid until they expire.
+
 ### Changed — 2026-10-02 — Claude Code subagents move to the 5.5 models
 
 - **`.claude/agents/solvro-implementor.md`**, **`.claude/agents/solvro-docs-keeper.md`** — `model` changes from `claude-sonnet-5` to `claude-sonnet-5-5`.
