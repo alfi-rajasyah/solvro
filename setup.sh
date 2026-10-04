@@ -143,6 +143,7 @@ COMPOSE_HEAD
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: 8h
       SECRETS_KEY: ${SECRETS_KEY}
+      ITOP_SYNC_DISABLED: "${ITOP_SYNC_DISABLED:-false}"
       CORS_ORIGIN: "*"
       LOG_LEVEL: info
     ports:

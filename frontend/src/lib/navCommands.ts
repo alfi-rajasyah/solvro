@@ -17,10 +17,10 @@ export const NAV_COMMANDS: readonly NavCommand[] = [
   { to: "/customers", label: "Customers", icon: "groups" },
   { to: "/daily-review", label: "Daily Review", icon: "edit_note" },
   { to: "/weekly-sync", label: "Weekly Sync", icon: "table_chart" },
-  // Work Logs (WorkLogs.tsx) is an unbuilt placeholder (iTop API integration),
-  // so it's intentionally NOT in this catalogue. Route stays registered in
-  // App.tsx — mirror of how Tasks is kept routable but hidden. This also keeps
-  // the nav in CLAUDE.md's canonical order (no Work Logs entry).
+  // Utilization (Utilization.tsx) replaced the old Work Logs placeholder; gated on
+  // project:read — meaningless without project access (port decision I-7,
+  // docs/archive/plans/solvro-cust-port-plan.md §10).
+  { to: "/utilization", label: "Utilization", icon: "schedule", requires: "project:read" },
   { to: "/pipeline", label: "Pipeline", icon: "monetization_on", requires: "pipeline:view" },
   { to: "/executive", label: "Executive", icon: "leaderboard", requires: "report:executive" },
   { to: "/settings", label: "Settings", icon: "settings" },

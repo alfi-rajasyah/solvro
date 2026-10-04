@@ -23,6 +23,7 @@ import { dependenciesRouter } from "./routes/dependencies.js";
 import { adminRouter } from "./routes/admin.js";
 import { itopAdminRouter } from "./routes/itopAdmin.js";
 import { itopRouter } from "./routes/itop.js";
+import { utilizationRouter } from "./routes/utilization.js";
 import { reportsRouter } from "./routes/reports.js";
 import { searchRouter } from "./routes/search.js";
 import { opportunitiesRouter } from "./routes/opportunities.js";
@@ -71,6 +72,7 @@ export function createApp(opts: CreateAppOptions = {}): Express {
   app.use("/admin", adminRouter);
   app.use("/admin/itop", itopAdminRouter);
   app.use("/itop", itopRouter);
+  app.use("/utilization", utilizationRouter);
   app.use("/reports", reportsRouter);
   app.use("/search", searchRouter);
   // Both mounted at the same base path: opportunitiesRouter owns the CRUD +

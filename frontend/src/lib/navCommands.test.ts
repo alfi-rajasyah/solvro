@@ -18,6 +18,12 @@ describe("filterNavCommands", () => {
     ]);
   });
 
+  it("shows Utilization only with project:read", () => {
+    expect(filterNavCommands(none, "").map((c) => c.label)).not.toContain("Utilization");
+    const projectRead = (p: string) => p === "project:read";
+    expect(filterNavCommands(projectRead, "").map((c) => c.label)).toContain("Utilization");
+  });
+
   it("includes Executive and Admin for a wildcard (admin) user", () => {
     const labels = filterNavCommands(wildcard, "").map((c) => c.label);
     expect(labels).toContain("Executive");
@@ -44,6 +50,7 @@ describe("filterNavCommands", () => {
       "/customers",
       "/daily-review",
       "/weekly-sync",
+      "/utilization",
       "/pipeline",
       "/executive",
       "/settings",

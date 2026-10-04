@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from "react-router-dom";
 import { AdminGuard } from "@/components/AdminGuard";
 import { AuthGuard } from "@/components/AuthGuard";
 import { ExecutiveGuard } from "@/components/ExecutiveGuard";
+import { PermissionGuard } from "@/components/PermissionGuard";
 import { PipelineGuard } from "@/components/PipelineGuard";
 import { Shell } from "@/components/layout/Shell";
 import { Admin } from "@/pages/Admin";
@@ -17,8 +18,8 @@ import { ProjectDetail } from "@/pages/ProjectDetail";
 import { Projects } from "@/pages/Projects";
 import { Settings } from "@/pages/Settings";
 import { Tasks } from "@/pages/Tasks";
+import { Utilization } from "@/pages/Utilization";
 import { WeeklySync } from "@/pages/WeeklySync";
-import { WorkLogs } from "@/pages/WorkLogs";
 import { ProjectGantt } from "@/pages/views/ProjectGantt";
 import { ProjectKanban } from "@/pages/views/ProjectKanban";
 import { ProjectList } from "@/pages/views/ProjectList";
@@ -57,7 +58,18 @@ export function App() {
         <Route path="daily-review" element={<DailyReview />} />
         <Route path="weekly-sync" element={<WeeklySync />} />
         <Route path="tasks" element={<Tasks />} />
-        <Route path="work-logs" element={<WorkLogs />} />
+        {/* Utilization is gated on project:read, like its nav entry — hours mean
+            nothing without project access (port decision I-7,
+            docs/archive/plans/solvro-cust-port-plan.md §10). */}
+        <Route
+          path="utilization"
+          element={
+            <PermissionGuard permission="project:read">
+              <Utilization />
+            </PermissionGuard>
+          }
+        />
+        <Route path="work-logs" element={<Navigate to="/utilization" replace />} />
         <Route
           path="pipeline"
           element={

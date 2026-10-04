@@ -217,9 +217,13 @@ cited files; entries marked *code check* below carry the result).
   breakdown / task signals / open risks / `CUSTOMER_FACING` notes, last 14
   days) via dynamically-imported `frontend/src/lib/export/projectExport.ts`,
   with both copy-to-clipboard and `.md` download.
-- **Work Logs / Utilization** (`WorkLogs.tsx`) — placeholder only, now hidden
+- ~~**Work Logs / Utilization** (`WorkLogs.tsx`) — placeholder only, now hidden
   from the sidebar; awaits the iTop API spec. Rename to "Utilization" when
-  implemented.
+  implemented.~~ **Resolved 2026-10-04**: shipped as the Utilization page
+  (ported with the iTop integration) — `frontend/src/pages/Utilization.tsx` at
+  `/utilization`, with `/work-logs` redirecting to it and the sidebar entry
+  restored after Weekly Sync. See `CHANGELOG.md`'s "Utilization from iTop
+  time tracking" entry.
 - **Task attachments** — not built. The "Attachments placeholder" block this
   entry used to cite in `TaskFormModal.tsx` was removed (verified absent
   2026-09-02); the only related trace is `frontend/src/pages/CustomerDetail.tsx:248`'s
@@ -1842,14 +1846,17 @@ Tickets tab, Daily Review strip" entry). Each is a follow-up per
 (the timezone setting and the `customerId, status` index arrive with the
 Utilization and timezone steps).
 
-- **`itop_tickets` has a low-cardinality `@@index([status])`.**
+- ~~**`itop_tickets` has a low-cardinality `@@index([status])`.**
   `backend/prisma/schema.prisma` (`ItopTicket` model, `@@index([status])`)
   indexes `status` alone; `status` has only a handful of distinct values
   (`new`, `assigned`, `resolved`, `closed`, …), so the index does little to
   narrow a scan once the table has real volume, while every read in
   `backend/src/routes/itop.ts` (ongoing/resolved/mine scopes) always filters
   by `customerId` first. Fix direction: replace it with
-  `@@index([customerId, status])` in the next iTop migration.
+  `@@index([customerId, status])` in the next iTop migration.~~ **Resolved
+  2026-10-04**: done exactly as suggested — migration
+  `20261004120100_itop_time_entries` drops `itop_tickets_status_idx` and adds
+  `@@index([customerId, status])` (`itop_tickets_customer_id_status_idx`).
 - **iTop datetimes are parsed as UTC.** `parseItopDate` in
   `backend/src/lib/itop/sync.ts:61` treats every date/time string iTop
   returns (`start_date`, `last_update`, `tto`, `ttr`, `resolution_date`) as
@@ -1884,3 +1891,29 @@ Utilization and timezone steps).
   hardening gap, not a live leak. Fix direction: add a `redact` array
   (`token`, `Auth-Token`, and the equivalent per-TAM token fields Phase 5
   introduces) to the `pino()` call in `backend/src/logger.ts`.
+---
+
+## iTop integration (Utilization) — deferred findings (ported 2026-10-04)
+
+- **`TimeSpent` duration unit assumed to be seconds.**
+  `backend/src/lib/itop/types.ts`'s `ITOP_TIME_SPENT_DURATION_IN_SECONDS`
+  (currently `true`) drives `lib/itop/sync.ts`'s `syncTimeEntries`, which
+  divides `TimeSpent.duration` by 60 to get `ItopTimeEntry.durationMinutes`.
+  This is iTop core's own default unit for a duration attribute, but the
+  real install's Time Tracking extension has not been probed yet. Verify
+  with the probe's `TimeSpent` field dump (`output_fields: "*"`, see
+  `client.ts`'s `probe()`) against the real install before go-live — if it
+  reports minutes instead, flip the one constant.
+- **Full-sync removal passes bind one parameter per in-window row —
+  approaches Postgres's bind-parameter ceiling at scale.** In
+  `backend/src/lib/itop/sync.ts`, both full-sync removal passes build an
+  `id: { notIn: [...seenIds] }` clause (the ticket removal pass in `syncTickets`
+  and the time-entry removal pass in `syncTimeEntries`), which Prisma compiles to one bind parameter per id in
+  `seenIds`. With many mapped users and a wide time-entry window (or many
+  tickets), that set can grow large enough to exceed Postgres's
+  bind-parameter limit; the failure is caught by the surrounding `catch`
+  (the `catch` around each removal pass) and logged, so the removal pass is silently skipped
+  rather than surfaced as a sync failure — stale rows accumulate instead of
+  being dropped. Fix direction: stamp rows with a `syncRunId`/`seenAt` during
+  the upsert and delete with `WHERE seenAt < runStart` instead of `notIn`,
+  which needs no per-row parameter regardless of row count.
