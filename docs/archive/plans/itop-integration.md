@@ -17,6 +17,8 @@ Branches: one per phase, off up-to-date `origin/develop`: `feat/itop-p1-tickets`
 | 7 | Ticket classes | **UserRequest + Incident only.** |
 | 8 | Write identity | **Per TAM**, personal token in Settings (spec default 6). |
 | 9 | Project tasks | **Stay in Solvro** (spec default 8). A task may pin one ticket ref and may create a ticket. |
+| 10 | Lifecycle rules (spec item 10) | **iTop defaults** (user, 2026-09-23): assign needs team + agent; pending needs nothing; resolve needs resolution code + solution; close and reopen need nothing. |
+| 11 | Token ownership | **Writes only under the acting user's own token** (user, 2026-09-23): a pasted personal token is accepted only when it resolves to the iTop person with the same email as the Solvro user; no fallback to the application token or another user's token, ever. |
 
 All 8 spec defaults accepted: read-only app token; 5-minute snapshot + Refresh; Work Logs → Utilization after Weekly Sync; tickets on the customer, not the project; 40 h/week capacity, one Admin number; per-TAM tokens; no optimistic writes, nothing queued; tasks never become tickets.
 
@@ -31,6 +33,7 @@ All 8 spec defaults accepted: read-only app token; 5-minute snapshot + Refresh; 
 7. **Scheduler is in-process** (`setInterval` started from `index.ts`), guarded by a Postgres advisory lock so a second backend instance cannot double-sync. `setup.sh` deploys one backend container; this is enough.
 8. **Snapshot freshness**: incremental pull by `last_update` every N minutes; a full pull per org once per 24 h and on manual Refresh, which also drops tickets iTop no longer returns.
 9. **Utilization API is its own router** (`backend/src/routes/utilization.ts`, mounted at `/utilization`) rather than a route in `routes/itop.ts`, for the same reason as deviation 4. "Today"/"this week" windows on external iTop instants follow the viewer's local day via a `utcOffsetMinutes` query param (user decision 2026-09-22); the Solvro-picked `date`/`week` strings still follow the UTC-midnight date contract.
+10. **Ticket ref format** is `^[A-Z]{1,3}-\d{4,8}$` (not the narrower `^[A-Z]-\d{6}$` written in Task 4.2): iTop's ref pattern is install-configurable (`R-004512`, `I-000123`, `TKT-123456`). Do not re-narrow it. A duplicated task never carries the ref (one ticket, one task by default); tasks cannot be created with a ref pre-set — pin it after creation.
 
 ## 3. Architecture
 

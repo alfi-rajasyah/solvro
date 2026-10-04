@@ -68,6 +68,7 @@ interface TicketOverrides {
   slaTtrPassed?: boolean;
   resolutionDate?: Date | null;
   syncedAt?: Date;
+  privateLog?: Array<{ date: string | null; author: string | null; message: string }>;
 }
 
 async function createTicket(overrides: TicketOverrides = {}) {
@@ -96,6 +97,7 @@ async function createTicket(overrides: TicketOverrides = {}) {
       slaTtrPassed: overrides.slaTtrPassed ?? false,
       resolutionDate: overrides.resolutionDate ?? null,
       syncedAt: overrides.syncedAt ?? new Date(),
+      ...(overrides.privateLog ? { privateLog: overrides.privateLog } : {}),
     },
   });
 }
@@ -245,6 +247,42 @@ describe("permission gating", () => {
     // An SA with no project on this customer still can't see it (owned by a TAM → 404).
     const unrelated = await call("get", `/itop/customers/${customer.id}/tickets`, otherSa.token);
     expect(unrelated.status).toBe(404);
+  });
+});
+
+describe("private case log visibility", () => {
+  const PRIVATE_NOTE = { date: "2026-09-20 10:00:00", author: "Rina S.", message: "agent-only: customer is hostile" };
+
+  it("returns the private log to a TAM (task:write) but an empty one to a STAKEHOLDER, on both single-ticket routes", async () => {
+    const tam = await createUserWithRole("TAM");
+    const stakeholder = await createUserWithRole("STAKEHOLDER");
+    const customer = await createCustomer({ tamId: tam.userId, itopOrgId: 83, itopOrgName: "Log Org" });
+    const ticket = await createTicket({ customerId: customer.id, orgId: 83, status: "new", privateLog: [PRIVATE_NOTE] });
+
+    for (const path of [`/itop/tickets/${ticket.id}`, `/itop/tickets/by-ref/${ticket.ref}`]) {
+      const asTam = await call("get", path, tam.token);
+      expect(asTam.status, path).toBe(200);
+      expect(asTam.body.privateLog, path).toEqual([PRIVATE_NOTE]);
+
+      const asStakeholder = await call("get", path, stakeholder.token);
+      expect(asStakeholder.status, path).toBe(200);
+      expect(asStakeholder.body.privateLog, path).toEqual([]);
+      expect(JSON.stringify(asStakeholder.body), path).not.toContain("hostile");
+    }
+  });
+
+  it("also hides the private log from an SA reaching the customer through saId", async () => {
+    const owner = await createUserWithRole("TAM");
+    const sa = await createUserWithRole("SA");
+    const customer = await createCustomer({ tamId: owner.userId, itopOrgId: 84, itopOrgName: "SA Log Org" });
+    await prisma.project.create({
+      data: { name: uniq(ITOP_TEST_CUSTOMER_PREFIX), tamId: owner.userId, saId: sa.userId, customerId: customer.id },
+    });
+    const ticket = await createTicket({ customerId: customer.id, orgId: 84, status: "new", privateLog: [PRIVATE_NOTE] });
+
+    const res = await call("get", `/itop/tickets/${ticket.id}`, sa.token);
+    expect(res.status).toBe(200);
+    expect(res.body.privateLog).toEqual([]);
   });
 });
 

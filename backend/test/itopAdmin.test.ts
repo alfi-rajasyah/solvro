@@ -13,11 +13,11 @@ import { open, seal } from "../src/lib/secretBox.js";
 import { bustItopConfigCache } from "../src/lib/itop/config.js";
 import { waitForItopSyncIdle } from "../src/routes/itopAdmin.js";
 import { createAdminAndToken, createUserWithRole, seedRoles } from "./testAuth.js";
-import { createFakeItop, seedFakeItop, type FakeItopState } from "./itop/fakeItop.js";
+import { createFakeItop, seedFakeItop, type FakeItopState, FAKE_ITOP_TOKENS } from "./itop/fakeItop.js";
 
 const app = createApp();
 
-const ALL_ROUTES: Array<{ method: "get" | "patch" | "post"; path: string }> = [
+const ALL_ROUTES: Array<{ method: "get" | "patch" | "post" | "delete"; path: string }> = [
   { method: "get", path: "/admin/itop/settings" },
   { method: "patch", path: "/admin/itop/settings" },
   { method: "post", path: "/admin/itop/test" },
@@ -28,9 +28,11 @@ const ALL_ROUTES: Array<{ method: "get" | "patch" | "post"; path: string }> = [
   { method: "post", path: "/admin/itop/customers/automatch" },
   { method: "get", path: "/admin/itop/persons" },
   { method: "post", path: "/admin/itop/persons/match" },
+  { method: "post", path: "/admin/itop/webhook-secret" },
+  { method: "delete", path: "/admin/itop/webhook-secret" },
 ];
 
-function call(method: "get" | "patch" | "post", path: string, token?: string) {
+function call(method: "get" | "patch" | "post" | "delete", path: string, token?: string) {
   const req = request(app)[method](path);
   return token ? req.set("Authorization", `Bearer ${token}`) : req;
 }
@@ -141,7 +143,7 @@ beforeEach(async () => {
 // route's baseUrl validation requires https:// (a real-install guardrail),
 // but the fake iTop test double only serves http — same bypass the sibling
 // sync suite uses (test/itop/sync.test.ts#configureItop).
-async function configureItop(baseUrl: string, appToken = "app-token-readonly"): Promise<void> {
+async function configureItop(baseUrl: string, appToken = FAKE_ITOP_TOKENS.app): Promise<void> {
   await prisma.itopConfig.upsert({
     where: { id: "default" },
     create: { id: "default", baseUrl, appTokenEnc: seal(appToken) },
@@ -230,6 +232,51 @@ describe("GET/PATCH /admin/itop/settings", () => {
   });
 });
 
+describe("POST/DELETE /admin/itop/webhook-secret", () => {
+  it("generates a secret shown once; GET /settings only flips webhookSecretSet, never echoes it", async () => {
+    const before = await call("get", "/admin/itop/settings", adminToken);
+    expect(before.body.webhookSecretSet).toBe(false);
+
+    const genRes = await call("post", "/admin/itop/webhook-secret", adminToken);
+    expect(genRes.status).toBe(200);
+    expect(typeof genRes.body.secret).toBe("string");
+    expect(genRes.body.secret.length).toBeGreaterThan(20);
+    expect(genRes.body.path).toBe("/api/webhook/itop");
+    expect(genRes.body.header).toBe("X-Solvro-Webhook-Secret");
+
+    const row = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(row.webhookSecretEnc).not.toBeNull();
+    expect(row.webhookSecretEnc).not.toContain(genRes.body.secret);
+    expect(open(row.webhookSecretEnc as string)).toBe(genRes.body.secret);
+
+    const after = await call("get", "/admin/itop/settings", adminToken);
+    expect(after.body.webhookSecretSet).toBe(true);
+    expect(after.body).not.toHaveProperty("webhookSecretEnc");
+    expect(JSON.stringify(after.body)).not.toContain(genRes.body.secret);
+  });
+
+  it("regenerating replaces the stored secret", async () => {
+    const first = await call("post", "/admin/itop/webhook-secret", adminToken);
+    const second = await call("post", "/admin/itop/webhook-secret", adminToken);
+    expect(first.body.secret).not.toBe(second.body.secret);
+
+    const row = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(open(row.webhookSecretEnc as string)).toBe(second.body.secret);
+  });
+
+  it("DELETE clears the secret; webhookSecretSet flips back to false", async () => {
+    await call("post", "/admin/itop/webhook-secret", adminToken);
+    const del = await call("delete", "/admin/itop/webhook-secret", adminToken);
+    expect(del.status).toBe(204);
+
+    const row = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(row.webhookSecretEnc).toBeNull();
+
+    const after = await call("get", "/admin/itop/settings", adminToken);
+    expect(after.body.webhookSecretSet).toBe(false);
+  });
+});
+
 describe("POST /admin/itop/test", () => {
   let server: Server | undefined;
 
@@ -252,7 +299,7 @@ describe("POST /admin/itop/test", () => {
     server = started.server;
     const res = await call("post", "/admin/itop/test", adminToken).send({
       baseUrl: started.baseUrl, // http://127.0.0.1:<port> — the fake iTop only serves http
-      appToken: "app-token-readonly",
+      appToken: FAKE_ITOP_TOKENS.app,
     });
     expect(res.status).toBe(400);
   });

@@ -23,6 +23,7 @@ import { dependenciesRouter } from "./routes/dependencies.js";
 import { adminRouter } from "./routes/admin.js";
 import { itopAdminRouter } from "./routes/itopAdmin.js";
 import { itopRouter } from "./routes/itop.js";
+import { itopUserRouter } from "./routes/itopUser.js";
 import { utilizationRouter } from "./routes/utilization.js";
 import { reportsRouter } from "./routes/reports.js";
 import { searchRouter } from "./routes/search.js";
@@ -30,6 +31,7 @@ import { opportunitiesRouter } from "./routes/opportunities.js";
 import { opportunityItemsRouter } from "./routes/opportunityItems.js";
 import { dailyReviewRouter } from "./routes/dailyReview.js";
 import { notesRouter } from "./routes/notes.js";
+import { webhookRouter } from "./routes/webhook.js";
 
 export interface CreateAppOptions {
   /** Request logger override — tests capture log lines through it. */
@@ -52,6 +54,13 @@ export function createApp(opts: CreateAppOptions = {}): Express {
   );
   // Secrets are scrubbed before any request line is written (http/requestLogger.ts).
   app.use(createRequestLogger(opts.logger ?? defaultLogger));
+
+  // Mounted BEFORE the global JSON body parser: the iTop webhook (the first
+  // unauthenticated non-health route — see routes/webhook.ts) ignores its
+  // request body entirely, so a malformed body must never 400 before that
+  // route's own secret check runs.
+  app.use("/webhook", webhookRouter);
+
   app.use(express.json({ limit: "1mb" }));
 
   app.use("/health", healthRouter);
@@ -71,6 +80,7 @@ export function createApp(opts: CreateAppOptions = {}): Express {
   app.use("/dependencies", dependenciesRouter);
   app.use("/admin", adminRouter);
   app.use("/admin/itop", itopAdminRouter);
+  app.use("/itop/me", itopUserRouter);
   app.use("/itop", itopRouter);
   app.use("/utilization", utilizationRouter);
   app.use("/reports", reportsRouter);

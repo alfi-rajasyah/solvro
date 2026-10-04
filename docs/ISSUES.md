@@ -1879,7 +1879,7 @@ Utilization and timezone steps).
   its inline comment attributes the omission to a `customers.ts` "select",
   but the route uses `include`, not `select`, so the fields are just
   untyped and unread on the frontend, not actually withheld by the backend.
-  Consider typing and using them directly in Phase 2, or explicitly
+  Consider typing and using them directly, or explicitly
   trimming the route's response with a real `select` if withholding them
   was the intent.
 - **No pino `redact` configuration — defence in depth for the iTop token.**
@@ -1889,7 +1889,7 @@ Utilization and timezone steps).
   the iTop application token — it travels to iTop in a request body that the
   HTTP request logger (see the next entry) doesn't log — so this is a
   hardening gap, not a live leak. Fix direction: add a `redact` array
-  (`token`, `Auth-Token`, and the equivalent per-TAM token fields Phase 5
+  (`token`, `Auth-Token`, and the equivalent per-user personal-token fields the write path
   introduces) to the `pino()` call in `backend/src/logger.ts`.
 ---
 
@@ -1917,3 +1917,107 @@ Utilization and timezone steps).
   being dropped. Fix direction: stamp rows with a `syncRunId`/`seenAt` during
   the upsert and delete with `WHERE seenAt < runStart` instead of `notIn`,
   which needs no per-row parameter regardless of row count.
+
+---
+
+## iTop integration (webhook, task ticket links) — deferred findings (ported 2026-10-04)
+
+Findings deferred in the customer edition when the webhook and the task ticket
+link shipped there (2026-09-23), carried over with the port (see `CHANGELOG.md`'s
+"iTop webhook, task ↔ ticket links, personal tokens and ticket actions" entry).
+No fix now; each is a follow-up decision.
+
+- **Duplicating a task or section drops its pinned iTop ticket ref.**
+  `backend/src/lib/duplicate.ts`'s `TASK_SELECT` (lines 17-31) does not
+  select `itopTicketRef`, and `copyOne`'s `data` object (lines 42-63) never
+  sets it, so every copy made by `POST /tasks/:id/duplicate` or
+  `POST /sections/:id/duplicate` gets no ref, even when its source task had
+  one pinned. This matches the module's existing "carry verbatim, but reset
+  anything that shouldn't point at the same external state twice" pattern
+  (status resets to `TODO`, baseline dates clear, dependencies and comments
+  never copy) but was never an explicit decision for this field. Decide:
+  should a duplicated task keep pointing at the same ticket, or is dropping
+  the ref (current behaviour) correct — two Solvro tasks pointing at one
+  iTop ticket may itself be undesirable.
+- **A task cannot be created with an iTop ticket ref pre-set.**
+  `createTaskSchema` in `backend/src/routes/projects.ts`
+  (`POST /projects/:id/tasks`, lines 85-103) was not extended with
+  `itopTicketRef` — only the PATCH schema in `backend/src/routes/tasks.ts`
+  (line 48) accepts it. A ref can only be attached after the task exists,
+  via a follow-up `PATCH /tasks/:id`. Decide whether create-time pinning
+  (e.g. from a "Create iTop ticket" flow in later work) is worth adding,
+  or whether PATCH-only is fine indefinitely.
+- **Focus treatment sweep needed (codebase-wide, not a regression of this feature).**
+  `docs/DESIGN.md` §4 names the one app-wide focus treatment as
+  `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30`
+  and explicitly excludes `focus-visible:border-primary`, yet the older,
+  fuller `focus:border-primary focus:outline-hidden` pattern still appears
+  at roughly 55-58 sites across the frontend — including two new ones this
+  phase added: `frontend/src/components/admin/ItopTab.tsx` (5 sites) and
+  `frontend/src/components/itop/TaskTicketField.tsx:14`, alongside
+  pre-existing ones such as `frontend/src/components/TaskPanel.tsx:466,586`.
+  This is a pre-existing, spreading inconsistency, not something to fix
+  per-PR — file as a one-shot design-system sweep task to align every site
+  to the DESIGN.md-documented form in one pass, rather than drifting further
+  one component at a time.
+- **Export: the Gantt Excel export has no "iTop ticket" column.**
+  `frontend/src/lib/gantt/exportExcel.ts`'s `buildTasksSheet` (columns at
+  lines 72-82) builds Section/Title/Status/Priority/(Critical
+  Path)/Start/Due — no column carries a task's pinned `itopTicketRef`, even
+  though it would be a customer-facing-safe field (the ref is the
+  customer's own iTop reference, not internal Solvro data) and could be
+  useful on a customer-facing export. Adding it needs the field threaded
+  through the Gantt row adapter that produces `Row` (`t.itopTicketRef` isn't
+  currently carried onto the row alongside `t.status`/`t.priority`). Decision
+  item — whether this export should show it — not a bug.
+
+---
+
+## iTop integration (personal tokens, ticket actions) — deferred findings (ported 2026-10-04)
+
+- **Personal-token expiry is best-effort, not guaranteed.** `PUT /itop/me/token`
+  (`backend/src/routes/itopUser.ts`) tries to read the token's expiry via
+  `core/get PersonalToken WHERE user_id = <resolved itopUserId>` using the
+  user's own freshly-saved token, and stores whatever comes back (`expiresAt`
+  left `null` on any failure — unresolved `itopUserId`, the class being
+  unreadable to that profile, or any other iTop error; see the `try/catch`
+  around the `PersonalToken` lookup). Whether an install exposes `PersonalToken`
+  to a plain personal-token holder varies with the profile granted. On an
+  install where it doesn't, `GET /itop/me/token` always reports `expiresAt:
+  null`, so the Settings page has no way to warn a TAM before their token
+  expires — the first sign of expiry is a saved token starting to fail on its
+  next use. No code change proposed; this is a documented limitation of the
+  "read it if iTop allows it" approach chosen for Task 5.1, not a bug to fix.
+- **A token's write capability can't be verified up front.** The same route's
+  write-capability probe calls `client.listOperations()` and checks whether
+  `core/apply_stimulus`/`core/update` appear — but `list_operations` reports
+  what the iTop *server* supports, not what the calling token's *profile* is
+  actually allowed to do, so the probe is logged only (`logger.debug`) and
+  never rejects the token. A TAM who saves a personal token without the
+  `Support Agent` / `Service Desk Agent` write profile therefore passes
+  token-save validation cleanly, and only discovers the gap when their first
+  real action (`POST /itop/tickets/:id/actions` or `/log`) comes back `403
+  itop_token_invalid` or `409 itop_refused` with iTop's own refusal text.
+  Working as designed per Task 5.1's "if you cannot detect rights, skip and
+  say so" rule — noted here so a future UX pass (e.g. a one-time trial
+  `apply_stimulus` dry run, if iTop ever supports one) has the context.
+- **Token-ownership check: residual risk on some iTop installs.** `PUT /itop/me/token`
+  (`backend/src/routes/itopUser.ts`) accepts a pasted personal token only when, used
+  with that token, `SELECT Person WHERE email = <user email>` returns exactly one person
+  AND — when the `PersonalToken` class is readable — `SELECT PersonalToken WHERE
+  user_id = <that person's iTop user>` returns at least one row (iTop scopes that class
+  to the token's own user, so a foreign token sees zero rows and is refused; proven by
+  the imposter test in `backend/test/itop/itopToken.test.ts`). iTop REST 1.3 has no
+  "whoami", so two gaps remain: (a) installs where `PersonalToken` is not readable by
+  the token's profile fall back to the email check alone, and a foreign token that can
+  read Persons would pass; (b) installs where the class is readable beyond the token's
+  own user (e.g. an admin-profile token) also pass. Some iTop versions answer a no-match
+  `core/get` with `code: 100` instead of an empty result; that path is treated as
+  "unreadable" (fail-open) — verify against the real install and record the answer
+  here. Mitigations: grant `PersonalToken` read to the TAM profile, or an iTop-side
+  whoami extension. This is impersonation with a stolen/foreign credential, not
+  privilege escalation: `itopPersonId` is always derived from the caller's own email.
+- **`rounded-full` on filter/tab pills vs DESIGN.md §"Radius".** `docs/DESIGN.md`
+  reserves `full` for status chips and avatars, yet `frontend/src/components/itop/
+  TicketFilters.tsx` and `TicketLog.tsx` use it on toggle buttons (count chips, log tabs).
+  Decide once: sanction the pill-toggle pattern in DESIGN.md, or retire it in both files.
