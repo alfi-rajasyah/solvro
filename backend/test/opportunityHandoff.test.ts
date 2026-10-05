@@ -90,8 +90,10 @@ function createProject(token: string, body: Record<string, unknown>) {
 }
 
 async function activitiesFor(opportunityId: string) {
+  // The "Created" sentence a new deal now opens its timeline with is asserted
+  // in opportunityActivity.test.ts; the sentences under test here follow it.
   return prisma.opportunityActivity.findMany({
-    where: { opportunityId },
+    where: { opportunityId, NOT: { note: "Created" } },
     orderBy: { createdAt: "asc" },
   });
 }

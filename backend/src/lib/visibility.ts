@@ -30,6 +30,15 @@ import { HttpError } from "../http/errors.js";
 // not allow (changing a project's TAM, SA or customer, deleting a project,
 // changing/deleting a customer — see the *OwnerAccess helpers below).
 export type ProjectAccess = "see" | "own";
+//
+// TWO REPRESENTATIONS OF THE SAME RULE live side by side below:
+// `projectVisibilityFilter` (a Prisma `where`, used by every route) and
+// `canUserSeeProject` (the same arms as a pure predicate over already-loaded
+// project facts, used where many users are checked against ONE project in a
+// fixed number of queries — lib/notifications.ts). Any change to the arms
+// (a new way to see a project) must be made in BOTH; test/notifications.test.ts
+// compares them for every arm, the saId arm included, so extend that test
+// with any new arm.
 
 export function projectVisibilityFilter(
   user: JwtPayload,

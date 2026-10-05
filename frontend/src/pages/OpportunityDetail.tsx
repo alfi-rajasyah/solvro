@@ -35,11 +35,12 @@
 // read-only (a `lock` glyph replaces the menu), the flag toggles and Close
 // disappear, and `canReopenDeal` gates a Reopen button instead (refused once
 // the deal already has a linked project).
-import { useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { AssignPicModal } from "@/components/AssignPicModal";
 import { CloseDealDialog } from "@/components/CloseDealDialog";
+import { CommentBody, CommentComposer } from "@/components/CommentMentions";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { HandoffProjectModal } from "@/components/DealCard";
@@ -62,6 +63,7 @@ import {
   canReopenDeal,
 } from "@/components/pipeline/boardLogic";
 import { probabilityTone } from "@/components/pipeline/kpi";
+import { ActivityFeedBody } from "@/components/ProjectActivity";
 import { Alert, AlertAction, AlertDescription } from "@/components/reui/alert";
 import {
   Timeline,
@@ -82,6 +84,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { fmtAgo, fmtDateTime } from "@/lib/formatDate";
+import { dealMentionCandidates } from "@/lib/mentions";
 import {
   formatIDR,
   formatPipelineDate,
@@ -102,10 +105,13 @@ import {
   useMoveOpportunity,
   useOpportunity,
   useOpportunityActivities,
+  useOpportunityActivity,
   useOpportunityLinks,
+  useUsers,
   useReopenOpportunity,
   useUpdateOpportunity,
   useUpdateOpportunityLink,
+  type ActivityEvent,
   type Opportunity,
   type OpportunityActivity,
   type OpportunityLink,
@@ -614,6 +620,7 @@ export function OpportunityDetail() {
             error={activities.error}
             addActivity={addActivity}
           />
+          <RecentChanges dealId={deal.id} />
         </div>
 
         <div className="space-y-6">
@@ -837,19 +844,16 @@ function ActivitySection({
   error: unknown;
   addActivity: ReturnType<typeof useAddOpportunityActivity>;
 }) {
-  const [note, setNote] = useState("");
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = note.trim();
-    if (!trimmed || addActivity.isPending) return;
-    try {
-      await addActivity.mutateAsync(trimmed);
-      setNote("");
-    } catch {
-      // Surfaced via addActivity.error below.
-    }
-  }
+  // @mentions in a note: active users who can open the Pipeline (the
+  // `pipeline:view` permission or `*`), so a mention always lands on someone
+  // who can follow the link. Chips render from the note's returned ids and the
+  // whole directory, so a mention of a since-deactivated user still shows.
+  const { data: directory } = useUsers();
+  const candidates = useMemo(() => dealMentionCandidates(directory), [directory]);
+  const known = useMemo(
+    () => (directory ?? []).map((u) => ({ id: u.id, username: u.username })),
+    [directory],
+  );
 
   return (
     <div className="space-y-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
@@ -899,9 +903,7 @@ function ActivitySection({
                       {fmtAgo(a.createdAt)}
                     </span>
                   </div>
-                  <p className="whitespace-pre-wrap wrap-break-word text-xs text-on-surface">
-                    {a.note}
-                  </p>
+                  <CommentBody body={a.note} mentionedUserIds={a.mentionedUserIds} users={known} />
                 </div>
               </div>
             </TimelineItem>
@@ -909,32 +911,52 @@ function ActivitySection({
         </Timeline>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-2 border-t border-outline-variant pt-3">
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={3}
-          maxLength={2000}
-          placeholder="Add a note…"
-          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
-        />
-        <div className="flex items-center justify-between gap-2">
-          {addActivity.isError ? (
-            <p className="text-xs text-error">{(addActivity.error as Error).message}</p>
-          ) : (
-            <span />
-          )}
-          <button
-            type="submit"
-            disabled={addActivity.isPending || !note.trim()}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined text-base">send</span>
-            {addActivity.isPending ? "Adding…" : "Add note"}
-          </button>
-        </div>
-      </form>
+      <CommentComposer
+        variant="note"
+        candidates={candidates}
+        isPending={addActivity.isPending}
+        error={addActivity.isError ? (addActivity.error as Error).message : null}
+        onSend={async (note, mentionedUserIds) => {
+          await addActivity.mutateAsync({ note, mentionedUserIds });
+        }}
+      />
     </div>
+  );
+}
+
+// The Activity timeline above already has a sentence for every other deal
+// action (created, moved, closed, reopened, assigned, handed off, sub-status
+// and tag changes, notes, links), so this list keeps only the field edits,
+// the one event type that carries from/to values the timeline lacks.
+const isFieldEdit = (event: ActivityEvent) =>
+  event.entityType === "opportunity" && event.action === "updated";
+
+/**
+ * The deal's field edits (GET /opportunities/:id/activity, narrowed to
+ * `opportunity` / `updated` events): value, deadline, win probability and so
+ * on, each with its before and after. The notes themselves stay in the
+ * Activity timeline above; this feed never carries note text.
+ */
+function RecentChanges({ dealId }: { dealId: string }) {
+  const query = useOpportunityActivity(dealId);
+  return (
+    <section
+      aria-labelledby="deal-changes-heading"
+      className="space-y-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-4"
+    >
+      <h2
+        id="deal-changes-heading"
+        className="font-display text-label-caps uppercase text-on-surface-variant"
+      >
+        Field changes
+      </h2>
+      <ActivityFeedBody
+        query={query}
+        emptyText="Edits to this deal's fields show up here, with the old and new values."
+        filter={isFieldEdit}
+        currentHref={`/pipeline/${dealId}`}
+      />
+    </section>
   );
 }
 
