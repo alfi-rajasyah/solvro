@@ -24,7 +24,8 @@ export type ActivityEntityType =
   | "epic"
   | "opportunity"
   | "opportunity_note"
-  | "opportunity_link";
+  | "opportunity_link"
+  | "share_link";
 export type ActivityAction =
   | "created"
   | "updated"

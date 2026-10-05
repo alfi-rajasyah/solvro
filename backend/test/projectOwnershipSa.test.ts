@@ -393,3 +393,45 @@ describe("handoff by an admin names the SA", () => {
   });
 });
 
+
+describe("guest links are owner-only: the SA never shares a project", () => {
+  it("a stock SA (project:read) gets 403 owner_only on the list; write routes answer forbidden", async () => {
+    const { sa, saProject } = await fixture();
+    const list = await request(app).get(`/projects/${saProject.id}/share-links`).set(auth(sa.token));
+    expect(list.status).toBe(403);
+    expect(list.body.code).toBe("owner_only");
+    const create = await request(app)
+      .post(`/projects/${saProject.id}/share-links`)
+      .set(auth(sa.token))
+      .send({});
+    expect(create.status).toBe(403);
+    expect(create.body.code).toBe("forbidden");
+    expect(await prisma.shareLink.count({ where: { projectId: saProject.id } })).toBe(0);
+  });
+
+  it("an SA with write permissions gets 403 owner_only on create, list and revoke", async () => {
+    const { saWrite, saWriteProject, tam } = await fixture();
+    const create = await request(app)
+      .post(`/projects/${saWriteProject.id}/share-links`)
+      .set(auth(saWrite.token))
+      .send({});
+    expect(create.status).toBe(403);
+    expect(create.body.code).toBe("owner_only");
+    const list = await request(app).get(`/projects/${saWriteProject.id}/share-links`).set(auth(saWrite.token));
+    expect(list.status).toBe(403);
+    expect(list.body.code).toBe("owner_only");
+    // The owner creates one; the SA still cannot revoke it.
+    const owned = await request(app)
+      .post(`/projects/${saWriteProject.id}/share-links`)
+      .set(auth(tam.token))
+      .send({});
+    expect(owned.status).toBe(201);
+    const linkId = (owned.body as { id: number }).id;
+    const revoke = await request(app)
+      .delete(`/projects/${saWriteProject.id}/share-links/${linkId}`)
+      .set(auth(saWrite.token));
+    expect(revoke.status).toBe(403);
+    expect(revoke.body.code).toBe("owner_only");
+    expect(await prisma.shareLink.count({ where: { projectId: saWriteProject.id, revokedAt: null } })).toBe(1);
+  });
+});

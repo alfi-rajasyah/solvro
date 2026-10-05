@@ -19,3 +19,6 @@ process.env.SECRETS_KEY =
   process.env.SECRETS_KEY ?? "c29sdnJvLXRlc3Qtc2VjcmV0cy1rZXktMzItYnl0ZXM=";
 process.env.CORS_ORIGIN = process.env.CORS_ORIGIN ?? "*";
 process.env.LOG_LEVEL = process.env.LOG_LEVEL ?? "error";
+// Pinned, not defaulted: requestLogger.test.ts asserts the 1-hop clientIp, and a
+// dev compose TRUST_PROXY (e.g. 2 for a tunnel) must not leak into the suite.
+process.env.TRUST_PROXY = "1";

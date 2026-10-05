@@ -5,6 +5,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { pino } from "pino";
 import { createApp } from "../src/app.js";
+import { prisma } from "../src/prisma.js";
 import { redactShareTokens } from "../src/http/requestLogger.js";
 import { createUserWithRole, seedRoles } from "./testAuth.js";
 
@@ -41,13 +42,25 @@ describe("redactShareTokens", () => {
 });
 
 describe("request logging", () => {
-  it("a /share/<token> path is logged without its token (url and referer)", async () => {
+  it("a public guest GET logs neither the token (url or referer) nor anything else secret", async () => {
     const { app, lines } = capturingApp();
-    const token = "abcDEF123_token-that-must-not-leak";
-    // No guest route exists yet: the 404 line still logs url + referer.
-    await request(app)
+    const tam = await createUserWithRole("TAM");
+    const project = await prisma.project.create({
+      data: { name: `Logged ${Date.now()}`, tamId: tam.userId, status: "ACTIVE" },
+    });
+    const created = await request(app)
+      .post(`/projects/${project.id}/share-links`)
+      .set("Authorization", `Bearer ${tam.token}`)
+      .send({});
+    const token = (created.body as { url: string }).url.replace("/share/", "");
+    lines.length = 0;
+
+    const res = await request(app)
       .get(`/public/share/${token}`)
       .set("Referer", `https://solvro.example/share/${token}`);
+    expect(res.status).toBe(200);
+    // Also an unknown-route request that would echo the path.
+    await request(app).get(`/public/share/${token}/extra`);
 
     const logged = lines.join("");
     expect(logged).toContain("/public/share/[redacted]");
@@ -55,15 +68,19 @@ describe("request logging", () => {
     expect(logged).not.toContain(token);
   });
 
-  it("keeps remoteAddress/remotePort and adds clientIp to every line", async () => {
+  it("keeps remoteAddress/remotePort and adds the trusted clientIp to every line", async () => {
     const { app, lines } = capturingApp();
-    await request(app).get("/health");
-    const entry = JSON.parse(lines.at(-1)!) as LoggedEntry;
+    await request(app).get("/health").set("X-Forwarded-For", "198.51.100.9, 203.0.113.5");
+    const entry = JSON.parse(lines.at(-1)!) as {
+      req: { remoteAddress?: string; remotePort?: number; method: string; url: string };
+      clientIp?: string;
+    };
     expect(entry.req.method).toBe("GET");
     expect(entry.req.url).toBe("/health");
     expect(entry.req.remoteAddress).toMatch(/127\.0\.0\.1|::1/);
     expect(typeof entry.req.remotePort).toBe("number");
-    expect(entry.clientIp).toMatch(/127\.0\.0\.1|::1/);
+    // TRUST_PROXY defaults to 1 hop: the rightmost X-Forwarded-For entry.
+    expect(entry.clientIp).toBe("203.0.113.5");
   });
 
   it("an authed request does not log its bearer token, but still logs the request", async () => {

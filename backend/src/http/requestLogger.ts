@@ -44,8 +44,8 @@ export function createRequestLogger(logger: Logger) {
   return pinoHttp({
     logger,
     serializers: { req: redactSerializedRequest },
-    // The address `req.ip` resolves to (under Express's "trust proxy" setting
-    // once one is configured). `remoteAddress` alone is the proxy behind nginx.
+    // The address `req.ip` resolves to under TRUST_PROXY — what the public
+    // share rate limiter keys on. `remoteAddress` alone is the proxy behind nginx.
     customProps: (req) => ({ clientIp: (req as IncomingMessage & { ip?: string }).ip }),
   });
 }

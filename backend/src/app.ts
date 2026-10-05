@@ -12,6 +12,8 @@ import { authRouter } from "./routes/auth.js";
 import { usersRouter } from "./routes/users.js";
 import { projectsRouter } from "./routes/projects.js";
 import { projectMembersRouter } from "./routes/projectMembers.js";
+import { shareLinksRouter } from "./routes/shareLinks.js";
+import { publicShareRouter } from "./routes/publicShare.js";
 import { activityRouter } from "./routes/activity.js";
 import { notificationsRouter } from "./routes/notifications.js";
 import { tasksRouter } from "./routes/tasks.js";
@@ -46,6 +48,12 @@ export function createApp(opts: CreateAppOptions = {}): Express {
   const app = express();
 
   app.disable("x-powered-by");
+  // The API sits behind the frontend's nginx (frontend/nginx.conf), which
+  // appends the client address to X-Forwarded-For. TRUST_PROXY says how many
+  // hops (or which subnets) to believe so `req.ip` is the real client — the
+  // public share route rate-limits per IP; trusting too few hops would put every
+  // visitor in the proxy's bucket, too many lets a client spoof its address.
+  app.set("trust proxy", env.TRUST_PROXY);
   app.use(helmet());
   app.use(
     cors({
@@ -65,6 +73,10 @@ export function createApp(opts: CreateAppOptions = {}): Express {
   // route's own secret check runs.
   app.use("/webhook", webhookRouter);
 
+  // Unauthenticated guest view (routes/publicShare.ts) — outside every authed
+  // router; requireAuth must never run for it.
+  app.use("/public/share", publicShareRouter);
+
   app.use(express.json({ limit: "1mb" }));
 
   app.use("/health", healthRouter);
@@ -74,6 +86,7 @@ export function createApp(opts: CreateAppOptions = {}): Express {
   app.use("/customers", customersRouter);
   app.use("/projects", projectsRouter);
   app.use("/projects", projectMembersRouter);
+  app.use("/projects", shareLinksRouter);
   app.use("/projects", activityRouter);
   app.use("/notifications", notificationsRouter);
   app.use("/daily-review", dailyReviewRouter);

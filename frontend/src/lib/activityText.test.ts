@@ -504,3 +504,24 @@ describe("describeActivity - Pipeline deals", () => {
     expect(text(deal({ action: "added" }))).toMatch(/^maya\.putri added the opportunity Acme deal$/);
   });
 });
+
+describe("describeActivity - guest links", () => {
+  const link = (over: Partial<ActivityEvent> = {}) =>
+    ev({ entityType: "share_link", entityLabel: "For Nusantara IT", ...over });
+
+  it("created / revoked name the label", () => {
+    expect(text(link({ action: "created" }))).toBe("maya.putri created the guest link For Nusantara IT");
+    expect(text(link({ action: "removed" }))).toBe("maya.putri revoked the guest link For Nusantara IT");
+  });
+
+  it("unlabelled links read as a guest link", () => {
+    expect(text(link({ action: "created", entityLabel: null }))).toBe("maya.putri created a guest link");
+    expect(text(link({ action: "removed", entityLabel: null }))).toBe("maya.putri revoked a guest link");
+  });
+
+  it("emphasises the label and never links to a task", () => {
+    const s = describeActivity(link({ action: "created" }));
+    expect(s.parts.filter((p) => p.kind === "entity").map((p) => p.text)).toEqual(["For Nusantara IT"]);
+    expect(s.taskId).toBeNull();
+  });
+});
