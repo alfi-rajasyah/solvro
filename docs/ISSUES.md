@@ -230,6 +230,10 @@ cited files; entries marked *code check* below carry the result).
   "Document attachments will live here once uploads are implemented" notice,
   which is customer documents, not task attachments. Storage, size limits, and
   export visibility are undecided.
+  *Updated 2026-10-05*: that customer-page notice is gone too (the customer
+  account page was rewritten; grep finds no "attachments" text in
+  `frontend/src/pages/CustomerDetail.tsx`), so no attachment trace remains in
+  the UI. Still not built.
 
 ---
 
@@ -2249,3 +2253,59 @@ Tested against a real iTop 3.2.2 (ITIL, default lifecycle). Fixed in code the sa
 - **The rate limiter is in-process only** (2026-09-30): `backend/src/http/rateLimit.ts` keeps its counters in memory per backend instance, with no shared store. With more than one backend instance the effective limit is per instance, and counters reset on restart. Fine for the current single-instance deployment; needs a shared store if the backend is ever scaled out.
 - **Guest links use the address the owner is browsing from** (2026-09-30): `frontend/src/components/ProjectShare.tsx` builds the copied link from `window.location.origin`, because the backend has no public base URL setting. An owner signed in through an SSH tunnel or `localhost` gets a link a guest cannot open. Possible fix: a `PUBLIC_BASE_URL` setting used to build the link.
 - **The shared dialog focus trap only wraps from the last focusable element** (2026-09-30): `useDialogFocus` (used by `Modal`) wraps Tab only when focus is on the last tabbable element, so focus that sits on a non-tabbable element with `tabIndex={-1}` (e.g. a heading focused programmatically) can Tab out of the dialog when nothing tabbable follows it. `ProjectShare.tsx` works around it locally on its "Guest links" heading. Pre-existing; the fix belongs in the shared hook.
+
+## Customer-edition port — deferred findings (2026-10-05)
+
+Findings collected while porting the customer edition's features (iTop, Utilization, Help, Epics, members, activity, guest links) onto this repo with the Pipeline module and the SA role kept. Each item was accepted as is at port time; the fix direction is noted.
+
+### iTop — security findings accepted at port time (Medium / Low)
+
+- **`POST /admin/itop/test` sends the stored application token to a new host.** `backend/src/routes/itopAdmin.ts` takes an optional `baseUrl` and an optional `appToken`; when only `baseUrl` is sent it falls back to the stored token, so an admin session (or a stolen admin JWT) can point the probe at any https host it controls and receive the token in the `Auth-Token` header. Fix: when `body.baseUrl` differs from the stored one, require `body.appToken`. Medium; admin-only surface.
+- **Personal-token ownership is checked best-effort, not fail-closed.** `backend/src/routes/itopUser.ts` (`PUT /itop/me/token`) proves ownership through the `User` → `PersonalToken` lookups, but a read failure on either class (no rights, missing extension) is treated as inconclusive and the token is accepted; a broad-read token that is not the user's own can therefore be saved and used for writes under that identity. Fix: reject when `resolvedItopUserId` is null or the `PersonalToken` read fails. Medium.
+- **The iTop client follows redirects, and the application token travels with them.** `backend/src/lib/itop/client.ts` passes no `redirect` option to `fetch`, so a 30x from the configured host forwards the `Auth-Token` header to the redirect target — including a plain-`http://` one, which bypasses the https-only check on `baseUrl`. Fix: `redirect: "error"`. Low (needs a hostile or compromised iTop host).
+- **Secrets at rest: no tag-length check, no AAD, no key rotation.** `backend/src/lib/secretBox.ts` does not pass `authTagLength: 16` to `createDecipheriv` (Node accepts truncated GCM tags), binds no additional data to the row (a sealed value could be copied between columns by someone with DB write access), and supports one key only — rotating `SECRETS_KEY` makes every sealed value unreadable until re-entered. Low; all need DB write access.
+- **The webhook rate limit is global, not per IP.** `backend/src/routes/webhook.ts` keeps two in-process sliding windows (60 calls/min total, 6 accepted/min) that do not use `http/rateLimit.ts`; an unauthenticated flood of 60 requests a minute starves legitimate iTop nudges (the sync degrades to its schedule — no data impact). Fix: key the first window per IP via the shared limiter.
+- **A newly mapped iTop organisation's older tickets wait for the next full sync.** The incremental pull is `last_update`-based, so tickets of an organisation mapped after the watermark appear only after the daily full sync or a manual Sync now, while `GET /itop/status` still reports ok. Low.
+- **A failed sync keeps half its work.** `upsertTicket` writes through the global Prisma client, not the sync transaction, so rows written before a crash stay and the full-sync cleanup never runs. `GET /itop/status` exposes no `lastSyncError` to non-admins, so the Tickets tab looks fresh after a failed sync.
+- **"Test connection" reports `ok:false` whenever `TimeSpent` is missing.** Without the Time Tracking extension the probe fails as a whole; it should treat `TimeSpent` as optional and report it as informational. Seen on the real iTop 3.2.2 dev install.
+- **Deployment note:** `itopUserId` matching needs the REST profile to have read rights on the `User` class (an iTop profile setting, not code) — without it time logging answers "Your iTop user account is not linked yet".
+
+### Ticket UI (parked at port time)
+
+- `TicketPanel.tsx`: Escape inside the Resolve/Team action sheet also closes the whole panel (panel and Modal keydown both fire); a mid-write unmount loses the result. Fix: early-return while `actionSheet !== null`, or stop propagation.
+- `TaskTicketField.tsx`: `draft` is never reset after Clear/commit, so focus-then-blur re-pins the cleared reference. Fix: `setDraft("")` on Clear and after `onSave`; add an e2e Clear case.
+- `TicketLog.tsx`: the composer clears its text before iTop answers; a refusal loses the entry. Clear only on success. Its `PILL_BASE` still uses `rounded-full` on buttons (DESIGN.md §3).
+- `useTicketAction` / `useAddTicketLog` in `lib/queries.ts` do not invalidate `queryKeys.itopTicketByRefRoot`, so a task's pinned-ticket chip can lag behind an action taken in the panel.
+
+### Epics
+
+- The unchecked epic `ownerId` is filed in full under "Epics — deferred findings (ported 2026-10-05)" above (port plan §10, E-4); not repeated here.
+
+### Members
+
+- **The members backfill also inserts `project:view-all` holders.** The one-off migration `20261004120700_project_members` adds every active assignee of an open task who is not already the TAM, SA, or customer owner — including users whose role already sees every project (e.g. STAKEHOLDER). The rows are redundant but harmless; they show in the Members list. Optional: exclude roles with `project:view-all` or `*` via a roles join.
+- **The backfill test checks a copy of the migration's SELECT**, not the file (`backend/test/taskAssigneeMembers.test.ts`); the two can drift.
+- The Members button count and the header avatars show the TAM and the members only; the SA appears in the dialog and in the project header facts. By design — the SA is not a member — but it reads as a mismatch.
+
+### Roles
+
+- **The seed resets the built-in roles' permissions on every container start** (port plan §10, F-7): `backend/prisma/seed.ts` upserts each built-in role with `update: { permissions }`, and the production backend command runs `prisma db seed` on every start, so an admin's edit to a built-in role's permission list is undone at the next restart. Custom roles are unaffected. Fix direction: `update: {}` for existing rows (as the `AuthConfig` seed already does), or a one-time guard.
+- **The frontend's built-in role list omits `SALES`** (port plan §10, F-8): `BUILTIN_ROLES` in `frontend/src/lib/auth.tsx` and the custom-role filter in `frontend/src/pages/Admin.tsx` list `SA`, `TAM`, `ADMIN`, `STAKEHOLDER`, `PENDING` only, so `SALES` is treated as a custom role in the Admin > Roles screen (editable, deletable). The Help page already describes `SALES`.
+
+### Proxy trust (`TRUST_PROXY`)
+
+- **The `setup.sh` default assumes the tunnel → nginx → backend chain.** The compose file `setup.sh` writes passes `loopback, uniquelocal`, which trusts every private address: a client on the LAN/VPN (when `BIND_ADDR` exposes the ports), or a hop that rewrites the source to a private address without appending `X-Forwarded-For`, can still forge its address. The effect is limited to the guest-link rate-limit bucket and the logged `clientIp`. A CDN with public edge addresses needs a hop count or its CIDRs instead — `docs/CONFIGURATION.md` §2.13.
+- In the dev stack (`TRUST_PROXY=1`, tunnel → Vite proxy → backend) a client that reaches `:5173` directly can forge `clientIp`. Dev only.
+
+### Agent docs
+
+- The root `CLAUDE.md` roster's spine-list prose and the `SPINE` regex in `.claude/scripts/gates.sh` are maintained by hand in two places; the port extended the regex (secrets box, webhook, personal tokens, iTop client, request logger, guest-link routes) and the prose was updated to match, but nothing checks that they agree.
+
+### Final review of the port — deferred (2026-10-05)
+
+- **Personal-token acceptance is looser than the iTop-writes guardrail states.** The guardrail says a personal token is accepted only when it resolves to the iTop Person with the user's email; `backend/src/routes/itopUser.ts` also accepts it when the `User` or `PersonalToken` lookup fails (see the Medium entry above). Kept as is at port time because failing closed rejects every token on an install whose REST profile cannot read `User`; needs a user decision: fail closed, or re-word the guardrail.
+- **Loading states without `SkeletonRegion`** (DESIGN.md §2: skeletons from `components/skeletons/`, 150 ms delay): `components/itop/TicketsTab.tsx`, `components/itop/TicketPanel.tsx`, `components/itop/board/TicketBoard.tsx`, `components/customer/AccountOverview.tsx` (two sites), `pages/Utilization.tsx` (bare `Skeleton` rows), `components/ProjectMembers.tsx` ("Loading members…" text). Deferred: presentation-only, found after the branch's full test run. `Overview.tsx`, `CustomerDetail.tsx` and `Executive.tsx` have the same pattern from before the port.
+- **The iTop ticket board is not wired into the drag guard.** `useCustomerTickets` refetches every 60 s and `TicketBoard.tsx` never calls `beginDrag`/`useDragActivityGuard` nor gates its interval on `shouldPauseRefresh`, unlike the task Kanban, the Pipeline board, the Gantt and the project list — a ticket change landing mid-drag re-renders the board under the cursor. Fix: register drag start/end with `beginDrag` and gate the interval; the comment in `lib/queries.ts` calling it "the first `refetchInterval` in the app" is stale.
+- **Arbitrary `text-[12px]` instead of the named roles** in the ported iTop UI (`components/itop/ActionSheet.tsx`, `NewTicketSheet.tsx` — `text-[12px] font-bold uppercase tracking-wider` should be `text-label-caps uppercase`; also `ItopTab.tsx`, `Settings.tsx`, `TicketTimer.tsx`, `TicketsTable.tsx`). No sub-12px sizes; deferred as presentation-only.
+- **`backend/src/routes/itop.ts` cites `docs/archive/plans/date-contract-utc-midnight.md`**, which does not exist (the plan is `docs/plans/date-contract-utc-midnight.md`, still active). Fix the comment when that plan is archived.
+- The INTERNAL-notes guardrail in the root `CLAUDE.md` still points at `frontend/src/lib/export/`, which no longer exists (true on `develop` too). User-owned wording; not changed here.

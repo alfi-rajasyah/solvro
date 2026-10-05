@@ -1,5 +1,7 @@
 # Handoff prompt: port the customer edition into Solvro Internal, in one PR
 
+> Archived 2026-10-05 with the plan (`solvro-cust-port-plan.md`, `solvro-cust-port/`) once every step was committed. Paths below that say `docs/plans/…` or `docs/prompts/…` now live in `docs/archive/plans/`.
+
 > Paste this file as the first message of a fresh Claude Code session in `/home/solvro-internal/solvro`. It is self-contained; the session reads the plan and the reports from the repo.
 
 ## 0. Authority and autonomy (user approvals, 2026-10-04)

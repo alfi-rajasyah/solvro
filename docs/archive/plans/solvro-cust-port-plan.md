@@ -1,5 +1,7 @@
 # Port plan: bring the customer edition's features into Solvro Internal
 
+> Archived 2026-10-05: the port shipped on branch `port/solvro-cust` (one squash commit per step). Relative links to `solvro-cust-port/` still resolve; the handoff prompt is `solvro-cust-port-prompt.md` beside this file.
+
 **Status:** decisions answered 2026-10-04 (section 10). Handed off for implementation as **one PR** — see section 4a and the handoff prompt `docs/prompts/solvro-cust-port.md`.
 **Source repo:** `alfi-rajasyah/solvro-cust` @ `develop 127f316` (92 commits). **Target:** this repo @ `develop 154b42f`.
 **Research:** ten reports in [`solvro-cust-port/`](solvro-cust-port/) (4,652 lines). This file is the summary and the decision register; the reports hold the file-level detail.
