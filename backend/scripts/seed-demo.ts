@@ -1,16 +1,19 @@
 // Wipes every data table and loads a small, human-readable demo workspace:
 // four customers, six projects (one per status), sections, epics, labels,
 // tasks with subtasks and dependencies, risks, daily notes, operations
-// notes, and weekly updates. Dates are relative to the day the script runs,
+// notes, weekly updates, a project member, and an activity log with
+// notifications derived from the task and deal data. Dates are relative to the day the script runs,
 // so the Gantt, overdue flags, and Daily Review always look current.
 //
 // DESTRUCTIVE — dev/demo databases only. Keeps roles, the auth_config and
 // itop_config singletons (settings preserved), and the migration history;
 // everything else, users included, is truncated. That includes the Pipeline
 // tables (opportunities, opportunity_activities, opportunity_links,
-// pipeline_import_logs): the wipe empties them and this script seeds none
-// back, so run it only where the pipeline data is disposable. Refuses to run
-// unless DEMO_SEED_CONFIRM=wipe is set and NODE_ENV is not "production".
+// pipeline_import_logs): the wipe empties them and this script seeds nine
+// demo deals back (one per stage, a won deal handed off to a demo project, a
+// lost deal, an unassigned deal) owned by a demo SA, so run it only where the
+// pipeline data is disposable. Refuses to run unless DEMO_SEED_CONFIRM=wipe
+// is set and NODE_ENV is not "production".
 //
 //   docker compose exec -e DEMO_SEED_CONFIRM=wipe backend npx tsx scripts/seed-demo.ts
 //
@@ -19,6 +22,11 @@
 
 import {
   PrismaClient,
+  type PipelineOutcome,
+  type PipelineOutcomeReason,
+  type PipelineStage,
+  type PipelineStatusTag,
+  type PipelineSubStatus,
   type Priority,
   type ProjectStatus,
   type RiskCategory,
@@ -42,6 +50,11 @@ function day(offset: number): Date {
   return new Date(TODAY.getTime() + offset * DAY_MS);
 }
 
+/** A timestamp on day `offset` at `hour` UTC — for events that need a time of day. */
+function at(offset: number, hour: number): Date {
+  return new Date(day(offset).getTime() + hour * 3_600_000);
+}
+
 /** Offset (in days) of the ISO Monday `weeksAgo` weeks before this week's. */
 function mondayOffset(weeksAgo: number): number {
   const dow = (TODAY.getUTCDay() + 6) % 7; // Monday = 0
@@ -60,7 +73,7 @@ function recentWeekdays(n: number): number[] {
 
 // ---------------------------------------------------------------- specs ---
 
-type UserKey = "admin" | "maya" | "rizky" | "dewi" | "agus" | "budi";
+type UserKey = "admin" | "maya" | "rizky" | "dewi" | "agus" | "budi" | "sari" | "andi";
 
 interface SubtaskSpec {
   title: string;
@@ -115,6 +128,10 @@ interface ProjectSpec {
   description: string;
   customer: string;
   tam: UserKey;
+  /** The Solution Architect who sold the deal — a visibility arm, not an owner. */
+  sa?: UserKey;
+  /** Members (TAM-level access without ownership), added by the TAM. */
+  members?: UserKey[];
   status: ProjectStatus;
   service: [string, string[]];
   /** Day offset the baseline was locked, when the project has one. */
@@ -135,6 +152,8 @@ const USERS: Record<UserKey, { username: string; email: string; role: string }> 
   dewi: { username: "dewi.lestari", email: "dewi.lestari@demo.solvro.local", role: "TAM" },
   agus: { username: "agus.setiawan", email: "agus.setiawan@demo.solvro.local", role: "TAM" },
   budi: { username: "budi.santoso", email: "budi.santoso@demo.solvro.local", role: "STAKEHOLDER" },
+  sari: { username: "sari.wijaya", email: "sari.wijaya@demo.solvro.local", role: "SA" },
+  andi: { username: "andi.kurniawan", email: "andi.kurniawan@demo.solvro.local", role: "SALES" },
 };
 
 const SERVICES: Array<[string, string]> = [
@@ -205,6 +224,8 @@ const PROJECTS: ProjectSpec[] = [
       "Replace ad-hoc NAS copies with Veeam backup for all production VMs, add an offsite copy to the Surabaya data centre, and hand over runbooks to the customer's IT team.",
     customer: "PT Nusantara Logistik",
     tam: "maya",
+    sa: "sari",
+    members: ["agus"],
     status: "ACTIVE",
     service: ["Backup & Disaster Recovery", ["Veeam"]],
     baselineLocked: -22,
@@ -675,6 +696,199 @@ const CUSTOMER_NOTES: Array<[string, UserKey, number, string, string]> = [
 
 // ------------------------------------------------------------------ run ---
 
+
+// ------------------------------------------------------------- pipeline ---
+
+interface DealSpec {
+  title: string;
+  customerName: string;
+  /** Rupiah. */
+  value: number;
+  stage: PipelineStage;
+  stageOrder: number;
+  pic?: UserKey; // omitted = unassigned, claimable with "Assign PIC"
+  requestDate: number; // day offset
+  deadline?: number;
+  winProbability: number;
+  leadSource: string;
+  productSolution: string;
+  description: string;
+  subStatus?: PipelineSubStatus;
+  waitingInputSince?: number;
+  statusTag?: PipelineStatusTag;
+  outcome?: { result: PipelineOutcome; closedAt: number; reason?: PipelineOutcomeReason; reasonText?: string; project?: string };
+  /** Day offset, author, note; `mention` tags a user in the note. */
+  notes: Array<{ day: number; by: UserKey; note: string; mention?: UserKey }>;
+  links?: Array<[string, string]>;
+}
+
+const DEALS: DealSpec[] = [
+  {
+    title: "Kopi Senja — Store Wi-Fi refresh (6 stores)",
+    customerName: "Kopi Senja",
+    value: 180_000_000,
+    stage: "ASSESSMENT",
+    stageOrder: 0,
+    pic: "sari",
+    requestDate: -5,
+    deadline: 40,
+    winProbability: 40,
+    leadSource: "Existing customer",
+    productSolution: "Ubiquiti UniFi access points, cloud gateway, guest portal",
+    description: "Replace consumer routers in six stores with managed UniFi; POS on its own VLAN, captive portal for guests.",
+    subStatus: "PROGRESS",
+    notes: [
+      { day: -5, by: "andi", note: "Store manager asked for a quote after the Bandung outage. Six sites, ~40 devices each." },
+      { day: -2, by: "sari", note: "Site survey booked for the flagship store next Tuesday." },
+    ],
+  },
+  {
+    title: "Sekolah Harapan — Lab Wi-Fi and firewall",
+    customerName: "Sekolah Harapan",
+    value: 95_000_000,
+    stage: "ASSESSMENT",
+    stageOrder: 1,
+    requestDate: -1,
+    winProbability: 30,
+    leadSource: "Inbound (website)",
+    productSolution: "FortiGate 60F, 12 access points",
+    description: "Two computer labs and the teachers' room. Budget not confirmed; waiting for a PIC.",
+    notes: [{ day: -1, by: "andi", note: "Inbound form. Principal wants content filtering for students." }],
+  },
+  {
+    title: "PT Nusantara Logistik — Warehouse CCTV & access control",
+    customerName: "PT Nusantara Logistik",
+    value: 650_000_000,
+    stage: "TECHNICAL_CLARIFICATION",
+    stageOrder: 0,
+    pic: "sari",
+    requestDate: -18,
+    deadline: 25,
+    winProbability: 55,
+    leadSource: "Existing customer",
+    productSolution: "Hikvision IP cameras, NVR, HID door controllers",
+    description: "Surabaya warehouse: 48 cameras, 12 doors, integration with the existing badge system.",
+    subStatus: "WAITING_SALES_INPUT",
+    waitingInputSince: -3,
+    notes: [
+      { day: -12, by: "sari", note: "Walked the warehouse with the ops manager; camera count confirmed at 48." },
+      { day: -3, by: "sari", note: "Need the badge system vendor and model before I can size the controllers.", mention: "andi" },
+    ],
+    links: [["Site photos", "https://example.com/nusantara/warehouse-photos"]],
+  },
+  {
+    title: "Bank Arta — Endpoint detection & response (1,200 seats)",
+    customerName: "Bank Arta Sejahtera",
+    value: 1_850_000_000,
+    stage: "POC",
+    stageOrder: 0,
+    pic: "sari",
+    requestDate: -40,
+    deadline: 20,
+    winProbability: 60,
+    leadSource: "Account plan",
+    productSolution: "CrowdStrike Falcon, 3-year subscription",
+    description: "Proof of concept on 50 endpoints in the Jakarta HQ; bank security team compares against the incumbent.",
+    statusTag: "DELAYED",
+    notes: [
+      { day: -30, by: "sari", note: "PoC scope agreed: 50 endpoints, 3 weeks, success criteria signed by the CISO office." },
+      { day: -6, by: "sari", note: "PoC start slipped two weeks — the bank's change board meets monthly." },
+    ],
+    links: [["PoC success criteria", "https://example.com/bank-arta/edr-poc-criteria"]],
+  },
+  {
+    title: "Klinik Sehat — Patient portal hosting",
+    customerName: "Klinik Sehat Bersama",
+    value: 420_000_000,
+    stage: "RFP",
+    stageOrder: 0,
+    pic: "sari",
+    requestDate: -25,
+    deadline: 12,
+    winProbability: 50,
+    leadSource: "Tender",
+    productSolution: "Azure App Service, Azure SQL, WAF; managed service 24 months",
+    description: "Formal RFP for hosting the new patient portal, with data residency in Indonesia.",
+    notes: [
+      { day: -20, by: "andi", note: "RFP received. Submission deadline is firm." },
+      { day: -8, by: "sari", note: "Clarification questions sent on data residency and backup RPO." },
+    ],
+    links: [["RFP document", "https://example.com/klinik-sehat/rfp-portal-hosting.pdf"]],
+  },
+  {
+    title: "Universitas Mandiri — Campus core switch replacement",
+    customerName: "Universitas Mandiri",
+    value: 2_300_000_000,
+    stage: "DELIVER_PROPOSAL",
+    stageOrder: 0,
+    pic: "sari",
+    requestDate: -55,
+    deadline: 7,
+    winProbability: 65,
+    leadSource: "Partner referral",
+    productSolution: "Cisco Catalyst 9500 core pair, 24 distribution switches, 3-year SmartNet",
+    description: "End-of-life core; proposal covers hardware, migration weekend and a year of managed network.",
+    notes: [
+      { day: -40, by: "sari", note: "BoM validated with the distributor; lead time 8 weeks." },
+      { day: -4, by: "sari", note: "Proposal draft with the pricing team; presenting to the IT director on Thursday." },
+    ],
+  },
+  {
+    title: "Hotel Laguna Bali — Guest Wi-Fi managed service",
+    customerName: "Hotel Laguna Bali",
+    value: 540_000_000,
+    stage: "WAITING_RESPONSE",
+    stageOrder: 0,
+    pic: "sari",
+    requestDate: -70,
+    deadline: 30,
+    winProbability: 45,
+    leadSource: "Event",
+    productSolution: "Aruba Instant On, managed service 36 months",
+    description: "Proposal delivered; the hotel group has paused procurement until the new GM starts.",
+    statusTag: "HOLD",
+    notes: [
+      { day: -35, by: "sari", note: "Proposal delivered and presented to the owner's representative." },
+      { day: -14, by: "andi", note: "Procurement on hold until the new GM joins next month. Keep warm." },
+    ],
+  },
+  {
+    title: "Bank Arta — Azure Landing Zone",
+    customerName: "Bank Arta Sejahtera",
+    value: 1_200_000_000,
+    stage: "WAITING_RESPONSE",
+    stageOrder: 1,
+    pic: "sari",
+    requestDate: -130,
+    deadline: -65,
+    winProbability: 100,
+    leadSource: "Account plan",
+    productSolution: "Azure landing zone build, ExpressRoute, governance baseline",
+    description: "Won. Handed off to delivery as the Azure Landing Zone project.",
+    outcome: { result: "WON", closedAt: -60, project: "Bank Arta — Azure Landing Zone" },
+    notes: [
+      { day: -75, by: "sari", note: "Final pricing accepted by the bank's procurement." },
+      { day: -60, by: "sari", note: "PO received. Handing off to Rizky's delivery team." },
+    ],
+  },
+  {
+    title: "Toko Makmur — Retail POS network (14 stores)",
+    customerName: "Toko Makmur",
+    value: 310_000_000,
+    stage: "DELIVER_PROPOSAL",
+    stageOrder: 1,
+    pic: "sari",
+    requestDate: -90,
+    deadline: -30,
+    winProbability: 0,
+    leadSource: "Cold outreach",
+    productSolution: "MikroTik routers, TP-Link Omada access points",
+    description: "Lost on price to a local integrator.",
+    outcome: { result: "LOST", closedAt: -20, reason: "PRICE", reasonText: "Local integrator quoted 35% lower with consumer-grade hardware." },
+    notes: [{ day: -20, by: "andi", note: "Customer went with the cheaper quote. Door open for the next refresh." }],
+  },
+];
+
 async function wipe() {
   const tables = await prisma.$queryRaw<Array<{ tablename: string }>>`
     SELECT tablename FROM pg_tables WHERE schemaname = 'public'`;
@@ -709,7 +923,7 @@ async function main() {
   }
 
   const roles = new Map((await prisma.role.findMany()).map((r) => [r.roleName, r.id]));
-  for (const name of ["ADMIN", "TAM", "STAKEHOLDER"]) {
+  for (const name of ["ADMIN", "TAM", "STAKEHOLDER", "SA", "SALES"]) {
     if (!roles.has(name)) throw new Error(`Role ${name} missing — run \`npm run db:seed\` first.`);
   }
 
@@ -766,6 +980,7 @@ async function main() {
         description: p.description,
         status: p.status,
         tamId: users[p.tam],
+        saId: p.sa ? users[p.sa] : null,
         customerId: customers.get(p.customer)!,
         baselineLockedAt: p.baselineLocked !== undefined ? day(p.baselineLocked) : null,
         baselineLockedById: p.baselineLocked !== undefined ? users[p.tam] : null,
@@ -877,6 +1092,82 @@ async function main() {
         },
       });
     }
+
+    // Members, with their "added" events.
+    for (const m of p.members ?? []) {
+      await prisma.projectMember.create({ data: { projectId: project.id, userId: users[m], addedById: users[p.tam] } });
+      await prisma.activityEvent.create({
+        data: {
+          projectId: project.id,
+          actorId: users[p.tam],
+          entityType: "member",
+          entityId: users[m],
+          action: "added",
+          entityLabel: USERS[m].username,
+          createdAt: at(-14, 10),
+        },
+      });
+    }
+
+    // Activity log derived from the task data: the TAM created each top-level
+    // task on its start day (assigned ones notify the assignee), the assignee
+    // moved it to "In progress" on that day and to "Done" on its due day.
+    for (const t of p.tasks) {
+      const taskId = taskIds.get(t.key)!;
+      const start = t.start ?? -30;
+      const assignee = t.assignee ? { id: users[t.assignee], username: USERS[t.assignee].username } : null;
+      const created = await prisma.activityEvent.create({
+        data: {
+          projectId: project.id,
+          actorId: users[p.tam],
+          entityType: "task",
+          entityId: taskId,
+          action: "created",
+          entityLabel: t.title,
+          changes: assignee ? { assignee: { from: null, to: assignee } } : {},
+          createdAt: at(Math.min(start, -1), 9),
+        },
+      });
+      if (assignee && t.assignee !== p.tam) {
+        await prisma.notification.create({
+          data: {
+            userId: assignee.id,
+            activityEventId: created.id,
+            reason: "assigned",
+            readAt: start < -7 ? at(start, 12) : null,
+            createdAt: at(Math.min(start, -1), 9),
+          },
+        });
+      }
+      if (t.status !== "TODO") {
+        await prisma.activityEvent.create({
+          data: {
+            projectId: project.id,
+            actorId: assignee?.id ?? users[p.tam],
+            entityType: "task",
+            entityId: taskId,
+            action: "updated",
+            entityLabel: t.title,
+            changes: { status: { from: "TODO", to: "IN_PROGRESS" } },
+            createdAt: at(Math.min(start, 0), 10),
+          },
+        });
+      }
+      if (t.status === "DONE") {
+        await prisma.activityEvent.create({
+          data: {
+            projectId: project.id,
+            actorId: assignee?.id ?? users[p.tam],
+            entityType: "task",
+            entityId: taskId,
+            action: "updated",
+            entityLabel: t.title,
+            changes: { status: { from: "IN_PROGRESS", to: "DONE" } },
+            createdAt: at(Math.min(t.due ?? start, 0), 16),
+          },
+        });
+      }
+    }
   }
 
   // Operations notes (issues outside any project).
@@ -975,6 +1266,117 @@ async function main() {
     },
   });
 
+  // Pipeline deals — the SA owns them; Sales adds notes.
+  for (const d of DEALS) {
+    const lastNote = d.notes.reduce((m, n) => Math.max(m, n.day), -365);
+    const closed = d.outcome;
+    const deal = await prisma.opportunity.create({
+      data: {
+        title: d.title,
+        customerName: d.customerName,
+        dealValue: BigInt(d.value),
+        stage: d.stage,
+        stageOrder: d.stageOrder,
+        picId: d.pic ? users[d.pic] : null,
+        requestDate: day(d.requestDate),
+        deadline: d.deadline !== undefined ? day(d.deadline) : null,
+        winProbability: d.winProbability,
+        leadSource: d.leadSource,
+        productSolution: d.productSolution,
+        description: d.description,
+        subStatus: d.subStatus ?? null,
+        waitingInputSince: d.waitingInputSince !== undefined ? day(d.waitingInputSince) : null,
+        statusTag: d.statusTag ?? null,
+        outcome: closed?.result ?? null,
+        outcomeReasonCategory: closed?.reason ?? null,
+        outcomeReason: closed?.reasonText ?? null,
+        closedAt: closed ? day(closed.closedAt) : null,
+        wonAt: closed?.result === "WON" ? day(closed.closedAt) : null,
+        projectId: closed?.project ? projects.get(closed.project)! : null,
+        lastActivityAt: day(lastNote),
+        createdAt: day(d.requestDate),
+        activities: {
+          create: d.notes.map((n) => ({
+            userId: users[n.by],
+            note: n.note,
+            mentionedUserIds: n.mention ? [users[n.mention]] : [],
+            createdAt: day(n.day),
+          })),
+        },
+        links: { create: (d.links ?? []).map(([label, url]) => ({ label, url })) },
+      },
+    });
+    const dealActor = d.pic ? users[d.pic] : users.andi;
+    const pic = d.pic ? { id: users[d.pic], username: USERS[d.pic].username } : null;
+    await prisma.activityEvent.create({
+      data: {
+        opportunityId: deal.id,
+        actorId: dealActor,
+        entityType: "opportunity",
+        action: "created",
+        entityLabel: d.title,
+        changes: { stage: "ASSESSMENT", dealValue: d.value, ...(pic ? { pic } : {}) },
+        createdAt: at(Math.min(d.requestDate, -1), 9),
+      },
+    });
+    if (d.stage !== "ASSESSMENT") {
+      await prisma.activityEvent.create({
+        data: {
+          opportunityId: deal.id,
+          actorId: dealActor,
+          entityType: "opportunity",
+          action: "moved",
+          entityLabel: d.title,
+          changes: { stage: { from: "ASSESSMENT", to: d.stage } },
+          createdAt: at(Math.min(d.requestDate + 7, lastNote), 11),
+        },
+      });
+    }
+    for (const n of d.notes) {
+      const noteEvent = await prisma.activityEvent.create({
+        data: {
+          opportunityId: deal.id,
+          actorId: users[n.by],
+          entityType: "opportunity_note",
+          action: "created",
+          entityLabel: d.title,
+          createdAt: at(n.day, 14),
+        },
+      });
+      if (n.mention) {
+        await prisma.notification.create({
+          data: { userId: users[n.mention], activityEventId: noteEvent.id, reason: "mentioned", createdAt: at(n.day, 14) },
+        });
+      }
+    }
+    if (closed) {
+      await prisma.activityEvent.create({
+        data: {
+          opportunityId: deal.id,
+          actorId: dealActor,
+          entityType: "opportunity",
+          action: "closed",
+          entityLabel: d.title,
+          changes: { outcome: closed.result, ...(closed.reason ? { reasonCategory: closed.reason } : {}) },
+          createdAt: at(closed.closedAt, 15),
+        },
+      });
+      if (closed.project) {
+        await prisma.activityEvent.create({
+          data: {
+            opportunityId: deal.id,
+            actorId: dealActor,
+            entityType: "opportunity",
+            action: "handed_off",
+            entityLabel: d.title,
+            changes: { project: { id: projects.get(closed.project)!, name: closed.project } },
+            createdAt: at(closed.closedAt, 16),
+          },
+        });
+      }
+    }
+  }
+
   // "Reviewed today" marks on the Daily Review.
   const [yesterday] = recentWeekdays(2);
   await prisma.projectReview.createMany({
@@ -985,9 +1387,10 @@ async function main() {
   });
 
   console.log(
-    `Demo data loaded: ${Object.keys(USERS).length + 1} users, ${CUSTOMERS.length} customers, ${PROJECTS.length} projects, ${taskCount} tasks.`,
+    `Demo data loaded: ${Object.keys(USERS).length + 1} users, ${CUSTOMERS.length} customers, ${PROJECTS.length} projects, ${taskCount} tasks, ${DEALS.length} pipeline deals.`,
   );
   console.log(`Log in as admin@demo.solvro.local (or any *@demo.solvro.local demo user) with password "${DEMO_PASSWORD}".`);
+  console.log("Pipeline: sari.wijaya@demo.solvro.local is the SA (PIC of every assigned deal), andi.kurniawan@demo.solvro.local is Sales.");
 }
 
 main()
