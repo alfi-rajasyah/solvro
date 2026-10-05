@@ -44,9 +44,9 @@ export default defineConfig({
         // App shell precache — index.html + built assets (JS/CSS/fonts/icons).
         globPatterns: ["**/*.{js,css,html,png,svg,ico,webmanifest}"],
         // The main bundle passed Workbox's 2 MiB default once the iTop,
-        // collaboration and Pipeline code shipped together; below the limit
-        // the build FAILS (not warns) and the shell is not precached. Raise
-        // the ceiling until the bundle is code-split (docs/ISSUES.md).
+        // collaboration and Pipeline code shipped together; a precached file
+        // over the limit fails the build (not a warning). Raise the ceiling
+        // until the bundle is code-split (docs/ISSUES.md).
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: "/index.html",
         // Navigations under /api/ must reach the network, never the cached

@@ -382,6 +382,7 @@ const PROJECTS: ProjectSpec[] = [
   },
   {
     name: "Bank Arta — Azure Landing Zone",
+    sa: "sari",
     description:
       "Build an OJK-compliant Azure landing zone (hub-and-spoke network, identity controls, policy baseline) and move the first internal workload onto it.",
     customer: "Bank Arta Sejahtera",
@@ -1104,10 +1105,17 @@ async function main() {
           entityId: users[m],
           action: "added",
           entityLabel: USERS[m].username,
-          createdAt: at(-14, 10),
+          createdAt: at(-36, 10),
         },
       });
     }
+
+    // Who can see this project (mirrors projectVisibilityFilter): its TAM, its
+    // SA, its members, the customer's TAM, and view-all roles. Only they get
+    // notified — the real path filters recipients the same way.
+    const customerTam = CUSTOMERS.find((c) => c.name === p.customer)!.tam;
+    const canSee = (u: UserKey) =>
+      u === p.tam || u === p.sa || (p.members ?? []).includes(u) || u === customerTam || USERS[u].role === "STAKEHOLDER" || USERS[u].role === "ADMIN";
 
     // Activity log derived from the task data: the TAM created each top-level
     // task on its start day (assigned ones notify the assignee), the assignee
@@ -1128,7 +1136,7 @@ async function main() {
           createdAt: at(Math.min(start, -1), 9),
         },
       });
-      if (assignee && t.assignee !== p.tam) {
+      if (assignee && t.assignee && t.assignee !== p.tam && canSee(t.assignee)) {
         await prisma.notification.create({
           data: {
             userId: assignee.id,
@@ -1149,7 +1157,7 @@ async function main() {
             action: "updated",
             entityLabel: t.title,
             changes: { status: { from: "TODO", to: "IN_PROGRESS" } },
-            createdAt: at(Math.min(start, 0), 10),
+            createdAt: at(Math.min(start, -1), 10),
           },
         });
       }
@@ -1163,7 +1171,7 @@ async function main() {
             action: "updated",
             entityLabel: t.title,
             changes: { status: { from: "IN_PROGRESS", to: "DONE" } },
-            createdAt: at(Math.min(t.due ?? start, 0), 16),
+            createdAt: at(Math.min(t.due ?? start, -1), 16),
           },
         });
       }
@@ -1284,7 +1292,7 @@ async function main() {
         leadSource: d.leadSource,
         productSolution: d.productSolution,
         description: d.description,
-        subStatus: d.subStatus ?? null,
+        subStatus: d.subStatus ?? (closed || d.stage === "WAITING_RESPONSE" ? null : "PROGRESS"),
         waitingInputSince: d.waitingInputSince !== undefined ? day(d.waitingInputSince) : null,
         statusTag: d.statusTag ?? null,
         outcome: closed?.result ?? null,
@@ -1300,13 +1308,36 @@ async function main() {
             userId: users[n.by],
             note: n.note,
             mentionedUserIds: n.mention ? [users[n.mention]] : [],
-            createdAt: day(n.day),
+            createdAt: at(n.day, 14),
           })),
         },
         links: { create: (d.links ?? []).map(([label, url]) => ({ label, url })) },
       },
     });
-    const dealActor = d.pic ? users[d.pic] : users.andi;
+    // Sales holds pipeline:view only, so an unassigned deal is created by the
+    // admin; the handoff needs project:write, which the SA lacks — admin too.
+    const dealActor = d.pic ? users[d.pic] : users.admin;
+    const systemNote = (offset: number, hour: number, note: string, by = dealActor) =>
+      prisma.opportunityActivity.create({ data: { opportunityId: deal.id, userId: by, note, createdAt: at(offset, hour) } });
+    const STAGE_LABELS: Record<PipelineStage, string> = {
+      ASSESSMENT: "Assessment",
+      RFP: "RFP",
+      POC: "PoC",
+      TECHNICAL_CLARIFICATION: "Technical Clarification",
+      DELIVER_PROPOSAL: "Delivered Proposal",
+      WAITING_RESPONSE: "Waiting Response",
+    };
+    const OUTCOME_LABELS: Record<PipelineOutcome, string> = { WON: "Won", LOST: "Lost", CANCELLED: "Cancelled" };
+    const REASON_LABELS: Record<PipelineOutcomeReason, string> = {
+      PRICE: "Price",
+      COMPETITOR: "Competitor",
+      TECHNICAL: "Technical",
+      BUDGET_WITHDRAWN: "Budget withdrawn",
+      PROJECT_CANCELLED: "Project cancelled",
+      LOST_CONTACT: "Lost contact",
+      OTHER: "Other",
+    };
+    await systemNote(Math.min(d.requestDate, -1), 9, "Created");
     const pic = d.pic ? { id: users[d.pic], username: USERS[d.pic].username } : null;
     await prisma.activityEvent.create({
       data: {
@@ -1331,7 +1362,11 @@ async function main() {
           createdAt: at(Math.min(d.requestDate + 7, lastNote), 11),
         },
       });
+      await systemNote(Math.min(d.requestDate + 7, lastNote), 11, `Moved from Assessment to ${STAGE_LABELS[d.stage]}`);
     }
+    if (d.subStatus === "WAITING_SALES_INPUT") await systemNote(d.waitingInputSince ?? lastNote, 15, "Waiting for Sales input");
+    if (d.statusTag === "HOLD") await systemNote(lastNote, 15, "Put on hold");
+    if (d.statusTag === "DELAYED") await systemNote(lastNote, 15, "Marked as delayed");
     for (const n of d.notes) {
       const noteEvent = await prisma.activityEvent.create({
         data: {
@@ -1361,18 +1396,44 @@ async function main() {
           createdAt: at(closed.closedAt, 15),
         },
       });
+      await systemNote(
+        closed.closedAt,
+        15,
+        `Closed as ${OUTCOME_LABELS[closed.result]}` +
+          (closed.reason ? ` (${REASON_LABELS[closed.reason]})` : "") +
+          (closed.reasonText ? `: ${closed.reasonText}` : ""),
+      );
       if (closed.project) {
-        await prisma.activityEvent.create({
+        const projectId = projects.get(closed.project)!;
+        const handoff = await prisma.activityEvent.create({
           data: {
             opportunityId: deal.id,
-            actorId: dealActor,
+            actorId: users.admin,
             entityType: "opportunity",
             action: "handed_off",
             entityLabel: d.title,
-            changes: { project: { id: projects.get(closed.project)!, name: closed.project } },
+            changes: { project: { id: projectId, name: closed.project } },
             createdAt: at(closed.closedAt, 16),
           },
         });
+        await systemNote(closed.closedAt, 16, `Handed off to project "${closed.project}"`, users.admin);
+        // The project side of the handoff, and the PIC hears about it.
+        await prisma.activityEvent.create({
+          data: {
+            projectId,
+            actorId: users.admin,
+            entityType: "project",
+            action: "created",
+            entityLabel: closed.project,
+            changes: { fromOpportunity: { id: deal.id, title: d.title }, ...(pic ? { sa: pic } : {}) },
+            createdAt: at(closed.closedAt, 16),
+          },
+        });
+        if (pic) {
+          await prisma.notification.create({
+            data: { userId: pic.id, activityEventId: handoff.id, reason: "handed_off", readAt: at(closed.closedAt + 1, 8), createdAt: at(closed.closedAt, 16) },
+          });
+        }
       }
     }
   }
