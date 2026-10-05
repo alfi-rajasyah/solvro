@@ -41,6 +41,7 @@ import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { AssignPicModal } from "@/components/AssignPicModal";
 import { CloseDealDialog } from "@/components/CloseDealDialog";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { HandoffProjectModal } from "@/components/DealCard";
 import { MoveReasonModal } from "@/components/MoveReasonModal";
 import { OpportunityFormModal } from "@/components/OpportunityFormModal";
@@ -402,6 +403,12 @@ export function OpportunityDetail() {
 
           <div className="flex flex-wrap shrink-0 items-center gap-3">
             <span className="text-lg tabular-nums text-primary">{formatIDR(deal.dealValue)}</span>
+            {/* Copies the address bar's URL at click time, so a deal has a
+                shareable address. */}
+            <CopyLinkButton
+              label="Copy link"
+              className="h-8 w-8 rounded-sm border border-outline-variant hover:border-primary hover:text-primary"
+            />
             {/* Persistent handoff affordance (PRD §2.10) — deliberately NOT
                 gated on the transient `justWonOffer` banner below: it must
                 stay available for as long as `outcome === "WON" &&

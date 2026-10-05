@@ -67,6 +67,7 @@ import {
   type KanbanCommitMeta,
 } from "@/components/reui/kanban";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { useDragActivityGuard } from "@/lib/dragActivity";
 import { formatIDRCompact, isSkipJump, STAGE_LABELS, type PipelineStage } from "@/lib/pipelineFormat";
 import { useMoveOpportunity, type Opportunity } from "@/lib/queries";
 import { PIPELINE_STAGES, projectToColumns } from "./adapter";
@@ -120,6 +121,9 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
     // — see kanban-v2/SolvroKanban.tsx's handleValueChange doc for the
     // "permanent freeze" bug this guards against.
     const isDraggingRef = useRef(false);
+    // Pauses the Pipeline queries' 30 s refresh for the gesture's lifetime and
+    // releases it on unmount mid-drag (docs/archive/plans/collaboration-and-sharing.md).
+    const dragActivity = useDragActivityGuard();
 
     // The Technical Clarification -> RFP skip-reason gate (D4). Mirrors the
     // old WON/DROP `pendingMove`/`isConfirming` pair's freeze-and-restore
@@ -166,16 +170,19 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
 
     function handleDragStart() {
       isDraggingRef.current = true;
+      dragActivity.begin();
       setLiveColumns(derivedColumns);
     }
 
     function handleDragEnd() {
       isDraggingRef.current = false;
+      dragActivity.end();
       setLiveColumns(null);
     }
 
     function handleDragCancel() {
       isDraggingRef.current = false;
+      dragActivity.end();
       setLiveColumns(null);
     }
 

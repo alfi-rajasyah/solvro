@@ -75,7 +75,9 @@ export function DealCard({ projectId }: DealCardProps) {
 }
 
 function DealCardInner({ projectId }: DealCardProps) {
-  const { data: deals } = useOpportunities();
+  // No live refresh here: this card only looks up one deal by projectId and
+  // sits on every open project tab (see useOpportunities).
+  const { data: deals } = useOpportunities({ live: false });
   const deal = (deals ?? []).find((d) => d.projectId === projectId);
   if (!deal) return null;
 
