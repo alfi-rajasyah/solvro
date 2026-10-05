@@ -19,6 +19,8 @@ import { Alert, AlertDescription } from "@/components/reui/alert";
 import { scoreClass, scoreLevel } from "@/components/RiskFormModal";
 import { Chip } from "@/components/StatusChip";
 import { dateToDay, dayFromIso } from "@/lib/dateField";
+import { fmtDay } from "@/lib/formatDate";
+import { TASK_STATUS_LABEL } from "@/lib/labels";
 import { type Task, useProjectNotes, useProjectRisks, useProjectTasks } from "@/lib/queries";
 
 export function ProjectOverview() {
@@ -104,7 +106,7 @@ export function ProjectOverview() {
           value={project.baselineLockedAt ? "Locked" : "Not set"}
           hint={
             project.baselineLockedAt
-              ? `by ${project.baselineLockedBy?.username ?? "—"} · ${fmtDate(project.baselineLockedAt)}`
+              ? `by ${project.baselineLockedBy?.username ?? "—"} · ${fmtDay(dateToDay(new Date(project.baselineLockedAt)))}`
               : "Lock to capture planned dates"
           }
           accent={project.baselineLockedAt ? "primary" : undefined}
@@ -178,7 +180,7 @@ export function ProjectOverview() {
 const PANEL_CLASS =
   "rounded-sm border border-outline-variant bg-surface-container-lowest p-4";
 const PANEL_HEADING =
-  "text-label-caps uppercase tracking-wider text-on-surface-variant";
+  "text-label-caps uppercase text-on-surface-variant";
 
 function NeedsAttention({ tasks, projectId }: { tasks: Task[]; projectId: number }) {
   const today = dateToDay(startOfToday())!;
@@ -255,9 +257,9 @@ function StatusBreakdown({ tasks }: { tasks: Task[] }) {
             )}
           </div>
           <dl className="mt-3 space-y-1.5 text-xs">
-            <BreakdownRow swatch="bg-primary" label="Done" count={done} />
-            <BreakdownRow swatch="bg-primary/45" label="In progress" count={inProgress} />
-            <BreakdownRow swatch="bg-surface-container-high" label="To do" count={todo} />
+            <BreakdownRow swatch="bg-primary" label={TASK_STATUS_LABEL.DONE} count={done} />
+            <BreakdownRow swatch="bg-primary/45" label={TASK_STATUS_LABEL.IN_PROGRESS} count={inProgress} />
+            <BreakdownRow swatch="bg-surface-container-high" label={TASK_STATUS_LABEL.TODO} count={todo} />
           </dl>
         </>
       )}
@@ -320,13 +322,13 @@ function TopRisks({ projectId }: { projectId: number }) {
                 </span>
                 <span
                   className={[
-                    "flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 font-mono text-xs font-bold tabular-nums",
+                    "flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-xs font-bold tabular-nums",
                     scoreClass(score),
                   ].join(" ")}
                   title={`${risk.probability} × ${risk.impact} = ${score}`}
                 >
                   {score}
-                  <span className="font-display text-[10px] font-bold uppercase tracking-wider">
+                  <span className="font-display text-label-caps uppercase">
                     {scoreLevel(score)}
                   </span>
                 </span>
@@ -373,8 +375,8 @@ function ProjectNotesPanel({ projectId }: { projectId: number }) {
           {notes.map((note) => (
             <li key={note.id} className="text-sm">
               <div className="mb-0.5 flex flex-wrap items-baseline gap-2">
-                <span className="font-mono text-xs text-on-surface-variant">
-                  {fmtDateShort(dayFromIso(note.noteDate)!)}
+                <span className="text-xs text-on-surface-variant">
+                  {fmtDay(note.noteDate)}
                 </span>
                 <span className="text-xs text-on-surface-variant">
                   {note.author.username}
@@ -442,7 +444,7 @@ function Kpi({
   return (
     <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
-        <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
+        <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${accent === "primary" ? "text-primary" : accent === "emerald" ? "text-emerald-600" : accent === "error" ? "text-error" : "text-on-surface-variant"}`}>{icon}</span>
       </div>
       <div className={`mt-2 font-body text-3xl font-bold tabular-nums ${accentClass}`}>{value}</div>
@@ -636,7 +638,7 @@ function buildSCurve(tasks: Task[]): SCurve {
 
   const points: SCurvePoint[] = sortedDates.map((date) => ({
     date,
-    label: fmtDateShort(date),
+    label: fmtDay(date),
     baseline: hasBaseline ? cumulativeCount(baselineDates, date) : null,
     current: cumulativeCount(currentDates, date),
   }));
@@ -671,19 +673,4 @@ function startOfToday() {
   const d = new Date();
   d.setHours(0, 0, 0, 0);
   return d;
-}
-
-function fmtDate(iso: string): string {
-  return new Date(iso).toLocaleDateString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-}
-
-function fmtDateShort(isoDay: string): string {
-  return new Date(isoDay + "T00:00:00").toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  });
 }

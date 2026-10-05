@@ -247,7 +247,7 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
               week had no such row. */}
           {carryOver && carryOver.achievements.length > 0 && (
             <div className="rounded-sm border border-outline-variant bg-surface-container p-3">
-              <p className="mb-2 font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+              <p className="mb-2 font-display text-label-caps uppercase text-on-surface-variant">
                 From last Friday · Week {carryOverWeekNumber} · {carryOver.achievements.length}{" "}
                 {carryOver.achievements.length === 1 ? "item" : "items"}
               </p>
@@ -291,7 +291,7 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
           )}
 
           <div>
-            <p className="mb-1 block font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
+            <p className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
               Health
             </p>
             <HealthButtonGroup value={state.health} onChange={(health) => patch({ health })} />
@@ -310,14 +310,14 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
           <div className="space-y-2.5">
             <div>
               <div className="mb-1 flex items-baseline justify-between gap-2">
-                <p className="block font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
+                <p className="block font-display text-label-caps uppercase text-on-surface-variant">
                   Highlights
                 </p>
                 <button type="button" onClick={requestDraft} className={linkClass}>
                   Draft from Mon–Wed notes
                 </button>
               </div>
-              <p className="text-[11px] text-on-surface-variant">
+              <p className="text-xs text-on-surface-variant">
                 One row in Monday&rsquo;s table per highlight. Title: one line, 200 characters max. Detail shows in
                 the form and in Copy as table, not in the table on screen.
               </p>
@@ -336,7 +336,7 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
                   className="space-y-2.5 rounded-sm border border-outline-variant bg-surface-container-low p-3"
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="font-display text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+                    <span className="font-display text-label-caps uppercase text-on-surface-variant">
                       Highlight {n}
                     </span>
                     <button
@@ -419,7 +419,7 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
                 Add highlight
               </button>
               {state.highlights.length >= MAX_HIGHLIGHTS && (
-                <p className="text-[11px] text-on-surface-variant">20 highlights max.</p>
+                <p className="text-xs text-on-surface-variant">20 highlights max.</p>
               )}
             </div>
           </div>

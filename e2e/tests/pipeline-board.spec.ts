@@ -398,6 +398,12 @@ test.describe("pipeline board", () => {
       "mouse drag cases run on the desktop project only (dnd-kit PointerSensor) — see file header for the mobile rationale",
     );
     await loginViaUi(page);
+    // The sidebar starts expanded at 1280px and wider (SidebarContext.tsx).
+    // With it open, the six-stage board overflows at 1440px: scrolling the
+    // RFP column into view pushes the Assessment card's grip off-screen and
+    // the pointer drag never starts. Collapse the rail the way a user would
+    // (the persisted choice) so both ends of the drag are on screen.
+    await page.evaluate(() => localStorage.setItem("solvro.sidebar", "closed"));
     await page.goto("/pipeline", { waitUntil: "networkidle" });
     await page.waitForTimeout(800);
 
@@ -551,6 +557,9 @@ test.describe("pipeline board", () => {
       "mouse drag cases run on the desktop project only (dnd-kit PointerSensor) — see file header for the mobile rationale",
     );
     await loginViaUi(page);
+    // Collapse the rail so both ends of a pointer drag stay on screen (see the
+    // first drag test above).
+    await page.evaluate(() => localStorage.setItem("solvro.sidebar", "closed"));
     await page.goto("/pipeline", { waitUntil: "networkidle" });
     await page.waitForTimeout(800);
 

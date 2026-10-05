@@ -2198,3 +2198,24 @@ Tested against a real iTop 3.2.2 (ITIL, default lifecycle). Fixed in code the sa
 - **Go-live iTop setting:** personal tokens work only for profiles listed in the `authent-token` module setting `personal_tokens_allowed_profiles` (e.g. `array('Support Agent')`); by default only administrators can use them.
 - **Time Tracking extension not bundled** with iTop Community; download it from iTop Hub before the `TimeSpent` checks (duration unit, `ticket_ref` writability) can run.
 - **`pending_reason` is assumed to be free text.** True on the default install; an install that turns it into a list of values will refuse free text, and the user sees iTop's message.
+
+## Professional UI pass — deferred findings (2026-09-29, ported 2026-10-05)
+
+- **Legacy exceptions to the binding UI-pass rules** (2026-10-05): `docs/DESIGN.md`'s
+  "Binding rules adopted with the professional UI pass" apply to new and
+  touched code; these carried-over sites still break one of them and are to be
+  swept, not re-litigated: bare `animate-pulse` placeholders instead of
+  `components/skeletons/` in `CustomerDetail.tsx`, `Overview.tsx`, `Projects.tsx`,
+  `views/ProjectTimeline.tsx`, `views/ProjectRisks.tsx`, `Executive.tsx`,
+  `customer/AccountOverview.tsx`, `itop/TicketsTab.tsx`, `itop/board/TicketBoard.tsx`,
+  `itop/TicketPanel.tsx`, `TaskPanel.tsx`, `services/ServiceMappingList.tsx`;
+  `gantt-v2/SolvroGantt.tsx`'s eight `text-[11.5px]` toolbar labels; the Gantt
+  export "counts" wording in `docs/DESIGN.md` §2 (`font-mono` is for IDs and
+  code only); about 169 `text-[12px]` sites that could use the `text-meta` role
+  (not a violation, 12px is the floor).
+
+- **e2e flakes that pass on retry** (2026-09-29): `e2e/tests/list-dnd.spec.ts:89` (cross-status reorder, Gamma onto Alpha), `e2e/tests/kanban-dnd.spec.ts:1114` (mobile touch append), `e2e/tests/kanban-dnd.spec.ts:1071` (R3 cross-view parity), `e2e/tests/gantt-parity.spec.ts:247` (drag-move). The sidebar now starts expanded at 1440px, which makes the main area 196px narrower; suspect for the desktop drag flakes, not confirmed. Same flake class as the earlier drag/reorder-timing entries above.
+- **`frontend/src/components/Drawer.tsx` has no focus management** (2026-09-29): `Modal` gained focus trap/restore via `frontend/src/hooks/useDialogFocus.ts`; `Drawer` is intentionally non-modal, so whether it should trap, restore, or stay as is needs a decision.
+- **`frontend/src/lib/contrast.ts` `pickContrast` has no callers left** (2026-09-29): label/epic chips now use `on-surface` text over a tint, so nothing needs it. Kept on purpose pending a decision to delete it.
+- **CORS config has no `exposedHeaders`** (2026-09-29): `backend/src/app.ts` (`cors({...})`) does not expose `X-Total-Count` (set in `backend/src/routes/tasks.ts:203`), so cross-origin callers cannot read it. Fine through the same-origin `/api` proxy the app uses; matters only if the API is ever called cross-origin.
+- **`GET /tasks` still caps at 200 rows** (2026-09-29): the `/tasks` page now shows "Showing N of total" (`frontend/src/pages/Tasks.tsx:424`), so truncation is visible, but pagination remains deferred (see the earlier `GET /tasks` window entry).

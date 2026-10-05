@@ -52,8 +52,8 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       {
         title: "Find your way around",
         points: [
-          "The left sidebar lists every page you have access to. Collapse it with the menu button at its top; on a phone, open it with the menu button in the top bar.",
-          "Press ⌘K (Ctrl+K on Windows/Linux) or use search in the top bar (the search icon on a phone) to jump to a page, project, task, or customer. Type at least 2 characters.",
+          "The left sidebar lists every page you have access to, in groups: Workspace (Overview, Projects, Customers), Cadence (Daily Review, Weekly Sync), Sales (Pipeline), Insights (Utilization, Executive), and System (Settings, Admin). Groups with no page for you are hidden. Collapse it with the menu button at its top; on a phone, open it with the menu button in the top bar.",
+          "Press ⌘K (Ctrl+K on Windows/Linux) or use search in the top bar (the search icon on a phone) to jump to a page, project, task, or customer, or to run an action such as \"New project\", \"New customer\", or \"Add task\" (on a project page). Type at least 2 characters to search; actions appear without typing.",
           "On a project page, the top bar reads \"Projects / <project name>\" with the project's status. Click \"Projects\" to go back to the list.",
           "Your avatar menu (top right) holds Settings and \"Sign out\".",
         ],
@@ -89,9 +89,9 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       {
         title: "What it shows",
         points: [
-          "Counters for Active Projects, Open Tasks, Completed, and Total tasks.",
+          "Three tiles: Overdue and Due this week open the matching Tasks view; Open risks opens the Daily Review.",
+          "\"Projects needing attention\": up to 6 projects, overdue ones first, with overdue-task and open-risk counts. \"View all →\" opens the Projects page.",
           "\"Portfolio timeline\": a year calendar of your projects. Use the arrows to change the year.",
-          "\"Projects needing attention\": up to 6 projects, overdue ones first. \"View all →\" opens the Projects page.",
           "\"Recent notes\": project and operations notes from the last 7 days. Add notes on the Daily Review page.",
           "If you have Pipeline access, a \"Pipeline\" panel shows Pipeline Value, Active Deals, Won This Month, and On Hold, plus a bar of deals per stage. \"View pipeline →\" opens the board.",
           "Projects marked \"Administrative project\" are left out of the counters, the timeline, and the attention list.",
@@ -158,7 +158,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       {
         title: "Kanban",
         points: [
-          "Columns To Do, In Progress, and Done. Drag cards between or within columns.",
+          "Columns To do, In progress, and Done. Drag cards between or within columns.",
           "Use \"Filter\" to show one assignee or priority. Use \"Add task\" or a column's \"Add task here\".",
           "A column count turns amber when it goes over its WIP limit.",
           "On a phone, swipe between columns and move a card with its \"Card options\" button and the \"Move to\" sheet.",
@@ -211,7 +211,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         title: "Subtasks, labels, and comments",
         points: [
           "Add subtasks at the bottom of the panel. Tick one to mark it done; drag to reorder. Subtasks go one level deep.",
-          "Click a label to toggle it. \"+ Label\" creates a new project label with a color.",
+          "Click a label to toggle it. \"Add label\" creates a new project label with a color.",
           "Write in \"Write a comment…\" and send to discuss the task. Comment counts show on Kanban cards.",
           "Link an iTop ticket from the task's \"iTop ticket\" field — see \"iTop tickets\".",
         ],
@@ -586,7 +586,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
     entries: [],
     shortcuts: [
       { keys: ["⌘K", "Ctrl+K"], action: "Open or close search" },
-      { keys: ["↑", "↓", "Enter"], action: "Move through and open search results" },
+      { keys: ["↑", "↓", "Enter"], action: "Move through and open search results or actions" },
       { keys: ["Esc"], action: "Close a dialog, the search, or the task or ticket panel" },
       { keys: ["⌘Enter", "Ctrl+Enter"], action: "Save a daily note, or run the main button of a sync dialog" },
       { keys: ["Enter"], action: "Add a subtask, a label, or a tool" },

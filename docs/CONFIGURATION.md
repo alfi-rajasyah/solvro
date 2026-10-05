@@ -106,6 +106,7 @@ The `?schema=public` query param is required by Prisma — if you drop it, migra
 | Variable | Where it's read | Default | Purpose |
 |---|---|---|---|
 | `VITE_API_PROXY_TARGET` | [frontend/vite.config.ts](frontend/vite.config.ts) `server.proxy["/api"].target` | `http://localhost:3000` | Where the **Vite dev server** forwards `/api/*` requests. Only used in dev. Set to `http://backend:3000` when Vite runs *inside* the docker dev stack. |
+| `VITE_ALLOWED_HOSTS` | [frontend/vite.config.ts](frontend/vite.config.ts) `server.allowedHosts` | unset (Vite's default: localhost and IPs only) | Comma-separated public hostnames the **Vite dev server** accepts in the `Host` header — needed when the dev server sits behind a tunnel or reverse proxy (Vite 5.4.12+ answers 403 "Blocked request. This host is not allowed" otherwise). Set it in the frontend service's environment of the dev compose file. Dev only; production serves a static build through nginx and never reads it. |
 
 That's all. The runtime bundle has no `VITE_*` vars baked in. **If you find yourself adding one, reconsider — the `/api` reverse-proxy pattern is what keeps the bundle environment-agnostic.**
 
