@@ -453,6 +453,7 @@ cited files; entries marked *code check* below carry the result).
 - **Reorder repack is N sequential UPDATEs — batch if perf ever bites** (2026-07-22, plan Task 6 close-out, orchestrator-filed): `insertAt`/`closeGap` in `backend/src/lib/taskOrdering.ts` issue one `UPDATE` per displaced sibling inside the transaction (~200 round-trips on a 200-task project). Calm-host worst case measured 0.196s (inside the 200ms NFR); under host load 6-15 the same call measured 0.20-0.47s with containers idle — host contention, not endpoint cost. If real-world use ever feels slow, batch the repack into a single SQL statement (`UPDATE ... FROM (VALUES ...)`) — one round-trip, no model change. Re-time on a quiet host: seed ~200 tasks, `curl -w "%{time_total}" -X PATCH .../tasks/<id> -d '{"position":0}'`.
 - ~~**Unswept prose-overflow surfaces remain candidates for overflow hardening** (2026-07-23, plan Task 2 review, deferred): The comment-text wrap fix (GH #57, `whitespace-pre-wrap break-words` convention) was applied to three surfaces in TaskPanel, CustomerDetail, and ProjectDetail. Three other surfaces remain unswept: (a) `frontend/src/pages/views/ProjectRisks.tsx:299` and `:446` — risk.description in a `max-w-[28rem]` cell, contained by table's `overflow-x-auto` but stretches it; (b) `frontend/src/pages/views/ProjectTimeline.tsx:157` — task.description with neither wrap-hardening nor clamp. Follow-up: apply the prose standard across all surfaces.~~ **Resolved 2026-08-02** (Issues Sweep #1): both surfaces now use `whitespace-pre-wrap wrap-break-word` (Tailwind v4's renamed `break-words`) — `ProjectRisks.tsx`'s desktop grid cell and mobile card description, and `ProjectTimeline.tsx`'s task description. Verified in the current tree. See CHANGELOG's "Service Catalogue and project Risks tables on the data grid; long text wraps" entry.
 - **E2E fixture pollution pattern: shared seeded state across suite** (2026-07-23, plan Task 2 review, deferred): `e2e/fixtures/test.ts` doc-comment incorrectly claims `seededProject` is "effectively per test file," but it is WORKER-scoped with `workers: 1`, meaning ONE seeded project is shared by the entire suite run (all specs sequentially). `e2e/tests/comments.spec.ts` (new) leaves a 300-char comment on task Alpha, inherited by `kanban-dnd.spec.ts` and `list-dnd.spec.ts`. Benign today (drag specs don't depend on Alpha being comment-free), but a known suspect for CI fragility if comment mutations cause later specs to flake. Future fix: clean comment state in specs that don't exercise comment persistence, or truncate seeded comment history between specs.
+  *Updated 2026-10-05 (with the Epics port)*: `e2e/fixtures/test.ts`'s comment (lines 4-7) still says "effectively per test file"; still inaccurate for the same reason — `playwright.config.ts` also sets `fullyParallel: false`, so the whole run is genuinely ONE seeded project shared by every spec file in sequence, not an approximation of per-file isolation. Two new specs add to the same pattern: `e2e/tests/epics.spec.ts` creates and deletes an epic on the shared `seededProject`, leaving behind a top-level "story" task (via the epic's "Add story…", later DONE-marked and orphaned by the epic delete) that persists into every later spec in the run; `e2e/tests/task-epic-select.spec.ts` seeds its own tasks/epics via the API rather than mutating the shared project directly, but its own file header notes that page-scoped `getByTestId("epic-chip")` locators must stay drawer/panel-scoped because the shared project can already carry epic-tagged tasks from earlier tests in the same worker. Still not fixed — same future-fix direction applies (truncate or scope seeded mutations per spec).
 
 ---
 
@@ -2172,6 +2173,21 @@ create-from-task shipped there (2026-09-23), carried over with the port (same
 
 The iTop integration shipped in the customer edition on 2026-09-23 and was ported here on 2026-10-04; the plan is archived at
 `docs/archive/plans/itop-integration.md`.
+
+## Epics — deferred findings (ported 2026-10-05)
+
+- **The epic `ownerId` is not validated against the project's people.**
+  `POST /projects/:id/epics` and `PATCH /epics/:id` accept any user id, not
+  only the project's TAM, Solution Architect or (once members exist) its
+  members. Ported as is by user decision. Two rough edges follow from it: the
+  create route writes the scalar `ownerId` directly
+  (`backend/src/routes/projects.ts`), so a non-existent id surfaces as a
+  Postgres foreign-key violation and a 500 (`http/errors.ts` maps only P2025
+  and P2002); the update route uses `owner: { connect }`
+  (`backend/src/routes/epics.ts`), so a bogus id answers 404 "Record not
+  found", which reads as if the epic itself were missing. Fix direction:
+  validate the owner against the project's people (400 `owner_not_in_project`)
+  and map P2003 in the error handler.
 
 ## iTop integration — real-install findings (2026-09-24, ported 2026-10-04)
 

@@ -1,6 +1,6 @@
 # Epics (Jira Epic & Story parity) — phase spec
 
-Drafted 2026-09-22. Driver: the first paying customer replaces Jira with Solvro and needs Jira's Epic & Story feature. Status: proposal, awaiting user decision on §2 and the §9 customer questions.
+Drafted 2026-09-22. Driver: the first paying customer replaces Jira with Solvro and needs Jira's Epic & Story feature. Status: shipped in the customer edition 2026-09-25 and ported into Solvro Internal 2026-10-05 (a Solution Architect reads epics but does not edit them; no epics from the won-deal handoff or the seed). §9 customer answers still open; v1 proceeds with the §3 non-goals as stated.
 
 ## 1. Goal
 
