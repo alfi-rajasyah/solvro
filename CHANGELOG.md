@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-10-05 — A warning before overwriting someone else's task edit
+
+Ported from the customer edition; the `PATCH /tasks/:id` rewrite keeps this edition's task fields (the iTop ticket reference, the epic link) and its ordering rules.
+
+- **Editing a task in the task panel or the edit form warns you when someone else changed the same field after you opened it.** A dialog, "Someone changed this task after you opened it", shows their value next to yours for each clashing field and lets you keep theirs or save yours (**`frontend/src/components/TaskConflictDialog.tsx`**, **`frontend/src/lib/taskConflict.ts`**, **`frontend/src/components/TaskPanel.tsx`**, **`frontend/src/components/TaskFormModal.tsx`**). Edits to different fields never clash: the edit form sends only the fields you changed, and editing one date in the task panel sends only that date. "Use theirs" in the edit form keeps the form open with your other changes. Saves of the same task are applied in the order you make them (**`frontend/src/lib/queries.ts`**). Board, List and Gantt edits and drags work as before. The task panel's Escape key ignores the keypress while the conflict dialog, the delete confirmation or a nested iTop sheet is open.
+- **`PATCH /tasks/:id` accepts an optional `expected` object** with the values the editor last saw for title, description, status, priority, start and due dates, assignee, section, epic, parent task, milestone and critical-path flags, and labels. If any of those fields changed in the meantime, the API returns 409 `stale_write` with the clashing fields and the current task, and writes nothing. The task row is locked during the check (`FOR NO KEY UPDATE`, so label, comment, subtask and dependency writes are not blocked), and two simultaneous saves that expect the same field value cannot both succeed. Requests without `expected` behave as before (**`backend/src/routes/tasks.ts`**, tests in **`backend/test/taskStaleWrite.test.ts`**).
+- **Tests and docs.** `e2e/tests/task-conflict.spec.ts` (new); the date-picker end-to-end tests expect no request when Apply changes nothing. The design is recorded in `docs/archive/plans/collaboration-and-sharing.md`; `docs/ISSUES.md` lists the deferred findings.
+
 ### Added — 2026-10-05 — Project members, and owner-only actions that a Solution Architect never holds
 
 Ported from the customer edition, with this edition's rule: a Solution Architect (SA) sees a project through `Project.saId` but is never its owner, and needs no member row.
