@@ -1125,8 +1125,11 @@ opportunitiesRouter.post(
     // Customer Visibility (docs/plans/customer-visibility-spec.md §5.5,
     // Decision 7): same rule routes/projects.ts applies on POST / and
     // PATCH /:id — a customerId the caller can't see 400s before the deal
-    // or any project row is touched.
-    if (!(await isCustomerVisible(req.user!, body.customerId))) {
+    // or any project row is touched. Checked at the "own" level: attaching a
+    // project to a customer is an owner-level act (a member or SA who only
+    // sees the customer through a project would otherwise become TAM of a
+    // project there and could then take the customer over).
+    if (!(await isCustomerVisible(req.user!, body.customerId, "own"))) {
       throw new HttpError(400, "customer_not_found", "Customer not found");
     }
 

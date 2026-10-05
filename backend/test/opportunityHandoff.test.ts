@@ -280,6 +280,34 @@ describe("POST /opportunities/:id/handoff — error paths", () => {
     expect(fetched.body.projectId).toBeNull();
   });
 
+  it("400s customer_not_found when the caller only sees the customer through a project membership; 201 for an unowned or their own customer", async () => {
+    const tam = await createHandoffCapableUser();
+    const owner = await createUserWithPermissions(["project:write"]);
+    const theirs = await prisma.customer.create({
+      data: { name: `Handoff Owned Co ${Date.now()}`, description: "d", tamId: owner.userId },
+    });
+    const sharedProject = await prisma.project.create({
+      data: { name: `Shared ${Date.now()}`, tamId: owner.userId, customerId: theirs.id, status: "ACTIVE" },
+    });
+    await prisma.projectMember.create({ data: { projectId: sharedProject.id, userId: tam.userId } });
+    const mine = await prisma.customer.create({
+      data: { name: `Handoff Mine Co ${Date.now()}`, description: "d", tamId: tam.userId },
+    });
+    const unownedId = await createCustomer();
+
+    const deal1 = await createWonOpportunity(app, tam.token, tam.userId);
+    const refused = await handoff(tam.token, deal1, { name: "Take Over", customerId: theirs.id });
+    expect(refused.status).toBe(400);
+    expect(refused.body.code).toBe("customer_not_found");
+    expect((await getOpportunity(tam.token, deal1)).body.projectId).toBeNull();
+
+    for (const customerId of [mine.id, unownedId]) {
+      const id = await createWonOpportunity(app, tam.token, tam.userId);
+      const ok = await handoff(tam.token, id, { name: "Fine", customerId });
+      expect(ok.status, `customer ${customerId}`).toBe(201);
+    }
+  });
+
   it("mirrors POST /projects's body validation for a malformed tamId (same 4xx both routes give)", async () => {
     const sa = await createHandoffCapableUser();
     const customerId = await createCustomer();
