@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-10-05 — The Pipeline pages follow the professional UI pass
+
+- The Pipeline pages now follow the same conventions as the rest of the app (`docs/DESIGN.md`'s binding rules): buttons, links and tabs are sentence case; no text is below 12px (`text-meta`, `text-xs`, `text-label-caps`); uppercase micro-labels no longer add extra letter-spacing; every date and time goes through the shared formatter (day-first, 24-hour: `28 Sep`, `28 Sep, 14:22`, `5 min ago`) in the body font instead of `Intl`/`toLocale*` calls, and amounts and counters are no longer set in monospace. This covers the board, list, swimlane, quarter and closed views, the KPI tiles and analytics, the opportunity detail page, the close / assign / move / import dialogs and the opportunity form, the linked-deal card on a project, and the Pipeline import history in Admin (**`frontend/src/pages/Pipeline.tsx`**, **`OpportunityDetail.tsx`**, **`frontend/src/pages/views/Pipeline*.tsx`**, **`frontend/src/components/pipeline/*`**, **`DealCard.tsx`**, the deal dialogs, **`frontend/src/lib/pipelineFormat.ts`**, **`frontend/src/pages/Admin.tsx`**).
+- Deleting an opportunity or one of its links asks for confirmation in the danger tone; the linked-deal project-status picker and WIP-limit labels use the shared status words (On hold, To do, In progress); Pipeline loading states use the shared delayed skeletons instead of bare grey blocks; the import history shows its status as "OK" or "Error". Instants such as the won, closed and last-activity times now show the time as well as the day.
+- `docs/DESIGN.md`: the "words come from `labels.ts`" rule names the Pipeline vocabulary (stage, sub-status, tag, outcome, outcome reason) as its one exception, with `frontend/src/lib/pipelineFormat.ts` as the single source.
+
 ### Changed — 2026-10-05 — Professional UI pass: one vocabulary, day-first dates, clearer hierarchy, health at a glance
 
 Ported from the customer edition; this edition's Solution Architect (SA) surfaces follow the same conventions, and the Pipeline pages receive them in the next change. A pass over every screen so Solvro reads as one consistent tool: one set of words for statuses and priorities, one day-first date format, sentence-case buttons, clearer page headers, project and customer health at a glance, and loading skeletons instead of blank boxes. The rules are now binding in `docs/DESIGN.md`.

@@ -201,7 +201,7 @@ export function OpportunityCard({
 
       {/* Product/solution, truncated */}
       {deal.productSolution && (
-        <p className="truncate text-[11px] text-on-surface-variant">{deal.productSolution}</p>
+        <p className="truncate text-meta text-on-surface-variant">{deal.productSolution}</p>
       )}
 
       {/* Badges row — owner / sub-status / tag / idle. Each chip renders

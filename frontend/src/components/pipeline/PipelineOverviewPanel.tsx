@@ -25,6 +25,7 @@
 import { Link } from "react-router-dom";
 import { computePipelineKpis, type FunnelBucket } from "@/components/pipeline/kpi";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import { CardGridSkeleton } from "@/components/skeletons";
 import { formatIDRCompact, STAGE_ALPHA, STAGE_LABELS, type PipelineStage } from "@/lib/pipelineFormat";
 import { useOpportunities, type Opportunity } from "@/lib/queries";
 
@@ -35,7 +36,7 @@ export function PipelineOverviewPanel() {
     <section className="space-y-3">
       <header className="flex items-center justify-between">
         <h3 className="font-display text-sm font-bold text-on-surface">Pipeline</h3>
-        <Link to="/pipeline" className="text-[11px] font-semibold text-primary hover:underline">
+        <Link to="/pipeline" className="text-meta font-semibold text-primary hover:underline">
           View pipeline →
         </Link>
       </header>
@@ -124,12 +125,12 @@ function Kpi({ label, value, hint, icon, tone }: KpiProps) {
   return (
     <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
-        <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
+        <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
-        <span className="font-mono text-3xl font-bold tabular-nums text-on-surface">{value}</span>
-        {hint && <span className="text-[11px] text-on-surface-variant">{hint}</span>}
+        <span className="text-3xl font-bold tabular-nums text-on-surface">{value}</span>
+        {hint && <span className="text-meta text-on-surface-variant">{hint}</span>}
       </div>
     </div>
   );
@@ -194,9 +195,9 @@ function StageDistribution({ funnel }: { funnel: FunnelBucket[] }) {
       </div>
       <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
         {visible.map((f) => (
-          <span key={f.stage} className="flex items-center gap-1.5 text-[11px] text-on-surface-variant">
+          <span key={f.stage} className="flex items-center gap-1.5 text-meta text-on-surface-variant">
             <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${STAGE_FILL[f.stage]}`} />
-            {STAGE_LABELS[f.stage]} <span className="font-mono text-on-surface">{f.count}</span>
+            {STAGE_LABELS[f.stage]} <span className="tabular-nums text-on-surface">{f.count}</span>
           </span>
         ))}
       </div>
@@ -205,11 +206,5 @@ function StageDistribution({ funnel }: { funnel: FunnelBucket[] }) {
 }
 
 function PipelinePanelSkeleton() {
-  return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-      {Array.from({ length: 4 }).map((_, i) => (
-        <div key={i} className="h-24 animate-pulse rounded-sm bg-surface-container-low" />
-      ))}
-    </div>
-  );
+  return <CardGridSkeleton count={4} gridClassName="gap-4 sm:grid-cols-2 lg:grid-cols-4" />;
 }

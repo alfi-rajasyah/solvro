@@ -1819,13 +1819,9 @@ function PipelineTab() {
       // string-column problem; TanStack's number auto-detect is reliable).
       accessorFn: (row) => new Date(row.createdAt).getTime(),
       header: ({ column }) => <DataGridColumnHeader column={column} title="When" />,
-      // House datetime rendering for this admin surface — same
-      // `new Date(...).toLocaleString()` this file already uses for the
-      // Sign-in tab's "Last updated" stamp (SignInTab, above).
+      // House datetime rendering (`lib/formatDate.ts`), in the body font.
       cell: ({ row }) => (
-        <span className="font-mono text-xs text-on-surface-variant">
-          {new Date(row.original.createdAt).toLocaleString()}
-        </span>
+        <span className="text-xs text-on-surface-variant">{fmtDateTime(row.original.createdAt)}</span>
       ),
       meta: { skeleton: <Skeleton className="h-3.5 w-32" /> },
     },
@@ -1856,7 +1852,7 @@ function PipelineTab() {
       accessorKey: "totalRows",
       header: ({ column }) => <DataGridColumnHeader column={column} title="Total" />,
       cell: ({ row }) => (
-        <span className="font-mono text-[13px] tabular-nums text-on-surface">
+        <span className="text-sm tabular-nums text-on-surface">
           {row.original.totalRows}
         </span>
       ),
@@ -1873,7 +1869,7 @@ function PipelineTab() {
       // text-primary — same meaning-color as PipelineImportDialog's own
       // "done" step summary (validCount there is also text-primary).
       cell: ({ row }) => (
-        <span className="font-mono text-[13px] tabular-nums text-primary">
+        <span className="text-sm tabular-nums text-primary">
           {row.original.validCount}
         </span>
       ),
@@ -1890,7 +1886,7 @@ function PipelineTab() {
       // text-warning — same meaning-color as PipelineImportDialog's own
       // "done" step summary (skipCount there is also text-warning).
       cell: ({ row }) => (
-        <span className="font-mono text-[13px] tabular-nums text-warning">
+        <span className="text-sm tabular-nums text-warning">
           {row.original.skipCount}
         </span>
       ),
@@ -1907,7 +1903,7 @@ function PipelineTab() {
       // text-error — same meaning-color as PipelineImportDialog's own "done"
       // step summary (invalidCount there is also text-error).
       cell: ({ row }) => (
-        <span className="font-mono text-[13px] tabular-nums text-error">
+        <span className="text-sm tabular-nums text-error">
           {row.original.invalidCount}
         </span>
       ),
@@ -1927,7 +1923,7 @@ function PipelineTab() {
       // ERROR → rose.
       cell: ({ row }) => (
         <Chip tone={row.original.status === "OK" ? "emerald" : "rose"}>
-          {row.original.status}
+          {row.original.status === "OK" ? "OK" : "Error"}
         </Chip>
       ),
       meta: { skeleton: <Skeleton className="h-4 w-14 rounded-full" /> },

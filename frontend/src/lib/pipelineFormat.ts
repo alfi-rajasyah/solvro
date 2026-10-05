@@ -4,7 +4,7 @@
 // Velora's `lib/utils.ts` (../VeloraApp, read-only reference/data source
 // per CLAUDE.md) verbatim so the ported UI reads identically to the
 // reference app.
-import { dayToDate } from "./dateField";
+import { fmtDayFull } from "./formatDate";
 
 /**
  * Pipeline stage enum, matching `backend/prisma/schema.prisma`'s
@@ -260,26 +260,15 @@ export function formatWinProbability(p: number): string {
 }
 
 /**
- * Short Indonesian-locale date rendering for Pipeline surfaces (board
- * cards, List/Swimlane/Quarter views) — e.g. "30 Jun 2026". `day` is a
- * plain "yyyy-MM-dd" calendar day (`Opportunity.deadline`/`requestDate`'s
- * wire shape, see `queries.ts`'s `Opportunity` doc comment), parsed via the
- * house `dayToDate` helper (`lib/dateField.ts`) rather than `new Date(day)`
- * directly on the bare string — `new Date("yyyy-MM-dd")` parses as UTC
- * midnight, which walks back a day in any timezone west of UTC once
- * rendered with local getters; `dayToDate` parses at LOCAL midnight
- * instead, so the same calendar day one clicked in a date picker is the
- * one rendered here, in every host timezone. Callers guard the null case
- * themselves (same convention as every deadline/requestDate render site
- * already uses) — an unparsable/empty input renders as an empty string
- * rather than throwing.
+ * Short date rendering for Pipeline surfaces (board cards, List/Swimlane/
+ * Quarter views, the detail page) — e.g. "30 Jun 2026". `day` is a plain
+ * "yyyy-MM-dd" calendar day (`Opportunity.deadline`/`requestDate`'s wire
+ * shape, see `queries.ts`'s `Opportunity` doc comment), formatted through the
+ * house `fmtDayFull` (`lib/formatDate.ts`: day-first, host-locale-independent,
+ * read as a calendar day so it never shifts a day in any timezone). Callers
+ * guard the null case themselves — an unparsable/empty input renders as an
+ * empty string rather than throwing.
  */
 export function formatPipelineDate(day: string): string {
-  const d = dayToDate(day);
-  if (!d) return "";
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(d);
+  return fmtDayFull(day);
 }
