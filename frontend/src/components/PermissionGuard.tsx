@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Navigate } from "react-router-dom";
+import { AuthLoading } from "@/components/AuthGuard";
 import { hasPermission, useAuth } from "@/lib/auth";
 
 /**
@@ -10,11 +11,11 @@ import { hasPermission, useAuth } from "@/lib/auth";
  * by URL. Redirects to /overview like the other guards.
  */
 export function PermissionGuard({ permission, children }: { permission: string; children: ReactNode }) {
-  const { user, status } = useAuth();
-  // While the session is still resolving there is no user to judge yet —
-  // render nothing instead of bouncing a deep link to /overview.
-  if (status === "loading" || (status === "authenticated" && user == null)) return null;
+  const { user, userVerified } = useAuth();
   if (!hasPermission(user, permission)) {
+    // Same rule as AdminGuard: don't redirect on a cached user that may be
+    // missing or stale — wait for the server's answer first.
+    if (!userVerified) return <AuthLoading />;
     return <Navigate to="/overview" replace />;
   }
   return <>{children}</>;

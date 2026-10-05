@@ -11,12 +11,16 @@ export interface NavCommand {
   requires?: string;
 }
 
+// The TAM pages (Overview … Weekly Sync) are listed only to roles that can read
+// projects, so a Pipeline-only role (e.g. SALES) sees just Pipeline and Settings.
+// This gates the sidebar and palette only — the routes themselves stay open, so
+// a user who lands on /overview after sign-in still gets a page.
 export const NAV_COMMANDS: readonly NavCommand[] = [
-  { to: "/overview", label: "Overview", icon: "dashboard" },
-  { to: "/projects", label: "Projects", icon: "folder_managed" },
-  { to: "/customers", label: "Customers", icon: "groups" },
-  { to: "/daily-review", label: "Daily Review", icon: "edit_note" },
-  { to: "/weekly-sync", label: "Weekly Sync", icon: "table_chart" },
+  { to: "/overview", label: "Overview", icon: "dashboard", requires: "project:read" },
+  { to: "/projects", label: "Projects", icon: "folder_managed", requires: "project:read" },
+  { to: "/customers", label: "Customers", icon: "groups", requires: "project:read" },
+  { to: "/daily-review", label: "Daily Review", icon: "edit_note", requires: "project:read" },
+  { to: "/weekly-sync", label: "Weekly Sync", icon: "table_chart", requires: "project:read" },
   // Utilization (Utilization.tsx) replaced the old Work Logs placeholder; gated on
   // project:read — meaningless without project access (port decision I-7,
   // docs/archive/plans/solvro-cust-port-plan.md §10).

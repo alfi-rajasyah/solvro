@@ -15,6 +15,23 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-10-05 — Help page, and sign-in no longer bounces gated pages to Overview
+
+Ported from the customer edition; the Help content is written for this edition, Pipeline and Solution Architect role included.
+
+- **A Help page explains how to use Solvro.** `/help` walks through every page and feature a user can reach: getting started (roles and what each sees by default, including the Solution Architect's project visibility), Overview, projects and their views, tasks, risks, customers and services, Daily Review, Weekly Sync, iTop tickets, Utilization, the Pipeline board and Opportunities (stages, sub-status and tags, the one move that asks for a reason, closing and reopening, PIC assignment, the won-deal handoff to a project, SLA and idle alerts, import, activity notes and links, who can change a deal), Executive, Settings, Admin (including its Pipeline tab) and keyboard shortcuts. Topics use the same permission rule as the sidebar: Executive and Admin show to users with that access; Pipeline and Opportunities to `pipeline:view` holders; the project pages to `project:read` holders, so a Sales-only user sees Pipeline, Settings and the basics. A search box narrows the topics and never reveals a gated one; `/help#<topic>` links straight to one (**`frontend/src/pages/Help.tsx`**, **`frontend/src/lib/helpContent.ts`**, **`frontend/src/App.tsx`**).
+- **The help content is a typed module.** Topics live in `helpContent.ts` with a pure `filterHelpTopics` function; unit tests pin the permission filter and check that each routed topic's gate equals its sidebar entry and that every sidebar page has a topic (**`frontend/src/lib/helpContent.test.ts`**).
+- **A help button in the top bar opens the page** — the question-mark button next to the theme toggle on desktop and phone; the page has no sidebar or ⌘K entry (**`frontend/src/components/layout/TopBar.tsx`**). Covered by **`e2e/tests/help.spec.ts`**.
+- **Sidebar entries for the project pages require `project:read`** (**`frontend/src/lib/navCommands.ts`**): Overview, Projects, Customers, Daily Review and Weekly Sync are listed only for users who can read projects, so the Help gating and the sidebar agree. The routes themselves stay reachable; a Sales-only user who lands on `/overview` after sign-in still gets a page.
+- **Documented limit** — the default Solution Architect role lacks `project:write`, so "Create project" on a won deal needs a TAM or Admin with Pipeline edit rights, or an admin granting that permission in Admin › Roles.
+
+### Fixed — 2026-10-05 — Admin, Executive, Pipeline and Utilization pages no longer bounce to Overview after sign-in
+
+- **Opening a gated page right after signing in no longer redirects to Overview.** On a full page load the permission guards judged the copy of the user cached in the browser, which could be missing (a load right after sign-in) or out of date (permissions changed since), before the server had confirmed the user. The guards now show "Loading…" until the server answers and only then redirect a user who lacks access; sign-in also stores the user in the browser at the same moment as the session token (**`frontend/src/lib/auth.tsx`**, **`frontend/src/components/AdminGuard.tsx`**, **`ExecutiveGuard.tsx`**, **`PipelineGuard.tsx`**, **`PermissionGuard.tsx`**).
+- **A stalled user check no longer leaves those pages loading forever.** The start-up user check gives up after 15 seconds and signs the user out cleanly, as any other failed check already did.
+- **Utilization deep links wait for the confirmed user too.** A link such as `/utilization?scope=customer` from a user whose cached permissions are out of date is no longer rewritten to the "Me" tab before the server has answered (**`frontend/src/pages/Utilization.tsx`**).
+- Two end-to-end tests cover opening an admin page right after sign-in and with no cached user (**`e2e/tests/auth.spec.ts`**).
+
 ### Added — 2026-10-04 — iTop board, new tickets, time tracking, and the real-install and timezone fixes
 
 Ported from the customer edition. Every write to iTop still runs under the acting user's own personal token and requires `task:write`; the application token only reads.

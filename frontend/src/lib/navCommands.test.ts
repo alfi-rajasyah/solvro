@@ -6,16 +6,26 @@ const wildcard = () => true; // admin: hasPermission(user, anything) === true
 const execOnly = (p: string) => p === "report:executive";
 
 describe("filterNavCommands", () => {
-  it("returns all ungated pages for a user with no permissions", () => {
-    const labels = filterNavCommands(none, "").map((c) => c.label);
-    expect(labels).toEqual([
+  it("returns only Settings for a user with no permissions", () => {
+    expect(filterNavCommands(none, "").map((c) => c.label)).toEqual(["Settings"]);
+  });
+
+  it("lists the TAM pages and Utilization for project:read, but not Pipeline", () => {
+    const projectRead = (p: string) => p === "project:read";
+    expect(filterNavCommands(projectRead, "").map((c) => c.label)).toEqual([
       "Overview",
       "Projects",
       "Customers",
       "Daily Review",
       "Weekly Sync",
+      "Utilization",
       "Settings",
     ]);
+  });
+
+  it("lists only Pipeline and Settings for pipeline:view without project:read", () => {
+    const pipelineOnly = (p: string) => p === "pipeline:view";
+    expect(filterNavCommands(pipelineOnly, "").map((c) => c.label)).toEqual(["Pipeline", "Settings"]);
   });
 
   it("shows Utilization only with project:read", () => {
@@ -38,9 +48,10 @@ describe("filterNavCommands", () => {
   });
 
   it("filters by label, case-insensitively", () => {
-    expect(filterNavCommands(none, "cust").map((c) => c.label)).toEqual(["Customers"]);
-    expect(filterNavCommands(none, "CUSTOMERS").map((c) => c.label)).toEqual(["Customers"]);
-    expect(filterNavCommands(none, "zzz")).toEqual([]);
+    const projectRead = (p: string) => p === "project:read";
+    expect(filterNavCommands(projectRead, "cust").map((c) => c.label)).toEqual(["Customers"]);
+    expect(filterNavCommands(projectRead, "CUSTOMERS").map((c) => c.label)).toEqual(["Customers"]);
+    expect(filterNavCommands(projectRead, "zzz")).toEqual([]);
   });
 
   it("pins the catalogue's route list", () => {

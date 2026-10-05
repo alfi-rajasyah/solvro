@@ -10,6 +10,7 @@ import { CustomerDetail } from "@/pages/CustomerDetail";
 import { Customers } from "@/pages/Customers";
 import { DailyReview } from "@/pages/DailyReview";
 import { Executive } from "@/pages/Executive";
+import { Help } from "@/pages/Help";
 import { Login } from "@/pages/Login";
 import { OpportunityDetail } from "@/pages/OpportunityDetail";
 import { Overview } from "@/pages/Overview";
@@ -95,6 +96,7 @@ export function App() {
           }
         />
         <Route path="settings" element={<Settings />} />
+        <Route path="help" element={<Help />} />
         <Route
           path="admin"
           element={
