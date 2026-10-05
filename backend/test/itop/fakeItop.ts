@@ -10,6 +10,7 @@ import {
   ITOP_TIME_SPENT_TICKET_REF_FIELD,
   type ItopTicketClass,
 } from "../../src/lib/itop/types.js";
+import { utcToZonedWallTime } from "../../src/lib/itop/timezone.js";
 
 // ---------------------------------------------------------------------------
 // State
@@ -29,6 +30,15 @@ interface PersonRecord {
   id: number;
   email: string;
   friendlyname: string;
+  /** Task 6.2: `GET /itop/customers/:id/contacts` filters Person by this against the customer's mapped org — 0 means "no organization" (never matches a real org id). */
+  org_id: number;
+}
+
+/** Task 6.2's "New ticket" service picklist (`GET /itop/services`). */
+interface ServiceRecord {
+  id: number;
+  name: string;
+  org_id: number;
 }
 
 interface UserRecord {
@@ -66,6 +76,7 @@ export interface TicketRecord {
   title: string;
   status: string;
   operational_status: string;
+  /** `"1".."4"` codes (1 critical .. 4 low) on a real install — never the words "medium"/"high". */
   priority: string;
   agent_id: string;
   agent_id_friendlyname: string;
@@ -75,8 +86,14 @@ export interface TicketRecord {
   org_id: string;
   start_date: string;
   last_update: string;
-  tto: string;
-  ttr: string;
+  /** JSON integer (elapsed SLA-stopwatch seconds) on a real install — a genuine `number`, not a numeric string, and NOT a deadline. Solvro's sync never reads this attribute (see `tto_escalation_deadline`) but the fake still returns it, matching the real shape. */
+  tto: number;
+  /** Same shape/caveat as `tto` above, for the TTR clock. */
+  ttr: number;
+  /** `"YYYY-MM-DD HH:MM:SS"` deadline, or `""` when the TTO clock isn't running — the field Solvro's sync actually reads into `ItopTicket.tto`. */
+  tto_escalation_deadline: string;
+  /** Same shape as `tto_escalation_deadline`, for TTR — read into `ItopTicket.ttr`. */
+  ttr_escalation_deadline: string;
   sla_tto_passed: string;
   sla_ttr_passed: string;
   resolution_date: string;
@@ -96,18 +113,21 @@ interface TimeSpentRecord {
 }
 
 export interface FakeItopState {
+  /** IANA zone the fake emits/accepts wall-clock datetime strings in — mirrors `ItopConfig.timezone` on a real install (confirmed reference value: `"Europe/Paris"`). Defaults to `"UTC"`; set directly on the returned state before `listen()` to exercise a non-UTC install end to end. */
+  timezone: string;
   tokens: Map<string, FakeItopToken>;
   organizations: Map<number, OrganizationRecord>;
   persons: Map<number, PersonRecord>;
   users: Map<number, UserRecord>;
+  services: Map<number, ServiceRecord>;
   tickets: Map<number, TicketRecord>;
   timeSpent: Map<number, TimeSpentRecord>;
   lnkPersonToTeam: Map<number, LnkPersonToTeamRecord>;
   personalTokens: Map<number, PersonalTokenRecord>;
   /** Classes `core/get` refuses, to simulate a missing extension (e.g. Time Tracking). */
   disabledClasses: Set<string>;
-  /** Every write attempt (core/create|update|apply_stimulus), in order — asserts a route never writes with the application token. Recorded regardless of outcome (including a refusal), keyed by the raw Auth-Token header value. */
-  writeLog: Array<{ token: string; operation: string }>;
+  /** Every write attempt (core/create|update|apply_stimulus), in order — asserts a route never writes with the application token, and (via `comment`) that every write sends one, per a real iTop 3.2.2 install's refusal of core/update and core/apply_stimulus with no comment at all. Recorded regardless of outcome (including a refusal), keyed by the raw Auth-Token header value. `comment` is whatever the request sent, `undefined` when it sent none at all. */
+  writeLog: Array<{ token: string; operation: string; comment?: string }>;
   /**
    * One-shot trap: the NEXT `core/get` made with exactly this token fails
    * with `message`, then clears itself. Lets a test simulate "the read-only
@@ -117,14 +137,18 @@ export interface FakeItopState {
    */
   failNextGetForToken: { token: string; message: string } | null;
   nextId: number;
+  /** Every request that reached `rest.php`, regardless of operation/outcome — lets a test prove a route's in-process cache (Task 6.2's `GET /itop/services`, 5-minute TTL) didn't re-hit the fake on a second call. */
+  requestCount: number;
 }
 
 export function createEmptyState(): FakeItopState {
   return {
+    timezone: "UTC",
     tokens: new Map(),
     organizations: new Map(),
     persons: new Map(),
     users: new Map(),
+    services: new Map(),
     tickets: new Map(),
     timeSpent: new Map(),
     lnkPersonToTeam: new Map(),
@@ -133,6 +157,7 @@ export function createEmptyState(): FakeItopState {
     failNextGetForToken: null,
     writeLog: [],
     nextId: 1,
+    requestCount: 0,
   };
 }
 
@@ -156,6 +181,7 @@ const SUPPORTED_CLASSES = [
   "Incident",
   "Person",
   "User",
+  "Service",
   "TimeSpent",
   "lnkPersonToTeam",
   "PersonalToken",
@@ -165,19 +191,22 @@ const WRITE_OPERATIONS = new Set(["core/create", "core/update", "core/apply_stim
 // ---------------------------------------------------------------------------
 // Seed data
 
-function formatDate(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return (
-    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
-    `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`
-  );
+/** Renders a real instant as the wall-clock string a fake install configured with `tz` would report — delegates to the same helper `lib/itop/sync.ts#formatItopDate` uses, so the fake round-trips through the real conversion instead of a second, possibly-diverging implementation. */
+function formatDate(date: Date, tz: string): string {
+  return utcToZonedWallTime(date, tz);
 }
 
-function daysAgo(days: number, hours = 9): string {
+/** The real instant `days` ago at `hours`:00 (host-local wall clock, but a `Date` is just an instant — see `daysAgo`'s own comment for why that doesn't matter). Exposed separately from `daysAgo` for seeds that need the SAME instant twice (e.g. a TimeSpent row's `start_date` and its `end_date`, `minutes` later) without formatting-then-reparsing a zoned string. */
+function daysAgoDate(days: number, hours = 9): Date {
   const date = new Date();
   date.setDate(date.getDate() - days);
   date.setHours(hours, 0, 0, 0);
-  return formatDate(date);
+  return date;
+}
+
+/** `days` ago at `hours`:00, expressed in `tz`. The instant itself is host-timezone-independent (see `daysAgoDate`); only the RENDERING below depends on `tz`. */
+function daysAgo(days: number, tz: string, hours = 9): string {
+  return formatDate(daysAgoDate(days, hours), tz);
 }
 
 /**
@@ -206,11 +235,20 @@ export function seedFakeItop(): FakeItopState {
   state.organizations.set(1, { id: 1, name: "Northwind Freight Sdn Bhd" });
   state.organizations.set(2, { id: 2, name: "PT Sinar Logistik" });
 
-  state.persons.set(1, { id: 1, email: "rina.s@example.co.id", friendlyname: "Rina S." });
-  state.persons.set(2, { id: 2, email: "dedi.p@example.co.id", friendlyname: "Dedi P." });
-  state.persons.set(3, { id: 3, email: "budi.h@example.co.id", friendlyname: "Budi H." });
+  state.persons.set(1, { id: 1, email: "rina.s@example.co.id", friendlyname: "Rina S.", org_id: 1 });
+  state.persons.set(2, { id: 2, email: "dedi.p@example.co.id", friendlyname: "Dedi P.", org_id: 2 });
+  // Budi is a caller in org 1 (matches mkTicket's hardcoded caller_id_friendlyname
+  // below) — used by Task 6.2's contacts endpoint tests as a 2nd org-1 contact.
+  state.persons.set(3, { id: 3, email: "budi.h@example.co.id", friendlyname: "Budi H.", org_id: 1 });
   // Deliberately unmatched: no Solvro user is expected to have this email.
-  state.persons.set(4, { id: 4, email: "orphan.contact@example.co.id", friendlyname: "Orphan Contact" });
+  // org_id 0 ("no organization") so it never appears as a contact for org 1 or 2.
+  state.persons.set(4, { id: 4, email: "orphan.contact@example.co.id", friendlyname: "Orphan Contact", org_id: 0 });
+
+  // Task 6.2's "New ticket" service picklist — org_id is the providing
+  // organization, surfaced as `providerName` by GET /itop/services.
+  state.services.set(1, { id: 1, name: "Network / WAN", org_id: 1 });
+  state.services.set(2, { id: 2, name: "Service Desk", org_id: 2 });
+  state.services.set(3, { id: 3, name: "Backup", org_id: 1 });
 
   state.users.set(1, { id: 1, contactid: 1, contactid_friendlyname: "Rina S.", login: "rina.s" });
   state.users.set(2, { id: 2, contactid: 2, contactid_friendlyname: "Dedi P.", login: "dedi.p" });
@@ -226,22 +264,23 @@ export function seedFakeItop(): FakeItopState {
   // token can only see ITS OWN user's row here (see the ownership filter in
   // `collectionFor`'s "PersonalToken" case below), mirroring real iTop's
   // per-user scoping of this class.
-  state.personalTokens.set(1, { id: 1, user_id: 1, expiration_date: daysAgo(-90) });
-  state.personalTokens.set(2, { id: 2, user_id: 2, expiration_date: daysAgo(-60) });
+  state.personalTokens.set(1, { id: 1, user_id: 1, expiration_date: daysAgo(-90, state.timezone) });
+  state.personalTokens.set(2, { id: 2, user_id: 2, expiration_date: daysAgo(-60, state.timezone) });
 
+  const tz = state.timezone;
   const ticketSeeds: Array<Omit<TicketRecord, "id">> = [
-    mkTicket({ class: "Incident", ref: "R-004512", title: "Branch 5 VPN tunnel flapping", status: "assigned", agentId: 1, orgId: 1, ageDays: 2, ttrPassed: true }),
-    mkTicket({ class: "UserRequest", ref: "R-004530", title: "Add 2 users to the Acronis console", status: "assigned", agentId: 1, orgId: 1, ageDays: 0 }),
-    mkTicket({ class: "UserRequest", ref: "R-004498", title: "Monthly backup report not received", status: "pending", agentId: 2, orgId: 1, ageDays: 4 }),
-    mkTicket({ class: "UserRequest", ref: "R-004535", title: "Firewall rule for the new HR app", status: "new", agentId: undefined, orgId: 1, ageDays: 0 }),
-    mkTicket({ class: "Incident", ref: "R-004471", title: "Veeam job failing on VM-DB02", status: "resolved", agentId: 1, orgId: 1, ageDays: 3 }),
-    mkTicket({ class: "UserRequest", ref: "R-004402", title: "Printer queue stuck, floor 3", status: "closed", agentId: 2, orgId: 1, ageDays: 10 }),
-    mkTicket({ class: "UserRequest", ref: "R-004488", title: "VPN client licence renewal", status: "assigned", agentId: 3, orgId: 2, ageDays: 1 }),
-    mkTicket({ class: "UserRequest", ref: "R-004519", title: "New starter laptop provisioning", status: "new", agentId: undefined, orgId: 2, ageDays: 0 }),
-    mkTicket({ class: "Incident", ref: "R-004501", title: "Warehouse scanner offline", status: "pending", agentId: 3, orgId: 2, ageDays: 2 }),
-    mkTicket({ class: "UserRequest", ref: "R-004540", title: "Mailbox quota increase", status: "resolved", agentId: 3, orgId: 2, ageDays: 5 }),
-    mkTicket({ class: "Incident", ref: "R-004545", title: "Core switch reboot loop", status: "assigned", agentId: 1, orgId: 2, ageDays: 1, ttrPassed: true }),
-    mkTicket({ class: "UserRequest", ref: "R-004550", title: "Guest wifi password rotation", status: "closed", agentId: 2, orgId: 2, ageDays: 14 }),
+    mkTicket({ class: "Incident", ref: "R-004512", title: "Branch 5 VPN tunnel flapping", status: "assigned", agentId: 1, orgId: 1, ageDays: 2, ttrPassed: true, tz }),
+    mkTicket({ class: "UserRequest", ref: "R-004530", title: "Add 2 users to the Acronis console", status: "assigned", agentId: 1, orgId: 1, ageDays: 0, tz }),
+    mkTicket({ class: "UserRequest", ref: "R-004498", title: "Monthly backup report not received", status: "pending", agentId: 2, orgId: 1, ageDays: 4, tz }),
+    mkTicket({ class: "UserRequest", ref: "R-004535", title: "Firewall rule for the new HR app", status: "new", agentId: undefined, orgId: 1, ageDays: 0, tz }),
+    mkTicket({ class: "Incident", ref: "R-004471", title: "Veeam job failing on VM-DB02", status: "resolved", agentId: 1, orgId: 1, ageDays: 3, tz }),
+    mkTicket({ class: "UserRequest", ref: "R-004402", title: "Printer queue stuck, floor 3", status: "closed", agentId: 2, orgId: 1, ageDays: 10, tz }),
+    mkTicket({ class: "UserRequest", ref: "R-004488", title: "VPN client licence renewal", status: "assigned", agentId: 3, orgId: 2, ageDays: 1, tz }),
+    mkTicket({ class: "UserRequest", ref: "R-004519", title: "New starter laptop provisioning", status: "new", agentId: undefined, orgId: 2, ageDays: 0, tz }),
+    mkTicket({ class: "Incident", ref: "R-004501", title: "Warehouse scanner offline", status: "pending", agentId: 3, orgId: 2, ageDays: 2, tz }),
+    mkTicket({ class: "UserRequest", ref: "R-004540", title: "Mailbox quota increase", status: "resolved", agentId: 3, orgId: 2, ageDays: 5, tz }),
+    mkTicket({ class: "Incident", ref: "R-004545", title: "Core switch reboot loop", status: "assigned", agentId: 1, orgId: 2, ageDays: 1, ttrPassed: true, tz }),
+    mkTicket({ class: "UserRequest", ref: "R-004550", title: "Guest wifi password rotation", status: "closed", agentId: 2, orgId: 2, ageDays: 14, tz }),
   ];
   for (const seed of ticketSeeds) {
     const id = state.nextId++;
@@ -270,15 +309,19 @@ export function seedFakeItop(): FakeItopState {
   ];
   for (const seed of timeSpentSeeds) {
     const id = state.nextId++;
-    const start = daysAgo(seed.daysAgo, 9);
-    const startDate = new Date(start.replace(" ", "T"));
-    const end = new Date(startDate.getTime() + seed.minutes * 60_000);
+    // Compute both timestamps from the SAME real instant, then render each
+    // into `state.timezone` — never format-then-reparse a zoned wall-clock
+    // string (`new Date("...")` with no offset parses as the HOST's local
+    // time, not `tz`, which silently corrupts the `minutes`-later math
+    // whenever `tz` isn't the host's own zone).
+    const startInstant = daysAgoDate(seed.daysAgo, 9);
+    const endInstant = new Date(startInstant.getTime() + seed.minutes * 60_000);
     state.timeSpent.set(id, {
       id,
       user_id: String(seed.userId),
       org_id: String(seed.orgId),
-      start_date: start,
-      end_date: formatDate(end),
+      start_date: formatDate(startInstant, state.timezone),
+      end_date: formatDate(endInstant, state.timezone),
       duration: String(seed.minutes * 60),
       title: seed.ref,
       ticketRef: seed.ref,
@@ -297,28 +340,41 @@ function mkTicket(opts: {
   orgId: number;
   ageDays: number;
   ttrPassed?: boolean;
+  /** IANA zone to emit `start_date`/`last_update`/the escalation deadlines in — `state.timezone`, threaded through so a non-UTC fake seeds internally-consistent wall-clock strings. */
+  tz: string;
 }): Omit<TicketRecord, "id"> {
   const agentNames: Record<number, string> = { 1: "Rina S.", 2: "Dedi P.", 3: "Budi H." };
+  const resolvedOrClosed = opts.status === "resolved" || opts.status === "closed";
   return {
     class: opts.class,
     ref: opts.ref,
     title: opts.title,
     status: opts.status,
     operational_status: opts.status === "assigned" && opts.ttrPassed ? "escalated_ttr" : "normal",
-    priority: opts.ttrPassed ? "high" : "medium",
+    // "1".."4" codes (1 critical .. 4 low) — a real install's own shape;
+    // stored as-is by Solvro, never translated to a word here.
+    priority: opts.ttrPassed ? "2" : "3",
     agent_id: opts.agentId ? String(opts.agentId) : "0",
     agent_id_friendlyname: opts.agentId ? agentNames[opts.agentId] : "",
     team_id_friendlyname: "TAM Team",
     service_id_friendlyname: opts.class === "Incident" ? "Network / WAN" : "Service Desk",
     caller_id_friendlyname: "Budi H.",
     org_id: String(opts.orgId),
-    start_date: daysAgo(opts.ageDays),
-    last_update: daysAgo(Math.max(opts.ageDays - 1, 0)),
-    tto: "3600",
-    ttr: "10800",
+    start_date: daysAgo(opts.ageDays, opts.tz),
+    last_update: daysAgo(Math.max(opts.ageDays - 1, 0), opts.tz),
+    // Elapsed SLA-stopwatch seconds — never read by Solvro's sync (kept only
+    // so a `probe()`/protocol-shape test sees the same fields a real install
+    // returns).
+    tto: 3600,
+    ttr: 10800,
+    // Escalation deadlines — "" (clock not running) once resolved/closed,
+    // otherwise a datetime a day or two out. These, not the integers above,
+    // are what Solvro's sync maps into ItopTicket.tto/ttr.
+    tto_escalation_deadline: resolvedOrClosed ? "" : daysAgo(-1, opts.tz),
+    ttr_escalation_deadline: resolvedOrClosed ? "" : daysAgo(-2, opts.tz),
     sla_tto_passed: "0",
     sla_ttr_passed: opts.ttrPassed ? "1" : "0",
-    resolution_date: opts.status === "resolved" || opts.status === "closed" ? daysAgo(Math.max(opts.ageDays - 1, 0)) : "",
+    resolution_date: resolvedOrClosed ? daysAgo(Math.max(opts.ageDays - 1, 0), opts.tz) : "",
     public_log: { entries: [] },
     private_log: { entries: [] },
   };
@@ -422,7 +478,12 @@ function organizationFields(org: OrganizationRecord): Record<string, unknown> {
 }
 
 function personFields(person: PersonRecord): Record<string, unknown> {
-  return { id: String(person.id), email: person.email, friendlyname: person.friendlyname };
+  return { id: String(person.id), email: person.email, friendlyname: person.friendlyname, org_id: String(person.org_id) };
+}
+
+function serviceFields(state: FakeItopState, service: ServiceRecord): Record<string, unknown> {
+  const orgName = state.organizations.get(service.org_id)?.name ?? "";
+  return { id: String(service.id), name: service.name, org_id: String(service.org_id), org_id_friendlyname: orgName };
 }
 
 function userFields(user: UserRecord): Record<string, unknown> {
@@ -466,6 +527,8 @@ function collectionFor(
       return [...state.persons.values()].map((p) => ({ id: p.id, fields: personFields(p) }));
     case "User":
       return [...state.users.values()].map((u) => ({ id: u.id, fields: userFields(u) }));
+    case "Service":
+      return [...state.services.values()].map((s) => ({ id: s.id, fields: serviceFields(state, s) }));
     case "UserRequest":
     case "Incident":
       return [...state.tickets.values()]
@@ -495,10 +558,20 @@ function collectionFor(
 // ---------------------------------------------------------------------------
 // Ticket lifecycle (core/apply_stimulus)
 
+// Confirmed against a real iTop 3.2.2 install (ITIL, default lifecycle):
+// ev_assign is valid from "new" AND "pending" (both -> "assigned") with no
+// mandatory fields (agent/team are optional there); it is REFUSED from
+// "assigned" ("Invalid stimulus") — reassigning an already-assigned ticket
+// is ev_reassign instead. ev_pending needs only pending_reason; ev_resolve
+// needs only solution (resolution_code is optional on this install, even
+// though Solvro's own action schema still requires both — see
+// docs/archive/plans/itop-integration.md §"Ground truth" for the fix that
+// prompted this).
 const TICKET_STIMULI: Record<string, { from: string[]; to: string; required?: string[] }> = {
-  ev_assign: { from: ["new"], to: "assigned", required: ["team_id", "agent_id"] },
-  ev_pending: { from: ["assigned"], to: "pending" },
-  ev_resolve: { from: ["assigned", "pending"], to: "resolved", required: ["resolution_code", "solution"] },
+  ev_assign: { from: ["new", "pending"], to: "assigned" },
+  ev_reassign: { from: ["assigned"], to: "assigned" },
+  ev_pending: { from: ["assigned"], to: "pending", required: ["pending_reason"] },
+  ev_resolve: { from: ["assigned", "pending"], to: "resolved", required: ["solution"] },
   ev_close: { from: ["resolved"], to: "closed" },
   ev_reopen: { from: ["resolved"], to: "assigned" },
 };
@@ -512,7 +585,7 @@ function appendCaseLogEntry(
   message: string,
 ): void {
   const author = token.personId !== undefined ? (state.persons.get(token.personId)?.friendlyname ?? "") : "";
-  ticket[field].entries.push({ date: formatDate(new Date()), user_login: author, message });
+  ticket[field].entries.push({ date: formatDate(new Date(), state.timezone), user_login: author, message });
 }
 
 function applyTicketStimulus(
@@ -526,24 +599,38 @@ function applyTicketStimulus(
   if (!rule.from.includes(ticket.status)) {
     return { ok: false, message: `Invalid stimulus '${stimulus}' for status '${ticket.status}'` };
   }
-  for (const required of rule.required ?? []) {
+  const missingRequired = (rule.required ?? []).filter((required) => {
     const value = fields[required];
-    if (value === undefined || value === null || value === "") {
-      return { ok: false, message: `Missing mandatory field '${required}' for stimulus '${stimulus}'` };
-    }
+    return value === undefined || value === null || value === "";
+  });
+  if (missingRequired.length > 0) {
+    // Exact wording confirmed against a real iTop 3.2.2 install (e.g. for
+    // ev_pending with no pending_reason).
+    return {
+      ok: false,
+      message: `Missing mandatory attribute(s) for applying the stimulus: ${missingRequired.join(", ")}.`,
+    };
   }
 
   ticket.status = rule.to;
-  if (stimulus === "ev_assign") {
-    const agentId = Number(fields.agent_id);
-    ticket.agent_id = String(agentId);
-    ticket.agent_id_friendlyname = state.persons.get(agentId)?.friendlyname ?? String(fields.agent_id);
-    ticket.team_id_friendlyname = String(fields.team_id);
+  if (stimulus === "ev_assign" || stimulus === "ev_reassign") {
+    // Both agent_id and team_id are optional on this install (ground truth:
+    // "it needs no mandatory fields") — only touch the ticket's agent/team
+    // when the caller actually sent one, so an ev_assign with no fields at
+    // all still transitions status without clobbering them to "0"/"".
+    if (fields.agent_id !== undefined && fields.agent_id !== null && fields.agent_id !== "") {
+      const agentId = Number(fields.agent_id);
+      ticket.agent_id = String(agentId);
+      ticket.agent_id_friendlyname = state.persons.get(agentId)?.friendlyname ?? String(fields.agent_id);
+    }
+    if (fields.team_id !== undefined && fields.team_id !== null && fields.team_id !== "") {
+      ticket.team_id_friendlyname = String(fields.team_id);
+    }
   }
   if (stimulus === "ev_resolve") {
-    ticket.resolution_date = formatDate(new Date());
+    ticket.resolution_date = formatDate(new Date(), state.timezone);
   }
-  ticket.last_update = formatDate(new Date());
+  ticket.last_update = formatDate(new Date(), state.timezone);
   return { ok: true };
 }
 
@@ -567,6 +654,7 @@ export function createFakeItop(seed: FakeItopState = createEmptyState()): FakeIt
   app.use(express.json());
 
   app.post("/webservices/rest.php", (req, res) => {
+    state.requestCount += 1;
     let payload: Record<string, unknown>;
     try {
       const raw = req.body?.json_data ?? (typeof req.body === "object" ? JSON.stringify(req.body) : undefined);
@@ -585,12 +673,29 @@ export function createFakeItop(seed: FakeItopState = createEmptyState()): FakeIt
     }
 
     const operation = payload.operation;
+    const requestComment = typeof payload.comment === "string" ? payload.comment : undefined;
 
     if (typeof operation === "string" && WRITE_OPERATIONS.has(operation)) {
       // Recorded unconditionally — including a refusal further down — so a
-      // test asserting "the application token is never used for a write"
-      // can check this regardless of whether the write itself succeeded.
-      state.writeLog.push({ token: authToken ?? "", operation });
+      // test asserting "the application token is never used for a write" (or
+      // "every write carries a comment") can check this regardless of
+      // whether the write itself succeeded.
+      state.writeLog.push({ token: authToken ?? "", operation, comment: requestComment });
+    }
+
+    // A real iTop 3.2.2 install refuses core/update and core/apply_stimulus
+    // outright with no comment at all — `code 100 "Error: Missing parameter
+    // 'comment'"`, verbatim. core/create does NOT require one on that
+    // install, so it's deliberately excluded here. Checked after the
+    // writeLog recording above (so a refused write is still visible there)
+    // but before any class-specific handling, matching the real server
+    // treating this as a generic REST-parameter check.
+    if (
+      (operation === "core/update" || operation === "core/apply_stimulus") &&
+      (!requestComment || requestComment.trim().length === 0)
+    ) {
+      sendEnvelope(res, { code: 100, message: "Error: Missing parameter 'comment'" });
+      return;
     }
 
     if (operation === "list_operations") {
@@ -719,7 +824,7 @@ export function createFakeItop(seed: FakeItopState = createEmptyState()): FakeIt
         if (typeof privateLogText === "string" && privateLogText.length > 0) {
           appendCaseLogEntry(state, ticket, "private_log", token, privateLogText);
         }
-        ticket.last_update = formatDate(new Date());
+        ticket.last_update = formatDate(new Date(), state.timezone);
         sendEnvelope(res, {
           code: 0,
           objects: {
@@ -738,25 +843,71 @@ export function createFakeItop(seed: FakeItopState = createEmptyState()): FakeIt
       const fields = (payload.fields as Record<string, unknown> | undefined) ?? {};
 
       if (className === "UserRequest" || className === "Incident") {
+        // Task 6.2 ("New ticket"): mirrors iTop's own mandatory-attribute
+        // refusal (code 100) for a stimulus-free core/create of a ticket —
+        // org_id, caller_id, title, description are all required, checked
+        // in that order so a request missing several gets a deterministic
+        // single message.
+        const missing = (value: unknown) => value === undefined || value === null || value === "";
+        const requiredFieldOrder: Array<[string, unknown]> = [
+          ["org_id", fields.org_id],
+          ["caller_id", fields.caller_id],
+          ["title", fields.title],
+          ["description", fields.description],
+        ];
+        const firstMissing = requiredFieldOrder.find(([, value]) => missing(value));
+        if (firstMissing) {
+          sendEnvelope(res, { code: 100, message: `Mandatory attribute '${firstMissing[0]}' is missing` });
+          return;
+        }
+
+        const orgId = Number(fields.org_id);
+        const callerId = Number(fields.caller_id);
+        const callerPerson = state.persons.get(callerId);
+        if (!callerPerson || callerPerson.org_id !== orgId) {
+          sendEnvelope(res, {
+            code: 100,
+            message: `Data integrity issue: caller ${callerId} does not belong to organization ${orgId}`,
+          });
+          return;
+        }
+
+        // An unknown service_id is a real iTop-style external-key refusal
+        // (unlike org_id/caller_id, this one is NOT re-validated by the
+        // Solvro route before the create — it's the case a test uses to
+        // exercise the "iTop's own refusal passes through verbatim" path).
+        let serviceName = "";
+        if (!missing(fields.service_id)) {
+          const service = state.services.get(Number(fields.service_id));
+          if (!service) {
+            sendEnvelope(res, { code: 100, message: `Object not found: Service::${String(fields.service_id)}` });
+            return;
+          }
+          serviceName = service.name;
+        }
+
         const id = state.nextId++;
+        const ref = `${className === "Incident" ? "I" : "R"}-${String(id).padStart(6, "0")}`;
         const ticket: TicketRecord = {
           id,
           class: className,
-          ref: String(fields.ref ?? `NEW-${id}`),
-          title: String(fields.title ?? ""),
+          ref,
+          title: String(fields.title),
           status: "new",
           operational_status: "normal",
-          priority: String(fields.priority ?? "medium"),
+          priority: "3",
           agent_id: "0",
           agent_id_friendlyname: "",
           team_id_friendlyname: "",
-          service_id_friendlyname: String(fields.service_id_friendlyname ?? ""),
-          caller_id_friendlyname: String(fields.caller_id_friendlyname ?? ""),
-          org_id: String(fields.org_id ?? ""),
-          start_date: formatDate(new Date()),
-          last_update: formatDate(new Date()),
-          tto: "",
-          ttr: "",
+          service_id_friendlyname: serviceName,
+          caller_id_friendlyname: callerPerson.friendlyname,
+          org_id: String(orgId),
+          start_date: formatDate(new Date(), state.timezone),
+          last_update: formatDate(new Date(), state.timezone),
+          tto: 0,
+          ttr: 0,
+          tto_escalation_deadline: "",
+          ttr_escalation_deadline: "",
           sla_tto_passed: "0",
           sla_ttr_passed: "0",
           resolution_date: "",
@@ -774,16 +925,63 @@ export function createFakeItop(seed: FakeItopState = createEmptyState()): FakeIt
       }
 
       if (className === "TimeSpent") {
+        // Mirrors the UserRequest/Incident mandatory-attribute check above
+        // (Task 7.1's POST /itop/tickets/:id/time always sends all five, but
+        // the fake still refuses an incomplete create the same way real
+        // iTop would, so a route regression here fails loudly instead of
+        // silently defaulting).
+        const missing = (value: unknown) => value === undefined || value === null || value === "";
+        const requiredFieldOrder: Array<[string, unknown]> = [
+          ["user_id", fields.user_id],
+          ["org_id", fields.org_id],
+          ["start_date", fields.start_date],
+          ["end_date", fields.end_date],
+          ["duration", fields.duration],
+        ];
+        const firstMissing = requiredFieldOrder.find(([, value]) => missing(value));
+        if (firstMissing) {
+          sendEnvelope(res, { code: 100, message: `Mandatory attribute '${firstMissing[0]}' is missing` });
+          return;
+        }
+
+        // Lexicographic comparison is safe here — both are the fixed-width
+        // "YYYY-MM-DD HH:MM:SS" shape lib/itop/sync.ts#formatItopDate emits.
+        if (String(fields.end_date) <= String(fields.start_date)) {
+          sendEnvelope(res, { code: 100, message: "end_date must be after start_date" });
+          return;
+        }
+
+        // A Solvro-side stand-in for iTop's external-key resolution on
+        // `ticket_ref` (assumed to point back to the UserRequest/Incident it
+        // was logged against), pending the admin's confirmation that
+        // `TimeSpent.<ref field>` is actually a writable external key on the
+        // real install (plan §5 risk "Time Tracking schema differs") — same
+        // shape as the unknown-`service_id` check on ticket create above in
+        // the meantime. Solvro's own POST /itop/tickets/:id/time always
+        // sends the ref of a ticket it just loaded from its own snapshot, so
+        // this only fires when a test deliberately makes the fake and the
+        // snapshot disagree (see ticketTime.test.ts's "iTop refusal" case) —
+        // not reachable in normal operation.
+        const ticketRef = fields[ITOP_TIME_SPENT_TICKET_REF_FIELD];
+        if (!missing(ticketRef) && ![...state.tickets.values()].some((t) => t.ref === ticketRef)) {
+          sendEnvelope(res, { code: 100, message: `Object not found: ${String(ticketRef)}` });
+          return;
+        }
+
         const id = state.nextId++;
         const entry: TimeSpentRecord = {
           id,
-          user_id: String(fields.user_id ?? ""),
-          org_id: String(fields.org_id ?? ""),
-          start_date: String(fields.start_date ?? formatDate(new Date())),
-          end_date: String(fields.end_date ?? formatDate(new Date())),
-          duration: String(fields.duration ?? "0"),
+          user_id: String(fields.user_id),
+          org_id: String(fields.org_id),
+          start_date: String(fields.start_date),
+          end_date: String(fields.end_date),
+          duration: String(fields.duration),
           title: String(fields.title ?? ""),
-          ticketRef: String(fields[ITOP_TIME_SPENT_TICKET_REF_FIELD] ?? fields.title ?? ""),
+          // NOT falling back to `title` — the ref field must come from
+          // whatever the caller actually sent, so a route that forgets to
+          // set it produces a genuinely empty ref rather than a
+          // misleadingly-populated one that happens to equal the title.
+          ticketRef: String(fields[ITOP_TIME_SPENT_TICKET_REF_FIELD] ?? ""),
         };
         state.timeSpent.set(id, entry);
         sendEnvelope(res, {

@@ -24,6 +24,7 @@ import {
   useDeleteTask,
   useDuplicateTask,
   useItopStatus,
+  useProject,
   useProjectSections,
   useProjectTasks,
   useUpdateTask,
@@ -96,6 +97,11 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
   // for its own inner rendering, but the label span here needs it too, or
   // an unconfigured install would show a label with no paired grid cell).
   const itopConfigured = useItopStatus().data?.configured ?? false;
+  // Task 7.2, docs/archive/plans/itop-integration.md: TaskTicketField's
+  // "Create in iTop" affordance needs the task's project's customer id — a
+  // task itself has no customer of its own, so this is the one extra fetch
+  // this panel needs for that field.
+  const { data: project } = useProject(projectId);
 
   const { data: tasks } = useProjectTasks(projectId);
   const { data: sections } = useProjectSections(projectId);
@@ -145,13 +151,17 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
   // rename.
   const renameSettledRef = useRef(false);
 
+  // True while a sheet opened from inside the panel (the iTop New-ticket
+  // sheet) is showing: Escape belongs to that sheet, and closing the panel
+  // under a pending create would unmount the field that pins the new ref.
+  const [nestedSheetOpen, setNestedSheetOpen] = useState(false);
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !nestedSheetOpen) onClose();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, nestedSheetOpen]);
 
   useEffect(() => {
     setEditingTitle(false);
@@ -618,7 +628,11 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                 <TaskTicketField
                   itopTicketRef={task.itopTicketRef}
                   canEdit={canEdit}
+                  customerId={project?.customerId ?? null}
+                  taskTitle={task.title}
+                  taskDescription={task.description}
                   onSave={(ref) => patch({ itopTicketRef: ref })}
+                  onCreateSheetOpenChange={setNestedSheetOpen}
                 />
               </>
             )}

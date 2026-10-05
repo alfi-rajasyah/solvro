@@ -1,5 +1,10 @@
 # iTop Integration — Plan
 
+**Shipped** across PRs #2–#8 on `develop`, 2026-09-22 → 2026-09-23. Decisions
+are in §1 below; deviations from the original proposal are in §2; deferred
+findings live in `docs/ISSUES.md` (the "iTop integration Phase N — deferred
+findings" sections).
+
 Status: **decisions confirmed 2026-09-22 (user)**; code starts after PR `feat/remove-pipeline-module` merges into `develop` (user sequencing decision, 2026-09-22).
 Source proposal: `docs/archive/plans/itop-integration-spec.md` (extract of the "iTop in Solvro" artifact, v2, 2026-09-12).
 Branches: one per phase, off up-to-date `origin/develop`: `feat/itop-p1-tickets`, `feat/itop-p2-daily-review`, `feat/itop-p3-utilization`, `feat/itop-p4-webhook-taskref`, `feat/itop-p5-write-path`, `feat/itop-p6-board`, `feat/itop-p7-timer`. Phase = branch = PR; task = commit.
@@ -34,6 +39,7 @@ All 8 spec defaults accepted: read-only app token; 5-minute snapshot + Refresh; 
 8. **Snapshot freshness**: incremental pull by `last_update` every N minutes; a full pull per org once per 24 h and on manual Refresh, which also drops tickets iTop no longer returns.
 9. **Utilization API is its own router** (`backend/src/routes/utilization.ts`, mounted at `/utilization`) rather than a route in `routes/itop.ts`, for the same reason as deviation 4. "Today"/"this week" windows on external iTop instants follow the viewer's local day via a `utcOffsetMinutes` query param (user decision 2026-09-22); the Solvro-picked `date`/`week` strings still follow the UTC-midnight date contract.
 10. **Ticket ref format** is `^[A-Z]{1,3}-\d{4,8}$` (not the narrower `^[A-Z]-\d{6}$` written in Task 4.2): iTop's ref pattern is install-configurable (`R-004512`, `I-000123`, `TKT-123456`). Do not re-narrow it. A duplicated task never carries the ref (one ticket, one task by default); tasks cannot be created with a ref pre-set — pin it after creation.
+11. **Board lifecycle graph** (2026-09-23): `new → assigned` = `ev_assign` (assign to me), `assigned → pending` = `ev_pending`, `assigned|pending → resolved` = `ev_resolve` (sheet), `resolved → closed` = `ev_close`, `resolved → assigned` = `ev_reopen`. ~~There is no `pending → assigned` move~~ — corrected 2026-09-24 after testing a real iTop 3.2.2: `ev_assign` is valid from `new` and `pending`, so `pending → assigned` = `ev_assign` (assign to me); `ev_pending` requires `pending_reason`; `ev_resolve` requires only `solution`; every stimulus and update requires a `comment`. Escalated and approval states are folded into the Assigned column; iTop's refusal text is shown if a step is not allowed there. Forbidden drops are refused client-side (dimmed columns, inline message) — the vendored engine has no per-column drop veto without a vendored patch, which we do not make.
 
 ## 3. Architecture
 

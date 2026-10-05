@@ -28,8 +28,16 @@ import {
 } from "@/lib/queries";
 import { ActionSheet, type ActionSheetMode } from "./ActionSheet";
 import { TicketLog } from "./TicketLog";
-import { actionLabel, availableActions } from "./ticketActions";
-import { ageLabel, itopTicketUrl, slaLabel, statusLabel, statusTone } from "./ticketPresentation";
+import { TicketTimer } from "./TicketTimer";
+import { actionLabel, availableActions, teamsFromError } from "./ticketActions";
+import {
+  ageLabel,
+  itopTicketUrl,
+  priorityLabel,
+  slaLabel,
+  statusLabel,
+  statusTone,
+} from "./ticketPresentation";
 
 const CLASS_LABEL: Record<string, string> = {
   UserRequest: "User request",
@@ -76,13 +84,16 @@ export function TicketPanel({
     setStaleNotice(null);
   }, [ticketId]);
 
+  // While the Resolve/Team sheet is open its own Modal handles Escape; the
+  // panel must not also close, or a mid-write unmount would lose the result.
+  const sheetOpen = actionSheet !== null;
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape" && !sheetOpen) onClose();
     }
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  }, [onClose, sheetOpen]);
 
   const actionsEnabled = status?.actionsEnabled ?? false;
   const tokenSet = myToken?.set ?? false;
@@ -103,14 +114,10 @@ export function TicketPanel({
           }
         },
         onError: (err) => {
-          if (err instanceof ApiError && err.status === 409) {
-            const body = err.body as
-              | { code?: string; details?: { teams?: ItopTicketTeamOption[] } }
-              | null;
-            if (body?.code === "itop_team_required" && body.details?.teams) {
-              setActionSheet({ mode: "team", action, teams: body.details.teams });
-              return;
-            }
+          const teams = teamsFromError(err);
+          if (teams) {
+            setActionSheet({ mode: "team", action, teams });
+            return;
           }
           setActionError(err instanceof ApiError ? err.message : "Action failed.");
         },
@@ -123,16 +130,25 @@ export function TicketPanel({
       setActionSheet({ mode: "resolve", action: "resolve" });
       return;
     }
+    // Pending needs a reason on a real iTop install (ground truth confirmed
+    // 2026-09-24: `POST /itop/tickets/:id/actions` 400s without
+    // `fields.pending_reason`) — same "open the sheet instead of firing
+    // directly" pattern as Resolve.
+    if (action === "pending") {
+      setActionSheet({ mode: "pending", action: "pending" });
+      return;
+    }
     runAction(action);
   }
 
-  function handleAddLog(visibility: "public" | "private", text: string) {
+  function handleAddLog(visibility: "public" | "private", text: string, onDone: () => void) {
     setLogError(null);
     setStaleNotice(null);
     logMutation.mutate(
       { visibility, text },
       {
         onSuccess: (fresh) => {
+          onDone();
           if (fresh.staleAfterWrite) {
             setStaleNotice(
               "Applied in iTop. The list refreshes on the next sync — use Refresh to see it now.",
@@ -255,7 +271,7 @@ export function TicketPanel({
                 <Fact label="Service" value={ticket.serviceName ?? "—"} />
                 <Fact label="Team" value={ticket.teamName ?? "—"} />
                 <Fact label="Agent" value={ticket.agentName ?? "Unassigned"} />
-                <Fact label="Priority" value={ticket.priority ?? "—"} />
+                <Fact label="Priority" value={ticket.priority ? priorityLabel(ticket.priority) : "—"} />
                 <Fact label="TTO/TTR" value={slaLabel(ticket)} />
                 <Fact
                   label="Started"
@@ -275,6 +291,16 @@ export function TicketPanel({
                   error={logError}
                 />
               </div>
+
+              {canWrite && (
+                <div className="mt-5 border-t border-outline-variant pt-4">
+                  <TicketTimer
+                    ticket={{ id: ticket.id, customerId, ref: ticket.ref }}
+                    myMinutesThisWeek={ticket.myMinutesThisWeek}
+                    canAct={canAct}
+                  />
+                </div>
+              )}
             </>
           )}
         </div>

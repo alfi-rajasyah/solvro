@@ -2,8 +2,10 @@
 // "Open in iTop" links, a customer's ticket list + counts for the Tickets
 // tab, single-ticket lookup, a debounced manual Refresh trigger, the Daily
 // Review strip's per-day, per-customer digest (GET /daily), and the write
-// path: lifecycle actions and case-log entries under the ACTING USER'S OWN
-// personal token, never the application token and never another user's
+// path: lifecycle actions, case-log entries, ticket creation (plus the "New
+// ticket" sheet's service and contact picklists), and logging time against a
+// ticket. Every write runs under the ACTING USER'S OWN personal token, never
+// the application token and never another user's
 // (docs/archive/plans/itop-integration.md §1 decision 8; CLAUDE.md guardrail).
 //
 // Permission gating: GET /status is open to every authenticated user (it only
@@ -19,7 +21,7 @@
 // so a customer hidden from the caller 404s (or is silently excluded from a
 // list) the same way every other customer-nested route does. Mounted at
 // /itop in src/app.ts. See docs/archive/plans/itop-integration.md Tasks 1.7,
-// 2.1, 5.3.
+// 2.1, 5.3, 6.2, 7.1.
 import { Router } from "express";
 import { z } from "zod";
 import { Prisma } from "@prisma/client";
@@ -28,24 +30,32 @@ import { logger } from "../logger.js";
 import { hasPermission, requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
-import { ensureCustomerVisible, customerVisibilityFilter } from "../lib/visibility.js";
+import { ensureCustomerVisible, customerVisibilityFilter, isCustomerVisible } from "../lib/visibility.js";
 import { getItopAppClient, getItopConfig, isItopConfigured, makeItopClient } from "../lib/itop/config.js";
 import { requestSync } from "../lib/itop/scheduler.js";
 import { open, SecretBoxError } from "../lib/secretBox.js";
-import { ItopError, type ItopGetResult } from "../lib/itop/client.js";
-import { upsertTicketFromItop } from "../lib/itop/sync.js";
+import { ItopError, type ItopGetResult, type ItopObjectRow } from "../lib/itop/client.js";
+import { TIME_ENTRY_WINDOW_MS, formatItopDate, upsertTicketFromItop, upsertTimeEntryFromItop } from "../lib/itop/sync.js";
 import {
   ITOP_LNK_PERSON_TO_TEAM_OUTPUT_FIELDS,
+  ITOP_PERSON_OUTPUT_FIELDS,
+  ITOP_SERVICE_OUTPUT_FIELDS,
   ITOP_TICKET_CLASSES,
   ITOP_TICKET_OUTPUT_FIELDS,
+  ITOP_TIME_SPENT_DURATION_IN_SECONDS,
+  ITOP_TIME_SPENT_OUTPUT_FIELDS,
+  ITOP_TIME_SPENT_TICKET_REF_FIELD,
   type ItopCaseLogEntry,
   type ItopLnkPersonToTeamFields,
+  type ItopPersonFields,
+  type ItopServiceFields,
   type ItopTicketClass,
   type ItopTicketFields,
+  type ItopTimeSpentFields,
 } from "../lib/itop/types.js";
 import { weekKeyOf, parseWeekKey } from "../lib/isoWeek.js";
 import { isValidDayString, utcMidnightOfDayString } from "../lib/dateBoundary.js";
-import type { ItopTicket } from "@prisma/client";
+import type { ItopTicket, ItopTimeEntry } from "@prisma/client";
 
 export const itopRouter = Router();
 
@@ -55,14 +65,41 @@ itopRouter.use(requireAuth);
 
 const RESOLVED_STATUSES = ["resolved", "closed"];
 
-/** UTC midnight of the Monday of the ISO week containing "now". Reuses the
- * shared ISO-week helper (lib/isoWeek.ts) rather than re-deriving Monday
- * arithmetic here. */
+/**
+ * Monday 00:00 UTC of the ISO week containing "now", shifted so the week
+ * boundary falls on the VIEWER'S LOCAL day rather than the UTC one —
+ * `utcOffsetMinutes` (local minus UTC, e.g. UTC+7 sends 420) is the same
+ * contract as `GET /daily`'s and `routes/utilization.ts`'s own shift, just
+ * anchored to "now" instead of an explicit `date`/`week` param. `0` is
+ * plain UTC-week Monday. Reuses the shared ISO-week helper (lib/isoWeek.ts)
+ * rather than re-deriving Monday arithmetic here.
+ */
+function localIsoWeekStart(utcOffsetMinutes: number): Date {
+  const localNow = new Date(Date.now() + utcOffsetMinutes * 60_000);
+  const localToday = localNow.toISOString().slice(0, 10);
+  const week = parseWeekKey(weekKeyOf(localToday));
+  if (!week) throw new Error(`unreachable: weekKeyOf(${localToday}) produced an unparseable key`);
+  return new Date(utcMidnightOfDayString(week.start).getTime() - utcOffsetMinutes * 60_000);
+}
+
+/** UTC midnight of the Monday of the ISO week containing "now" (no viewer-local shift) — `localIsoWeekStart(0)` under a name that reads clearly at its call sites below (`resolvedWeekWhere`, the Task 7.1 timer's own week figure). */
 function currentIsoWeekStart(): Date {
-  const todayDay = new Date().toISOString().slice(0, 10);
-  const week = parseWeekKey(weekKeyOf(todayDay));
-  if (!week) throw new Error(`unreachable: weekKeyOf(${todayDay}) produced an unparseable key`);
-  return utcMidnightOfDayString(week.start);
+  return localIsoWeekStart(0);
+}
+
+/**
+ * Sum of `userId`'s `ItopTimeEntry.durationMinutes` on `ticketId` within
+ * `[weekStart, weekStart + 7d)` — the "x h this week on this ticket" figure
+ * shared by `GET /tickets/:id` (viewer-local week, Task 7.1) and the
+ * Stop-timer response of `POST /tickets/:id/time` below.
+ */
+async function myMinutesThisWeekOnTicket(userId: number, ticketId: number, weekStart: Date): Promise<number> {
+  const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const agg = await prisma.itopTimeEntry.aggregate({
+    where: { userId, ticketId, startDate: { gte: weekStart, lt: weekEnd } },
+    _sum: { durationMinutes: true },
+  });
+  return agg._sum.durationMinutes ?? 0;
 }
 
 /** `[]` (never `null`) when there's nothing stored — Phase 5 case-log entries, normalised by `lib/itop/sync.ts#normalizeCaseLog` at sync/write time. */
@@ -283,11 +320,21 @@ itopRouter.get(
 
 const ticketIdParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
+// Task 7.1: `myMinutesThisWeek` follows the viewer's LOCAL ISO week (Monday
+// 00:00 local), same `utcOffsetMinutes` contract as `GET /daily` and
+// `routes/utilization.ts` — only the window's position shifts, never the
+// underlying UTC-midnight arithmetic (`localIsoWeekStart` above).
+const ticketDetailQuerySchema = z.object({
+  utcOffsetMinutes: z.coerce.number().int().min(-840).max(840).default(0),
+});
+
 itopRouter.get(
   "/tickets/:id",
   validate("params", ticketIdParamSchema),
+  validate("query", ticketDetailQuerySchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof ticketIdParamSchema>;
+    const { utcOffsetMinutes } = req.query as unknown as z.infer<typeof ticketDetailQuerySchema>;
 
     const ticket = await prisma.itopTicket.findUnique({ where: { id } });
     if (!ticket || ticket.customerId === null) {
@@ -297,7 +344,12 @@ itopRouter.get(
     await ensureCustomerVisible(req.user!, ticket.customerId);
 
     const myItopPersonId = await getMyItopPersonId(req.user!.sub);
-    res.json(toTicketRow(ticket, myItopPersonId, { withLogs: true, includePrivate: canSeePrivate(req.user!) }));
+    const myMinutesThisWeek = await myMinutesThisWeekOnTicket(
+      req.user!.sub,
+      ticket.id,
+      localIsoWeekStart(utcOffsetMinutes),
+    );
+    res.json({ ...toTicketRow(ticket, myItopPersonId, { withLogs: true, includePrivate: canSeePrivate(req.user!) }), myMinutesThisWeek });
   },
 );
 
@@ -587,7 +639,13 @@ interface WritableTicketContext {
   ticket: ItopTicket;
   token: string;
   myItopPersonId: number | null;
+  /** iTop `User` object key (distinct from `myItopPersonId`, the `Person`) — Task 7.1's `POST /tickets/:id/time` needs this for `TimeSpent.user_id`; the Phase 5 action/log routes ignore it. */
+  myItopUserId: number | null;
   baseUrl: string;
+  /** The caller's Solvro email — real iTop 3.2.2 refuses core/update and core/apply_stimulus with no `comment` at all, so every write route below builds one identifying who acted from Solvro. */
+  myEmail: string;
+  /** The iTop SERVER's own configured IANA timezone (`ItopConfig.timezone`) — every date this route formats for iTop (Task 7.1's `POST /tickets/:id/time` start/end) must be expressed in this zone, never UTC. */
+  timezone: string;
 }
 
 /**
@@ -611,7 +669,7 @@ async function loadWritableTicket(userSub: number, ticketId: number, user: JwtPa
 
   const me = await prisma.user.findUnique({
     where: { id: userSub },
-    select: { itopTokenEnc: true, itopPersonId: true },
+    select: { itopTokenEnc: true, itopPersonId: true, itopUserId: true, email: true },
   });
   if (!me?.itopTokenEnc) {
     throw new HttpError(403, "itop_token_missing", "Add your personal iTop token in Settings");
@@ -635,7 +693,15 @@ async function loadWritableTicket(userSub: number, ticketId: number, user: JwtPa
     throw new HttpError(409, "itop_not_configured", "iTop is not connected. An admin must set the iTop URL first.");
   }
 
-  return { ticket, token, myItopPersonId: me.itopPersonId, baseUrl: config.baseUrl };
+  return {
+    ticket,
+    token,
+    myItopPersonId: me.itopPersonId,
+    myItopUserId: me.itopUserId,
+    baseUrl: config.baseUrl,
+    myEmail: me.email,
+    timezone: config.timezone,
+  };
 }
 
 /**
@@ -650,11 +716,11 @@ async function loadWritableTicket(userSub: number, ticketId: number, user: JwtPa
  * of a 500.
  */
 async function reReadAndUpsertTicket(cls: string, ticketId: number): Promise<ItopTicket> {
-  const appClient = await getItopAppClient();
+  const [appClient, config] = await Promise.all([getItopAppClient(), getItopConfig()]);
   const result = await appClient.get<ItopTicketFields>(cls, ticketId, ITOP_TICKET_OUTPUT_FIELDS);
   const row = result.objects[0];
   if (row) {
-    await upsertTicketFromItop(cls, { key: ticketId, class: cls, fields: row.fields });
+    await upsertTicketFromItop(cls, { key: ticketId, class: cls, fields: row.fields }, config.timezone);
   }
   return prisma.itopTicket.findUniqueOrThrow({ where: { id: ticketId } });
 }
@@ -693,9 +759,13 @@ const actionBodySchema = z.discriminatedUnion("action", [
     action: z.literal("assign_to_me"),
     fields: z.object({ team_id: z.coerce.number().int().positive().optional() }).optional(),
   }),
+  // pending_reason is mandatory on a real iTop 3.2.2 install (`ev_pending`
+  // refuses with "Missing mandatory attribute(s) for applying the stimulus:
+  // pending_reason." otherwise) — `fields` is therefore required here, not
+  // optional, and 400s before the route even runs when it's missing.
   z.object({
     action: z.literal("pending"),
-    fields: z.object({ pending_reason: z.union([z.string(), z.number()]).optional() }).optional(),
+    fields: z.object({ pending_reason: z.string().min(1).max(500) }),
   }),
   z.object({
     action: z.literal("resolve"),
@@ -717,7 +787,7 @@ itopRouter.post(
     const { id } = req.params as unknown as z.infer<typeof ticketIdParamSchema>;
     const body = req.body as z.infer<typeof actionBodySchema>;
 
-    const { ticket, token, myItopPersonId, baseUrl } = await loadWritableTicket(req.user!.sub, id, req.user!);
+    const { ticket, token, myItopPersonId, baseUrl, myEmail } = await loadWritableTicket(req.user!.sub, id, req.user!);
     const client = makeItopClient(baseUrl, token);
 
     let stimulus: string;
@@ -778,10 +848,7 @@ itopRouter.post(
       stimulusFields = { team_id: teamId, agent_id: myItopPersonId };
     } else if (body.action === "pending") {
       stimulus = "ev_pending";
-      const pendingReason = body.fields?.pending_reason;
-      if (pendingReason !== undefined) {
-        stimulusFields = { pending_reason: pendingReason };
-      }
+      stimulusFields = { pending_reason: body.fields.pending_reason };
     } else if (body.action === "resolve") {
       stimulus = "ev_resolve";
       stimulusFields = { resolution_code: body.fields.resolution_code, solution: body.fields.solution };
@@ -792,7 +859,11 @@ itopRouter.post(
     }
 
     try {
-      await client.applyStimulus(ticket.class, ticket.id, stimulus, stimulusFields);
+      // Real iTop 3.2.2 refuses core/apply_stimulus outright with no comment
+      // ("Error: Missing parameter 'comment'") — always identify the acting
+      // Solvro user and action rather than relying on client.ts's generic
+      // default.
+      await client.applyStimulus(ticket.class, ticket.id, stimulus, stimulusFields, `Solvro: ${body.action} by ${myEmail}`);
     } catch (err) {
       mapItopWriteError(err);
     }
@@ -822,12 +893,15 @@ itopRouter.post(
     const { id } = req.params as unknown as z.infer<typeof ticketIdParamSchema>;
     const { visibility, text } = req.body as z.infer<typeof logBodySchema>;
 
-    const { ticket, token, myItopPersonId, baseUrl } = await loadWritableTicket(req.user!.sub, id, req.user!);
+    const { ticket, token, myItopPersonId, baseUrl, myEmail } = await loadWritableTicket(req.user!.sub, id, req.user!);
     const client = makeItopClient(baseUrl, token);
 
     const field = visibility === "public" ? "public_log" : "private_log";
     try {
-      await client.update(ticket.class, ticket.id, { [field]: text });
+      // Real iTop 3.2.2 refuses core/update outright with no comment ("Error:
+      // Missing parameter 'comment'") — identify the acting Solvro user
+      // rather than relying on client.ts's generic default.
+      await client.update(ticket.class, ticket.id, { [field]: text }, `Solvro: log entry by ${myEmail}`);
     } catch (err) {
       mapItopWriteError(err);
     }
@@ -838,5 +912,446 @@ itopRouter.post(
       "iTop ticket log entry added",
     );
     res.json({ ...toTicketRow(updated, myItopPersonId, { withLogs: true, includePrivate: canSeePrivate(req.user!) }), staleAfterWrite });
+  },
+);
+
+// ---- Phase 6: "New ticket" sheet — picklists + creation ----------------------
+//
+// GET /services and GET /customers/:id/contacts are reads (APPLICATION
+// client, like every other GET in this file) feeding the sheet's dropdowns.
+// POST /tickets is the one write here and follows the same preconditions as
+// the Phase 5 action/log routes above (actionsEnabled, visibility, the
+// caller's own decryptable token) — it just has no existing ticket row to
+// load, so it checks the CUSTOMER's mapping instead of an ItopTicket's. The
+// caller must belong to the customer's iTop organisation (checked with the
+// read-only application client, since that's just a fact about iTop's own
+// data — not itself a write) before the create is attempted with the user's
+// token. See docs/archive/plans/itop-integration.md Task 6.2.
+
+/** Maps a read-only iTop failure (GET /services, GET /customers/:id/contacts, and the caller-in-org check below) to a 502 — these never surface iTop's error as a 409 since there's no "refusal" concept for a plain read. */
+function mapItopReadError(err: unknown): never {
+  if (err instanceof ItopError) {
+    throw new HttpError(502, "itop_unreachable", err.message);
+  }
+  throw err;
+}
+
+interface ServiceOption {
+  id: number;
+  name: string;
+  providerName: string | null;
+}
+
+/** In-process, 5-minute TTL — the service catalogue changes rarely and every "New ticket" sheet open would otherwise re-fetch it. Mirrors lib/itop/config.ts's ItopConfig cache shape. Module-level (not per-request), so it's shared across callers; there's no per-customer variation to key on. */
+const SERVICES_CACHE_TTL_MS = 5 * 60_000;
+let servicesCache: { value: ServiceOption[]; expiresAt: number } | null = null;
+
+/**
+ * Busts the `GET /services` cache. iTop's own service catalogue and org
+ * names are admin-side data — `routes/itopAdmin.ts` calls this alongside
+ * every `bustItopConfigCache()` (settings PATCH, token change, manual sync)
+ * so a base-URL/token change or a sync-driven org rename doesn't leave a
+ * stale service list cached for up to 5 more minutes. Exported (not
+ * automatic on every config bust) because this cache lives in this route
+ * file, not lib/itop/config.ts — same reasoning as that module's own
+ * `bustItopConfigCache` export.
+ */
+export function bustItopServicesCache(): void {
+  servicesCache = null;
+}
+
+itopRouter.get("/services", async (_req, res) => {
+  const now = Date.now();
+  if (servicesCache && servicesCache.expiresAt > now) {
+    res.json(servicesCache.value);
+    return;
+  }
+
+  // Throws 409 itop_not_configured itself when the admin hasn't connected
+  // iTop yet — no separate isItopConfigured check needed here.
+  const appClient = await getItopAppClient();
+
+  let result: ItopGetResult<ItopServiceFields>;
+  try {
+    result = await appClient.get<ItopServiceFields>("Service", "SELECT Service", ITOP_SERVICE_OUTPUT_FIELDS);
+  } catch (err) {
+    mapItopReadError(err);
+  }
+
+  const rows: ServiceOption[] = result.objects
+    .map((row) => ({ id: row.key, name: row.fields.name, providerName: row.fields.org_id_friendlyname || null }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  servicesCache = { value: rows, expiresAt: now + SERVICES_CACHE_TTL_MS };
+  res.json(rows);
+});
+
+// ---- GET /customers/:id/contacts ---------------------------------------------
+
+itopRouter.get(
+  "/customers/:id/contacts",
+  validate("params", customerIdParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof customerIdParamSchema>;
+
+    await ensureCustomerVisible(req.user!, id);
+
+    const customer = await prisma.customer.findUnique({ where: { id }, select: { itopOrgId: true } });
+    if (!customer) throw new HttpError(404, "customer_not_found", "Customer not found");
+
+    if (customer.itopOrgId === null) {
+      res.json([]);
+      return;
+    }
+
+    const appClient = await getItopAppClient();
+    let result: ItopGetResult<ItopPersonFields>;
+    try {
+      result = await appClient.get<ItopPersonFields>(
+        "Person",
+        `SELECT Person WHERE org_id = ${customer.itopOrgId}`,
+        ITOP_PERSON_OUTPUT_FIELDS,
+      );
+    } catch (err) {
+      mapItopReadError(err);
+    }
+
+    const rows = result.objects
+      .map((row) => ({ id: row.key, name: row.fields.friendlyname, email: row.fields.email }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+    res.json(rows);
+  },
+);
+
+// ---- POST /tickets -------------------------------------------------------------
+
+interface WritableCustomerContext {
+  itopOrgId: number;
+  token: string;
+  myItopPersonId: number | null;
+  baseUrl: string;
+  myEmail: string;
+}
+
+/**
+ * Shared preconditions for `POST /tickets`, mirroring `loadWritableTicket`'s
+ * order (write switch → visibility → the caller's own token) but checking a
+ * CUSTOMER's org mapping instead of an existing ticket's customer link,
+ * since there is no ticket yet. `customerId` here is a BODY field (like
+ * `POST /projects`), not an id-keyed URL param — per backend/CLAUDE.md this
+ * uses `isCustomerVisible` + 400 `customer_not_found`, NOT
+ * `ensureCustomerVisible`'s 404 (that 404 is reserved for id-keyed routes,
+ * e.g. `GET /customers/:id/contacts` above).
+ */
+async function loadWritableCustomerContext(
+  userSub: number,
+  customerId: number,
+  user: JwtPayload,
+): Promise<WritableCustomerContext> {
+  const config = await getItopConfig();
+  if (!config.actionsEnabled) {
+    throw new HttpError(404, "not_found", "Not found");
+  }
+
+  if (!(await isCustomerVisible(user, customerId))) {
+    throw new HttpError(400, "customer_not_found", "Customer not found");
+  }
+
+  const customer = await prisma.customer.findUnique({ where: { id: customerId }, select: { itopOrgId: true } });
+  if (!customer || customer.itopOrgId === null) {
+    throw new HttpError(400, "customer_not_mapped", "This customer isn't mapped to an iTop organisation.");
+  }
+
+  const me = await prisma.user.findUnique({
+    where: { id: userSub },
+    select: { itopTokenEnc: true, itopPersonId: true, email: true },
+  });
+  if (!me?.itopTokenEnc) {
+    throw new HttpError(403, "itop_token_missing", "Add your personal iTop token in Settings");
+  }
+
+  let token: string;
+  try {
+    token = open(me.itopTokenEnc);
+  } catch (err) {
+    if (err instanceof SecretBoxError) {
+      throw new HttpError(
+        403,
+        "itop_token_unreadable",
+        "Your saved iTop token could not be decrypted (SECRETS_KEY changed?) — enter it again in Settings.",
+      );
+    }
+    throw err;
+  }
+
+  if (!config.baseUrl) {
+    throw new HttpError(409, "itop_not_configured", "iTop is not connected. An admin must set the iTop URL first.");
+  }
+
+  return {
+    itopOrgId: customer.itopOrgId,
+    token,
+    myItopPersonId: me.itopPersonId,
+    baseUrl: config.baseUrl,
+    myEmail: me.email,
+  };
+}
+
+/**
+ * Re-reads a just-created ticket with the read-only APPLICATION client and
+ * upserts it into the snapshot, same spirit as `reReadAfterWrite` above — but
+ * for a ticket that has no PRE-write snapshot row to fall back to (it didn't
+ * exist before this request). On failure there is nothing to answer with
+ * except the bare fact that iTop accepted the create, so the caller gets
+ * `null` and the route answers 202 instead of 201.
+ */
+async function readAndUpsertNewTicket(cls: string, id: number): Promise<ItopTicket | null> {
+  try {
+    return await reReadAndUpsertTicket(cls, id);
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err), ticketId: id, cls },
+      "iTop re-read after a successful ticket create failed — the ticket exists in iTop but not yet in the snapshot",
+    );
+    return null;
+  }
+}
+
+const createTicketBodySchema = z.object({
+  customerId: z.number().int().positive(),
+  class: z.enum([...ITOP_TICKET_CLASSES] as [ItopTicketClass, ...ItopTicketClass[]]),
+  title: z.string().min(1).max(255),
+  description: z.string().min(1).max(4000),
+  callerId: z.number().int().positive(),
+  serviceId: z.number().int().positive().optional(),
+});
+
+itopRouter.post(
+  "/tickets",
+  requirePermission("task:write"),
+  validate("body", createTicketBodySchema),
+  async (req, res) => {
+    const body = req.body as z.infer<typeof createTicketBodySchema>;
+
+    const { itopOrgId, token, myItopPersonId, baseUrl, myEmail } = await loadWritableCustomerContext(
+      req.user!.sub,
+      body.customerId,
+      req.user!,
+    );
+
+    // The caller must actually belong to the customer's iTop organisation —
+    // checked with the read-only application client (a fact about iTop's
+    // own data, not a write) before spending the user's own token on a
+    // create that iTop would refuse anyway.
+    const appClient = await getItopAppClient();
+    let callerCheck: ItopGetResult<ItopPersonFields>;
+    try {
+      callerCheck = await appClient.get<ItopPersonFields>(
+        "Person",
+        `SELECT Person WHERE id = ${body.callerId} AND org_id = ${itopOrgId}`,
+        ITOP_PERSON_OUTPUT_FIELDS,
+      );
+    } catch (err) {
+      mapItopReadError(err);
+    }
+    if (callerCheck.objects.length !== 1) {
+      throw new HttpError(
+        400,
+        "itop_caller_not_in_org",
+        "That caller doesn't belong to the customer's organisation in iTop.",
+      );
+    }
+
+    const client = makeItopClient(baseUrl, token);
+    const createFields: Record<string, unknown> = {
+      org_id: itopOrgId,
+      caller_id: body.callerId,
+      title: body.title,
+      description: body.description,
+    };
+    if (body.serviceId !== undefined) createFields.service_id = body.serviceId;
+
+    let created: ItopObjectRow<ItopTicketFields> | undefined;
+    try {
+      created = await client.create<ItopTicketFields>(body.class, createFields, `Solvro: ticket created by ${myEmail}`);
+    } catch (err) {
+      mapItopWriteError(err);
+    }
+    if (!created) {
+      throw new HttpError(502, "itop_unreachable", "iTop did not confirm the new ticket");
+    }
+
+    logger.info(
+      { userId: req.user!.sub, customerId: body.customerId, class: body.class, itopId: created.key },
+      "iTop ticket created from Solvro",
+    );
+
+    const newTicket = await readAndUpsertNewTicket(created.class, created.key);
+    if (!newTicket) {
+      res.status(202).json({ created: true, id: created.key, staleAfterWrite: true });
+      return;
+    }
+
+    res.status(201).json(
+      toTicketRow(newTicket, myItopPersonId, { withLogs: true, includePrivate: canSeePrivate(req.user!) }),
+    );
+  },
+);
+
+// ---- Phase 7: POST /tickets/:id/time — log time on a ticket ------------------
+//
+// Same preconditions as the Phase 5 write routes (`loadWritableTicket`:
+// actionsEnabled, ticket visibility, a decryptable personal token) PLUS a
+// linked iTop USER identity: `TimeSpent.user_id` references iTop's `User`
+// object, not the `Person` — `me.itopPersonId` (used everywhere else in this
+// file) is the wrong id here. `syncUsers` (lib/itop/sync.ts) only ever sets
+// `User.itopUserId` once a Person's own `contactid` resolves to an iTop
+// `User`; an account still missing it needs an admin to re-run "Match
+// users", not a Solvro-side fix. See
+// docs/archive/plans/itop-integration.md Task 7.1.
+//
+// Caveat on the `core/create` call below: the `ITOP_TIME_SPENT_TICKET_REF_FIELD`
+// value sent as `ticket_ref` assumes the real install's Time Tracking
+// extension resolves it as a genuine external key back to the ticket (the
+// same assumption `lib/itop/sync.ts#syncTimeEntries` makes reading it back).
+// That is unconfirmed against the real install — plan §5 risk "Time
+// Tracking schema differs" — so this send is a stand-in pending the admin's
+// confirmation, not a verified contract.
+
+const logTimeBodySchema = z.object({
+  startedAt: z.coerce.date(),
+  endedAt: z.coerce.date(),
+  title: z.string().min(1).max(255).optional(),
+});
+
+const MIN_TIME_ENTRY_MS = 60_000; // 1 minute
+const MAX_TIME_ENTRY_MS = 24 * 60 * 60 * 1000; // 24 hours
+// Allows a little clock skew between the browser and the server rather than
+// rejecting a Stop that lands a few seconds after the server's own "now".
+const TIME_ENTRY_FUTURE_SKEW_MS = 5 * 60_000;
+
+/**
+ * Re-reads a just-created `TimeSpent` row with the read-only APPLICATION
+ * client and upserts it into the snapshot — same spirit as
+ * `readAndUpsertNewTicket` above, but for a time entry that has no
+ * pre-write snapshot row to fall back to. Returns `null` (never throws) on
+ * any re-read failure, which the caller turns into a 202
+ * `{ created: true, staleAfterWrite: true }` instead of pretending the
+ * snapshot already reflects a write that, from iTop's point of view,
+ * already succeeded and must not be retried.
+ */
+async function readAndUpsertNewTimeEntry(id: number): Promise<ItopTimeEntry | null> {
+  try {
+    const [appClient, config] = await Promise.all([getItopAppClient(), getItopConfig()]);
+    const result = await appClient.get<ItopTimeSpentFields>("TimeSpent", id, ITOP_TIME_SPENT_OUTPUT_FIELDS);
+    const row = result.objects[0];
+    if (!row) return null;
+    await upsertTimeEntryFromItop(row, config.timezone);
+    return await prisma.itopTimeEntry.findUniqueOrThrow({ where: { id } });
+  } catch (err) {
+    logger.warn(
+      { err: err instanceof Error ? err.message : String(err), timeEntryId: id },
+      "iTop re-read after a successful time entry create failed — the entry exists in iTop but not yet in the snapshot",
+    );
+    return null;
+  }
+}
+
+itopRouter.post(
+  "/tickets/:id/time",
+  requirePermission("task:write"),
+  validate("params", ticketIdParamSchema),
+  validate("body", logTimeBodySchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof ticketIdParamSchema>;
+    const { startedAt, endedAt, title } = req.body as z.infer<typeof logTimeBodySchema>;
+
+    const { ticket, token, myItopUserId, baseUrl, myEmail, timezone } = await loadWritableTicket(
+      req.user!.sub,
+      id,
+      req.user!,
+    );
+
+    if (myItopUserId === null) {
+      throw new HttpError(
+        403,
+        "itop_user_unmatched",
+        "Your iTop user account is not linked yet — ask an admin to run Match users",
+      );
+    }
+
+    if (endedAt.getTime() <= startedAt.getTime()) {
+      throw new HttpError(400, "invalid_time_range", "The end time must be after the start time.");
+    }
+    const durationMs = endedAt.getTime() - startedAt.getTime();
+    if (durationMs < MIN_TIME_ENTRY_MS) {
+      throw new HttpError(400, "invalid_duration", "A logged entry must be at least 1 minute.");
+    }
+    if (durationMs > MAX_TIME_ENTRY_MS) {
+      throw new HttpError(400, "invalid_duration", "A logged entry cannot exceed 24 hours.");
+    }
+    const now = Date.now();
+    if (startedAt.getTime() > now + TIME_ENTRY_FUTURE_SKEW_MS) {
+      throw new HttpError(400, "started_in_future", "The start time cannot be in the future.");
+    }
+    if (startedAt.getTime() < now - TIME_ENTRY_WINDOW_MS) {
+      throw new HttpError(400, "started_too_old", "The start time is more than 8 weeks ago, outside the sync window.");
+    }
+
+    const client = makeItopClient(baseUrl, token);
+    // Matches the unit `syncTimeEntries` (lib/itop/sync.ts) assumes when
+    // reading `TimeSpent.duration` back — seconds when
+    // ITOP_TIME_SPENT_DURATION_IN_SECONDS is true, minutes otherwise — so a
+    // write made here round-trips through the next sync at the same value.
+    const durationValue = Math.round(ITOP_TIME_SPENT_DURATION_IN_SECONDS ? durationMs / 1000 : durationMs / 60_000);
+    const createFields: Record<string, unknown> = {
+      user_id: myItopUserId,
+      org_id: ticket.orgId,
+      // Formatted in the iTop SERVER's own zone (`timezone`), never UTC —
+      // same contract lib/itop/sync.ts's parseItopDate reads this shape
+      // back with.
+      start_date: formatItopDate(startedAt, timezone),
+      end_date: formatItopDate(endedAt, timezone),
+      duration: durationValue,
+      title: title ?? ticket.ref,
+      [ITOP_TIME_SPENT_TICKET_REF_FIELD]: ticket.ref,
+    };
+
+    let created: ItopObjectRow<ItopTimeSpentFields> | undefined;
+    try {
+      created = await client.create<ItopTimeSpentFields>("TimeSpent", createFields, `Solvro: time logged by ${myEmail}`);
+    } catch (err) {
+      mapItopWriteError(err);
+    }
+    if (!created) {
+      throw new HttpError(502, "itop_unreachable", "iTop did not confirm the new time entry");
+    }
+
+    logger.info(
+      { userId: req.user!.sub, ticketId: ticket.id, itopTimeEntryId: created.key },
+      "iTop time entry logged from Solvro",
+    );
+
+    const entry = await readAndUpsertNewTimeEntry(created.key);
+    if (!entry) {
+      res.status(202).json({ created: true, id: created.key, staleAfterWrite: true });
+      return;
+    }
+
+    // No `myMinutesThisWeek` here — this route has no `utcOffsetMinutes`
+    // input, so any week figure it computed would be the UTC week, silently
+    // contradicting `GET /tickets/:id`'s viewer-LOCAL week figure. The panel
+    // re-fetches the ticket (which does take `utcOffsetMinutes`) for that
+    // number instead of trusting this response for it.
+    res.status(201).json({
+      entry: {
+        id: entry.id,
+        startDate: entry.startDate,
+        endDate: entry.endDate,
+        durationMinutes: entry.durationMinutes,
+        title: entry.title,
+        ticketRef: entry.ticketRef,
+      },
+    });
   },
 );

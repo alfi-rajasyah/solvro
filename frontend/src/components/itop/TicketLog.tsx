@@ -10,7 +10,7 @@ type LogVisibility = "public" | "private";
 const LOG_MAX_LENGTH = 4000;
 
 const PILL_BASE =
-  "rounded-full px-2.5 py-1 font-display text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
+  "rounded-sm px-2.5 py-1 font-display text-[11px] font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
 
 function pillClass(active: boolean): string {
   return [
@@ -36,7 +36,8 @@ export function TicketLog({
   canAct: boolean;
   /** Whether the Private tab (and the private option in the composer) render — the backend withholds private entries from callers without task:write. */
   showPrivate: boolean;
-  onAdd: (visibility: LogVisibility, text: string) => void;
+  /** `onSuccess` fires only once iTop accepted the entry — the composer keeps the typed text until then, so a refusal doesn't lose it. */
+  onAdd: (visibility: LogVisibility, text: string, onSuccess: () => void) => void;
   adding: boolean;
   error: string | null;
 }) {
@@ -61,8 +62,7 @@ export function TicketLog({
     e.preventDefault();
     const trimmed = text.trim();
     if (!trimmed || adding) return;
-    onAdd(entryVisibility, trimmed);
-    setText("");
+    onAdd(entryVisibility, trimmed, () => setText(""));
   }
 
   return (

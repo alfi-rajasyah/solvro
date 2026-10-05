@@ -1857,14 +1857,19 @@ Utilization and timezone steps).
   2026-10-04**: done exactly as suggested — migration
   `20261004120100_itop_time_entries` drops `itop_tickets_status_idx` and adds
   `@@index([customerId, status])` (`itop_tickets_customer_id_status_idx`).
-- **iTop datetimes are parsed as UTC.** `parseItopDate` in
+- ~~**iTop datetimes are parsed as UTC.** `parseItopDate` in
   `backend/src/lib/itop/sync.ts:61` treats every date/time string iTop
   returns (`start_date`, `last_update`, `tto`, `ttr`, `resolution_date`) as
   UTC with no timezone conversion. If the iTop server itself runs in local
   (non-UTC) time, every stamp — and the SLA/age math derived from it — is
   off by the server's UTC offset. Fix direction: a per-install timezone
   setting (likely on `ItopConfig`) once an iTop admin confirms the source
-  server's zone; no such setting exists yet.
+  server's zone; no such setting exists yet.~~ **Resolved 2026-09-24 in the customer edition, ported
+  2026-10-04**: confirmed on the real iTop 3.2.2 (Europe/Paris,
+  2 h skew). `ItopConfig.timezone` (IANA, default `UTC`, Admin › iTop) feeds
+  `lib/itop/timezone.ts`; all reads, OQL cutoffs and writes convert through
+  it, and a zone change forces a full re-sync. Verified live: 8 tickets and
+  their case logs match iTop after the re-sync.
 - **`GET /customers/:id` doesn't type or use `itopOrgId`/`itopOrgName` on
   the frontend, though the backend response already carries both fields.**
   `backend/src/routes/customers.ts`'s `GET /:id` calls
@@ -1917,6 +1922,7 @@ Utilization and timezone steps).
   being dropped. Fix direction: stamp rows with a `syncRunId`/`seenAt` during
   the upsert and delete with `WHERE seenAt < runStart` instead of `notIn`,
   which needs no per-row parameter regardless of row count.
+
 
 ---
 
@@ -1971,6 +1977,7 @@ No fix now; each is a follow-up decision.
   currently carried onto the row alongside `t.status`/`t.priority`). Decision
   item — whether this export should show it — not a bug.
 
+
 ---
 
 ## iTop integration (personal tokens, ticket actions) — deferred findings (ported 2026-10-04)
@@ -2021,3 +2028,157 @@ No fix now; each is a follow-up decision.
   reserves `full` for status chips and avatars, yet `frontend/src/components/itop/
   TicketFilters.tsx` and `TicketLog.tsx` use it on toggle buttons (count chips, log tabs).
   Decide once: sanction the pill-toggle pattern in DESIGN.md, or retire it in both files.
+
+
+---
+
+## iTop integration (board, new tickets) — deferred findings (ported 2026-10-04)
+
+Findings deferred in the customer edition when the ticket board and new-ticket
+flow shipped there (2026-09-23), carried over with the port (see `CHANGELOG.md`'s
+"iTop board, new tickets, time tracking, and the real-install and timezone
+fixes" entry). No fix now; each is a follow-up decision.
+
+- ~~**Scope chips stay visible but inert in Board view.**
+    `frontend/src/components/itop/TicketsTab.tsx` renders `TicketFilters`
+    (Ongoing / Resolved this week / Mine) above both the Table and the Board,
+    but only the Table's `useCustomerTickets(scope, cls, ...)` call reads
+    `scope` — `TicketBoard.tsx` always fetches its own fixed `ongoing` +
+    `resolved_week` scopes directly and ignores the `scope` state entirely (it
+    does still respect `cls`). Clicking a scope chip while the Board is active
+    changes nothing on screen, with no indication that the click was a no-op.
+    Fix direction: hide the scope chips (keep the class filter) when
+    `view === "board"` in `TicketFilters.tsx`/`TicketsTab.tsx`.~~ **Resolved 2026-09-23**: `TicketFilters.tsx` gained `showScope`; the Tickets tab hides the scope chips in Board view (class chips stay).
+
+- **The drop lifecycle graph assumes iTop's default stimuli.**
+  `frontend/src/components/itop/board/dropMapper.ts`'s `TRANSITIONS` table
+  hard-codes iTop's default UserRequest/Incident lifecycle (`ev_assign`,
+  `ev_pending`, `ev_resolve`, `ev_close`, `ev_reopen` — decision 10 in
+  `docs/archive/plans/itop-integration.md`). An install with custom states,
+  a narrower state machine, or `ev_reassign`-style semantics instead of plain
+  reassignment will either reject drags the admin actually wants to allow, or
+  let a drag through that `apply_stimulus` then refuses — surfaced only as
+  iTop's own refusal text (`409 itop_refused`), not a Solvro-authored
+  message. No per-install configuration exists for this graph; verify item
+  10 against the real install before relying on Board drag-and-drop there.
+- **Mobile board is a single stacked column with touch drag.**
+  `TicketBoard.tsx`'s `KanbanBoard` uses `grid gap-3 md:grid-cols-5` — below
+  the `md:` breakpoint the five columns stack vertically with drag-and-drop
+  still wired through the same dnd-kit-backed `reui/kanban` engine. This has
+  not been evaluated against real phone use (long stacked scroll to reach a
+  distant column, touch-drag precision across a tall single-column stack);
+  evaluate before treating it as the phone-usable form of the Board, same
+  caution flagged for `kanban-v2`'s task board mobile fallback.
+- **The services pick-list caches for 5 minutes in-process; the cache is now busted on every admin settings change.**
+  `backend/src/routes/itop.ts`'s `GET /services` handler caches
+  `servicesCache` in a module-level variable for `SERVICES_CACHE_TTL_MS` (5
+  minutes). Fixed this round: `bustItopServicesCache()` is called from
+  `routes/itopAdmin.ts` alongside every `bustItopConfigCache()` (settings
+  PATCH, webhook-secret generate/remove, manual sync), so a base-URL/token
+  change no longer leaves a stale or previous-instance service list cached
+  for up to 5 minutes — it re-fetches on the next `GET /services` call.
+- **`GET /itop/services` returns every organisation's services to any authenticated user, with no customer scoping.**
+  `backend/src/routes/itop.ts`'s `GET /services` handler runs `SELECT
+  Service` (no `WHERE`) with the read-only application token and returns
+  every service's `name` and `providerName` (the owning organisation's
+  friendly name) to any signed-in Solvro user, regardless of which
+  customers they can see — `ensureCustomerVisible`/`customerVisibilityFilter`
+  are not applied here, unlike every other `/itop` read. Two consequences:
+  (a) `NewTicketSheet.tsx`'s service picker offers services that don't
+  belong to the customer being ticketed — iTop's own `create` call refuses
+  an entitlement mismatch at submit time, so this is friction, not a write
+  bypass; (b) every iTop organisation name in the install becomes readable
+  through this endpoint by any Solvro user, independent of customer
+  visibility — a narrower information leak than a ticket/customer read, but
+  still not gated the way the rest of `/itop` is. Decision item before this
+  endpoint (or its picker) is reused elsewhere: filter services by the
+  target customer's organisation via iTop's service-entitlement link
+  (`lnkCustomerContractToService` or equivalent) once a `customerId` is
+  known, or accept and document the current organisation-wide visibility.
+
+
+---
+
+## iTop integration (time tracking, task-to-ticket) — deferred findings (ported 2026-10-04)
+
+Findings deferred in the customer edition when time tracking and
+create-from-task shipped there (2026-09-23), carried over with the port (same
+`CHANGELOG.md` entry as above). No fix now; each is a follow-up decision.
+
+- ~~**The running timer is shared across every user on one browser profile.**
+  `frontend/src/components/itop/useTicketTimer.ts` persists the single
+  running timer in `localStorage["solvro.itopTimer"]` with no user id in the
+  key or the stored shape. Two Solvro accounts signed in from the same
+  browser profile (e.g. a shared kiosk machine, or one TAM covering for
+  another) see and can stop/discard each other's timer, and a Stop always
+  logs the entry under whichever user's session is currently active, not
+  necessarily the one who started it. Fix direction: key the storage entry
+  (or at least gate reads/writes) by the signed-in user's id.~~ **Resolved 2026-10-04**: the timer is stored under `solvro.itopTimer.<userId>`, checked against the signed-in user on read, and cleared on sign-out (`frontend/src/components/itop/useTicketTimer.ts`, `frontend/src/lib/auth.tsx`).
+- ~~**The Stop-timer response's `myMinutesThisWeek` is UTC-week bucketed; the
+  panel always displays the local-week figure from a separate read.**
+  `POST /itop/tickets/:id/time` (`backend/src/routes/itop.ts`) computes its
+  returned `myMinutesThisWeek` via `currentIsoWeekStart()` (plain UTC
+  Monday), while `TicketTimer.tsx`'s displayed weekly figure comes from
+  `GET /tickets/:id`'s `myMinutesThisWeek`, bucketed by the viewer's local
+  week (`useItopTicket`'s `utcOffsetMinutes`). The two numbers can disagree
+  near a week boundary in a non-UTC timezone. This is already documented in
+  a code comment at the POST handler and in `useLogTicketTimeFor` — the
+  client deliberately never `setQueryData`s the POST response's figure onto
+  the ticket cache, invalidating instead so the next `GET` supplies the
+  correctly-bucketed number. No behavioural bug today, but the mismatched
+  units between the two responses are worth resolving (e.g. have the POST
+  route accept and honor the same `utcOffsetMinutes` the GET route does) so
+  the two payload shapes stop disagreeing on what "this week" means.~~
+  **Resolved 2026-09-23**: `POST /itop/tickets/:id/time` no longer computes
+  or returns `myMinutesThisWeek` at all (`backend/src/routes/itop.ts`'s 201
+  response is now just `{ entry }`) — the route has no `utcOffsetMinutes`
+  input to bucket it correctly by, so the ambiguous figure was dropped
+  rather than fixed to agree. The panel's "this week" figure comes only from
+  `GET /tickets/:id`'s local-week-bucketed value, refetched via
+  `useLogTicketTimeFor`'s invalidation on success — there is no longer a
+  second, differently-bucketed number in play. (Note for a follow-up docs
+  pass: `frontend/src/lib/queries.ts`'s `ItopTimeLogResult` type and its
+  surrounding comments still describe the old `myMinutesThisWeek`-bearing
+  shape as of this writing — worth updating alongside this fix.)
+- **`useItopTicket`'s `utcOffsetMinutes` isn't part of its query key.**
+  `frontend/src/lib/queries.ts`'s `useItopTicket(id)` computes
+  `utcOffsetMinutes` fresh on every render and sends it on the request, but
+  the query key is just `queryKeys.itopTicket(id)` — unlike `useItopDaily`
+  and `useUtilization`, which both fold `utcOffsetMinutes` into their keys.
+  A DST transition (or a laptop's timezone changing mid-session) changes
+  what "this week" means without invalidating the cached response, so the
+  ticket panel's "x h this week" figure can read stale-by-timezone until the
+  query's `staleTime` next elapses on its own. Fix direction: fold
+  `utcOffsetMinutes` into `queryKeys.itopTicket` the same way the other two
+  hooks do.
+- **The `TimeSpent.ticket_ref` attribute name is unverified against the real install.**
+  `POST /itop/tickets/:id/time`'s `core/create TimeSpent` call
+  (`backend/src/routes/itop.ts`) sends `ITOP_TIME_SPENT_TICKET_REF_FIELD`
+  (`backend/src/lib/itop/types.ts`, currently `"ticket_ref"`) to link the new
+  entry back to its ticket. Whether that attribute exists, is spelled that
+  way, and is writable via REST on the real install's Time Tracking
+  extension has not been confirmed — only the fake iTop (`backend/test/itop/
+  fakeItop.ts`) enforces it, by refusing an unknown ref, which is a
+  Solvro-side test stand-in, not evidence about the real server. If the real
+  install accepts the create but silently ignores an unrecognised
+  `ticket_ref` field, the entry still lands in Utilization (time is real and
+  attributed to the right user/customer) but with no ticket link, and the
+  ticket panel's "x h this week on this ticket" figure stays at 0 for every
+  entry logged from Solvro, even though the hours are being counted
+  elsewhere. Action for the iTop admin before go-live: confirm the
+  attribute's name and that it is writable via REST (the same probe
+  discipline already used for `TimeSpent.duration`'s unit, see the Utilization
+  finding above and `docs/CONFIGURATION.md` §2.16).
+
+The iTop integration shipped in the customer edition on 2026-09-23 and was ported here on 2026-10-04; the plan is archived at
+`docs/archive/plans/itop-integration.md`.
+
+## iTop integration — real-install findings (2026-09-24, ported 2026-10-04)
+
+Tested against a real iTop 3.2.2 (ITIL, default lifecycle). Fixed in code the same day: mandatory `comment` on writes, `pending_reason`, assign from Pending, SLA deadline fields, per-row sync skipping, priority codes. Still open:
+
+- **The application token cannot read iTop's `User` class** (Support Agent profile), and neither can a TAM's personal token. So user matching sets the person link but never `User.itopUserId`, and time logging answers "Your iTop user account is not linked yet". Options once the Time Tracking extension is installed: check whether `TimeSpent.user_id` can be omitted (iTop may default it to the caller), or grant the application token a profile that can read `User`.
+- **`PersonalToken` is not readable by a Support Agent token either.** The token-ownership check therefore falls back to the email match, and token expiry shows as unknown. See the "personal tokens, ticket actions" section above.
+- **Go-live iTop setting:** personal tokens work only for profiles listed in the `authent-token` module setting `personal_tokens_allowed_profiles` (e.g. `array('Support Agent')`); by default only administrators can use them.
+- **Time Tracking extension not bundled** with iTop Community; download it from iTop Hub before the `TimeSpent` checks (duration unit, `ticket_ref` writability) can run.
+- **`pending_reason` is assumed to be free text.** True on the default install; an install that turns it into a list of values will refuse free text, and the user sees iTop's message.

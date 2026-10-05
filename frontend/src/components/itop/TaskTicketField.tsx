@@ -1,14 +1,28 @@
 // "iTop ticket" row in TaskPanel.tsx's metadata grid (Task 4.2,
 // docs/archive/plans/itop-integration.md). Rendered only when
 // `useItopStatus().configured` is true — an install with no iTop connection
-// never sees this field at all. Owns no mutation of its own: saving goes
-// through the caller's `onSave`, which TaskPanel.tsx threads into its
-// existing `patch()` helper (useUpdateTask's optimistic-cache pattern
-// applies unchanged, same as every other editable row in the panel).
-import { useId, useRef, useState } from "react";
+// never sees this field at all. Owns no mutation of its own for the ref
+// itself: saving goes through the caller's `onSave`, which TaskPanel.tsx
+// threads into its existing `patch()` helper (useUpdateTask's optimistic-
+// cache pattern applies unchanged, same as every other editable row in the
+// panel).
+//
+// "Create in iTop" (Task 7.2) is the one exception — it owns the
+// `NewTicketSheet` it opens directly, since creating a ticket needs its own
+// form/mutation, not a value this row's own `onSave` can express. Success
+// still funnels back through `onSave(ref)`, so the created ticket is pinned
+// to the task exactly like a manually typed ref.
+import { useEffect, useId, useRef, useState } from "react";
 import { Chip } from "@/components/StatusChip";
 import { ApiError } from "@/lib/api";
-import { useItopStatus, useItopTicketByRef } from "@/lib/queries";
+import { hasPermission, useAuth } from "@/lib/auth";
+import {
+  useItopCustomerMapped,
+  useItopStatus,
+  useItopTicketByRef,
+  useMyItopToken,
+} from "@/lib/queries";
+import { NewTicketSheet } from "./NewTicketSheet";
 import { isItopRef, itopTicketUrl, statusLabel, statusTone } from "./ticketPresentation";
 
 const INPUT_CLASS =
@@ -23,19 +37,59 @@ const AFFORDANCE_CLASS =
 export function TaskTicketField({
   itopTicketRef,
   canEdit,
+  customerId,
+  taskTitle,
+  taskDescription,
   onSave,
+  onCreateSheetOpenChange,
 }: {
   itopTicketRef: string | null;
   canEdit: boolean;
+  /** The task's project's customer id, or null when the project has none —
+   * gates "Create in iTop" (Task 7.2): no customer, no organisation to
+   * create the ticket under. */
+  customerId: number | null;
+  taskTitle: string;
+  taskDescription: string | null;
   onSave: (ref: string | null) => void;
+  /** Reports whether the nested New-ticket sheet is open, so the parent panel can leave Escape to the sheet instead of closing itself mid-create. */
+  onCreateSheetOpenChange?: (open: boolean) => void;
 }) {
+  const { user } = useAuth();
   const { data: status } = useItopStatus();
+  const { data: myToken } = useMyItopToken();
   const ticketQuery = useItopTicketByRef(itopTicketRef);
 
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
   const errorId = useId();
+
+  // Keep the parent's Escape handling in sync with the nested sheet. The
+  // cleanup also clears the flag when this field unmounts with the sheet open.
+  const reportSheetOpen = useRef(onCreateSheetOpenChange);
+  reportSheetOpen.current = onCreateSheetOpenChange;
+  useEffect(() => {
+    reportSheetOpen.current?.(createOpen);
+    return () => reportSheetOpen.current?.(false);
+  }, [createOpen]);
+
+  // Cheap booleans first (no extra request) before the one that actually
+  // costs a fetch (`useItopCustomerMapped` hits `GET
+  // /itop/customers/:id/tickets` under the hood) — `enabled` below skips
+  // that fetch entirely once the task already has a ref, or nothing else
+  // about this row would show the button anyway.
+  // Creating a ticket is a write (POST /itop/tickets) — task:write only.
+  const wantsCreateAffordance =
+    hasPermission(user, "task:write") &&
+    canEdit &&
+    !itopTicketRef &&
+    customerId !== null &&
+    (status?.actionsEnabled ?? false) &&
+    (myToken?.set ?? false);
+  const customerMapped = useItopCustomerMapped(customerId, { enabled: wantsCreateAffordance });
+  const canCreate = wantsCreateAffordance && customerMapped;
 
   // One edit settles exactly once — same rationale and same risk as
   // TaskPanel.tsx's own `renameSettledRef` (Enter and the blur that follows
@@ -88,6 +142,8 @@ export function TaskTicketField({
     settledRef.current = true;
     setError(null);
     setEditing(false);
+    // Reset so a later focus-then-blur on the bare input can't re-pin this value.
+    setDraft("");
     onSave(value);
   }
 
@@ -99,30 +155,61 @@ export function TaskTicketField({
   if (showInput) {
     return (
       <div className="relative">
-        <input
-          key={editing ? "editing" : "empty"}
-          autoFocus={editing}
-          type="text"
-          value={draft}
-          onChange={(e) => setDraft(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") commit();
-            if (e.key === "Escape" && editing) setEditing(false);
-          }}
-          onBlur={commit}
-          disabled={!canEdit}
-          placeholder="R-000000"
-          spellCheck={false}
-          autoComplete="off"
-          aria-label="iTop ticket"
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? errorId : undefined}
-          className={INPUT_CLASS}
-        />
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            key={editing ? "editing" : "empty"}
+            autoFocus={editing}
+            type="text"
+            value={draft}
+            onChange={(e) => {
+              // Typing starts a fresh edit: an earlier empty blur marked the
+              // previous one settled, which would otherwise swallow this one.
+              settledRef.current = false;
+              setDraft(e.target.value);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") commit();
+              if (e.key === "Escape" && editing) setEditing(false);
+            }}
+            onBlur={commit}
+            disabled={!canEdit}
+            placeholder="R-000000"
+            spellCheck={false}
+            autoComplete="off"
+            aria-label="iTop ticket"
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? errorId : undefined}
+            className={INPUT_CLASS}
+          />
+          {canCreate && (
+            <button
+              type="button"
+              onClick={() => setCreateOpen(true)}
+              className={AFFORDANCE_CLASS}
+            >
+              Create in iTop
+            </button>
+          )}
+        </div>
         {error && (
           <p id={errorId} className="mt-1 text-[11px] text-error">
             {error}
           </p>
+        )}
+        {createOpen && customerId !== null && (
+          <NewTicketSheet
+            open
+            onClose={() => setCreateOpen(false)}
+            customerId={customerId}
+            initialTitle={taskTitle}
+            initialDescription={taskDescription ?? ""}
+            onCreated={(ticket) => {
+              setCreateOpen(false);
+              settledRef.current = true;
+              setDraft("");
+              onSave(ticket.ref);
+            }}
+          />
         )}
       </div>
     );
@@ -163,6 +250,7 @@ export function TaskTicketField({
             type="button"
             onClick={() => {
               settledRef.current = false;
+              setDraft("");
               onSave(null);
             }}
             aria-label={`Clear iTop ticket ${itopTicketRef}`}
