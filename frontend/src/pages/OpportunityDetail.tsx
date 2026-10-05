@@ -35,12 +35,14 @@
 // read-only (a `lock` glyph replaces the menu), the flag toggles and Close
 // disappear, and `canReopenDeal` gates a Reopen button instead (refused once
 // the deal already has a linked project).
-import { useState, type FormEvent } from "react";
+import { useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { AssignPicModal } from "@/components/AssignPicModal";
 import { CloseDealDialog } from "@/components/CloseDealDialog";
+import { CommentBody, CommentComposer } from "@/components/CommentMentions";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { HandoffProjectModal } from "@/components/DealCard";
 import { MoveReasonModal } from "@/components/MoveReasonModal";
 import { OpportunityFormModal } from "@/components/OpportunityFormModal";
@@ -61,6 +63,7 @@ import {
   canReopenDeal,
 } from "@/components/pipeline/boardLogic";
 import { probabilityTone } from "@/components/pipeline/kpi";
+import { ActivityFeedBody } from "@/components/ProjectActivity";
 import { Alert, AlertAction, AlertDescription } from "@/components/reui/alert";
 import {
   Timeline,
@@ -68,6 +71,7 @@ import {
   TimelineItem,
   TimelineSeparator,
 } from "@/components/reui/timeline";
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
 import { StageChip } from "@/components/StageChip";
 import { Chip } from "@/components/StatusChip";
 import {
@@ -76,8 +80,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { fmtAgo, fmtDateTime } from "@/lib/formatDate";
+import { dealMentionCandidates } from "@/lib/mentions";
 import {
   formatIDR,
   formatPipelineDate,
@@ -98,10 +105,13 @@ import {
   useMoveOpportunity,
   useOpportunity,
   useOpportunityActivities,
+  useOpportunityActivity,
   useOpportunityLinks,
+  useUsers,
   useReopenOpportunity,
   useUpdateOpportunity,
   useUpdateOpportunityLink,
+  type ActivityEvent,
   type Opportunity,
   type OpportunityActivity,
   type OpportunityLink,
@@ -134,38 +144,6 @@ function isHttpUrl(value: string): boolean {
   } catch {
     return false;
   }
-}
-
-// Duplicated from TaskPanel.tsx's private `relativeTime` helper (same
-// house convention for comment/activity timestamps) — not exported there,
-// so re-implemented verbatim rather than reaching into that file.
-function relativeTime(iso: string): string {
-  const then = new Date(iso).getTime();
-  const diffMs = Date.now() - then;
-  const diffMin = Math.round(diffMs / 60_000);
-  if (diffMin < 1) return "just now";
-  if (diffMin < 60) return `${diffMin}m ago`;
-  const diffHr = Math.round(diffMin / 60);
-  if (diffHr < 24) return `${diffHr}h ago`;
-  const diffDay = Math.round(diffHr / 24);
-  if (diffDay < 7) return `${diffDay}d ago`;
-  return new Date(iso).toLocaleDateString();
-}
-
-// Short Indonesian-locale date for an ISO INSTANT (`closedAt`/
-// `lastActivityAt`/`waitingInputSince`) — verbatim copy of DealCard.tsx's
-// private `formatWonAt` (not exported there, same reason it isn't here):
-// these three fields are real Prisma DateTime instants, not the plain
-// "yyyy-MM-dd" day strings `formatPipelineDate` (pipelineFormat.ts) is
-// contracted to — feeding an instant through that helper would misinterpret
-// it as a bare day string and silently render the wrong calendar date around
-// midnight in any timezone away from the exact moment it was recorded in UTC.
-function formatInstantDate(iso: string): string {
-  return new Intl.DateTimeFormat("id-ID", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  }).format(new Date(iso));
 }
 
 // Display text for `PIPELINE_SLA_HINT`'s per-stage row (pipelineFormat.ts) —
@@ -205,12 +183,12 @@ function closedByUsername(activities: OpportunityActivity[] | undefined): string
 // know).
 function detailCaption(deal: Opportunity, closedBy: string | null): string {
   if (deal.outcome !== null) {
-    const dateText = deal.closedAt ? formatInstantDate(deal.closedAt) : "—";
+    const dateText = deal.closedAt ? fmtDateTime(deal.closedAt) : "—";
     const parts = [closedBy ? `Closed ${dateText} by ${closedBy}` : `Closed ${dateText}`];
     if (deal.outcomeReason) parts.push(deal.outcomeReason);
     return parts.join(" · ");
   }
-  return `Last activity ${formatInstantDate(deal.lastActivityAt)} · SLA for this stage: ${slaHintCaption(deal.stage)}`;
+  return `Last activity ${fmtDateTime(deal.lastActivityAt)} · SLA for this stage: ${slaHintCaption(deal.stage)}`;
 }
 
 export function OpportunityDetail() {
@@ -256,14 +234,14 @@ export function OpportunityDetail() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
-        <div className="h-6 w-32 animate-pulse rounded-sm bg-surface-container-low" />
-        <div className="h-20 animate-pulse rounded-xl bg-surface-container-low" />
+      <SkeletonRegion className="space-y-4">
+        <Skeleton className="h-6 w-32" />
+        <Skeleton className="h-20" />
         <div className="grid gap-6 lg:grid-cols-3">
-          <div className="h-64 animate-pulse rounded-xl bg-surface-container-low lg:col-span-2" />
-          <div className="h-64 animate-pulse rounded-xl bg-surface-container-low" />
+          <Skeleton className="h-64 lg:col-span-2" />
+          <Skeleton className="h-64" />
         </div>
-      </div>
+      </SkeletonRegion>
     );
   }
 
@@ -399,7 +377,7 @@ export function OpportunityDetail() {
       <div>
         <Link
           to="/pipeline"
-          className="inline-flex items-center gap-1 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant hover:text-primary"
+          className="inline-flex items-center gap-1 font-display text-xs font-semibold text-on-surface-variant hover:text-primary"
         >
           <span className="material-symbols-outlined text-[17px]">chevron_left</span>
           Pipeline
@@ -426,15 +404,17 @@ export function OpportunityDetail() {
               <OutcomeChip outcome={deal.outcome} reasonCategory={deal.outcomeReasonCategory} />
             </div>
 
-            <p className="mt-1.5 text-[12px] text-on-surface-variant">{caption}</p>
+            <p className="mt-1.5 text-xs text-on-surface-variant">{caption}</p>
           </div>
 
           <div className="flex flex-wrap shrink-0 items-center gap-3">
-            {/* `font-mono`, not `text-data-mono` (N4): `text-data-mono`
-                carries its own fixed 13px font-size token, which conflicts
-                with `text-lg` here — `font-mono` applies only the
-                monospace font family. */}
-            <span className="font-mono text-lg text-primary">{formatIDR(deal.dealValue)}</span>
+            <span className="text-lg tabular-nums text-primary">{formatIDR(deal.dealValue)}</span>
+            {/* Copies the address bar's URL at click time, so a deal has a
+                shareable address. */}
+            <CopyLinkButton
+              label="Copy link"
+              className="h-8 w-8 rounded-sm border border-outline-variant hover:border-primary hover:text-primary"
+            />
             {/* Persistent handoff affordance (PRD §2.10) — deliberately NOT
                 gated on the transient `justWonOffer` banner below: it must
                 stay available for as long as `outcome === "WON" &&
@@ -454,7 +434,7 @@ export function OpportunityDetail() {
             {deal.outcome === "WON" && deal.projectId && (
               <Link
                 to={`/projects/${deal.projectId}`}
-                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
               >
                 <span className="material-symbols-outlined text-base">business_center</span>
                 View project
@@ -464,7 +444,7 @@ export function OpportunityDetail() {
               <button
                 type="button"
                 onClick={() => setHandoffOpen(true)}
-                className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-primary hover:bg-primary/10"
+                className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-xs font-semibold text-primary hover:bg-primary/10"
               >
                 <span className="material-symbols-outlined text-base">rocket_launch</span>
                 Create project
@@ -476,7 +456,7 @@ export function OpportunityDetail() {
                 type="button"
                 onClick={handleToggleWaitingInput}
                 disabled={updateOpportunity.isPending}
-                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-base">
                   {deal.subStatus === "WAITING_SALES_INPUT" ? "check_circle" : "schedule"}
@@ -495,7 +475,7 @@ export function OpportunityDetail() {
                 type="button"
                 onClick={handleToggleHold}
                 disabled={updateOpportunity.isPending}
-                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-base">
                   {deal.statusTag === "HOLD" ? "play_circle" : "pause_circle"}
@@ -508,7 +488,7 @@ export function OpportunityDetail() {
                 type="button"
                 onClick={handleToggleDelayed}
                 disabled={updateOpportunity.isPending}
-                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-base">
                   {deal.statusTag === "DELAYED" ? "event_available" : "event"}
@@ -520,7 +500,7 @@ export function OpportunityDetail() {
               <button
                 type="button"
                 onClick={() => setCloseDealOpen(true)}
-                className="inline-flex items-center gap-1 rounded-sm border border-error px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-error hover:bg-error/10"
+                className="inline-flex items-center gap-1 rounded-sm border border-error px-2.5 py-1.5 font-display text-xs font-semibold text-error hover:bg-error/10"
               >
                 <span className="material-symbols-outlined text-base">flag</span>
                 Close deal
@@ -531,7 +511,7 @@ export function OpportunityDetail() {
                 type="button"
                 onClick={handleReopen}
                 disabled={reopenOpportunity.isPending}
-                className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-primary hover:bg-primary/10 disabled:opacity-50"
+                className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
               >
                 <span className="material-symbols-outlined text-base">restart_alt</span>
                 Reopen
@@ -542,7 +522,7 @@ export function OpportunityDetail() {
               <button
                 type="button"
                 onClick={() => setAssignOpen(true)}
-                className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-primary hover:bg-primary/10"
+                className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-xs font-semibold text-primary hover:bg-primary/10"
               >
                 <span className="material-symbols-outlined text-base">person_add</span>
                 Assign PIC
@@ -552,7 +532,7 @@ export function OpportunityDetail() {
               <button
                 type="button"
                 onClick={() => setEditOpen(true)}
-                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
               >
                 <span className="material-symbols-outlined text-base">edit</span>
                 Edit
@@ -562,7 +542,7 @@ export function OpportunityDetail() {
               <button
                 type="button"
                 onClick={() => setConfirmDeleteOpen(true)}
-                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-error hover:text-error"
+                className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-error hover:text-error"
               >
                 <span className="material-symbols-outlined text-base">delete</span>
                 Delete
@@ -615,14 +595,14 @@ export function OpportunityDetail() {
                 setHandoffOpen(true);
                 setJustWonOffer(false);
               }}
-              className="rounded-sm bg-primary px-3 py-1 font-display text-[12px] font-bold text-on-primary hover:bg-primary-container"
+              className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container"
             >
               Create project
             </button>
             <button
               type="button"
               onClick={() => setJustWonOffer(false)}
-              className="rounded-sm px-2.5 py-1 text-[12px] font-semibold text-on-surface-variant hover:bg-surface-container"
+              className="rounded-sm px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
             >
               Dismiss
             </button>
@@ -640,6 +620,7 @@ export function OpportunityDetail() {
             error={activities.error}
             addActivity={addActivity}
           />
+          <RecentChanges dealId={deal.id} />
         </div>
 
         <div className="space-y-6">
@@ -675,7 +656,7 @@ export function OpportunityDetail() {
           </>
         }
         confirmLabel="Delete"
-        confirmTone="warning"
+        confirmTone="danger"
         busy={deleteOpportunity.isPending}
       />
 
@@ -773,7 +754,7 @@ function MetaItem({
         {icon}
       </span>
       <div className="min-w-0">
-        <p className="text-[11px] uppercase tracking-wider text-on-surface-variant">{label}</p>
+        <p className="text-label-caps uppercase text-on-surface-variant">{label}</p>
         <div className="text-sm text-on-surface">{children}</div>
       </div>
     </div>
@@ -783,7 +764,7 @@ function MetaItem({
 function MetaGrid({ deal }: { deal: Opportunity }) {
   return (
     <div className="space-y-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
-      <h2 className="font-display text-[13px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <h2 className="font-display text-label-caps uppercase text-on-surface-variant">
         Details
       </h2>
 
@@ -817,7 +798,7 @@ function MetaGrid({ deal }: { deal: Opportunity }) {
           deal.subStatus === "WAITING_SALES_INPUT" &&
           deal.waitingInputSince && (
           <MetaItem icon="schedule" label="Waiting on Sales since">
-            {formatInstantDate(deal.waitingInputSince)}
+            {fmtDateTime(deal.waitingInputSince)}
           </MetaItem>
         )}
         {/* Closed (D5): the stage never resets, so it's shown here as history
@@ -833,7 +814,7 @@ function MetaGrid({ deal }: { deal: Opportunity }) {
                 : OUTCOME_LABELS[deal.outcome]}
             </MetaItem>
             <MetaItem icon="event_available" label="Closed">
-              {deal.closedAt ? formatInstantDate(deal.closedAt) : "—"}
+              {deal.closedAt ? fmtDateTime(deal.closedAt) : "—"}
             </MetaItem>
           </>
         )}
@@ -863,28 +844,27 @@ function ActivitySection({
   error: unknown;
   addActivity: ReturnType<typeof useAddOpportunityActivity>;
 }) {
-  const [note, setNote] = useState("");
-
-  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const trimmed = note.trim();
-    if (!trimmed || addActivity.isPending) return;
-    try {
-      await addActivity.mutateAsync(trimmed);
-      setNote("");
-    } catch {
-      // Surfaced via addActivity.error below.
-    }
-  }
+  // @mentions in a note: active users who can open the Pipeline (the
+  // `pipeline:view` permission or `*`), so a mention always lands on someone
+  // who can follow the link. Chips render from the note's returned ids and the
+  // whole directory, so a mention of a since-deactivated user still shows.
+  const { data: directory } = useUsers();
+  const candidates = useMemo(() => dealMentionCandidates(directory), [directory]);
+  const known = useMemo(
+    () => (directory ?? []).map((u) => ({ id: u.id, username: u.username })),
+    [directory],
+  );
 
   return (
     <div className="space-y-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
-      <h2 className="font-display text-[13px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <h2 className="font-display text-label-caps uppercase text-on-surface-variant">
         Activity {activities && activities.length > 0 && `· ${activities.length}`}
       </h2>
 
       {isLoading && (
-        <div className="h-16 animate-pulse rounded-sm bg-surface-container-low" />
+        <SkeletonRegion>
+          <Skeleton className="h-16" />
+        </SkeletonRegion>
       )}
       {isError && (
         <Alert variant="destructive">
@@ -915,17 +895,15 @@ function ActivitySection({
               <div className="flex gap-2.5">
                 <AssigneeAvatar user={a.user} size="xs" />
                 <div className="min-w-0 flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2">
-                  <div className="mb-0.5 flex items-center justify-between gap-2 text-[12px]">
+                  <div className="mb-0.5 flex items-center justify-between gap-2 text-xs">
                     <span className="min-w-0 truncate font-medium text-on-surface">
                       {a.user?.username ?? "Unknown"}
                     </span>
                     <span className="shrink-0 text-on-surface-variant">
-                      {relativeTime(a.createdAt)}
+                      {fmtAgo(a.createdAt)}
                     </span>
                   </div>
-                  <p className="whitespace-pre-wrap wrap-break-word text-xs text-on-surface">
-                    {a.note}
-                  </p>
+                  <CommentBody body={a.note} mentionedUserIds={a.mentionedUserIds} users={known} />
                 </div>
               </div>
             </TimelineItem>
@@ -933,32 +911,52 @@ function ActivitySection({
         </Timeline>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-2 border-t border-outline-variant pt-3">
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          rows={3}
-          maxLength={2000}
-          placeholder="Add a note…"
-          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
-        />
-        <div className="flex items-center justify-between gap-2">
-          {addActivity.isError ? (
-            <p className="text-[12px] text-error">{(addActivity.error as Error).message}</p>
-          ) : (
-            <span />
-          )}
-          <button
-            type="submit"
-            disabled={addActivity.isPending || !note.trim()}
-            className="inline-flex shrink-0 items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
-          >
-            <span className="material-symbols-outlined text-base">send</span>
-            {addActivity.isPending ? "Adding…" : "Add note"}
-          </button>
-        </div>
-      </form>
+      <CommentComposer
+        variant="note"
+        candidates={candidates}
+        isPending={addActivity.isPending}
+        error={addActivity.isError ? (addActivity.error as Error).message : null}
+        onSend={async (note, mentionedUserIds) => {
+          await addActivity.mutateAsync({ note, mentionedUserIds });
+        }}
+      />
     </div>
+  );
+}
+
+// The Activity timeline above already has a sentence for every other deal
+// action (created, moved, closed, reopened, assigned, handed off, sub-status
+// and tag changes, notes, links), so this list keeps only the field edits,
+// the one event type that carries from/to values the timeline lacks.
+const isFieldEdit = (event: ActivityEvent) =>
+  event.entityType === "opportunity" && event.action === "updated";
+
+/**
+ * The deal's field edits (GET /opportunities/:id/activity, narrowed to
+ * `opportunity` / `updated` events): value, deadline, win probability and so
+ * on, each with its before and after. The notes themselves stay in the
+ * Activity timeline above; this feed never carries note text.
+ */
+function RecentChanges({ dealId }: { dealId: string }) {
+  const query = useOpportunityActivity(dealId);
+  return (
+    <section
+      aria-labelledby="deal-changes-heading"
+      className="space-y-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-4"
+    >
+      <h2
+        id="deal-changes-heading"
+        className="font-display text-label-caps uppercase text-on-surface-variant"
+      >
+        Field changes
+      </h2>
+      <ActivityFeedBody
+        query={query}
+        emptyText="Edits to this deal's fields show up here, with the old and new values."
+        filter={isFieldEdit}
+        currentHref={`/pipeline/${dealId}`}
+      />
+    </section>
   );
 }
 
@@ -1010,7 +1008,7 @@ function LinksSection({
   return (
     <div className="space-y-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="font-display text-[13px] font-bold uppercase tracking-wider text-on-surface-variant">
+        <h2 className="font-display text-label-caps uppercase text-on-surface-variant">
           Links {links && links.length > 0 && `· ${links.length}`}
         </h2>
         {canEdit && (
@@ -1020,7 +1018,7 @@ function LinksSection({
               setFormOpen((v) => !v);
               setFormError(null);
             }}
-            className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2 py-1 font-display text-label-caps uppercase tracking-wider text-on-surface-variant hover:border-primary hover:text-primary"
+            className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2 py-1 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
           >
             <span className="material-symbols-outlined text-base">add</span>
             Add link
@@ -1028,7 +1026,11 @@ function LinksSection({
         )}
       </div>
 
-      {isLoading && <div className="h-10 animate-pulse rounded-sm bg-surface-container-low" />}
+      {isLoading && (
+        <SkeletonRegion>
+          <Skeleton className="h-10" />
+        </SkeletonRegion>
+      )}
       {isError && (
         <Alert variant="destructive">
           <AlertDescription>Could not load links: {(error as Error).message}</AlertDescription>
@@ -1049,7 +1051,7 @@ function LinksSection({
             placeholder="https://…"
             className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
           />
-          {formError && <p className="text-[12px] text-error">{formError}</p>}
+          {formError && <p className="text-xs text-error">{formError}</p>}
           <div className="flex justify-end gap-2">
             <button
               type="button"
@@ -1057,7 +1059,7 @@ function LinksSection({
                 setFormOpen(false);
                 setFormError(null);
               }}
-              className="rounded-sm px-2.5 py-1 text-[12px] font-semibold text-on-surface-variant hover:bg-surface-container"
+              className="rounded-sm px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
             >
               Cancel
             </button>
@@ -1065,7 +1067,7 @@ function LinksSection({
               type="button"
               onClick={handleAdd}
               disabled={addLink.isPending}
-              className="rounded-sm bg-primary px-3 py-1 font-display text-[12px] font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-50"
             >
               {addLink.isPending ? "Saving…" : "Save"}
             </button>
@@ -1110,7 +1112,7 @@ function LinksSection({
           ) : null
         }
         confirmLabel="Delete"
-        confirmTone="warning"
+        confirmTone="danger"
         busy={deleteLink.isPending}
       />
     </div>
@@ -1181,12 +1183,12 @@ function LinkRow({
           onChange={(e) => setUrl(e.target.value)}
           className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
         />
-        {error && <p className="text-[12px] text-error">{error}</p>}
+        {error && <p className="text-xs text-error">{error}</p>}
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="rounded-sm px-2.5 py-1 text-[12px] font-semibold text-on-surface-variant hover:bg-surface-container"
+            className="rounded-sm px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
           >
             Cancel
           </button>
@@ -1194,7 +1196,7 @@ function LinkRow({
             type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="rounded-sm bg-primary px-3 py-1 font-display text-[12px] font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-50"
           >
             {isSaving ? "Saving…" : "Save"}
           </button>

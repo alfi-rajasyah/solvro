@@ -122,7 +122,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
         </p>
 
         <fieldset>
-          <legend className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <legend className="mb-1 block text-label-caps uppercase text-on-surface-variant">
             Outcome
           </legend>
           <div className="grid grid-cols-3 gap-2">
@@ -154,7 +154,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
 
         {outcome !== "WON" && (
           <label className="block">
-            <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+            <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">
               Reason category
               <span className="ml-1 text-error">*</span>
             </span>
@@ -175,7 +175,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
         )}
 
         <label className="block">
-          <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">
             Note (optional)
           </span>
           <textarea

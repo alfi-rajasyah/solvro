@@ -58,6 +58,7 @@ import { StageChip } from "@/components/StageChip";
 import { Chip } from "@/components/StatusChip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { dayToDate } from "@/lib/dateField";
+import { fmtDateTime } from "@/lib/formatDate";
 import { formatIDR, formatPipelineDate, formatWinProbability, STAGE_ORDER } from "@/lib/pipelineFormat";
 import type { Opportunity } from "@/lib/queries";
 import { personNameSortingFn } from "@/lib/tableSort";
@@ -75,20 +76,6 @@ export interface PipelineListProps {
    * an empty grid before data lands. Defaults `false` so this component
    * still renders standalone without a caller passing it. */
   isLoading?: boolean;
-}
-
-// id-ID day formatter for the `closedAt` ISO instant — same rationale as
-// DealCard.tsx's own `formatWonAt` (duplicated locally, not imported: that
-// helper is private to DealCard.tsx, same "copy, don't extract" precedent
-// every other Pipeline view in this directory already follows for its own
-// small formatters). `closedAt` is a real ISO instant (set by
-// POST /:id/close), not a plain "yyyy-MM-dd" day string, so
-// `formatPipelineDate`/`dayFromIso` (that pair's contract is plain calendar
-// days only) would misinterpret it.
-function formatClosedAt(closedAt: string): string {
-  return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(
-    new Date(closedAt),
-  );
 }
 
 export function PipelineList({ deals, closedView, isLoading = false }: PipelineListProps) {
@@ -182,7 +169,7 @@ export function PipelineList({ deals, closedView, isLoading = false }: PipelineL
         // needs no explicit sortingFn, same as Admin.tsx's/CustomerDetail's
         // numeric count columns.
         cell: ({ row }) => (
-          <span className="font-mono text-[13px] tabular-nums text-on-surface">
+          <span className="text-sm tabular-nums text-on-surface">
             {formatIDR(row.original.dealValue)}
           </span>
         ),
@@ -256,7 +243,7 @@ export function PipelineList({ deals, closedView, isLoading = false }: PipelineL
         accessorFn: (row) => dayToDate(row.requestDate)?.getTime() ?? Number.POSITIVE_INFINITY,
         header: ({ column }) => <DataGridColumnHeader column={column} title="Request date" />,
         cell: ({ row }) => (
-          <span className="font-mono text-[12px] text-on-surface-variant">
+          <span className="text-xs text-on-surface-variant">
             {row.original.requestDate ? formatPipelineDate(row.original.requestDate) : "—"}
           </span>
         ),
@@ -277,12 +264,12 @@ export function PipelineList({ deals, closedView, isLoading = false }: PipelineL
             <span
               className={
                 overdue
-                  ? "font-mono text-[12px] font-bold text-error"
-                  : "font-mono text-[12px] text-on-surface-variant"
+                  ? "text-xs font-bold text-error"
+                  : "text-xs text-on-surface-variant"
               }
             >
               {deal.deadline ? formatPipelineDate(deal.deadline) : "—"}
-              {overdue && " · OVERDUE"}
+              {overdue && " · Overdue"}
             </span>
           );
         },
@@ -297,8 +284,8 @@ export function PipelineList({ deals, closedView, isLoading = false }: PipelineL
       accessorFn: (row) => (row.closedAt ? new Date(row.closedAt).getTime() : Number.POSITIVE_INFINITY),
       header: ({ column }) => <DataGridColumnHeader column={column} title="Closed" />,
       cell: ({ row }) => (
-        <span className="font-mono text-[12px] text-on-surface-variant">
-          {row.original.closedAt ? formatClosedAt(row.original.closedAt) : "—"}
+        <span className="text-xs text-on-surface-variant">
+          {row.original.closedAt ? fmtDateTime(row.original.closedAt) : "—"}
         </span>
       ),
       meta: { skeleton: <Skeleton className="h-3.5 w-16" /> },

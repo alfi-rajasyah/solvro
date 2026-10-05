@@ -2,7 +2,6 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import {
-  fmtDate,
   PortfolioCalendar,
   sortPortfolioRows,
 } from "@/components/portfolio/PortfolioCalendar";
@@ -10,6 +9,7 @@ import { PipelineAnalyticsSection } from "@/components/pipeline/PipelineAnalytic
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { fmtDateTime, fmtDay, fmtRange } from "@/lib/formatDate";
 import { type PortfolioProjectRow, useExecutiveReport } from "@/lib/queries";
 
 // Executive dashboard — org-wide portfolio roll-up. Two blocks: an
@@ -108,7 +108,7 @@ function OverdueProjectsSection({
         <h2 className="font-display text-base font-bold text-on-surface">
           Overdue Projects
         </h2>
-        <span className="inline-flex items-center rounded-full bg-error-container px-2 py-0.5 font-mono text-[11px] font-semibold text-on-error-container">
+        <span className="inline-flex items-center rounded-full bg-error-container px-2 py-0.5 font-mono text-meta font-semibold text-on-error-container">
           {sorted.length}
         </span>
       </header>
@@ -121,7 +121,7 @@ function OverdueProjectsSection({
       ) : (
         <div className="overflow-x-auto rounded-sm border border-outline-variant bg-surface-container-lowest">
           {/* Desktop grid */}
-          <div className="hidden grid-cols-[minmax(200px,1.6fr)_140px_160px_140px_120px] items-center border-b border-outline-variant bg-surface-container-low px-3 py-2 font-display text-label-caps uppercase tracking-widest text-on-surface-variant md:grid">
+          <div className="hidden grid-cols-[minmax(200px,1.6fr)_140px_160px_140px_120px] items-center border-b border-outline-variant bg-surface-container-low px-3 py-2 font-display text-label-caps uppercase text-on-surface-variant md:grid">
             <span>Project</span>
             <span>TAM</span>
             <span>Customer</span>
@@ -156,8 +156,8 @@ function OverdueRow({ project: p }: { project: PortfolioProjectRow }) {
         <span className="truncate text-on-surface-variant">
           {p.customerName ?? "—"}
         </span>
-        <span className="font-mono text-[12px] text-on-surface-variant">
-          {fmtDate(p.end)}
+        <span className="text-[12px] text-on-surface-variant">
+          {fmtDay(p.end) || "—"}
         </span>
         <span className="text-right font-semibold text-error">
           {fmtOverdueBy(p.daysOverdue)}
@@ -179,7 +179,7 @@ function OverdueRow({ project: p }: { project: PortfolioProjectRow }) {
           <span className="truncate">
             {p.tamName} · {p.customerName ?? "—"}
           </span>
-          <span className="font-mono text-[12px]">{fmtDate(p.end)}</span>
+          <span className="text-[12px]">{fmtDay(p.end) || "—"}</span>
         </div>
         <div className="text-right text-[13px] font-semibold text-error">
           {fmtOverdueBy(p.daysOverdue)} overdue
@@ -228,7 +228,7 @@ function PortfolioTimelinesSection({
               type="button"
               onClick={() => setView(v.view)}
               className={[
-                "px-2.5 py-1 font-display text-label-caps uppercase tracking-wider",
+                "px-2.5 py-1 font-display text-sm font-semibold",
                 i > 0 ? "border-l border-outline-variant" : "",
                 v.view === view
                   ? "bg-primary text-on-primary"
@@ -257,7 +257,7 @@ function PortfolioTimelinesSection({
 function PortfolioList({ projects }: { projects: PortfolioProjectRow[] }) {
   return (
     <div className="space-y-3">
-      <p className="text-[11px] text-on-surface-variant">
+      <p className="text-xs text-on-surface-variant">
         High-level progress overview — a first pass. Phase dots below are a
         legend, not date-positioned segments.
       </p>
@@ -306,12 +306,12 @@ function TimelineRow({ project: p }: { project: PortfolioProjectRow }) {
               {p.progressPct}%
             </span>
           </div>
-          <div className="font-mono text-[11px] text-on-surface-variant">
-            {fmtDate(p.start)} → {fmtDate(p.end)}
+          <div className="text-xs text-on-surface-variant">
+            {fmtRange(p.start, p.end)}
           </div>
         </>
       ) : (
-        <p className="text-[11px] italic text-on-surface-variant">
+        <p className="text-xs italic text-on-surface-variant">
           No scheduled tasks
         </p>
       )}
@@ -321,7 +321,7 @@ function TimelineRow({ project: p }: { project: PortfolioProjectRow }) {
           {p.sections.map((s) => (
             <span
               key={s.id}
-              className="inline-flex items-center gap-1 text-[11px] text-on-surface-variant"
+              className="inline-flex items-center gap-1 text-meta text-on-surface-variant"
             >
               <span
                 className="h-1.5 w-1.5 rounded-full"
@@ -339,16 +339,6 @@ function TimelineRow({ project: p }: { project: PortfolioProjectRow }) {
 // ─────────────────────────────────────────────────────────────────────────
 // Formatting helpers
 // ─────────────────────────────────────────────────────────────────────────
-
-function fmtDateTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  });
-}
 
 function fmtOverdueBy(days: number): string {
   return `${days} day${days === 1 ? "" : "s"}`;

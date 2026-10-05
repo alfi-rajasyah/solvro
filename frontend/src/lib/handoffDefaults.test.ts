@@ -21,6 +21,8 @@ function makeUser(overrides: Partial<UserSummary> & Pick<UserSummary, "id" | "us
     email: "user@example.com",
     role: "SA",
     permissions: [],
+    active: true,
+    avatarUrl: null,
     ...overrides,
   };
 }

@@ -62,3 +62,5 @@ e2e/blob-report/
 # New UI/ — local-only design reference (the Figma PDF is 163 MB, over
 # GitHub's 100 MB limit; the HTMLs are dev-only previews, not a build target).
 New UI/
+# --- Large local-only QA screenshots from the UI pass; the report and notes beside them are tracked ---
+docs/archive/plans/ui-ux-qa-run/shots/

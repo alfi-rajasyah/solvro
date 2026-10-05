@@ -7,6 +7,7 @@ import { isActiveDeal } from "@/components/pipeline/kpi";
 import { PipelineKpiBar } from "@/components/pipeline/PipelineKpiBar";
 import { SolvroPipelineKanban, type SolvroPipelineKanbanHandle } from "@/components/pipeline/SolvroPipelineKanban";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import { BoardSkeleton, CardGridSkeleton } from "@/components/skeletons";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { isClosed } from "@/lib/pipelineFormat";
 import { useOpportunities, type Opportunity } from "@/lib/queries";
@@ -67,13 +68,8 @@ function isDealsFilter(value: string | null): value is DealsFilter {
 // `useOpportunities()` is still loading.
 function PipelineKanbanSkeleton() {
   return (
-    <div className="flex gap-4 overflow-x-auto pb-2">
-      {PIPELINE_STAGES.map((stage) => (
-        <div
-          key={stage}
-          className="h-64 w-[85vw] shrink-0 animate-pulse rounded-xl bg-surface-container-low sm:w-72"
-        />
-      ))}
+    <div className="overflow-x-auto pb-2">
+      <BoardSkeleton columns={PIPELINE_STAGES.length} cardsPerColumn={2} className="min-w-[72rem]" />
     </div>
   );
 }
@@ -231,7 +227,7 @@ export function Pipeline() {
             <button
               type="button"
               onClick={() => setImportOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-sm border border-outline-variant px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-surface-variant transition-colors hover:bg-surface-container"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-outline-variant px-3 py-1.5 font-display text-xs font-semibold text-on-surface-variant transition-colors hover:bg-surface-container"
             >
               <span className="material-symbols-outlined text-base">upload_file</span>
               Import
@@ -242,7 +238,7 @@ export function Pipeline() {
             <button
               type="button"
               onClick={() => setCreateOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-label-caps uppercase tracking-wider text-on-primary transition-colors hover:bg-primary-container"
+              className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-semibold text-on-primary transition-colors hover:bg-primary-container"
             >
               <span className="material-symbols-outlined text-base">add</span>
               New opportunity
@@ -254,11 +250,7 @@ export function Pipeline() {
       {/* KPI tiles: their own skeleton while loading, an error Alert on
           failure, the real bar once loaded — unchanged 3-way split. */}
       {isLoading ? (
-        <div className="grid grid-cols-2 gap-3 md:grid-cols-5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-sm bg-surface-container-low" />
-          ))}
-        </div>
+        <CardGridSkeleton count={5} gridClassName="grid-cols-2 md:grid-cols-5" />
       ) : isError ? (
         <Alert variant="destructive">
           <AlertDescription>Could not load Pipeline metrics: {(error as Error).message}</AlertDescription>

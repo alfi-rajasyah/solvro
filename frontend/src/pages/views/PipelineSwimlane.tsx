@@ -89,6 +89,7 @@ import {
   type SwimlaneLane,
 } from "@/components/pipeline/swimlaneLogic";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import { TableSkeleton } from "@/components/skeletons";
 import { StageChip } from "@/components/StageChip";
 import { formatIDRCompact } from "@/lib/pipelineFormat";
 import { useOpportunities } from "@/lib/queries";
@@ -108,10 +109,8 @@ export function PipelineSwimlane() {
 
   if (isLoading) {
     return (
-      <div className="max-h-[calc(100vh-280px)] space-y-2 overflow-auto">
-        {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-20 animate-pulse rounded-sm bg-surface-container-low" />
-        ))}
+      <div className="max-h-[calc(100vh-280px)] overflow-auto">
+        <TableSkeleton rows={4} columns={SWIMLANE_STAGES.length + 1} />
       </div>
     );
   }
@@ -176,16 +175,12 @@ export function PipelineSwimlane() {
                 className="sticky top-0 z-10 flex flex-col items-center gap-1 border-b border-outline-variant bg-surface-container px-2 py-2"
               >
                 <StageChip stage={stage} />
-                <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant">
+                <div className="flex items-center gap-1.5 text-meta text-on-surface-variant">
                   <span>
                     {count} {count === 1 ? "deal" : "deals"}
                   </span>
                   <span>·</span>
-                  {/* `font-mono`, not `text-data-mono` (same N4 finding
-                      SwimlaneCard below already fixed): `text-data-mono`
-                      carries its own fixed 13px font-size token, which
-                      conflicts with this `text-[11px]` row. */}
-                  <span className="font-mono">{formatIDRCompact(total)}</span>
+                  <span className="tabular-nums">{formatIDRCompact(total)}</span>
                 </div>
               </div>
             );
@@ -225,14 +220,12 @@ function LaneRow({
           <AssigneeAvatar user={lane.pic} size="sm" />
           <span className="truncate text-sm font-semibold text-on-surface">{lane.picName}</span>
         </div>
-        <div className="flex items-center gap-1.5 text-[11px] text-on-surface-variant">
+        <div className="flex items-center gap-1.5 text-meta text-on-surface-variant">
           <span>
             {summary.count} active {summary.count === 1 ? "deal" : "deals"}
           </span>
           <span>·</span>
-          {/* `font-mono`, not `text-data-mono` — same N4 finding as the
-              column-header total above. */}
-          <span className="font-mono">{formatIDRCompact(summary.total)}</span>
+          <span className="tabular-nums">{formatIDRCompact(summary.total)}</span>
         </div>
       </div>
 
@@ -285,12 +278,7 @@ function SwimlaneCard({ deal }: { deal: SwimlaneDeal }) {
       >
         {deal.title}
       </Link>
-      {/* `font-mono`, not `text-data-mono` (same N4 finding OpportunityCard.tsx/
-          SolvroPipelineKanban.tsx already fixed): `text-data-mono` carries its
-          own fixed 13px font-size token, which conflicts with the explicit
-          `text-[11px]` size here — `font-mono` applies only the monospace
-          font family. */}
-      <p className="font-mono text-[11px] text-primary">{formatIDRCompact(deal.dealValue)}</p>
+      <p className="text-meta tabular-nums text-primary">{formatIDRCompact(deal.dealValue)}</p>
     </div>
   );
 }

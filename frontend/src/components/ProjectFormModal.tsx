@@ -1,8 +1,9 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
-import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
+import { saveErrorMessage } from "@/lib/ownerAccess";
+import { PROJECT_STATUS_LABEL, taskStatusOptions } from "@/lib/labels";
 import {
   type ProjectDetail,
   type ProjectStatus,
@@ -22,11 +23,7 @@ const PROJECT_STATUSES: ProjectStatus[] = [
   "CANCELLED",
 ];
 
-const WIP_COLUMNS: { id: TaskStatus; label: string }[] = [
-  { id: "TODO", label: "To Do" },
-  { id: "IN_PROGRESS", label: "In Progress" },
-  { id: "DONE", label: "Done" },
-];
+const WIP_COLUMNS = taskStatusOptions;
 
 // Form-local representation: each column's limit as the literal <input>
 // string value ("" = no limit) so the field can be edited freely without
@@ -55,9 +52,21 @@ interface Props {
   /** When supplied, the form opens in edit mode for this project. */
   project?: ProjectDetail | null;
   onSaved?: (id: number) => void;
+  /**
+   * Edit mode only: false for someone with access through membership or the SA assignment alone,
+   * who may not change the TAM, customer or SA (server: 403 owner_only). The
+   * customer and SA selects are then read-only and none of the three is sent.
+   */
+  canChangeOwnership?: boolean;
 }
 
-export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
+export function ProjectFormModal({
+  open,
+  onClose,
+  project,
+  onSaved,
+  canChangeOwnership = true,
+}: Props) {
   const { user } = useAuth();
   const isEdit = Boolean(project);
   const { data: users } = useUsers();
@@ -98,7 +107,11 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
       setWipLimits(wipLimitsToForm(null));
       setExcludeFromPortfolio(false);
     }
-  }, [open, project, user]);
+    // Seed on open / project switch only — `project` gets a fresh identity on
+    // every 30 s refetch (and any task edit moves its `health`), and re-running
+    // this reset wipes in-progress input (docs/archive/plans/collaboration-and-sharing.md).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, project?.id]);
 
   // SA / TAM dropdowns list all users — role names no longer gate who's
   // eligible to be assigned (admin's choice). Anti-self-clutter not done
@@ -124,9 +137,15 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
         await update.mutateAsync({
           name: name.trim(),
           description: description.trim() || null,
-          saId: saId === "" ? null : Number(saId),
-          tamId: tamId === "" ? undefined : Number(tamId),
-          customerId: Number(customerId),
+          ...(canChangeOwnership
+            ? {
+                tamId: tamId === "" ? undefined : Number(tamId),
+                customerId: Number(customerId),
+                // Changing the SA is owner-only too (port decision M-2,
+                // docs/archive/plans/solvro-cust-port-plan.md §10).
+                saId: saId === "" ? null : Number(saId),
+              }
+            : {}),
           status,
           wipLimits: formToWipLimits(wipLimits),
           excludeFromPortfolio,
@@ -147,7 +166,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
       }
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Save failed.");
+      setError(saveErrorMessage(err, "Save failed."));
     }
   }
 
@@ -207,7 +226,8 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             onChange={(e) =>
               setCustomerId(e.target.value === "" ? "" : Number(e.target.value))
             }
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            disabled={isEdit && !canChangeOwnership}
+            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-70"
           >
             <option value="">
               {customers && customers.length === 0
@@ -219,7 +239,16 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
                 {c.name}
               </option>
             ))}
+            {/* A member may not see the customer in the list; keep it shown. */}
+            {project?.customer && !(customers ?? []).some((c) => c.id === project.customer!.id) && (
+              <option value={project.customer.id}>{project.customer.name}</option>
+            )}
           </select>
+          {isEdit && !canChangeOwnership && (
+            <p className="mt-1 text-meta text-on-surface-variant">
+              Only the project's TAM or the customer's owner can move it to another customer.
+            </p>
+          )}
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
@@ -227,7 +256,8 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             <select
               value={saId === "" ? "" : String(saId)}
               onChange={(e) => setSaId(e.target.value === "" ? "" : Number(e.target.value))}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              disabled={isEdit && !canChangeOwnership}
+              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-70"
             >
               <option value="">No SA</option>
               {sas.map((u) => (
@@ -236,6 +266,11 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
                 </option>
               ))}
             </select>
+            {isEdit && !canChangeOwnership && (
+              <p className="mt-1 text-meta text-on-surface-variant">
+                Only the project's TAM or the customer's owner can change the SA.
+              </p>
+            )}
           </Field>
 
           <Field label="Status">
@@ -246,14 +281,14 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             >
               {PROJECT_STATUSES.map((s) => (
                 <option key={s} value={s}>
-                  {s.replace("_", " ")}
+                  {PROJECT_STATUS_LABEL[s]}
                 </option>
               ))}
             </select>
           </Field>
         </div>
 
-        {canPickTam && (
+        {canPickTam && canChangeOwnership && (
           <Field label="Technical Account Manager">
             <select
               value={tamId === "" ? "" : String(tamId)}
@@ -273,8 +308,8 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
         <Field label="WIP limit — leave empty for none">
           <div className="grid grid-cols-3 gap-3">
             {WIP_COLUMNS.map((col) => (
-              <label key={col.id} className="block">
-                <span className="mb-1 block text-[11px] text-on-surface-variant">
+              <label key={col.value} className="block">
+                <span className="mb-1 block text-xs text-on-surface-variant">
                   {col.label}
                 </span>
                 <input
@@ -282,9 +317,9 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
                   min={1}
                   step={1}
                   inputMode="numeric"
-                  value={wipLimits[col.id]}
+                  value={wipLimits[col.value]}
                   onChange={(e) =>
-                    setWipLimits((prev) => ({ ...prev, [col.id]: e.target.value }))
+                    setWipLimits((prev) => ({ ...prev, [col.value]: e.target.value }))
                   }
                   placeholder="—"
                   className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
@@ -305,7 +340,7 @@ export function ProjectFormModal({ open, onClose, project, onSaved }: Props) {
             <span className="block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
               Administrative project
             </span>
-            <span className="block text-[11px] text-on-surface-variant">
+            <span className="block text-xs text-on-surface-variant">
               Exclude from portfolio roll-ups (Executive dashboard, Overview,
               overdue monitoring). The project stays fully usable here.
             </span>

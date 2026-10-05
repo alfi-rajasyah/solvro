@@ -31,6 +31,7 @@ import { OutcomeChip } from "@/components/PipelineFlagChips";
 import { StageChip } from "@/components/StageChip";
 import { Chip, type Tone } from "@/components/StatusChip";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { fmtDateTime } from "@/lib/formatDate";
 import {
   computeCloseReasons,
   computeWinRatePct,
@@ -59,17 +60,6 @@ const COLUMN_TONE: Record<PipelineOutcome, Tone> = {
   LOST: "rose",
   CANCELLED: "gray",
 };
-
-// id-ID day formatter for the `closedAt` ISO instant — same rationale as
-// DealCard.tsx's own `formatWonAt`: `closedAt` is a real ISO instant (set by
-// POST /:id/close), not a plain "yyyy-MM-dd" day string, so
-// `formatPipelineDate`/`dayFromIso` (that pair's contract is plain calendar
-// days only) would misinterpret it.
-function formatClosedAt(closedAt: string): string {
-  return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(
-    new Date(closedAt),
-  );
-}
 
 function byClosedAtDesc(a: Opportunity, b: Opportunity): number {
   return (b.closedAt ?? "").localeCompare(a.closedAt ?? "");
@@ -259,8 +249,8 @@ function ClosedDealCard({
       </div>
 
       {deal.closedAt && (
-        <p className="mt-1.5 text-[11px] text-on-surface-variant">
-          {OUTCOME_LABELS[outcome]} {formatClosedAt(deal.closedAt)} · {deal.pic?.username ?? "Unassigned"}
+        <p className="mt-1.5 text-meta text-on-surface-variant">
+          {OUTCOME_LABELS[outcome]} {fmtDateTime(deal.closedAt)} · {deal.pic?.username ?? "Unassigned"}
         </p>
       )}
 
@@ -269,7 +259,7 @@ function ClosedDealCard({
           {deal.projectId ? (
             <Link
               to={`/projects/${deal.projectId}`}
-              className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
+              className="inline-flex items-center gap-1 text-meta font-semibold text-primary hover:underline"
             >
               <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
               View project
@@ -279,7 +269,7 @@ function ClosedDealCard({
               <button
                 type="button"
                 onClick={onRequestHandoff}
-                className="inline-flex items-center gap-1 text-[12px] font-semibold text-primary hover:underline"
+                className="inline-flex items-center gap-1 text-meta font-semibold text-primary hover:underline"
               >
                 <span className="material-symbols-outlined text-[14px]">add_circle</span>
                 Create project
@@ -315,13 +305,13 @@ function SummaryTile({ label, value, hint, icon, tone }: SummaryTileProps) {
   return (
     <div className="rounded-sm border border-outline-variant bg-surface-container p-4">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
+        <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
-        <span className="truncate font-mono text-2xl font-bold tabular-nums text-on-surface">{value}</span>
+        <span className="truncate text-2xl font-bold tabular-nums text-on-surface">{value}</span>
       </div>
-      <p className="mt-1 text-[11px] text-on-surface-variant">{hint}</p>
+      <p className="mt-1 text-meta text-on-surface-variant">{hint}</p>
     </div>
   );
 }

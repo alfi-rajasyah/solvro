@@ -17,7 +17,7 @@ Everything is multi-user and permission-gated. What a person sees and can change
 
 ### Delivery workspace (per project)
 
-Seven tabs under `/projects/:id`: Overview, List, Kanban, Gantt, Timeline, Risks, Services.
+Eight tabs under `/projects/:id`: Overview, List, Kanban, Gantt, Epics, Timeline, Risks, Services.
 
 - **One task order, three views.** List, Kanban, and Gantt render the same manual order. A status change never moves a task's slot.
 - **List** — sortable, filterable table with drag reorder, inline date-range editing, subtasks, labels, and comments.
@@ -25,6 +25,7 @@ Seven tabs under `/projects/:id`: Overview, List, Kanban, Gantt, Timeline, Risks
 - **Gantt** — four zoom levels, weekend shading and Indonesian public holidays, collapsible phase rows, hard/soft dependency arrows drawn by drag, milestones, a manual critical-path flag, and a **baseline lock** that shows planned-vs-actual slip. Exports to Excel and PDF. Desktop-only; phones fall back to the List.
 - **Timeline** — phase-level linear view, distinct from the task-level Gantt.
 - **Phases (sections)** with colour, reorder, and duplicate; task duplicate (subtasks included); project-scoped labels.
+- **Epics** — project-scoped groupings across phases with an owner, a colour, a status and a target date; a top-level task carries at most one epic (shown as a chip in every view), and the Epics tab rolls up each epic's task count and done percentage. Removing an epic unlinks its tasks and never deletes them.
 - **Risk register** — category, probability × impact score, mitigation and contingency plans, open / mitigated / closed.
 - **Services** — a service catalogue with assignments at both the customer and the project level, each tagged with the tools in use.
 
@@ -34,7 +35,16 @@ Seven tabs under `/projects/:id`: Overview, List, Kanban, Gantt, Timeline, Risks
 - **Daily Review** (`/daily-review`) — a weekly, per-customer page: dated notes per project, operations notes per customer for issues outside any project, an explicit "Mark reviewed" stamp, and actionable overdue-task and open-risk lists. One request loads the whole page.
 - **Weekly Sync** (`/weekly-sync`) — two tables for Monday's read. **Mid-week**: one row per highlight with its own risk and action. **Reflection**: one row per achievement with its outstanding issue, lesson learned, next-week focus, and manager decision (rows that need a decision pin to the top). Each customer carries a Green / Amber / Red health and a Draft / Done status. Both forms draft themselves from the week's notes, and "Copy as table" puts the rows on the clipboard as TSV and HTML for pasting into a document.
 - **Recent notes** — a seven-day feed of project and operations notes on the Overview page.
-- Notes carry an `INTERNAL` / `CUSTOMER_FACING` visibility. Internal notes never reach an export or a search result.
+- Notes carry an `INTERNAL` / `CUSTOMER_FACING` visibility. Internal notes never reach an export, a search result, or a guest link.
+
+### Collaboration
+
+- **Project members** — anyone who can see a project and holds `project:write` can add members, who get the same access as the TAM except ownership changes (reassigning the TAM, customer or SA, deleting the project, and guest links stay owner-only). Assigning a task to someone who cannot see the project adds them as a member in the same transaction, and the picker says so. A one-off backfill added the active open-task assignees who were not already the TAM, the SA or the customer's owner.
+- **Activity log** — every project keeps a 180-day event feed (fields changed, tasks and risks added, members and guest links) and every opportunity a feed of deal changes (stage moves, assignment, closing, handoff) that is kept for the life of the deal; note bodies are never stored. A daily job removes project events older than 180 days.
+- **Notifications and @mentions** — a bell in the top bar lists what happened on the caller's own items: tasks assigned to them, comments and deal notes that @mention them, deals closed or handed off. The mention picker in task comments and deal notes offers only people who can see the item.
+- **Stale-edit warning** — a task-panel save sends the field value the editor last saw; when someone else changed that field in between, the server refuses the save and a dialog shows both values with "Use theirs" / "Keep mine". Board and Gantt drags stay last-write-wins.
+- **Live refresh, copy links, deep links** — list and board views refetch every 30 seconds and on focus; every task, project, customer and deal has a copyable link that opens straight to it.
+- **Guest links** — a project owner shares a read-only timeline (phases, milestones, status — never tasks, notes, people or risks) through a tokenised `/share/<token>` page that needs no sign-in, with an optional label and a 7, 30 or 90 day expiry, listed and revocable from the project header. The public endpoint is rate-limited per client address and answers every failure with the same 404.
 
 ### Pipeline module (for SAs)
 
@@ -52,11 +62,22 @@ Seven tabs under `/projects/:id`: Overview, List, Kanban, Gantt, Timeline, Risks
 ### Platform
 
 - **Authentication** — email/password (JWT, 8-hour default) and Google sign-in with an admin-managed domain allowlist. Unknown Google users are auto-provisioned into a zero-permission `PENDING` role until an admin promotes them.
-- **RBAC** — permission-based, with admin-managed custom roles. Built-in roles: `ADMIN`, `SA`, `TAM`, `STAKEHOLDER`, `PENDING`.
-- **Admin** (`/admin`) — Users, Roles, Sign-in (Google client ID and allowed domains, editable without a redeploy), Projects (bulk reassign), and Pipeline (import history).
+- **RBAC** — permission-based, with admin-managed custom roles. Built-in roles: `ADMIN`, `SA`, `SALES`, `TAM`, `STAKEHOLDER`, `PENDING`.
+- **Admin** (`/admin`) — Users, Roles, Sign-in (Google client ID and allowed domains, editable without a redeploy), Projects (bulk reassign), Pipeline (import history), and iTop (connection, sync, organisation and person matching, webhook secret, actions switch).
+- **Help** (`/help`) — in-app guide, one topic per page the caller can open; topics for pages the caller's permissions hide are hidden too.
+- **Settings** (`/settings`) — theme, password, and the user's personal iTop token.
 - **⌘K command palette** — page navigation plus search across projects, tasks, and customers, scoped to what the caller may see.
 - **PWA & mobile** — installable, precached app shell, usable down to 375 px.
 - **Design system** — "Technical Precision": dark-first charcoal surfaces with a single green accent, light mode included, Source Sans 3 and Material Symbols.
+
+### iTop integration
+
+Solvro connects to an external [iTop](https://www.itophub.io/) ITSM instance, configured once at Admin > iTop:
+
+- **Tickets** — a customer's iTop tickets appear on that customer's page in a Tickets tab, with a Board view whose columns follow iTop's own lifecycle (New, Assigned, Pending, Resolved, Closed); dragging a card sends the matching lifecycle step to iTop, and a "New ticket" button creates a ticket directly in iTop. A task's panel can pin one iTop ticket by reference — showing its live status and an "Open in iTop" link once the ticket is in the local snapshot — or create a new ticket directly from the task, prefilled with its title and description.
+- **Time** — **Utilization** (`/utilization`, the old `/work-logs` URL redirects here) shows hours per customer per week drawn from iTop's Time Tracking extension; every TAM sees their own hours, and holders of the Executive-report permission also get "By TAM" and "By customer" views. A Start/Stop timer on the ticket panel — one running timer per user, shown as a compact pill in the top bar — logs a Time Tracking entry in iTop under the user's own identity the moment it's stopped.
+- **Live sync** — an optional per-install webhook secret lets iTop's own "on ticket update" trigger nudge Solvro into an immediate sync instead of waiting for the next scheduled pull.
+- **Actions from Solvro** — opt-in per install (Admin > iTop) and per TAM (a personal iTop token saved in Settings): once both are on, a ticket can be assigned, set pending, resolved, closed, reopened, or given a log entry straight from Solvro's ticket panel. Every write happens under the acting TAM's own iTop identity — iTop stays the owner of what a ticket can do and who can do it.
 
 ## Architecture
 
@@ -77,10 +98,11 @@ Seven tabs under `/projects/:id`: Overview, List, Kanban, Gantt, Timeline, Risks
 | Layer | Files | Role |
 |---|---|---|
 | Bootstrap | `index.ts`, `app.ts`, `env.ts` | `createApp()` is split from the listener for testability. Env is parsed once with Zod; the process exits on a bad config. |
-| HTTP plumbing | `http/auth.ts`, `http/validate.ts`, `http/errors.ts` | Bearer-token auth and permission gates, Zod validation of body / params / query, and one error handler that renders every failure as `{ error, code, details }`. |
+| HTTP plumbing | `http/auth.ts`, `http/validate.ts`, `http/errors.ts`, `http/requestLogger.ts`, `http/rateLimit.ts`, `http/trustProxy.ts` | Bearer-token auth and permission gates, Zod validation of body / params / query, one error handler that renders every failure as `{ error, code, details }`, a request logger that redacts bearer tokens, guest-link tokens and the webhook secret, an in-memory per-client rate limiter for the public routes, and the `TRUST_PROXY` parser. |
 | Routes | `routes/*.ts` | One router per resource. Every authenticated router calls `requireAuth` once at the top, then `requirePermission(...)` per mutating handler. |
-| Domain helpers | `lib/visibility.ts`, `lib/pipelineAccess.ts`, `lib/portfolio.ts`, `lib/taskOrdering.ts`, `lib/duplicate.ts`, `lib/dateBoundary.ts`, `lib/isoWeek.ts` | Row-level visibility filters, the Pipeline ownership gate, the portfolio roll-up shared by Overview and Executive, dense sibling ordering for tasks, deep copy for tasks and sections, and the caller-local "today" contract. |
-| Data | `prisma.ts`, `prisma/schema.prisma`, `prisma/migrations/`, `prisma/seed.ts` | One shared Prisma client. Tables and columns are `@map`ped to snake_case; the TypeScript surface is camelCase. The seed upserts the five built-in roles and the auth-config singleton and creates no users. |
+| Domain helpers | `lib/visibility.ts`, `lib/pipelineAccess.ts`, `lib/portfolio.ts`, `lib/taskOrdering.ts`, `lib/duplicate.ts`, `lib/dateBoundary.ts`, `lib/isoWeek.ts` | Row-level visibility filters (see-level and owner-level), the Pipeline ownership gate, the portfolio roll-up shared by Overview and Executive, dense sibling ordering for tasks, deep copy for tasks and sections, and the caller-local "today" contract. |
+| Collaboration & integrations | `lib/activity.ts`, `lib/opportunityActivity.ts`, `lib/notifications.ts`, `lib/projectMembers.ts`, `lib/shareLinks.ts`, `lib/secretBox.ts`, `lib/itop/` | Activity events and notification fan-out (assignments, @mentions, deal events) for projects and deals, the member list and the assign-adds-member rule, the allow-listed guest payload, AES-256-GCM secrets at rest (`SECRETS_KEY`), and the iTop REST client, snapshot sync, scheduler and config. |
+| Data | `prisma.ts`, `prisma/schema.prisma`, `prisma/migrations/`, `prisma/seed.ts` | One shared Prisma client. Tables and columns are `@map`ped to snake_case; the TypeScript surface is camelCase. The seed upserts the six built-in roles and the auth-config singleton and creates no users. |
 
 Security baseline: `helmet`, a CORS allowlist, a 1 MB JSON body limit, bcrypt password hashes, and structured request logging with pino. The API targets sub-200 ms responses. Page-level endpoints (Daily Review, Overview, Executive) fetch each sub-collection with one batched query keyed by the in-scope ids, so the query count stays flat as data grows.
 
@@ -88,11 +110,11 @@ Security baseline: `helmet`, a CORS allowlist, a 1 MB JSON body limit, bcrypt pa
 
 | Layer | Files | Role |
 |---|---|---|
-| Routing & shell | `App.tsx`, `components/layout/` | React Router 6 routes under a persistent `Shell` (sidebar, top bar with ⌘K, and a project right-sidebar for the baseline lock and schedule export). `AuthGuard`, `AdminGuard`, `ExecutiveGuard`, and `PipelineGuard` wrap the gated routes. |
+| Routing & shell | `App.tsx`, `components/layout/` | React Router 6 routes under a persistent `Shell` (sidebar, top bar with ⌘K, and a project right-sidebar for the baseline lock and schedule export). `AuthGuard`, `AdminGuard`, `ExecutiveGuard`, `PipelineGuard`, and the generic `PermissionGuard` wrap the gated routes; the guest page `/share/:token` renders outside the shell and the auth guard. |
 | Data access | `lib/api.ts`, `lib/queries.ts` | A single `apiRequest<T>` wrapper (bearer token from `localStorage`, base `/api`) and every TanStack Query hook in one module with namespaced query keys. Inline edits use optimistic updates with rollback. |
 | Auth, theme, nav | `lib/auth.tsx`, `lib/theme.tsx`, `lib/navCommands.ts` | The signed-in user and `hasPermission`, the dark / light / system theme, and the single navigation catalogue that feeds both the sidebar and the command palette. |
-| Pages | `pages/`, `pages/views/` | One component per route; project and pipeline sub-views live in `views/`. |
-| Feature components | `components/daily-review/`, `components/pipeline/`, `components/portfolio/`, `components/services/` | Feature UIs. Board and analytics math lives in plain `.ts` modules (`boardLogic.ts`, `kpi.ts`, `analytics.ts`, `importParse.ts`, …) with unit tests beside them; components only render. |
+| Pages | `pages/`, `pages/views/` | One component per route (including Help, Utilization, Settings and the guest `PublicShare`); project and pipeline sub-views live in `views/`. Titles and breadcrumbs come from `lib/routeMeta.ts`; dates render through `lib/formatDate.ts` and enum words through `lib/labels.ts`. |
+| Feature components | `components/daily-review/`, `components/pipeline/`, `components/portfolio/`, `components/services/`, `components/itop/`, `components/utilization/`, `components/skeletons/` | Feature UIs (the iTop ticket board reuses the vendored Kanban engine). Board and analytics math lives in plain `.ts` modules (`boardLogic.ts`, `kpi.ts`, `analytics.ts`, `importParse.ts`, …) with unit tests beside them; components only render. |
 | Drag engines | `components/reui/`, `components/gantt-v2/`, `components/kanban-v2/` | The Gantt, Kanban, Sortable, and Data Grid engines are vendored ReUI source (in-repo, not npm packages) on top of dnd-kit, TanStack Table, and TanStack Virtual. Solvro's adapters and commit mappers translate between engine events and the API's task contract. |
 | Primitives | `components/ui/` | shadcn-style primitives built on Base UI (`@base-ui/react`). |
 | Theme | `index.css` | Tailwind CSS 4, CSS-first: every token lives in two `@theme inline` blocks and dark mode is a `@custom-variant`. There is no `tailwind.config`. |
@@ -102,7 +124,9 @@ The PWA layer (vite-plugin-pwa / Workbox) precaches the app shell and serves `/a
 ### Data model (`backend/prisma/schema.prisma`)
 
 - **Identity** — `User`, `Role` (a JSON permission list), `AuthConfig` (Google client ID and allowed domains, one row).
-- **Delivery** — `Project` (TAM, optional SA, customer, status, WIP limits, baseline lock), `Section`, `Task` (status, priority, dates, milestone and critical-path flags, baseline dates, parent for subtasks, dense `position`), `TaskDependency` (HARD / SOFT), `Label`, `Comment`, `Risk`, `ProjectReview`.
+- **Delivery** — `Project` (TAM, optional SA, customer, status, WIP limits, baseline lock), `Section`, `Epic`, `Task` (status, priority, dates, milestone and critical-path flags, baseline dates, parent for subtasks, dense `position`, optional epic and iTop ticket reference), `TaskDependency` (HARD / SOFT), `Label`, `Comment` (with mentioned user ids), `Risk`, `ProjectReview`.
+- **Collaboration** — `ProjectMember`, `ActivityEvent` (scoped to exactly one project or one opportunity), `Notification`, `ShareLink` (SHA-256 of the token only).
+- **iTop** — `ItopConfig` (one row: base URL, sealed application token and webhook secret, sync state, timezone, actions switch), `ItopTicket` (the local snapshot), `ItopTimeEntry`; `Customer` maps to an iTop organisation and `User` to an iTop person, user and sealed personal token.
 - **Customers & services** — `Customer`, `Service`, `CustomerService`, `ProjectService`.
 - **Notes & weekly rhythm** — `ProjectNote`, `CustomerNote`, `WeeklyUpdate` with child `WeeklyHighlight` and `WeeklyAchievement` rows.
 - **Pipeline** — `Opportunity` (stage, PIC, deal value, win probability, `wonAt`, `preHoldStage`, optional link to the handed-off `Project`), `OpportunityActivity`, `OpportunityLink`, `PipelineImportLog`.
@@ -111,15 +135,15 @@ The PWA layer (vite-plugin-pwa / Workbox) precaches the app shell and serves `/a
 
 - A sign-in returns a JWT whose payload is `{ sub, role, permissions[] }`. The permission list is copied from the role at sign-in. `*` is the wildcard that satisfies every check and is what makes a role an admin.
 - **Permissions** — `project:view-all`, `project:read`, `project:write`, `task:read`, `task:write`, `pipeline:view`, `pipeline:create`, `pipeline:edit_own`, `pipeline:edit_all`, `pipeline:delete_own`, `pipeline:delete_all`, `report:executive`.
-- **Built-in roles** — `ADMIN` = `*`. `TAM` = project read/write + task read/write. `SA` = project read + pipeline view / create / edit-own / delete-own. `STAKEHOLDER` = project read + view-all. `PENDING` = nothing.
-- **Project visibility** (`lib/visibility.ts`) — `project:view-all` sees everything. Everyone else sees a project where they are the TAM, the SA, or the owning TAM of its customer. A **customer** is visible when the caller owns it, when nobody owns it, or when it has a visible project.
+- **Built-in roles** — `ADMIN` = `*`. `TAM` = project read/write + task read/write. `SA` = project read + pipeline view / create / edit-own / delete-own. `SALES` = pipeline view. `STAKEHOLDER` = project read + view-all. `PENDING` = nothing.
+- **Project visibility** (`lib/visibility.ts`) — `project:view-all` sees everything. Everyone else sees a project where they are the TAM, the SA, the owning TAM of its customer, or a member. **Ownership** is narrower: only the TAM, the customer's owner, or a view-all user may reassign the TAM, customer or SA, delete the project, or manage guest links — a member or the SA gets `403 owner_only`. A **customer** is visible when the caller owns it, when nobody owns it, or when it has a visible project.
 - **Hidden means 404.** A resource outside the caller's visibility answers `404 not_found`, not `403`, so its existence is not revealed. A `customerId` sent as a body field answers `400 customer_not_found` instead.
 - **Pipeline ownership** (`lib/pipelineAccess.ts`) — `pipeline:edit_all` / `delete_all` act on any deal. `edit_own` / `delete_own` act only on a deal whose PIC is the caller. A deal with no PIC is locked for every write except **assign**, which an `edit_own` holder may use to claim it.
 - **Executive is org-wide by design.** `report:executive` is itself the grant, so the visibility filter is not applied to that report.
 
 ## API
 
-The backend is a JSON REST API. Routers mount without an `/api` prefix; the frontend's proxy adds and strips it. Every route except `GET /health`, `POST /auth/login`, `GET /auth/google/config`, and `POST /auth/google` needs an `Authorization: Bearer <jwt>` header.
+The backend is a JSON REST API. Routers mount without an `/api` prefix; the frontend's proxy adds and strips it. Every route except `GET /health`, `POST /auth/login`, `GET /auth/google/config`, `POST /auth/google`, the guest view `GET /public/share/:token` (rate-limited, uniform 404) and the iTop nudge `POST /webhook/itop` (secret header, body ignored) needs an `Authorization: Bearer <jwt>` header.
 
 ### Conventions
 
@@ -136,20 +160,28 @@ The backend is a JSON REST API. Routers mount without an `/api` prefix; the fron
 | `/health` | `GET /` | public |
 | `/auth` | `POST /login`, `GET /google/config`, `POST /google`, `GET /me`, `POST /change-password` | sign-in routes public; the rest any signed-in user |
 | `/users` | `GET /` — user directory for assignee and PIC pickers | signed in |
-| `/overview` | `GET /?today=` — project and task counts plus the caller's portfolio rows | signed in, visibility-scoped |
+| `/overview` | `GET /?today=` — project and task counts plus the caller's portfolio rows; `GET /badges` — the sidebar's pending Daily Review count | signed in, visibility-scoped |
 | `/notes` | `GET /recent?today=` — the last seven days of project and operations notes | signed in, visibility-scoped |
 | `/daily-review` | `GET /?week=YYYY-Www&today=` — the whole Daily Review page in one payload: customers, projects, notes, overdue tasks, open risks, review stamps, weekly updates | signed in, visibility-scoped |
 | `/search` | `GET /?q=` — projects, top-level tasks, and customers; notes are never searched | signed in, visibility-scoped |
 | `/holidays` | `GET /?year=` — Indonesian public holidays for the Gantt | signed in |
 | `/customers` | `GET /`, `POST /`, `GET /:id`, `PATCH /:id`, `DELETE /:id`, `PUT /:id/services`, `GET` / `POST /:id/notes`, `PATCH` / `DELETE /:id/notes/:noteId`, `GET /:id/weekly-updates`, `PUT /:id/weekly-updates/:weekStart` | reads `project:read`, writes `project:write` |
-| `/projects` | `GET /`, `POST /`, `GET /:id`, `PATCH /:id`, `DELETE /:id`, `POST /:id/baseline`, `PUT /:id/services`; nested `GET` / `POST` for `tasks`, `sections`, `risks`, `notes`, `dependencies`, `labels`; `PATCH` / `DELETE /:id/notes/:noteId`; `POST /:id/reviews`, `DELETE /:id/reviews/:reviewDate` | reads visibility-scoped; writes `project:write` (`task:write` for dependencies) |
+| `/projects` | `GET /`, `POST /`, `GET /:id`, `PATCH /:id`, `DELETE /:id`, `POST /:id/baseline`, `PUT /:id/services`; nested `GET` / `POST` for `tasks`, `sections`, `risks`, `notes`, `dependencies`, `labels`; `PATCH` / `DELETE /:id/notes/:noteId`; `POST /:id/reviews`, `DELETE /:id/reviews/:reviewDate`; `GET` / `POST /:id/epics`; `GET` / `POST /:id/members`, `DELETE /:id/members/:userId`; `GET` / `POST /:id/share-links`, `DELETE /:id/share-links/:linkId`; `GET /:id/activity` | reads visibility-scoped; writes `project:write` (`task:write` for dependencies); share links owner-only |
+| `/epics` | `GET /:id`, `PATCH /:id`, `DELETE /:id` | read visibility-scoped; writes `project:write` |
+| `/notifications` | `GET /`, `GET /unread-count`, `POST /read-all`, `POST /:id/read` | signed in, own rows only |
 | `/tasks` | `GET /` (filters `status`, `priority`, `assignedToId`, `labelId`, `customerId`, `overdue`, `topLevel`, `today`), `PATCH /:id` (fields, status, labels, reorder, re-parent, move between sections), `DELETE /:id`, `POST /:id/duplicate`, `GET` / `POST /:id/comments` | writes `task:write` |
 | `/sections` | `PATCH /:id`, `POST /:id/duplicate`, `DELETE /:id` | `project:write` |
 | `/labels`, `/dependencies` | `PATCH /:id`, `DELETE /:id` | `task:write` |
 | `/risks` | `PATCH /:id`, `DELETE /:id` | `project:write` |
 | `/services` | `GET /`, `POST /`, `PATCH /:id`, `DELETE /:id` | writes `project:write` |
-| `/opportunities` | `GET /`, `GET /:id`, `POST /`, `PATCH /:id`, `POST /:id/move`, `POST /:id/assign`, `DELETE /:id`, `POST /:id/handoff`, `POST /import`, `GET /imports`; `GET` / `POST /:id/activities`; `GET` / `POST /:id/links`, `PATCH` / `DELETE /:id/links/:linkId` | `pipeline:view` to read, `pipeline:create` to create or import, the ownership gate for edit / move / delete / links |
+| `/opportunities` | `GET /`, `GET /:id`, `POST /`, `PATCH /:id`, `POST /:id/move`, `POST /:id/close`, `POST /:id/reopen`, `POST /:id/assign`, `DELETE /:id`, `POST /:id/handoff`, `POST /import`, `GET /imports`; `GET` / `POST /:id/activities`, `GET /:id/activity` (the structured event feed); `GET` / `POST /:id/links`, `PATCH` / `DELETE /:id/links/:linkId` | `pipeline:view` to read, `pipeline:create` to create or import, the ownership gate for edit / move / delete / links |
 | `/reports` | `GET /executive?today=` — org-wide portfolio rows | `report:executive` |
+| `/itop` | `GET /status`, `GET /daily`, `GET /services`, `GET /customers/:id/tickets`, `GET /customers/:id/contacts`, `GET /tickets/:id`, `GET /tickets/by-ref/:ref`, `POST /refresh`; writes `POST /tickets`, `POST /tickets/:id/actions`, `POST /tickets/:id/log`, `POST /tickets/:id/time` | reads `project:read` + customer visibility; writes `task:write` and the caller's own iTop token |
+| `/itop/me` | `GET` / `PUT` / `DELETE /token` — the personal iTop token | `GET` any signed-in user; `PUT` / `DELETE` `task:write` |
+| `/utilization` | `GET /?week=YYYY-Www&scope=` (`me`, `tam` or `customer`) — hours per customer per week from iTop time entries | `project:read`; the `tam` and `customer` scopes need `report:executive` |
+| `/admin/itop` | `GET` / `PATCH /settings`, `POST` / `DELETE /webhook-secret`, `POST /test`, `POST /sync`, `GET /organizations`, `GET /customers`, `PATCH /customers/:id`, `POST /customers/automatch`, `GET /persons`, `POST /persons/match` | `*` (admin wildcard) |
+| `/webhook` | `POST /itop` — iTop's "on update" trigger nudges an incremental sync | public; `X-Solvro-Webhook-Secret` header, global rate limit |
+| `/public/share` | `GET /:token` — the guest timeline payload | public; per-client rate limit, uniform 404 |
 | `/admin` | `GET` / `POST /users`, `PATCH /users/:id/role`, `PATCH /users/:id/deactivate`, `POST /users/:id/reset-password`, `DELETE /users/:id`; `GET` / `POST /roles`, `PATCH` / `DELETE /roles/:id`; `GET` / `PATCH /settings/auth`; `GET /projects`, `PUT /projects/reassign` | `*` (admin wildcard) |
 
 ### Key flows
@@ -187,7 +219,7 @@ On a server with Docker Engine and the Docker Compose plugin:
 bash <(curl -sSL https://raw.githubusercontent.com/alfi-rajasyah/solvro/main/setup.sh)
 ```
 
-The script prompts for an admin email and password and for the host ports (website `80`, API `3000`, both bound to `127.0.0.1` unless you choose otherwise; Postgres stays private). It generates `POSTGRES_PASSWORD` and `JWT_SECRET`, writes `~/solvro/docker-compose.yml` and `~/solvro/.env`, pulls the GHCR images, starts the stack, and creates the admin. The backend container runs `prisma migrate deploy` and the seed on every start.
+The script prompts for an admin email and password and for the host ports (website `80`, API `3000`, both bound to `127.0.0.1` unless you choose otherwise; Postgres stays private). It generates `POSTGRES_PASSWORD`, `JWT_SECRET`, and `SECRETS_KEY` (the secrets-at-rest key for integration tokens — rotating it invalidates every stored token), writes `~/solvro/docker-compose.yml` and `~/solvro/.env`, pulls the GHCR images, starts the stack, and creates the admin. The backend container runs `prisma migrate deploy` and the seed on every start.
 
 Every input can come from the environment instead of a prompt:
 
@@ -260,7 +292,3 @@ The backend test setup refuses any database whose name does not end in `_test`, 
 ## Branches and releases
 
 Work branches off `develop` and merges back by pull request; `develop` is the integration branch. `main` is the release branch: a merge into `main` runs CI, and only a green run publishes the `latest` images that `setup.sh` pulls. `v*` tags publish versioned images directly.
-
-## Roadmap
-
-- **Work Logs** — an iTop (ITSM) integration for utilization reporting. The `/work-logs` route is a placeholder today.

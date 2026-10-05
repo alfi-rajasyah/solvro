@@ -10,6 +10,7 @@
 // ports the stage/threshold vocabulary onto this repo's own `PipelineStage`
 // enum where Velora's ids differ (snake_case stage ids, no HOLD stage).
 import type { Tone } from "@/components/StatusChip";
+import { MONTH_ABBR } from "@/lib/formatDate";
 import {
   STAGE_LABELS,
   STAGE_ORDER,
@@ -243,11 +244,7 @@ function trailingMonthKeys(now: Date, months: number): string[] {
 
 function monthLabel(key: string): string {
   const [year, month] = key.split("-").map(Number);
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, month - 1, 1)));
+  return `${MONTH_ABBR[month - 1]} ${year}`;
 }
 
 // ---------------------------------------------------------------------------

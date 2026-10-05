@@ -201,10 +201,68 @@ if [ -f frontend/src/components/reui/badge.tsx ]; then
   else fail guardrail-badge-vendor "SOLVRO PATCH count $N != recorded $EXPECTED_BADGE_PATCHES"; fi
 else fail guardrail-badge-vendor "frontend/src/components/reui/badge.tsx missing"; fi
 
+# Pipeline + SA intact (customer-edition port, 2026-10-04). The customer edition
+# removed the Pipeline module and `Project.saId`; Internal keeps both (CLAUDE.md
+# Guardrails + Standing decisions). Fails if the opportunities router is gone, if
+# any migration drops the opportunities table or the sa_id column, or if the
+# project visibility filter no longer matches on saId.
+if [ ! -f backend/src/routes/opportunities.ts ]; then
+  fail guardrail-pipeline-intact "backend/src/routes/opportunities.ts is missing (Guardrail: the Pipeline module is a native port, never removed)"
+elif grep -rliE 'DROP TABLE "?opportunities"?|DROP COLUMN "?sa_id"?' backend/prisma/migrations/ >/dev/null 2>&1; then
+  fail guardrail-pipeline-intact "a migration drops the opportunities table or projects.sa_id (never copy the customer edition's remove_pipeline_module migration)"
+elif ! awk '/^export function projectVisibilityFilter/,/^}/' backend/src/lib/visibility.ts | grep -q 'saId'; then
+  fail guardrail-pipeline-intact "projectVisibilityFilter no longer contains the saId arm (Standing decision: SA visibility stays)"
+else pass guardrail-pipeline-intact; fi
+
+# Guest links never carry notes (INTERNAL-notes guardrail, public surface). The
+# guest payload builder and the public route must never touch a note model or
+# select a `notes` relation. Comment lines are stripped first: the modules may
+# (and do) state this very invariant in prose.
+GUEST_FILES="$(ls backend/src/lib/shareLinks.ts backend/src/routes/publicShare.ts 2>/dev/null)"
+if [ -n "$GUEST_FILES" ]; then
+  GUEST_HITS="$(cat $GUEST_FILES | grep -vE '^\s*(//|/?\*)' | grep -nE 'projectNote|customerNote|ProjectNote|CustomerNote|\bnotes\s*:' || true)"
+  if [ -n "$GUEST_HITS" ]; then
+    fail guardrail-guest-links-no-notes "the guest-link modules reference notes (Guardrail: INTERNAL notes never in customer-facing output): $(echo "$GUEST_HITS" | head -3 | tr '\n' ' ')"
+  else pass guardrail-guest-links-no-notes; fi
+else pass "guardrail-guest-links-no-notes (no guest-link module yet)"; fi
+
+# iTop writes never use the application token (Guardrail, 2026-10-04). Every
+# iTop write call (applyStimulus / create<Itop…> / update) in the iTop routes
+# and libs must run on a client built from the user's personal token. The app
+# client (getItopAppClient) only reads — so a write receiver may never be a
+# variable bound from getItopAppClient. Convention that makes this checkable:
+# bind the app client to `appClient`, never to the name a write uses.
+ITOP_WRITE_RE='\b([A-Za-z_][A-Za-z0-9_]*)\.(applyStimulus\(|create<Itop|update\()'
+ITOP_BAD=""
+for f in backend/src/routes/itop.ts backend/src/lib/itop/*.ts; do
+  [ -f "$f" ] || continue
+  case "$f" in */client.ts) continue ;; esac
+  RECEIVERS="$(grep -vE 'prisma\.|\btx\.' "$f" | grep -oE "$ITOP_WRITE_RE" | sed -E 's/\.(applyStimulus\(|create<Itop|update\()$//' | sort -u)"
+  for r in $RECEIVERS; do
+    # A write receiver is bad when it is the app client by name, is bound from
+    # getItopAppClient(), or is built from an expression that opens the stored
+    # application token (appTokenEnc) — the literal guardrail wording.
+    if [ "$r" = "appClient" ] \
+       || grep -qE "\b$r\b[^=]*=\s*await getItopAppClient\(|\[$r\b[^]]*\]\s*=\s*await Promise\.all\(\[getItopAppClient" "$f" \
+       || grep -qE "\b(const|let|var)\s+$r\b[^=]*=[^;]*appTokenEnc" "$f"; then
+      ITOP_BAD="$ITOP_BAD $f:$r"
+    fi
+  done
+done
+if [ -n "$ITOP_BAD" ]; then
+  fail guardrail-itop-no-app-token-writes "an iTop write runs on the application-token client:$ITOP_BAD (Guardrail: writes use the user's personal token only)"
+else pass guardrail-itop-no-app-token-writes; fi
+
 # ---------- spine check (always) ----------
 # Shared spine of the projects page + app-wide hot surfaces. Touching any of these
 # requires an instant opus review of the task (--performed-review=opus).
-SPINE='^backend/src/lib/taskOrdering\.ts$|^backend/src/routes/tasks\.ts$|^backend/src/routes/projects\.ts$|^backend/src/http/auth\.ts$|^backend/src/routes/admin\.ts$|^backend/src/lib/visibility\.ts$|^backend/prisma/schema\.prisma$|^backend/prisma/migrations/|^frontend/src/lib/dateField\.ts$|^frontend/src/components/DateField\.tsx$|^frontend/src/components/DateRangeField\.tsx$|^frontend/src/components/InlineDateRangeEditor\.tsx$|^frontend/src/lib/queries\.ts$|^frontend/src/components/kanban-v2/(adapter|commitMapper)\.ts$|^frontend/src/components/gantt-v2/|^frontend/src/components/reui/|^frontend/src/lib/export/|^docker-compose\.yml$|^\.env|^setup\.sh$|^frontend/nginx\.conf$'
+# Extended 2026-10-04 (customer-edition port) with the secrets box, the two
+# unauthenticated surfaces (iTop webhook, guest links), personal iTop tokens,
+# the outbound iTop client and the redacting request logger.
+# Standing decision (CLAUDE.md): the SA user role, `Project.saId`, and SA
+# visibility matching (`backend/src/lib/visibility.ts`) stay; the Pipeline
+# module is a native port and is never removed — see guardrail-pipeline-intact.
+SPINE='^backend/src/lib/taskOrdering\.ts$|^backend/src/routes/tasks\.ts$|^backend/src/routes/projects\.ts$|^backend/src/http/auth\.ts$|^backend/src/routes/admin\.ts$|^backend/src/lib/visibility\.ts$|^backend/prisma/schema\.prisma$|^backend/prisma/migrations/|^frontend/src/lib/dateField\.ts$|^frontend/src/components/DateField\.tsx$|^frontend/src/components/DateRangeField\.tsx$|^frontend/src/components/InlineDateRangeEditor\.tsx$|^frontend/src/lib/queries\.ts$|^frontend/src/components/kanban-v2/(adapter|commitMapper)\.ts$|^frontend/src/components/gantt-v2/|^frontend/src/components/reui/|^frontend/src/lib/export/|^docker-compose\.yml$|^\.env|^setup\.sh$|^frontend/nginx\.conf$|^backend/src/lib/secretBox\.ts$|^backend/src/routes/webhook\.ts$|^backend/src/routes/itopUser\.ts$|^backend/src/lib/itop/client\.ts$|^backend/src/http/requestLogger\.ts$|^backend/src/routes/publicShare\.ts$|^backend/src/lib/shareLinks\.ts$'
 SPINE_HITS="$(echo "$DIFF_FILES" | grep -E "$SPINE" | sed '/^$/d' || true)"
 if [ -n "$SPINE_HITS" ]; then
   echo "SPINE TOUCHED — instant review required:"

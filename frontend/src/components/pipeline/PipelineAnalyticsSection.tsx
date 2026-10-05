@@ -64,6 +64,7 @@ import { OutcomeChip } from "@/components/PipelineFlagChips";
 import { PicDrillDownModal } from "@/components/pipeline/PicDrillDownModal";
 import { EmptyState } from "@/components/EmptyState";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import { CardGridSkeleton } from "@/components/skeletons";
 import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-grid";
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
@@ -80,7 +81,7 @@ import {
 import { useOpportunities, type Opportunity } from "@/lib/queries";
 
 const PANEL_CLASS = "rounded-sm border border-outline-variant bg-surface-container-lowest p-4";
-const PANEL_HEADING = "text-label-caps uppercase tracking-wider text-on-surface-variant";
+const PANEL_HEADING = "text-label-caps uppercase text-on-surface-variant";
 
 export function PipelineAnalyticsSection() {
   const { data: deals, isLoading, isError, error } = useOpportunities();
@@ -96,11 +97,7 @@ export function PipelineAnalyticsSection() {
       </header>
 
       {isLoading && (
-        <div className="grid gap-4 lg:grid-cols-2">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
-          ))}
-        </div>
+        <CardGridSkeleton count={4} gridClassName="gap-4 lg:grid-cols-2" />
       )}
 
       {isError && (
@@ -204,7 +201,7 @@ function StageFunnelPanel({ funnel }: { funnel: StageFunnelBucket[] }) {
             <XAxis
               type="number"
               allowDecimals={false}
-              tick={{ fontSize: 11, fill: "rgb(var(--on-surface-variant))" }}
+              tick={{ fontSize: 12, fill: "rgb(var(--on-surface-variant))" }}
               tickLine={false}
               axisLine={{ stroke: "rgb(var(--outline-variant))" }}
             />
@@ -212,13 +209,13 @@ function StageFunnelPanel({ funnel }: { funnel: StageFunnelBucket[] }) {
               dataKey="label"
               type="category"
               width={132}
-              tick={{ fontSize: 11, fill: "rgb(var(--on-surface-variant))" }}
+              tick={{ fontSize: 12, fill: "rgb(var(--on-surface-variant))" }}
               tickLine={false}
               axisLine={{ stroke: "rgb(var(--outline-variant))" }}
             />
             <Tooltip
               contentStyle={{ borderRadius: 8, border: "1px solid rgb(var(--outline-variant))", fontSize: 12 }}
-              labelStyle={{ fontSize: 11, color: "rgb(var(--on-surface-variant))" }}
+              labelStyle={{ fontSize: 12, color: "rgb(var(--on-surface-variant))" }}
               formatter={(value: number) => [value, "Deals"]}
             />
             <Bar dataKey="count" radius={[0, 4, 4, 0]}>
@@ -234,9 +231,9 @@ function StageFunnelPanel({ funnel }: { funnel: StageFunnelBucket[] }) {
           .filter((f) => f.count > 0)
           .map((f) => (
             <div key={f.stage} className="rounded-sm border border-outline-variant px-2 py-1.5">
-              <p className="truncate text-[11px] text-on-surface-variant">{f.label}</p>
-              <p className="font-mono text-sm font-semibold text-on-surface">{f.count}</p>
-              <p className="text-[10px] text-on-surface-variant">{formatIDRCompact(f.value)}</p>
+              <p className="truncate text-meta text-on-surface-variant">{f.label}</p>
+              <p className="text-sm font-semibold text-on-surface">{f.count}</p>
+              <p className="text-meta text-on-surface-variant">{formatIDRCompact(f.value)}</p>
             </div>
           ))}
       </div>
@@ -271,17 +268,17 @@ function LeaderboardPanel({
                 onClick={() => onSelectPic(row.picId, row.picName)}
                 className="flex w-full items-center gap-3 rounded-sm border border-outline-variant px-3 py-2 text-left hover:border-primary hover:bg-surface-container"
               >
-                <span className="w-5 shrink-0 text-center font-mono text-xs font-bold text-on-surface-variant">
+                <span className="w-5 shrink-0 text-center text-xs font-bold text-on-surface-variant">
                   #{i + 1}
                 </span>
                 <AssigneeAvatar user={{ id: row.picId, username: row.picName }} size="sm" />
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-sm font-medium text-on-surface">{row.picName}</p>
-                  <p className="text-[11px] text-on-surface-variant">
+                  <p className="text-meta text-on-surface-variant">
                     {row.wonCount} won · {row.activeCount} active
                   </p>
                 </div>
-                <span className="shrink-0 font-mono text-sm font-semibold text-primary">
+                <span className="shrink-0 text-sm font-semibold text-primary">
                   {formatIDRCompact(row.wonValue)}
                 </span>
               </button>
@@ -341,7 +338,7 @@ function PicPerformancePanel({
       accessorKey: "activeValue",
       header: ({ column }) => <DataGridColumnHeader column={column} title="Active value" />,
       cell: ({ row }) => (
-        <span className="font-mono tabular-nums">{formatIDRCompact(row.original.activeValue)}</span>
+        <span className="tabular-nums">{formatIDRCompact(row.original.activeValue)}</span>
       ),
       meta: { headerClassName: "text-right", cellClassName: "text-right" },
     },
@@ -357,7 +354,7 @@ function PicPerformancePanel({
       accessorKey: "wonValue",
       header: ({ column }) => <DataGridColumnHeader column={column} title="Won value" />,
       cell: ({ row }) => (
-        <span className="font-mono tabular-nums text-primary">{formatIDRCompact(row.original.wonValue)}</span>
+        <span className="tabular-nums text-primary">{formatIDRCompact(row.original.wonValue)}</span>
       ),
       meta: { headerClassName: "text-right", cellClassName: "text-right" },
     },
@@ -430,7 +427,7 @@ function TrendPanel({ trend }: { trend: MonthlyTrendPoint[] }) {
             <CartesianGrid stroke="rgb(var(--outline-variant))" strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="label"
-              tick={{ fontSize: 11, fill: "rgb(var(--on-surface-variant))" }}
+              tick={{ fontSize: 12, fill: "rgb(var(--on-surface-variant))" }}
               tickLine={false}
               axisLine={{ stroke: "rgb(var(--outline-variant))" }}
               interval="preserveStartEnd"
@@ -438,13 +435,13 @@ function TrendPanel({ trend }: { trend: MonthlyTrendPoint[] }) {
             />
             <YAxis
               allowDecimals={false}
-              tick={{ fontSize: 11, fill: "rgb(var(--on-surface-variant))" }}
+              tick={{ fontSize: 12, fill: "rgb(var(--on-surface-variant))" }}
               tickLine={false}
               axisLine={{ stroke: "rgb(var(--outline-variant))" }}
             />
             <Tooltip
               contentStyle={{ borderRadius: 8, border: "1px solid rgb(var(--outline-variant))", fontSize: 12 }}
-              labelStyle={{ fontSize: 11, color: "rgb(var(--on-surface-variant))" }}
+              labelStyle={{ fontSize: 12, color: "rgb(var(--on-surface-variant))" }}
             />
             <Bar dataKey="created" name="Created" fill="rgb(var(--on-surface-variant) / 0.35)" radius={[3, 3, 0, 0]} />
             <Line
@@ -459,7 +456,7 @@ function TrendPanel({ trend }: { trend: MonthlyTrendPoint[] }) {
           </ComposedChart>
         </ResponsiveContainer>
       </div>
-      <div className="mt-2 flex gap-4 text-[11px] text-on-surface-variant">
+      <div className="mt-2 flex gap-4 text-meta text-on-surface-variant">
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: "rgb(var(--on-surface-variant) / 0.35)" }} />
           Created
@@ -505,7 +502,7 @@ function WorkloadHeatmapPanel({
     <section className={PANEL_CLASS}>
       <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h3 className={PANEL_HEADING}>Workload heatmap</h3>
-        <p className="text-[11px] text-on-surface-variant">Active deals across the 6 in-motion stages</p>
+        <p className="text-meta text-on-surface-variant">Active deals across the 6 in-motion stages</p>
       </header>
 
       {rows.length === 0 ? (
@@ -515,16 +512,16 @@ function WorkloadHeatmapPanel({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-outline-variant text-left">
-                <th className="px-2 py-2 font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
+                <th className="px-2 py-2 font-display text-label-caps uppercase text-on-surface-variant">
                   PIC
                 </th>
-                <th className="px-2 py-2 text-center font-display text-label-caps uppercase tracking-wider text-on-surface-variant">
+                <th className="px-2 py-2 text-center font-display text-label-caps uppercase text-on-surface-variant">
                   Status
                 </th>
                 {HEATMAP_STAGES.map((stage) => (
                   <th
                     key={stage}
-                    className="px-2 py-2 text-center font-display text-[10px] uppercase tracking-wider text-on-surface-variant"
+                    className="px-2 py-2 text-center font-display text-label-caps uppercase text-on-surface-variant"
                   >
                     {STAGE_LABELS[stage]}
                   </th>
@@ -550,7 +547,7 @@ function WorkloadHeatmapPanel({
                   {row.byStage.map(({ stage, count }) => (
                     <td key={stage} className="px-2 py-2 text-center">
                       <span
-                        className={`inline-flex h-7 w-7 items-center justify-center rounded-sm font-mono text-xs font-semibold ${heatmapCellClass(count)}`}
+                        className={`inline-flex h-7 w-7 items-center justify-center rounded-sm text-xs font-semibold ${heatmapCellClass(count)}`}
                       >
                         {count}
                       </span>
@@ -616,7 +613,7 @@ function CloseReasonsPanel({
       accessorKey: "value",
       header: ({ column }) => <DataGridColumnHeader column={column} title="Value" />,
       cell: ({ row }) => (
-        <span className="font-mono tabular-nums">{formatIDRCompact(row.original.value)}</span>
+        <span className="tabular-nums">{formatIDRCompact(row.original.value)}</span>
       ),
       meta: { headerClassName: "text-right", cellClassName: "text-right" },
     },
@@ -656,8 +653,8 @@ function CloseReasonsPanel({
       </section>
       <section className={PANEL_CLASS}>
         <h3 className={`${PANEL_HEADING} mb-3`}>Win rate — {year}</h3>
-        <p className="font-mono text-4xl font-bold tabular-nums text-primary">{winRate}%</p>
-        <p className="mt-1 text-[11px] text-on-surface-variant">Won ÷ closed deals, {year}</p>
+        <p className="text-4xl font-bold tabular-nums text-primary">{winRate}%</p>
+        <p className="mt-1 text-meta text-on-surface-variant">Won ÷ closed deals, {year}</p>
       </section>
     </div>
   );

@@ -174,6 +174,7 @@ model User {
   projectsAsTAM          Project[]             @relation("ProjectTAM")
   projectBaselinesLocked Project[]             @relation("ProjectBaselineLockedBy")
   assignedTasks          Task[]
+  epicsOwned             Epic[]
   comments               Comment[]
   projectNotes           ProjectNote[]
   authConfigUpdates      AuthConfig[]          @relation("AuthConfigUpdatedBy")
@@ -184,6 +185,24 @@ model User {
   customerNotes          CustomerNote[]
   weeklyUpdates          WeeklyUpdate[]
   projectReviews         ProjectReview[]
+  itopConfigUpdates      ItopConfig[]          @relation("ItopConfigUpdatedBy")
+  // iTop Person/User object keys this account is matched to (by email).
+  itopPersonId           Int?                  @unique @map("itop_person_id")
+  itopUserId             Int?                  @unique @map("itop_user_id")
+  itopTimeEntries        ItopTimeEntry[]
+  // Personal iTop token (Phase 5 write path, backend/src/routes/itopUser.ts).
+  // Sealed at rest (lib/secretBox.ts) — never the plaintext token. Writes to
+  // iTop always use this token for the acting user; the application token
+  // (ItopConfig.appTokenEnc) is read-only and never used for a write.
+  itopTokenEnc           String?               @map("itop_token_enc")
+  itopTokenCheckedAt     DateTime?             @map("itop_token_checked_at")
+  itopTokenPersonName    String?               @map("itop_token_person_name")
+  itopTokenExpiresAt     DateTime?             @map("itop_token_expires_at")
+  projectMemberships     ProjectMember[]       @relation("ProjectMemberUser")
+  projectMembersAdded    ProjectMember[]       @relation("ProjectMemberAddedBy")
+  activityEvents         ActivityEvent[]
+  shareLinksCreated      ShareLink[]
+  notifications          Notification[]
 
   @@index([roleId])
   @@map("users")
@@ -204,6 +223,38 @@ model AuthConfig {
   updatedBy            User?    @relation("AuthConfigUpdatedBy", fields: [updatedById], references: [id])
 
   @@map("auth_config")
+}
+
+// Singleton row (id="default") holding the iTop connection + sync policy,
+// editable by an admin without a redeploy. Copies the AuthConfig singleton
+// pattern above. Token fields hold sealed ciphertext (backend/src/lib/secretBox.ts)
+// — never the plaintext token (sealed in backend/src/routes/itopAdmin.ts).
+model ItopConfig {
+  id                   String    @id @default("default")
+  baseUrl              String?   @map("base_url")
+  appTokenEnc          String?   @map("app_token_enc")
+  webhookSecretEnc     String?   @map("webhook_secret_enc")
+  // IANA timezone name the iTop SERVER is configured with (confirmed on the
+  // reference install: 'timezone' => 'Europe/Paris') — iTop's REST API
+  // returns/accepts "YYYY-MM-DD HH:MM:SS" wall-clock strings in THIS zone,
+  // never UTC and never with an offset suffix. lib/itop/sync.ts's
+  // parseItopDate/formatItopDate convert through lib/itop/timezone.ts using
+  // this value. Admin-set via PATCH /admin/itop/settings, validated with
+  // isValidTimeZone (routes/itopAdmin.ts).
+  timezone             String    @default("UTC") @map("timezone")
+  refreshMinutes       Int       @default(5) @map("refresh_minutes")
+  readClasses          String[]  @default(["UserRequest", "Incident"]) @map("read_classes")
+  capacityHoursPerWeek Int       @default(40) @map("capacity_hours_per_week")
+  actionsEnabled       Boolean   @default(false) @map("actions_enabled")
+  lastSyncAt           DateTime? @map("last_sync_at")
+  lastSyncOk           Boolean?  @map("last_sync_ok")
+  lastSyncError        String?   @map("last_sync_error")
+  lastFullSyncAt       DateTime? @map("last_full_sync_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  updatedById          Int?      @map("updated_by_id")
+  updatedBy            User?     @relation("ItopConfigUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  @@map("itop_config")
 }
 
 model Project {
@@ -235,6 +286,7 @@ model Project {
   tasks                Task[]
   labels               Label[]
   sections             Section[]
+  epics                Epic[]
   risks                Risk[]
   taskDependencies     TaskDependency[]
   notes                ProjectNote[]
@@ -243,12 +295,87 @@ model Project {
   // Won-deal handoff link (native replacement for the PRD's cross-DB
   // Project.sourceDealId soft link) — the Opportunity side owns the FK.
   opportunity          Opportunity?
+  members              ProjectMember[]
+  activityEvents       ActivityEvent[]
+  shareLinks           ShareLink[]
 
   @@index([saId])
   @@index([tamId])
   @@index([customerId])
   @@index([status])
   @@map("projects")
+}
+
+// Extra people with full access to a project alongside its TAM (visibility.ts
+// projectVisibilityFilter member arm; docs/archive/plans/collaboration-and-sharing.md).
+// Rows are created by the members API and by task assignment. The project's
+// own TAM is never stored here. `addedById` records who added the row and is
+// nulled (not cascaded) when that user is deleted.
+model ProjectMember {
+  projectId Int      @map("project_id")
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    Int      @map("user_id")
+  user      User     @relation("ProjectMemberUser", fields: [userId], references: [id], onDelete: Cascade)
+  addedById Int?     @map("added_by_id")
+  addedBy   User?    @relation("ProjectMemberAddedBy", fields: [addedById], references: [id], onDelete: SetNull)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@id([projectId, userId])
+  @@index([userId])
+  @@map("project_members")
+}
+
+// Append-only activity log (docs/archive/plans/collaboration-and-sharing.md, C5a),
+// scoped to a project OR a Pipeline deal — exactly one of `projectId` /
+// `opportunityId` is set (the activity_events_one_scope CHECK, hand-appended in
+// migration 20261004121100_activity_events_pipeline; Prisma cannot model it).
+// One row per write, recorded in the same transaction as the change through
+// lib/activity.ts#recordActivity. `entityLabel` is a display snapshot taken at
+// write time so a deleted item still reads well. `changes` holds short scalar
+// diffs only — NEVER a note or comment body or description text (an INTERNAL
+// note must not leak through the log). `actorId` is nulled when the user is
+// deleted; rows older than 180 days are removed by lib/activityCleanup.ts.
+model ActivityEvent {
+  id            Int            @id @default(autoincrement())
+  projectId     Int?           @map("project_id")
+  project       Project?       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  opportunityId String?        @map("opportunity_id")
+  opportunity   Opportunity?   @relation(fields: [opportunityId], references: [id], onDelete: Cascade)
+  actorId       Int?           @map("actor_id")
+  actor         User?          @relation(fields: [actorId], references: [id], onDelete: SetNull)
+  entityType    String         @map("entity_type")
+  // Integer id of the changed row; null for uuid-keyed entities (deals, deal notes, links).
+  entityId      Int?           @map("entity_id")
+  action        String
+  entityLabel   String?        @map("entity_label")
+  changes       Json?          @db.JsonB
+  createdAt     DateTime       @default(now()) @map("created_at")
+  notifications Notification[]
+
+  @@index([projectId, createdAt(sort: Desc)])
+  @@index([opportunityId, createdAt(sort: Desc)])
+  @@index([createdAt])
+  @@map("activity_events")
+}
+
+// In-app notification (docs/archive/plans/collaboration-and-sharing.md, C5b): one
+// row per (recipient, activity event), created in the same transaction as the
+// event by lib/notifications.ts#notifyForEvent. Cascades from the event, so the
+// 180-day activity cleanup removes notifications too. `reason` is `assigned` |
+// `commented` | `mentioned`.
+model Notification {
+  id              Int           @id @default(autoincrement())
+  userId          Int           @map("user_id")
+  user            User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activityEventId Int           @map("activity_event_id")
+  activityEvent   ActivityEvent @relation(fields: [activityEventId], references: [id], onDelete: Cascade)
+  reason          String
+  readAt          DateTime?     @map("read_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+
+  @@index([userId, readAt, createdAt(sort: Desc)])
+  @@index([activityEventId])
+  @@map("notifications")
 }
 
 model Customer {
@@ -264,6 +391,12 @@ model Customer {
   tam               User?             @relation("CustomerTam", fields: [tamId], references: [id], onDelete: SetNull)
   notes             CustomerNote[]
   weeklyUpdates     WeeklyUpdate[]
+  // iTop Organization this customer is mapped to (admin-mapped or exact
+  // name auto-match). One customer per org.
+  itopOrgId         Int?              @unique @map("itop_org_id")
+  itopOrgName       String?           @map("itop_org_name")
+  itopTickets       ItopTicket[]
+  itopTimeEntries   ItopTimeEntry[]
 
   @@index([tamId])
   @@map("customers")
@@ -351,6 +484,26 @@ model Task {
   // Dependency edges (Gantt connector arrows).
   predecessors      TaskDependency[] @relation("DependencySuccessor")
   successors        TaskDependency[] @relation("DependencyPredecessor")
+  // Optional pin to one iTop ticket ref (e.g. "R-000123"), validated in
+  // routes/tasks.ts. Free-form string, not an FK to ItopTicket — the ref may
+  // not exist in the local snapshot yet (unmapped org, not synced, or the
+  // ticket predates this integration); GET /itop/tickets/by-ref/:ref
+  // resolves it against the snapshot when present. Tasks never become
+  // tickets and this never writes to iTop. See
+  // docs/archive/plans/itop-integration.md Task 4.2.
+  /// Reverse lookup: "which task (if any) pins this ticket ref" — used by
+  /// the iTop ticket panel and the task-to-ticket flow (later phases) to
+  /// find a task from a ticket, the opposite direction of the by-ref
+  /// endpoint above (which resolves a ref to a ticket).
+  itopTicketRef     String?          @map("itop_ticket_ref")
+  // Optional Jira-style Epic link — top-level tasks only. A subtask always
+  // has epicId null and inherits its parent's epic for display; routes/
+  // tasks.ts and routes/projects.ts enforce that (400 epic_on_subtask) and
+  // re-parenting a task clears its epicId in the same transaction. Deleting
+  // the epic keeps the task (SetNull), mirroring section delete. See
+  // docs/archive/plans/epics-spec.md §4.
+  epicId            Int?             @map("epic_id")
+  epic              Epic?            @relation(fields: [epicId], references: [id], onDelete: SetNull)
 
   @@index([projectId])
   @@index([sectionId])
@@ -360,6 +513,9 @@ model Task {
   @@index([dueDate])
   @@index([parentTaskId])
   @@index([projectId, position])
+  // Backs the reverse lookup itopTicketRef documents above (ticket ref -> task).
+  @@index([itopTicketRef])
+  @@index([epicId])
   @@map("tasks")
 }
 
@@ -403,6 +559,35 @@ model Section {
   @@map("sections")
 }
 
+// Jira-style Epic: a named grouping of a project's top-level tasks ("stories"
+// in Jira's vocabulary — Solvro keeps the Task name, see
+// docs/archive/plans/epics-spec.md §3 non-goals). Distinct from Section (a phase/track axis);
+// an epic is a scope axis. Deleting an epic keeps its tasks (Task.epicId
+// SetNull, mirroring section delete). Status is manual, like Jira; progress
+// (done/total) is derived server-side from top-level tasks only — see
+// routes/epics.ts and routes/projects.ts.
+model Epic {
+  id          Int        @id @default(autoincrement())
+  projectId   Int        @map("project_id")
+  project     Project    @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  title       String
+  description String?
+  status      TaskStatus @default(TODO) // reuse the enum so StatusChip works unchanged
+  color       String     @default("#94a3b8") // same default as Section
+  ownerId     Int?       @map("owner_id")
+  owner       User?      @relation(fields: [ownerId], references: [id])
+  startDate   DateTime?  @map("start_date") // manual; date contract via lib/dateBoundary.ts / z.coerce.date()
+  dueDate     DateTime?  @map("due_date")
+  position    Int        @default(0) // dense 0..n-1 per project
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  tasks       Task[]
+
+  @@index([projectId])
+  @@index([projectId, position])
+  @@map("epics")
+}
+
 model Label {
   id        Int     @id @default(autoincrement())
   projectId Int     @map("project_id")
@@ -423,6 +608,9 @@ model Comment {
   authorId  Int      @map("author_id")
   author    User     @relation(fields: [authorId], references: [id])
   body      String   @db.Text
+  // Users @mentioned in the body: only active users who could see the project
+  // when the comment was written (routes/tasks.ts filters before storing).
+  mentionedUserIds Int[] @default([]) @map("mentioned_user_ids")
   createdAt DateTime @default(now()) @map("created_at")
 
   @@index([taskId])
@@ -637,6 +825,7 @@ model Opportunity {
   updatedAt             DateTime               @updatedAt @map("updated_at")
   activities            OpportunityActivity[]
   links                 OpportunityLink[]
+  activityEvents        ActivityEvent[]
 
   @@index([stage])
   @@index([picId])
@@ -654,6 +843,9 @@ model OpportunityActivity {
   userId        Int?        @map("user_id")
   user          User?       @relation("OpportunityActivityUser", fields: [userId], references: [id], onDelete: SetNull)
   note          String
+  // @mentions in a deal note (POST /opportunities/:id/activities): users who
+  // had pipeline:view at write time. Plain ids, no FK (same as TaskComment).
+  mentionedUserIds Int[]    @default([]) @map("mentioned_user_ids")
   createdAt     DateTime    @default(now()) @map("created_at")
 
   @@index([opportunityId])
@@ -687,4 +879,108 @@ model PipelineImportLog {
 
   @@index([createdAt])
   @@map("pipeline_import_logs")
+}
+
+// Read-only snapshot of an iTop UserRequest/Incident, refreshed by the
+// scheduled sync (backend/src/lib/itop/sync.ts). `id` is the iTop object
+// key, not a Solvro-assigned autoincrement — never generated here. Log
+// columns (public/private) arrive with the iTop write path.
+model ItopTicket {
+  id                Int       @id
+  class             String
+  ref               String    @unique
+  title             String
+  status            String
+  operationalStatus String?   @map("operational_status")
+  priority          String?
+  agentPersonId     Int?      @map("agent_person_id")
+  agentName         String?   @map("agent_name")
+  teamName          String?   @map("team_name")
+  serviceName       String?   @map("service_name")
+  callerName        String?   @map("caller_name")
+  orgId             Int       @map("org_id")
+  customerId        Int?      @map("customer_id")
+  customer          Customer? @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  startDate         DateTime? @map("start_date")
+  lastUpdate        DateTime  @map("last_update")
+  // Escalation DEADLINES (a point in time), not the SLA stopwatch itself —
+  // confirmed against a real iTop 3.2.2 install that the bare `tto`/`ttr`
+  // ticket attributes are JSON integers (elapsed clock seconds), which is
+  // NOT what these columns hold. Populated from iTop's
+  // `tto_escalation_deadline`/`ttr_escalation_deadline` fields; null when
+  // that clock isn't running. See lib/itop/sync.ts#upsertTicket and
+  // lib/itop/types.ts's ITOP_TICKET_OUTPUT_FIELDS doc comment.
+  tto               DateTime?
+  ttr               DateTime?
+  slaTtoPassed      Boolean   @default(false) @map("sla_tto_passed")
+  slaTtrPassed      Boolean   @default(false) @map("sla_ttr_passed")
+  resolutionDate    DateTime? @map("resolution_date")
+  // Case log entries (Phase 5, backend/src/lib/itop/sync.ts). Normalised
+  // JSON array `Array<{ date: string|null (ISO), author: string|null,
+  // message: string }>` capped at the last 50 entries, newest last — never
+  // the raw iTop `{ entries: [...] }` shape. `withLogs` on toTicketRow
+  // (routes/itop.ts) gates whether these reach a response.
+  publicLog         Json?     @map("public_log")
+  privateLog        Json?     @map("private_log")
+  syncedAt          DateTime  @map("synced_at")
+  itopTimeEntries   ItopTimeEntry[]
+
+  @@index([customerId, status])
+  @@index([lastUpdate])
+  @@index([agentPersonId])
+  @@index([orgId])
+  @@map("itop_tickets")
+}
+
+// Time-tracking snapshot rows pulled from iTop's TimeSpent (Time Tracking
+// extension), refreshed by the same sync as ItopTicket
+// (backend/src/lib/itop/sync.ts). `id` is the iTop object key, not a
+// Solvro-assigned autoincrement. Powers the Utilization page
+// (docs/archive/plans/itop-integration.md, Utilization) — hours are read only from
+// TimeSpent, never a ticket's own time_spent/clock field (plan §3).
+model ItopTimeEntry {
+  id              Int         @id
+  itopUserId      Int         @map("itop_user_id")
+  userId          Int?        @map("user_id")
+  user            User?       @relation(fields: [userId], references: [id], onDelete: SetNull)
+  orgId           Int?        @map("org_id")
+  customerId      Int?        @map("customer_id")
+  customer        Customer?   @relation(fields: [customerId], references: [id], onDelete: SetNull)
+  ticketId        Int?        @map("ticket_id")
+  ticket          ItopTicket? @relation(fields: [ticketId], references: [id], onDelete: SetNull)
+  ticketRef       String?     @map("ticket_ref")
+  startDate       DateTime    @map("start_date")
+  endDate         DateTime?   @map("end_date")
+  durationMinutes Int         @map("duration_minutes")
+  title           String?
+  syncedAt        DateTime    @map("synced_at")
+
+  @@index([userId, startDate])
+  @@index([customerId, startDate])
+  @@index([itopUserId])
+  @@index([ticketId])
+  @@index([startDate])
+  @@map("itop_time_entries")
+}
+
+// Read-only guest link to one project's timeline (docs/archive/plans/collaboration-and-sharing.md,
+// L4). Only the SHA-256 hex of the token is stored (lib/shareLinks.ts) — the
+// full link is shown once, at creation. `createdById` is nulled when the user
+// is deleted. A link stops working at `expiresAt` or once `revokedAt` is set;
+// `lastUsedAt` is bumped at most once an hour by the public route.
+model ShareLink {
+  id          Int       @id @default(autoincrement())
+  projectId   Int       @map("project_id")
+  project     Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  tokenHash   String    @unique @map("token_hash")
+  label       String?
+  createdById Int?      @map("created_by_id")
+  createdBy   User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  expiresAt   DateTime  @map("expires_at")
+  revokedAt   DateTime? @map("revoked_at")
+  lastUsedAt  DateTime? @map("last_used_at")
+
+  @@index([projectId])
+  @@map("share_links")
 }

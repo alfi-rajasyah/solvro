@@ -10,6 +10,13 @@ import { isValidDayString, utcMidnightOfDayString } from "../lib/dateBoundary.js
 import { isCustomerVisible } from "../lib/visibility.js";
 import { assertCanAssignOpportunity, assertCanWriteOpportunity, PIC_SELECT } from "../lib/pipelineAccess.js";
 import { computeIdle } from "../lib/pipelineSla.js";
+import { recordActivity, shortLabel } from "../lib/activity.js";
+import {
+  diffOpportunityChanges,
+  opportunityCreatedChanges,
+  recordOpportunityChange,
+} from "../lib/opportunityActivity.js";
+import { notifyForEvent } from "../lib/notifications.js";
 import { logger } from "../logger.js";
 // Anti-drift seam (finding S6): the handoff body is byte-for-byte the same
 // shape as a plain project create, so this reuses routes/projects.ts's own
@@ -478,10 +485,22 @@ opportunitiesRouter.post(
     // into the same stage can't race to the same stageOrder.
     const created = await prisma.$transaction(async (tx) => {
       const stageOrder = await tx.opportunity.count({ where: { stage } });
-      return tx.opportunity.create({
+      const row = await tx.opportunity.create({
         data: { ...data, stageOrder },
         include: { pic: { select: PIC_SELECT } },
       });
+      // Timeline sentence + structured event; a PIC other than the creator is
+      // told they were assigned the deal.
+      const event = await recordOpportunityChange(tx, {
+        opportunityId: row.id,
+        actorId: req.user!.sub,
+        action: "created",
+        entityLabel: shortLabel(row.title),
+        changes: opportunityCreatedChanges(row),
+        note: "Created",
+      });
+      await notifyForEvent(tx, event);
+      return row;
     });
 
     res.status(201).json(serializeOpportunity(created));
@@ -626,6 +645,17 @@ opportunitiesRouter.post(
 
           const opportunity = await tx.opportunity.create({ data });
 
+          // Recorded for the log, never notified: a bulk import would flood
+          // every PIC. No "Created" sentence either — the optional
+          // `activityLog` seed below is the row's own timeline entry.
+          await recordOpportunityChange(tx, {
+            opportunityId: opportunity.id,
+            actorId: userId,
+            action: "created",
+            entityLabel: opportunity.title,
+            changes: { stage, source: "import" },
+          });
+
           if (activityLog) {
             await tx.opportunityActivity.create({
               data: { opportunityId: opportunity.id, userId, note: activityLog },
@@ -724,50 +754,70 @@ opportunitiesRouter.patch(
     if (body.leadSource !== undefined) data.leadSource = body.leadSource;
     if (body.winProbability !== undefined) data.winProbability = body.winProbability;
 
-    // Real transitions only — repeating the same value is a true no-op: no
-    // field write, no waitingInputSince churn, no note.
-    const notes: string[] = [];
-    if (body.subStatus !== undefined && body.subStatus !== current.subStatus) {
-      data.subStatus = body.subStatus;
-      if (body.subStatus === PipelineSubStatus.WAITING_SALES_INPUT) {
-        data.waitingInputSince = new Date();
-        notes.push("Waiting for Sales input");
-      } else {
-        data.waitingInputSince = null;
-        notes.push("Input received");
-      }
-    }
-    if (body.statusTag !== undefined && body.statusTag !== current.statusTag) {
-      data.statusTag = body.statusTag;
-      // A tag-to-tag swap (Hold <-> Delayed) logs BOTH the old tag's
-      // clearing note and the new tag's entering note, in that order (N5
-      // fix, phase review) — checking `current` and `body` independently
-      // (rather than one `if`/`else if` chain) means a swap naturally falls
-      // through both checks instead of the old code's chain treating a
-      // non-null `body.statusTag` as "only entering" and silently dropping
-      // the clearing note for whichever tag the deal already carried.
-      if (current.statusTag === PipelineStatusTag.HOLD) notes.push("Hold released");
-      if (current.statusTag === PipelineStatusTag.DELAYED) notes.push("Delay cleared");
-      if (body.statusTag === PipelineStatusTag.HOLD) notes.push("Put on hold");
-      if (body.statusTag === PipelineStatusTag.DELAYED) notes.push("Marked as delayed");
-    }
-
-    // Bump lastActivityAt on any accepted field (§3.7) — but only if this
-    // PATCH actually changes something; an empty/no-op body shouldn't make
-    // the deal look freshly touched.
-    if (Object.keys(data).length > 0) data.lastActivityAt = new Date();
-
     const updated = await prisma.$transaction(async (tx) => {
+      // Lock the row, then read it again WITH its PIC: the diff and the
+      // "assigned" notification are computed from exactly the row this write
+      // replaces (FOR NO KEY UPDATE, not FOR UPDATE — same as the task/risk
+      // PATCH, it doesn't block FK checks on rows pointing at the deal).
+      await tx.$queryRaw`SELECT id FROM opportunities WHERE id = ${id} FOR NO KEY UPDATE`;
+      const before = await tx.opportunity.findUniqueOrThrow({
+        where: { id },
+        include: { pic: { select: PIC_SELECT } },
+      });
+      // Sub-status/tag sentences come from the LOCKED row, not the pre-lock
+      // `current`: two overlapping identical PATCHes then write one sentence
+      // for the one real transition.
+      const notes: string[] = [];
+      // Real transitions only — repeating the same value is a true no-op: no
+      // field write, no waitingInputSince churn, no note.
+      if (body.subStatus !== undefined && body.subStatus !== before.subStatus) {
+        data.subStatus = body.subStatus;
+        if (body.subStatus === PipelineSubStatus.WAITING_SALES_INPUT) {
+          data.waitingInputSince = new Date();
+          notes.push("Waiting for Sales input");
+        } else {
+          data.waitingInputSince = null;
+          notes.push("Input received");
+        }
+      }
+      if (body.statusTag !== undefined && body.statusTag !== before.statusTag) {
+        data.statusTag = body.statusTag;
+        // A tag-to-tag swap (Hold <-> Delayed) logs BOTH the old tag's
+        // clearing note and the new tag's entering note, in that order (N5
+        // fix, phase review) — checking `before` and `body` independently
+        // (rather than one `if`/`else if` chain) means a swap naturally falls
+        // through both checks instead of the old code's chain treating a
+        // non-null `body.statusTag` as "only entering" and silently dropping
+        // the clearing note for whichever tag the deal already carried.
+        if (before.statusTag === PipelineStatusTag.HOLD) notes.push("Hold released");
+        if (before.statusTag === PipelineStatusTag.DELAYED) notes.push("Delay cleared");
+        if (body.statusTag === PipelineStatusTag.HOLD) notes.push("Put on hold");
+        if (body.statusTag === PipelineStatusTag.DELAYED) notes.push("Marked as delayed");
+      }
+
+      // Bump lastActivityAt on any accepted field (§3.7) — but only if this
+      // PATCH actually changes something; an empty/no-op body shouldn't make
+      // the deal look freshly touched.
+      if (Object.keys(data).length > 0) data.lastActivityAt = new Date();
+
       const result = await tx.opportunity.update({
         where: { id },
         data,
         include: { pic: { select: PIC_SELECT } },
       });
-      for (const note of notes) {
-        await tx.opportunityActivity.create({
-          data: { opportunityId: id, userId: req.user!.sub, note },
-        });
+      // A PIC change through PATCH reads like /assign on the timeline.
+      if ((before.pic?.id ?? null) !== (result.pic?.id ?? null)) {
+        notes.push(result.pic ? `Assigned to ${result.pic.username}` : "Unassigned");
       }
+      const event = await recordOpportunityChange(tx, {
+        opportunityId: id,
+        actorId: req.user!.sub,
+        action: "updated",
+        entityLabel: result.title,
+        changes: diffOpportunityChanges(before, result),
+        note: notes,
+      });
+      await notifyForEvent(tx, event);
       return result;
     });
 
@@ -851,8 +901,17 @@ opportunitiesRouter.post(
         const note = isSkipJump
           ? `Moved from Technical Clarification to RFP, PoC skipped: ${body.reason}`
           : `Moved from ${STAGE_LABELS[current.stage]} to ${STAGE_LABELS[body.stage]}`;
-        await tx.opportunityActivity.create({
-          data: { opportunityId: id, userId: req.user!.sub, note },
+        // The skip reason stays in the sentence only — never in `changes`.
+        await recordOpportunityChange(tx, {
+          opportunityId: id,
+          actorId: req.user!.sub,
+          action: "moved",
+          entityLabel: result.title,
+          changes: {
+            stage: { from: current.stage, to: body.stage },
+            ...(isSkipJump && { pocSkipped: true }),
+          },
+          note,
         });
       }
 
@@ -914,6 +973,13 @@ opportunitiesRouter.post(
 
     const now = new Date();
     const updated = await prisma.$transaction(async (tx) => {
+      // Lock + re-check: two overlapping closes record one event and one
+      // `deal_closed` notification; the loser gets the same 409 as a retry.
+      await tx.$queryRaw`SELECT id FROM opportunities WHERE id = ${id} FOR NO KEY UPDATE`;
+      const locked = await tx.opportunity.findUniqueOrThrow({ where: { id }, select: { outcome: true } });
+      if (locked.outcome !== null) {
+        throw new HttpError(409, "already_closed", "This deal is already closed");
+      }
       const result = await tx.opportunity.update({
         where: { id },
         data: {
@@ -929,9 +995,19 @@ opportunitiesRouter.post(
         },
         include: { pic: { select: PIC_SELECT } },
       });
-      await tx.opportunityActivity.create({
-        data: { opportunityId: id, userId: req.user!.sub, note },
+      // Category only — the free-text `reason` lives in the sentence alone.
+      const event = await recordOpportunityChange(tx, {
+        opportunityId: id,
+        actorId: req.user!.sub,
+        action: "closed",
+        entityLabel: result.title,
+        changes: {
+          outcome: body.outcome,
+          ...(body.reasonCategory !== undefined && { reasonCategory: body.reasonCategory }),
+        },
+        note,
       });
+      await notifyForEvent(tx, event, { picId: result.picId });
       return result;
     });
 
@@ -963,6 +1039,14 @@ opportunitiesRouter.post("/:id/reopen", validate("params", idParamSchema), async
 
   const now = new Date();
   const updated = await prisma.$transaction(async (tx) => {
+    // Same lock + re-check as /close: a double reopen records one event.
+    await tx.$queryRaw`SELECT id FROM opportunities WHERE id = ${id} FOR NO KEY UPDATE`;
+    const locked = await tx.opportunity.findUniqueOrThrow({
+      where: { id },
+      select: { outcome: true, projectId: true },
+    });
+    if (locked.outcome === null) throw new HttpError(409, "not_closed", "This deal isn't closed");
+    if (locked.projectId !== null) throw new HttpError(409, "handed_off", "This deal already became a project");
     const result = await tx.opportunity.update({
       where: { id },
       data: {
@@ -976,8 +1060,13 @@ opportunitiesRouter.post("/:id/reopen", validate("params", idParamSchema), async
       },
       include: { pic: { select: PIC_SELECT } },
     });
-    await tx.opportunityActivity.create({
-      data: { opportunityId: id, userId: req.user!.sub, note: "Reopened" },
+    await recordOpportunityChange(tx, {
+      opportunityId: id,
+      actorId: req.user!.sub,
+      action: "reopened",
+      entityLabel: result.title,
+      changes: { outcome: { from: locked.outcome, to: null } },
+      note: "Reopened",
     });
     return result;
   });
@@ -1032,27 +1121,45 @@ opportunitiesRouter.post(
     }
 
     const updated = await prisma.$transaction(async (tx) => {
-      // lastActivityAt bumps here too (§3.7) — only reached once the
-      // no-op short-circuit above has ruled out "same PIC again", so this
-      // transaction only ever runs on a real PIC change.
+      // Lock + re-read WITH the old PIC, so `changes.pic.from` and the
+      // same-PIC check are those of the row this write replaces (two
+      // overlapping identical assigns produce one event, one notification).
+      await tx.$queryRaw`SELECT id FROM opportunities WHERE id = ${id} FOR NO KEY UPDATE`;
+      const before = await tx.opportunity.findUniqueOrThrow({
+        where: { id },
+        include: { pic: { select: PIC_SELECT } },
+      });
+      if (before.picId === pic.id) return before;
+
+      // lastActivityAt bumps here too (§3.7) — only reached for a real PIC
+      // change (the short-circuits above and the check just made rule out
+      // "same PIC again").
       const result = await tx.opportunity.update({
         where: { id },
         data: { pic: { connect: { id: pic.id } }, lastActivityAt: new Date() },
         include: { pic: { select: PIC_SELECT } },
       });
 
-      await tx.opportunityActivity.create({
-        data: {
-          opportunityId: id,
-          userId: req.user!.sub,
-          note: `Assigned to ${pic.username}`,
+      const event = await recordOpportunityChange(tx, {
+        opportunityId: id,
+        actorId: req.user!.sub,
+        action: "assigned",
+        entityLabel: result.title,
+        changes: {
+          pic: {
+            from: before.pic ? { id: before.pic.id, username: before.pic.username } : null,
+            to: { id: pic.id, username: pic.username },
+          },
         },
+        note: `Assigned to ${pic.username}`,
       });
+      // The new PIC hears about it — unless they claimed it themselves.
+      await notifyForEvent(tx, event);
 
       return result;
     });
 
-    res.json(serializeOpportunity(updated));
+    res.json(serializeOpportunity(updated as OpportunityWithPic));
   },
 );
 
@@ -1125,8 +1232,11 @@ opportunitiesRouter.post(
     // Customer Visibility (docs/plans/customer-visibility-spec.md §5.5,
     // Decision 7): same rule routes/projects.ts applies on POST / and
     // PATCH /:id — a customerId the caller can't see 400s before the deal
-    // or any project row is touched.
-    if (!(await isCustomerVisible(req.user!, body.customerId))) {
+    // or any project row is touched. Checked at the "own" level: attaching a
+    // project to a customer is an owner-level act (a member or SA who only
+    // sees the customer through a project would otherwise become TAM of a
+    // project there and could then take the customer over).
+    if (!(await isCustomerVisible(req.user!, body.customerId, "own"))) {
       throw new HttpError(400, "customer_not_found", "Customer not found");
     }
 
@@ -1174,18 +1284,48 @@ opportunitiesRouter.post(
         throw new HttpError(409, "already_linked", "This deal was handed off by another request");
       }
 
-      await tx.opportunityActivity.create({
-        data: {
-          opportunityId: id,
-          userId: req.user!.sub,
-          note: `Handed off to project "${project.name}"`,
-        },
-      });
-
       const opportunity = await tx.opportunity.findUniqueOrThrow({
         where: { id },
         include: { pic: { select: PIC_SELECT } },
       });
+
+      // Project side: the new project's history opens with where it came
+      // from, and its TAM and SA (other than the actor) are told they were
+      // given it. Written only after the link above succeeded, so a lost
+      // race rolls everything back, events included.
+      const people = await tx.user.findMany({
+        where: { id: { in: body.saId != null ? [tamId, body.saId] : [tamId] } },
+        select: { id: true, username: true },
+      });
+      const personOf = (userId: number) => people.find((u) => u.id === userId) ?? null;
+      const tam = personOf(tamId);
+      const sa = body.saId != null ? personOf(body.saId) : null;
+      const projectEvent = await recordActivity(tx, {
+        projectId: project.id,
+        actorId: req.user!.sub,
+        entityType: "project",
+        entityId: project.id,
+        action: "created",
+        entityLabel: shortLabel(project.name),
+        changes: {
+          fromOpportunity: { id: opportunity.id, title: opportunity.title },
+          ...(tam && { tam }),
+          ...(sa && { sa }),
+        },
+      });
+      await notifyForEvent(tx, projectEvent);
+
+      // Deal side: the timeline sentence + structured event; the deal's PIC
+      // hears about a handoff somebody else did.
+      const dealEvent = await recordOpportunityChange(tx, {
+        opportunityId: id,
+        actorId: req.user!.sub,
+        action: "handed_off",
+        entityLabel: opportunity.title,
+        changes: { project: { id: project.id, name: project.name } },
+        note: `Handed off to project "${project.name}"`,
+      });
+      await notifyForEvent(tx, dealEvent, { picId: opportunity.picId });
 
       return { project, opportunity };
     });

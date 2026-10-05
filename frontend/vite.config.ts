@@ -43,11 +43,19 @@ export default defineConfig({
       workbox: {
         // App shell precache — index.html + built assets (JS/CSS/fonts/icons).
         globPatterns: ["**/*.{js,css,html,png,svg,ico,webmanifest}"],
+        // The main bundle passed Workbox's 2 MiB default once the iTop,
+        // collaboration and Pipeline code shipped together; a precached file
+        // over the limit fails the build (not a warning). Raise the ceiling
+        // until the bundle is code-split (docs/ISSUES.md).
+        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: "/index.html",
         // Navigations under /api/ must reach the network, never the cached
         // app shell — the NavigationRoute is registered before the NetworkOnly
         // runtime route, so without this denylist it wins for navigations.
-        navigateFallbackDenylist: [/^\/api\//],
+        // Guest-link navigations (/share/<token>) must also reach nginx, which
+        // sends them no-store + Referrer-Policy: no-referrer; a precached
+        // shell would serve them without those headers.
+        navigateFallbackDenylist: [/^\/api\//, /^\/share\//],
         runtimeCaching: [
           {
             // API responses carry auth state and must always be fresh —
@@ -81,6 +89,13 @@ export default defineConfig({
   server: {
     host: "0.0.0.0",
     port: 5173,
+    // Vite refuses requests whose Host header isn't localhost/an IP (host
+    // check, 5.4.12+). When the dev server sits behind a tunnel or reverse
+    // proxy (e.g. cloudflared), list the public hostnames here via
+    // VITE_ALLOWED_HOSTS=host1,host2 in that container's env.
+    allowedHosts: process.env.VITE_ALLOWED_HOSTS
+      ? process.env.VITE_ALLOWED_HOSTS.split(",").map((h) => h.trim()).filter(Boolean)
+      : undefined,
     proxy: {
       // Forward /api/* to the backend. In native dev (npm run dev on the
       // host), the backend is at http://localhost:3000. In dockerised dev

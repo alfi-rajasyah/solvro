@@ -284,7 +284,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
           </div>
 
           <div className="rounded-lg bg-surface-container-low p-3">
-            <p className="mb-1.5 text-[11px] font-bold uppercase tracking-wider text-on-surface-variant">
+            <p className="mb-1.5 text-label-caps uppercase text-on-surface-variant">
               Valid stages
             </p>
             <div className="flex flex-wrap gap-1.5">
