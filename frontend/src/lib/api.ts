@@ -2,6 +2,9 @@ const BASE_URL = "/api";
 
 const TOKEN_STORAGE_KEY = "solvro.token";
 
+/** Fired on `window` when an authenticated request is answered with 401. */
+export const UNAUTHENTICATED_EVENT = "solvro:unauthenticated";
+
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_STORAGE_KEY);
 }
@@ -43,10 +46,8 @@ export async function apiRequestWithHeaders<T>(
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
 
-  if (auth) {
-    const token = getToken();
-    if (token) headers["Authorization"] = `Bearer ${token}`;
-  }
+  const token = auth ? getToken() : null;
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
   const res = await fetch(`${BASE_URL}${path}`, {
     method,
@@ -63,6 +64,15 @@ export async function apiRequestWithHeaders<T>(
       isErrorBody(parsed) && typeof parsed.error === "string"
         ? parsed.error
         : `Request failed with status ${res.status}`;
+    // A 401 on an authenticated request means the session is over: the
+    // token expired, or the server revoked it (password change, admin
+    // reset, deactivation — the account check runs on every request since
+    // 2026-10-06). AuthProvider listens and signs the user out.
+    // Only when the rejected token is still the current one: a late 401
+    // from a previous session must not sign out a fresh login.
+    if (res.status === 401 && token && getToken() === token) {
+      window.dispatchEvent(new Event(UNAUTHENTICATED_EVENT));
+    }
     throw new ApiError(res.status, message, parsed);
   }
 

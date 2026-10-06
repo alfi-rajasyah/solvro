@@ -146,11 +146,11 @@ describe("splitComment", () => {
 });
 
 describe("taskMentionPeople", () => {
-  const user = (id: number, username: string, active = true, permissions: string[] = []) => ({
+  const user = (id: number, username: string, active = true, pipelineAccess = false) => ({
     id,
     username,
     active,
-    permissions,
+    pipelineAccess,
   });
   const directory = [user(1, "ana"), user(2, "budi"), user(3, "cara"), user(4, "dewi"), user(5, "eko", false)];
 
@@ -200,12 +200,12 @@ describe("taskMentionPeople", () => {
   });
 
   describe("dealMentionCandidates", () => {
-    it("keeps active users with pipeline:view or the wildcard", () => {
+    it("keeps active users who can open the Pipeline", () => {
       const people = [
-        user(1, "ana", true, ["pipeline:view"]),
-        user(2, "budi", true, ["*"]),
-        user(3, "cara", true, ["project:write"]),
-        user(4, "dewi", false, ["pipeline:view"]),
+        user(1, "ana", true, true),
+        user(2, "budi", true, true),
+        user(3, "cara", true, false),
+        user(4, "dewi", false, true),
       ];
       expect(dealMentionCandidates(people).map((u) => u.username)).toEqual(["ana", "budi"]);
       expect(dealMentionCandidates(undefined)).toEqual([]);

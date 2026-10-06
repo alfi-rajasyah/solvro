@@ -8,6 +8,7 @@ import { requireAuth, requireAdmin } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { bustAuthConfigCache } from "../authConfig.js";
+import { normalizeUsername, USERNAME_MAX } from "../lib/username.js";
 
 export const adminRouter = Router();
 
@@ -77,7 +78,9 @@ adminRouter.get("/users", async (_req, res) => {
 
 const createUserSchema = z.object({
   email: z.string().email(),
-  username: z.string().min(1).max(50),
+  // Length only here; the character rule and the case-insensitive clash
+  // check run in the handler (lib/username.ts, pentest finding L1).
+  username: z.string().min(1).max(USERNAME_MAX * 2),
   password: z.string().min(8).max(200),
   role: z.string().min(1).max(50),
 });
@@ -86,13 +89,32 @@ adminRouter.post(
   "/users",
   validate("body", createUserSchema),
   async (req, res) => {
-    const { email, username, password, role } = req.body as z.infer<
+    const { email, username: rawUsername, password, role } = req.body as z.infer<
       typeof createUserSchema
     >;
+
+    const username = normalizeUsername(rawUsername);
+    if (username === null) {
+      throw new HttpError(
+        400,
+        "username_invalid",
+        `Username must be 1-${USERNAME_MAX} characters: Latin letters, digits, spaces, and . _ ' - only`,
+      );
+    }
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) {
       throw new HttpError(409, "email_in_use", "A user with that email already exists");
+    }
+    // Case-insensitive on purpose: "Admin" beside "admin" is the same
+    // look-alike problem as a homoglyph. Raw `lower() = lower()` rather than
+    // Prisma's `mode: "insensitive"`, which compiles to ILIKE and would read
+    // the allowed `_` as a one-character wildcard.
+    const usernameClash = await prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM users WHERE lower(username) = lower(${username}) LIMIT 1
+    `;
+    if (usernameClash.length > 0) {
+      throw new HttpError(409, "username_in_use", "A user with that username already exists");
     }
 
     const targetRole = await prisma.role.findUnique({
@@ -274,7 +296,12 @@ adminRouter.post(
     // admin can relay it to the user out-of-band (no mail infra in dev).
     const tempPassword = randomBytes(9).toString("base64url");
     const passwordHash = await bcrypt.hash(tempPassword, 10);
-    await prisma.user.update({ where: { id }, data: { passwordHash } });
+    // tokenVersion bump: the reset also ends the account's live sessions
+    // (pentest finding M3) — whoever held the old password holds no session.
+    await prisma.user.update({
+      where: { id },
+      data: { passwordHash, tokenVersion: { increment: 1 } },
+    });
     res.json({ tempPassword });
   },
 );

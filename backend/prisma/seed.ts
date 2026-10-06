@@ -24,7 +24,12 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   // 2026-09-25).
   SALES: ["pipeline:view"],
   TAM: ["project:read", "project:write", "task:read", "task:write"],
-  STAKEHOLDER: ["project:read", "project:view-all"],
+  // STAKEHOLDER reads only the projects it is attached to (TAM, SA, member
+  // or customer owner). The read-everything grant (`project:view-all`) was
+  // removed 2026-10-06 after the external penetration test (finding H1,
+  // docs/archive/plans/pentest-remediation-2026-09.md); an admin can add it
+  // back to a role in Admin > Roles.
+  STAKEHOLDER: ["project:read"],
   PENDING: [],
 };
 

@@ -1111,11 +1111,12 @@ async function main() {
     }
 
     // Who can see this project (mirrors projectVisibilityFilter): its TAM, its
-    // SA, its members, the customer's TAM, and view-all roles. Only they get
+    // SA, its members, the customer's TAM, and view-all roles (ADMIN only —
+    // STAKEHOLDER lost `project:view-all` on 2026-10-06). Only they get
     // notified — the real path filters recipients the same way.
     const customerTam = CUSTOMERS.find((c) => c.name === p.customer)!.tam;
     const canSee = (u: UserKey) =>
-      u === p.tam || u === p.sa || (p.members ?? []).includes(u) || u === customerTam || USERS[u].role === "STAKEHOLDER" || USERS[u].role === "ADMIN";
+      u === p.tam || u === p.sa || (p.members ?? []).includes(u) || u === customerTam || USERS[u].role === "ADMIN";
 
     // Activity log derived from the task data: the TAM created each top-level
     // task on its start day (assigned ones notify the assignee), the assignee

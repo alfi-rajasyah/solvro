@@ -16,8 +16,13 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
   ],
   SALES: ["pipeline:view"],
   TAM: ["project:read", "project:write", "task:read", "task:write"],
-  STAKEHOLDER: ["project:read", "project:view-all"],
+  STAKEHOLDER: ["project:read"],
   PENDING: [],
+  // Test-only (not seeded by the app): a read-everything role, the kind an
+  // admin can create in Admin > Roles. Stands in where a suite needs
+  // `project:view-all` without `project:write` — STAKEHOLDER carried that
+  // grant until 2026-10-06 (pentest finding H1).
+  AUDITOR: ["project:read", "project:view-all"],
 };
 
 export async function seedRoles(): Promise<void> {
@@ -51,7 +56,7 @@ export async function createUserWithRole(
       active: true,
     },
   });
-  const token = signToken({ sub: user.id, role: role.roleName, permissions: role.permissions as string[] });
+  const token = signToken({ sub: user.id, ver: 0 });
   return { userId: user.id, token };
 }
 

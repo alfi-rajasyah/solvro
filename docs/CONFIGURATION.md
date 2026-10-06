@@ -218,7 +218,7 @@ Guest-page navigations (`/share/<token>`) bypass the PWA service-worker cache: [
 
 [backend/prisma/seed.ts](backend/prisma/seed.ts) seeds **no users**. It only upserts:
 
-- **Five built-in roles**: `ADMIN` (`*` wildcard), `SA` (`project:read`), `TAM` (`project:read`, `project:write`, `task:read`, `task:write`), `STAKEHOLDER` (`project:read`, `report:read`, `project:view-all`), `PENDING` (empty permissions — the auto-provisioning role for first-time Google sign-ins, see [2.9](#29--auth--rbac-configuration)).
+- **Six built-in roles**: `ADMIN` (`*` wildcard), `SA` (`project:read`, `pipeline:view`, `pipeline:create`, `pipeline:edit_own`, `pipeline:delete_own`), `SALES` (`pipeline:view`), `TAM` (`project:read`, `project:write`, `task:read`, `task:write`), `STAKEHOLDER` (`project:read` — read-only on the projects it is attached to; `project:view-all` was removed 2026-10-06 after the penetration test, add it back in Admin › Roles for a read-everything role), `PENDING` (empty permissions — the auto-provisioning role for first-time Google sign-ins, see [2.9](#29--auth--rbac-configuration)).
 - The `AuthConfig` singleton (`id: "default"`), bootstrapped with an empty `googleAllowedDomains` array so Google sign-in starts disabled until an admin configures it.
 
 The seed is idempotent (`upsert`) and re-running it never overwrites an admin-edited `AuthConfig` row.
@@ -237,7 +237,7 @@ docker compose exec -e ADMIN_EMAIL=you@example.com -e ADMIN_PASSWORD=your-passwo
 
 - **Built-in roles** (hard-coded): `SA`, `TAM`, `ADMIN`, `STAKEHOLDER`, `PENDING`. `PENDING` is the auto-provisioning role for first-time Google sign-ins — empty permissions, so every screen renders a permission-denied empty state until an admin promotes the user from Admin > Users.
 - **Custom roles**: created by admins via `POST /admin/roles` with an arbitrary `permissions: string[]`. The wildcard `"*"` short-circuits all permission checks.
-- **JWT payload**: `{ sub: <userId>, role: <RoleName>, permissions: string[] }`. The `permissions` array is materialised at login from the user's role record.
+- **JWT payload**: `{ sub: <userId>, ver: <tokenVersion> }` (since 2026-10-06). Role and permissions are read from the database on every request, so a role change applies to live sessions at once; `ver` must equal `User.tokenVersion`, which a password change or an admin reset increments — every older token is then refused with 401 `token_revoked`. A deactivated account's token is refused with 401 `account_disabled`; a deleted account's with 401 `unauthenticated`. Tokens issued before this version carry no `ver` claim and are refused, so every user signs in again once after upgrading.
 - **Authorization gate to use** (in priority order):
   1. `requirePermission("project:write")` — the canonical pattern; works for both built-in and custom roles.
   2. `requireRole("ADMIN", ...)` — narrow legacy use only (e.g. `services.ts` writes).
