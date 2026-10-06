@@ -39,7 +39,9 @@ import { StageChip } from "./StageChip";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { fmtDateTime } from "@/lib/formatDate";
 import { computeHandoffDefaults } from "@/lib/handoffDefaults";
+import { PROJECT_STATUS_LABEL, TASK_STATUS_LABEL } from "@/lib/labels";
 import { formatIDR } from "@/lib/pipelineFormat";
 import {
   type Opportunity,
@@ -72,33 +74,18 @@ export function DealCard({ projectId }: DealCardProps) {
   return <DealCardInner projectId={projectId} />;
 }
 
-// id-ID day formatter for the `wonAt` ISO instant (finding S5) — NOT
-// `dayFromIso`/`formatPipelineDate`: that pair's contract is for plain
-// "yyyy-MM-dd" UTC-midnight day strings only (Opportunity.deadline/
-// requestDate, DateField's own convention), while `wonAt` is a real ISO
-// instant (a Prisma DateTime, set to `new Date()` at the moment a deal
-// enters WON — backend/src/routes/opportunities.ts's POST /:id/close, the
-// one Close action for Won/Lost/Cancelled; a deal is never "moved into WON"
-// anymore, since Won stopped being a stage, 2026-09-25 flow redesign D5).
-// Feeding an instant through `dayFromIso` would misinterpret it as a plain
-// day string and silently render the wrong calendar date around midnight
-// in any timezone away from the exact moment `wonAt` was recorded in UTC.
-function formatWonAt(wonAt: string): string {
-  return new Intl.DateTimeFormat("id-ID", { day: "numeric", month: "short", year: "numeric" }).format(
-    new Date(wonAt),
-  );
-}
-
 function DealCardInner({ projectId }: DealCardProps) {
-  const { data: deals } = useOpportunities();
+  // No live refresh here: this card only looks up one deal by projectId and
+  // sits on every open project tab (see useOpportunities).
+  const { data: deals } = useOpportunities({ live: false });
   const deal = (deals ?? []).find((d) => d.projectId === projectId);
   if (!deal) return null;
 
-  const wonLabel = deal.wonAt ? formatWonAt(deal.wonAt) : null;
+  const wonLabel = deal.wonAt ? fmtDateTime(deal.wonAt) : null;
 
   return (
     <section className="mb-4">
-      <p className="mb-1.5 font-display text-label-caps uppercase tracking-widest text-on-surface-variant">
+      <p className="mb-1.5 font-display text-label-caps uppercase text-on-surface-variant">
         Linked deal
       </p>
       <Link
@@ -118,14 +105,14 @@ function DealCardInner({ projectId }: DealCardProps) {
             <StageChip stage={deal.stage} />
             <OutcomeChip outcome={deal.outcome} reasonCategory={deal.outcomeReasonCategory} />
           </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-on-surface-variant">
-            <span className="font-mono text-primary">{formatIDR(deal.dealValue)}</span>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-on-surface-variant">
+            <span className="tabular-nums text-primary">{formatIDR(deal.dealValue)}</span>
             {wonLabel && <span>Won {wonLabel}</span>}
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <AssigneeAvatar user={deal.pic} size="xs" />
-          <span className="text-[12px] text-on-surface-variant">
+          <span className="text-xs text-on-surface-variant">
             {deal.pic?.username ?? "Unassigned"}
           </span>
         </div>
@@ -147,9 +134,9 @@ const PROJECT_STATUSES: ProjectStatus[] = [
 ];
 
 const WIP_COLUMNS: { id: TaskStatus; label: string }[] = [
-  { id: "TODO", label: "To Do" },
-  { id: "IN_PROGRESS", label: "In Progress" },
-  { id: "DONE", label: "Done" },
+  { id: "TODO", label: TASK_STATUS_LABEL.TODO },
+  { id: "IN_PROGRESS", label: TASK_STATUS_LABEL.IN_PROGRESS },
+  { id: "DONE", label: TASK_STATUS_LABEL.DONE },
 ];
 
 // Duplicated verbatim from ProjectFormModal.tsx (private there, and this
@@ -320,7 +307,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
     >
       <form id="handoff-project-form" onSubmit={handleSubmit} className="space-y-4">
         {deal && (
-          <p className="text-[12px] text-on-surface-variant">
+          <p className="text-xs text-on-surface-variant">
             From deal <span className="font-semibold text-on-surface">{deal.title}</span>
           </p>
         )}
@@ -405,7 +392,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
           >
             {PROJECT_STATUSES.map((s) => (
               <option key={s} value={s}>
-                {s.replace("_", " ")}
+                {PROJECT_STATUS_LABEL[s]}
               </option>
             ))}
           </select>
@@ -415,7 +402,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
           <div className="grid grid-cols-3 gap-3">
             {WIP_COLUMNS.map((col) => (
               <label key={col.id} className="block">
-                <span className="mb-1 block text-[11px] text-on-surface-variant">{col.label}</span>
+                <span className="mb-1 block text-meta text-on-surface-variant">{col.label}</span>
                 <input
                   type="number"
                   min={1}
@@ -439,10 +426,10 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
           />
           <span className="min-w-0">
-            <span className="block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+            <span className="block text-label-caps uppercase text-on-surface-variant">
               Administrative project
             </span>
-            <span className="block text-[11px] text-on-surface-variant">
+            <span className="block text-meta text-on-surface-variant">
               Exclude from portfolio roll-ups (Executive dashboard, Overview, overdue monitoring). The
               project stays fully usable here.
             </span>
@@ -470,7 +457,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">
         {label}
         {required && <span className="ml-1 text-error">*</span>}
       </span>

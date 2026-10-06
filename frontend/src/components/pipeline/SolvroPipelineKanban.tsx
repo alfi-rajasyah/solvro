@@ -67,6 +67,7 @@ import {
   type KanbanCommitMeta,
 } from "@/components/reui/kanban";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { useDragActivityGuard } from "@/lib/dragActivity";
 import { formatIDRCompact, isSkipJump, STAGE_LABELS, type PipelineStage } from "@/lib/pipelineFormat";
 import { useMoveOpportunity, type Opportunity } from "@/lib/queries";
 import { PIPELINE_STAGES, projectToColumns } from "./adapter";
@@ -120,6 +121,9 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
     // — see kanban-v2/SolvroKanban.tsx's handleValueChange doc for the
     // "permanent freeze" bug this guards against.
     const isDraggingRef = useRef(false);
+    // Pauses the Pipeline queries' 30 s refresh for the gesture's lifetime and
+    // releases it on unmount mid-drag (docs/archive/plans/collaboration-and-sharing.md).
+    const dragActivity = useDragActivityGuard();
 
     // The Technical Clarification -> RFP skip-reason gate (D4). Mirrors the
     // old WON/DROP `pendingMove`/`isConfirming` pair's freeze-and-restore
@@ -166,16 +170,19 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
 
     function handleDragStart() {
       isDraggingRef.current = true;
+      dragActivity.begin();
       setLiveColumns(derivedColumns);
     }
 
     function handleDragEnd() {
       isDraggingRef.current = false;
+      dragActivity.end();
       setLiveColumns(null);
     }
 
     function handleDragCancel() {
       isDraggingRef.current = false;
+      dragActivity.end();
       setLiveColumns(null);
     }
 
@@ -284,7 +291,7 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
               <button
                 type="button"
                 onClick={() => setToggleError(null)}
-                className="rounded-sm px-2.5 py-1 text-[12px] font-semibold text-on-surface-variant hover:bg-surface-container"
+                className="rounded-sm px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
               >
                 Dismiss
               </button>
@@ -306,14 +313,14 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
                   setHandoffDeal(justWonDeal);
                   setJustWonDeal(null);
                 }}
-                className="rounded-sm bg-primary px-3 py-1 font-display text-[12px] font-bold text-on-primary hover:bg-primary-container"
+                className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container"
               >
                 Create project
               </button>
               <button
                 type="button"
                 onClick={() => setJustWonDeal(null)}
-                className="rounded-sm px-2.5 py-1 text-[12px] font-semibold text-on-surface-variant hover:bg-surface-container"
+                className="rounded-sm px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
               >
                 Dismiss
               </button>
@@ -367,16 +374,11 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
                           >
                             {STAGE_LABELS[stage]}
                           </h3>
-                          <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-[11px] font-medium text-on-surface-variant">
+                          <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-meta text-on-surface-variant">
                             {stageDeals.length}
                           </span>
                           <span className="flex-1" />
-                          {/* `font-mono`, not `text-data-mono` (finding N4):
-                              `text-data-mono` already carries its own fixed
-                              13px font-size token, which conflicts with the
-                              explicit `text-[11px]` size here — `font-mono`
-                              applies only the monospace font family. */}
-                          <span className="font-mono text-[11px] text-on-surface-variant">
+                          <span className="text-meta tabular-nums text-on-surface-variant">
                             {formatIDRCompact(stageValue)}
                           </span>
                         </div>

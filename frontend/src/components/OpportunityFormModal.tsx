@@ -78,8 +78,12 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
     // can happen while this modal is already open; depending on the object
     // would re-run this reset (wiping whatever the user had typed) on that
     // rehydrate even though the id, and thus the correct default, didn't
-    // change.
-  }, [open, opportunity, initialStage, user?.id]);
+    // change. Same for `opportunity?.id`, not `opportunity`: the deal is
+    // refreshed every 30 s and on focus (useOpportunity's live refresh), and
+    // any change by someone else — a note, a flag, a link — replaces the
+    // object; the fields are seeded on open and on a record switch only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, opportunity?.id, initialStage, user?.id]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -348,7 +352,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">
         {label}
         {required && <span className="ml-1 text-error">*</span>}
       </span>

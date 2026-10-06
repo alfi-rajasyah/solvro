@@ -43,6 +43,7 @@ import { useNavigate } from "react-router-dom";
 import { OpportunityCard } from "@/components/pipeline/OpportunityCard";
 import { QUARTER_ORDER, groupByQuarter, type QuarterId } from "@/components/pipeline/quarterLogic";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import { BoardSkeleton } from "@/components/skeletons";
 import { formatIDRCompact } from "@/lib/pipelineFormat";
 import { useOpportunities } from "@/lib/queries";
 
@@ -83,13 +84,8 @@ export function PipelineQuarter() {
 
   if (isLoading) {
     return (
-      <div className="flex gap-4 overflow-x-auto pb-2">
-        {QUARTER_ORDER.map((id) => (
-          <div
-            key={id}
-            className="h-64 w-[85vw] shrink-0 animate-pulse rounded-xl bg-surface-container-low sm:w-72"
-          />
-        ))}
+      <div className="overflow-x-auto pb-2">
+        <BoardSkeleton columns={QUARTER_ORDER.length} cardsPerColumn={2} className="min-w-[60rem]" />
       </div>
     );
   }

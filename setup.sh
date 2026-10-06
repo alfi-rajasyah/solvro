@@ -5,7 +5,7 @@
 #   - Prompts for an admin email + password
 #   - Prompts for the host ports (website / API / optional Postgres), each
 #     with a default you can accept by pressing Enter
-#   - Generates random POSTGRES_PASSWORD and JWT_SECRET
+#   - Generates random POSTGRES_PASSWORD, JWT_SECRET and SECRETS_KEY
 #   - Writes ~/solvro/{docker-compose.yml,.env}
 #   - Wipes any prior solvro_pgdata volume (clears stale postgres state)
 #   - Brings the stack up and creates the admin user
@@ -23,6 +23,16 @@
 #   FRONTEND_PORT   website     (default 80)
 #   BACKEND_PORT    API         (default 3000)
 #   POSTGRES_PORT   database    (default: NOT published — stays private)
+#   TRUST_PROXY     which proxies the API trusts for the client IP. Default
+#                   "loopback, uniquelocal": the bundled nginx (Docker network)
+#                   and a tunnel connector on this host or a private network,
+#                   never a public address — so a client on the public internet
+#                   cannot spoof its IP, whether or not a tunnel sits in front
+#                   (a client on a private network still can; that only moves
+#                   its rate-limit bucket). Use a hop count ("1", "2") or a
+#                   comma list of loopback/linklocal/uniquelocal/IPs/CIDRs
+#                   when a CDN with public addresses fronts nginx. Validated
+#                   and saved to .env when set — on install and on update.
 # To change BIND_ADDR / frontend / backend later, edit ~/solvro/.env and
 # `docker compose up -d`. Changing whether/where Postgres is published
 # requires re-running this script.
@@ -67,6 +77,27 @@ is_ipv4() {
   local IFS=. octet
   for octet in $1; do
     (( 10#$octet >= 0 && 10#$octet <= 255 )) || return 1
+  done
+  return 0
+}
+
+# Light check of TRUST_PROXY: a hop count 0-10, or a comma list of
+# loopback / linklocal / uniquelocal / IPv4 / IPv6 addresses or CIDRs. The
+# backend (src/http/trustProxy.ts) validates it fully; this only fails early.
+is_trust_proxy() {
+  local value="$1" entry
+  if [[ "$value" =~ ^[0-9]+$ ]]; then
+    (( 10#$value <= 10 ))
+    return
+  fi
+  # read -ra, not an unquoted word split: no pathname expansion on `*` / `?`.
+  local -a entries
+  IFS=, read -ra entries <<< "$value"
+  for entry in "${entries[@]}"; do
+    entry="${entry//[[:space:]]/}"
+    [[ "$entry" =~ ^(loopback|linklocal|uniquelocal)$ \
+      || "$entry" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}(/[0-9]{1,2})?$ \
+      || "$entry" =~ ^[0-9a-fA-F:.]*:[0-9a-fA-F:.]*(/[0-9]{1,3})?$ ]] || return 1
   done
   return 0
 }
@@ -142,8 +173,11 @@ COMPOSE_HEAD
       DATABASE_URL: postgresql://solvro:${POSTGRES_PASSWORD}@postgres:5432/solvro?schema=public
       JWT_SECRET: ${JWT_SECRET}
       JWT_EXPIRES_IN: 8h
+      SECRETS_KEY: ${SECRETS_KEY}
+      ITOP_SYNC_DISABLED: "${ITOP_SYNC_DISABLED:-false}"
       CORS_ORIGIN: "*"
       LOG_LEVEL: info
+      TRUST_PROXY: "${TRUST_PROXY:-loopback, uniquelocal}"
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-3000}:3000"
     command: >
@@ -169,6 +203,9 @@ COMPOSE_REST
 # ------------------------------------------------------------------ branch: update vs fresh install
 if [[ -f "$ENV_FILE" ]]; then
   echo "Existing install detected (~/solvro/.env present). Pulling new images and restarting..."
+  # A TRUST_PROXY passed to this run wins over the saved one; capture it
+  # before sourcing .env (which would otherwise silently override it).
+  TRUST_PROXY_ARG="${TRUST_PROXY:-}"
   # Reuse the ports persisted at first install. Older installs predate the
   # port vars — the compose ${VAR:-default} fallbacks keep them on 80/3000
   # and Postgres unpublished, exactly as before (now bound to 127.0.0.1).
@@ -176,6 +213,28 @@ if [[ -f "$ENV_FILE" ]]; then
   # shellcheck disable=SC1090
   . "$ENV_FILE"
   set +a
+  # Older installs predate SECRETS_KEY (secrets-at-rest for integration
+  # tokens) — generate it once and append, never overwriting an existing value.
+  # Test the FILE, not the shell variable: an exported SECRETS_KEY that is
+  # missing from .env would otherwise be lost on the next run, and a new key
+  # makes every stored token unreadable.
+  if ! grep -q '^SECRETS_KEY=.' "$ENV_FILE"; then
+    SECRETS_KEY=$(openssl rand -base64 32)
+    echo "SECRETS_KEY=$SECRETS_KEY" >> "$ENV_FILE"
+  fi
+  if [[ -n "$TRUST_PROXY_ARG" ]]; then
+    is_trust_proxy "$TRUST_PROXY_ARG" || {
+      echo "ERROR: TRUST_PROXY must be a hop count 0-10 or a comma list of loopback, linklocal, uniquelocal, IP addresses or CIDRs (got '$TRUST_PROXY_ARG')."
+      exit 1
+    }
+    TRUST_PROXY="$TRUST_PROXY_ARG"
+    # Persist: replace the saved line or append one (quoted — the value may hold spaces).
+    if grep -q '^TRUST_PROXY=' "$ENV_FILE"; then
+      sed -i "s|^TRUST_PROXY=.*|TRUST_PROXY=\"$TRUST_PROXY\"|" "$ENV_FILE"
+    else
+      echo "TRUST_PROXY=\"$TRUST_PROXY\"" >> "$ENV_FILE"
+    fi
+  fi
   write_compose_file
   docker compose pull
   docker compose up -d
@@ -242,6 +301,7 @@ FRONTEND_PORT="${FRONTEND_PORT:-}"
 BACKEND_PORT="${BACKEND_PORT:-}"
 POSTGRES_PORT="${POSTGRES_PORT:-}"
 BIND_ADDR="${BIND_ADDR:-}"
+TRUST_PROXY="${TRUST_PROXY:-}"
 
 if [[ -r /dev/tty ]]; then
   [[ -z "$FRONTEND_PORT" ]] && \
@@ -285,20 +345,31 @@ is_ipv4 "$BIND_ADDR" || {
   echo "ERROR: BIND_ADDR must be an IPv4 address (e.g. 127.0.0.1, 0.0.0.0, 192.168.1.10) — got '$BIND_ADDR'."
   exit 1
 }
+if [[ -n "$TRUST_PROXY" ]]; then
+  is_trust_proxy "$TRUST_PROXY" || {
+    echo "ERROR: TRUST_PROXY must be a hop count 0-10 or a comma list of loopback, linklocal, uniquelocal, IP addresses or CIDRs (got '$TRUST_PROXY')."
+    exit 1
+  }
+fi
 
 # hex (not base64): base64's `/` `+` `=` are unsafe in the DATABASE_URL
 # userinfo and truncate it (P1013 "invalid port number"). 24 bytes = 192 bits.
 POSTGRES_PASSWORD=$(openssl rand -hex 24)
 JWT_SECRET=$(openssl rand -hex 48)
+# Base64 (not hex): SECRETS_KEY must decode to exactly 32 bytes for AES-256-GCM (backend/src/env.ts).
+SECRETS_KEY=$(openssl rand -base64 32)
 
 cat > "$ENV_FILE" <<EOF
 POSTGRES_PASSWORD=$POSTGRES_PASSWORD
 JWT_SECRET=$JWT_SECRET
+SECRETS_KEY=$SECRETS_KEY
 BIND_ADDR=$BIND_ADDR
 FRONTEND_PORT=$FRONTEND_PORT
 BACKEND_PORT=$BACKEND_PORT
 EOF
 [[ -n "$POSTGRES_PORT" ]] && echo "POSTGRES_PORT=$POSTGRES_PORT" >> "$ENV_FILE"
+# Quoted: the value may hold spaces ("loopback, uniquelocal") and .env is sourced by bash on update.
+[[ -n "$TRUST_PROXY" ]] && echo "TRUST_PROXY=\"$TRUST_PROXY\"" >> "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 
 write_compose_file

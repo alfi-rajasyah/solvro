@@ -60,7 +60,7 @@ export function PicDrillDownModal({ picId, picName, deals, onClose }: PicDrillDo
                   {/* D5: the stage stays whatever it was at close — the
                       outcome chip renders nothing on an open deal. */}
                   <OutcomeChip outcome={deal.outcome} reasonCategory={deal.outcomeReasonCategory} />
-                  <span className="font-mono text-xs font-semibold text-on-surface">
+                  <span className="text-xs font-semibold tabular-nums text-on-surface">
                     {formatIDRCompact(deal.dealValue)}
                   </span>
                   <span className="material-symbols-outlined text-base text-on-surface-variant">

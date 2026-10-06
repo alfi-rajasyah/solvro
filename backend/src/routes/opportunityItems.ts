@@ -5,14 +5,32 @@ import { requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { ensureOpportunityEditable, PIC_SELECT } from "../lib/pipelineAccess.js";
+import { listActivityPage } from "../lib/activity.js";
+import { recordOpportunityChange } from "../lib/opportunityActivity.js";
+import { filterActiveUsersWhoCanSeeOpportunity, notifyForEvent } from "../lib/notifications.js";
 
 // Mounted at "/opportunities" in src/app.ts — paths below are relative to that.
 
 const opportunityIdParamSchema = z.object({ opportunityId: z.string().uuid() });
 const linkParamSchema = opportunityIdParamSchema.extend({ linkId: z.string().uuid() });
 
+const MAX_MENTIONS = 20;
+
 const createActivitySchema = z.object({
   note: z.string().trim().min(1).max(2000),
+  // Same contract as task comments: <= 20 distinct user ids; ids that are
+  // unknown, inactive or without pipeline:view are dropped by the handler.
+  mentionedUserIds: z
+    .array(z.number().int().positive())
+    .max(MAX_MENTIONS)
+    .transform((ids) => [...new Set(ids)])
+    .optional(),
+});
+
+const activityFeedQuerySchema = z.object({
+  limit: z.coerce.number().int().min(1).max(100).default(50),
+  before: z.coerce.number().int().positive().optional(),
+  actorId: z.coerce.number().int().positive().optional(),
 });
 
 // Matches VeloraApp's opportunity_links contract: label + a plain http(s) URL
@@ -42,12 +60,13 @@ const updateLinkSchema = z.object({
   url: httpUrlSchema.optional(),
 });
 
-async function ensureOpportunityExists(opportunityId: string): Promise<void> {
+async function ensureOpportunityExists(opportunityId: string) {
   const opportunity = await prisma.opportunity.findUnique({
     where: { id: opportunityId },
-    select: { id: true },
+    select: { id: true, title: true, picId: true },
   });
   if (!opportunity) throw new HttpError(404, "not_found", "Opportunity not found");
+  return opportunity;
 }
 
 // The edit_own/edit_all ownership gate and the PIC/acting-user select shape
@@ -76,6 +95,24 @@ opportunityItemsRouter.get(
   },
 );
 
+// The deal's STRUCTURED events (lib/opportunityActivity.ts — field diffs, moves,
+// closes, assignments, notes, links), newest first, same paging and shape as
+// GET /projects/:id/activity. Complements the timeline above, which stays the
+// deal's permanent human-readable record. Deal visibility is global for
+// pipeline:view holders.
+opportunityItemsRouter.get(
+  "/:opportunityId/activity",
+  requirePermission("pipeline:view"),
+  validate("params", opportunityIdParamSchema),
+  validate("query", activityFeedQuerySchema),
+  async (req, res) => {
+    const { opportunityId } = req.params as unknown as z.infer<typeof opportunityIdParamSchema>;
+    const { limit, before, actorId } = req.query as unknown as z.infer<typeof activityFeedQuerySchema>;
+    await ensureOpportunityExists(opportunityId);
+    res.json(await listActivityPage({ opportunityId }, { limit, before, actorId }, true));
+  },
+);
+
 // pipeline:view (not an edit permission) is deliberate: logging an activity
 // note is collaboration on a deal, not editing it — anyone who can see the
 // board can leave a note. Flagged for review per the dispatch brief.
@@ -91,17 +128,36 @@ opportunityItemsRouter.post(
   validate("body", createActivitySchema),
   async (req, res) => {
     const { opportunityId } = req.params as unknown as z.infer<typeof opportunityIdParamSchema>;
-    const { note } = req.body as z.infer<typeof createActivitySchema>;
-    await ensureOpportunityExists(opportunityId);
+    const { note, mentionedUserIds: requestedMentions = [] } = req.body as z.infer<
+      typeof createActivitySchema
+    >;
+    const deal = await ensureOpportunityExists(opportunityId);
     const activity = await prisma.$transaction(async (tx) => {
+      // Keep only mentions of active users who can see the Pipeline; unknown,
+      // inactive and hidden ids are dropped silently. A self-mention is kept
+      // (so the chip renders) — notifyForEvent never notifies the actor.
+      const visible = await filterActiveUsersWhoCanSeeOpportunity(tx, requestedMentions);
+      const mentionedUserIds = requestedMentions.filter((uid) => visible.has(uid));
       const created = await tx.opportunityActivity.create({
-        data: { opportunityId, userId: req.user!.sub, note },
+        data: { opportunityId, userId: req.user!.sub, note, mentionedUserIds },
         include: { user: { select: PIC_SELECT } },
       });
       await tx.opportunity.update({
         where: { id: opportunityId },
         data: { lastActivityAt: new Date() },
       });
+      // Never the note text or the mention ids: the event carries the note's
+      // id (the row itself is the timeline entry).
+      const event = await recordOpportunityChange(tx, {
+        opportunityId,
+        actorId: req.user!.sub,
+        action: "created",
+        entityType: "opportunity_note",
+        entityLabel: deal.title,
+        changes: { activityId: created.id },
+      });
+      // The PIC hears about a note by someone else; a mention wins over that.
+      await notifyForEvent(tx, event, { picId: deal.picId, mentionedUserIds });
       return created;
     });
     res.status(201).json(activity);
@@ -138,7 +194,21 @@ opportunityItemsRouter.post(
       const created = await tx.opportunityLink.create({
         data: { opportunityId, label: body.label, url: body.url },
       });
-      await tx.opportunity.update({ where: { id: opportunityId }, data: { lastActivityAt: new Date() } });
+      const deal = await tx.opportunity.update({
+        where: { id: opportunityId },
+        data: { lastActivityAt: new Date() },
+        select: { title: true },
+      });
+      // Label only — the URL never enters the log.
+      await recordOpportunityChange(tx, {
+        opportunityId,
+        actorId: req.user!.sub,
+        action: "added",
+        entityType: "opportunity_link",
+        entityLabel: deal.title,
+        changes: { linkId: created.id, label: created.label },
+        note: `Link added: ${created.label}`,
+      });
       return created;
     });
     res.status(201).json(link);
@@ -155,14 +225,29 @@ opportunityItemsRouter.patch(
     await ensureOpportunityEditable(req.user!, opportunityId);
     const link = await prisma.opportunityLink.findUnique({
       where: { id: linkId },
-      select: { id: true, opportunityId: true },
+      select: { id: true, opportunityId: true, label: true, url: true },
     });
     if (!link || link.opportunityId !== opportunityId) {
       throw new HttpError(404, "not_found", "Link not found");
     }
     const updated = await prisma.$transaction(async (tx) => {
       const result = await tx.opportunityLink.update({ where: { id: linkId }, data: body });
-      await tx.opportunity.update({ where: { id: opportunityId }, data: { lastActivityAt: new Date() } });
+      const deal = await tx.opportunity.update({
+        where: { id: opportunityId },
+        data: { lastActivityAt: new Date() },
+        select: { title: true },
+      });
+      // Re-saving identical values records nothing.
+      if (result.label !== link.label || result.url !== link.url) {
+        await recordOpportunityChange(tx, {
+          opportunityId,
+          actorId: req.user!.sub,
+          action: "updated",
+          entityType: "opportunity_link",
+          entityLabel: deal.title,
+          changes: { linkId, label: result.label },
+        });
+      }
       return result;
     });
     res.json(updated);
@@ -177,14 +262,27 @@ opportunityItemsRouter.delete(
     await ensureOpportunityEditable(req.user!, opportunityId);
     const link = await prisma.opportunityLink.findUnique({
       where: { id: linkId },
-      select: { id: true, opportunityId: true },
+      select: { id: true, opportunityId: true, label: true },
     });
     if (!link || link.opportunityId !== opportunityId) {
       throw new HttpError(404, "not_found", "Link not found");
     }
     await prisma.$transaction(async (tx) => {
       await tx.opportunityLink.delete({ where: { id: linkId } });
-      await tx.opportunity.update({ where: { id: opportunityId }, data: { lastActivityAt: new Date() } });
+      const deal = await tx.opportunity.update({
+        where: { id: opportunityId },
+        data: { lastActivityAt: new Date() },
+        select: { title: true },
+      });
+      await recordOpportunityChange(tx, {
+        opportunityId,
+        actorId: req.user!.sub,
+        action: "removed",
+        entityType: "opportunity_link",
+        entityLabel: deal.title,
+        changes: { linkId, label: link.label },
+        note: `Link removed: ${link.label}`,
+      });
     });
     res.status(204).end();
   },

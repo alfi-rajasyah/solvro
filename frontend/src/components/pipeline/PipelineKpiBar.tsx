@@ -94,22 +94,16 @@ function KpiTile({ label, value, hint, icon, tone }: KpiTileProps) {
   return (
     <div className="rounded-sm border border-outline-variant bg-surface-container p-4">
       <div className="flex items-center justify-between gap-2">
-        <span className="text-label-caps uppercase tracking-wider text-on-surface-variant">{label}</span>
+        <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
         <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
-        {/* `font-mono`, not `text-data-mono` (finding N4, true Overview.tsx
-            parity — its own `Kpi` component's value span uses `font-mono
-            text-3xl ...` verbatim): `text-data-mono` carries its own fixed
-            13px font-size token, which conflicted with `text-2xl` here —
-            `font-mono` applies only the monospace font family, leaving
-            `text-2xl` as the one size utility in play. */}
-        <span className="truncate font-mono text-2xl font-bold tabular-nums text-on-surface">
+        <span className="truncate text-2xl font-bold tabular-nums text-on-surface">
           {value}
         </span>
       </div>
       <p
-        className={`mt-1 text-[11px] ${tone === "rose" ? "font-semibold text-chip-rose-text" : "text-on-surface-variant"}`}
+        className={`mt-1 text-meta ${tone === "rose" ? "font-semibold text-chip-rose-text" : "text-on-surface-variant"}`}
       >
         {hint}
       </p>
@@ -162,7 +156,7 @@ function FunnelStrip({
 
   return (
     <div className="flex items-center gap-3">
-      <span className="shrink-0 text-label-caps uppercase tracking-wider text-on-surface-variant">
+      <span className="shrink-0 text-label-caps uppercase text-on-surface-variant">
         Pipeline
       </span>
       <div className="min-w-0 flex-1">
@@ -181,7 +175,7 @@ function FunnelStrip({
         </div>
         <div className="mt-1.5 flex flex-wrap gap-3">
           {visible.map((f) => (
-            <span key={f.stage} className="flex items-center gap-1 text-[11px] text-on-surface-variant">
+            <span key={f.stage} className="flex items-center gap-1 text-meta text-on-surface-variant">
               <span className={`h-2 w-2 rounded-full ${FUNNEL_FILL[f.stage]}`} />
               {STAGE_LABELS[f.stage]} {f.count}
             </span>
