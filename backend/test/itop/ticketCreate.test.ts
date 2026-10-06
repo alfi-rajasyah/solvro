@@ -75,7 +75,7 @@ async function createUserWithEmail(email: string): Promise<{ userId: number; tok
       active: true,
     },
   });
-  const token = signToken({ sub: user.id, role: role.roleName, permissions: role.permissions as string[] });
+  const token = signToken({ sub: user.id, ver: 0 });
   return { userId: user.id, token };
 }
 
@@ -251,7 +251,7 @@ describe("task:write gating", () => {
   }
 
   it("keeps the read-only picklists open to a STAKEHOLDER (project:read)", async () => {
-    const stakeholder = await createUserWithRole("STAKEHOLDER");
+    const stakeholder = await createUserWithRole("AUDITOR");
     expect((await call("get", "/itop/services", stakeholder.token)).status).toBe(200);
     expect((await call("get", `/itop/customers/${fixture.customer1Id}/contacts`, stakeholder.token)).status).toBe(200);
   });

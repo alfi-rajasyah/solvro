@@ -362,7 +362,7 @@ describe("POST /sections/:id/duplicate", () => {
     const projectId = await createProject(admin.userId);
     const source = await createSection(projectId, admin.token, "Section");
 
-    // STAKEHOLDER has project:read + project:view-all but no project:write,
+    // STAKEHOLDER has project:read but no project:write,
     // so this exercises the permission gate independent of visibility.
     const stakeholder = await createUserWithRole("STAKEHOLDER");
     const res = await duplicateSection(source.id, stakeholder.token);

@@ -77,7 +77,7 @@ async function createUserWithEmail(email: string): Promise<{ userId: number; tok
       active: true,
     },
   });
-  const token = signToken({ sub: user.id, role: role.roleName, permissions: role.permissions as string[] });
+  const token = signToken({ sub: user.id, ver: 0 });
   return { userId: user.id, token };
 }
 

@@ -46,7 +46,8 @@ export interface UserSummary {
   username: string;
   email: string;
   role: Role;
-  permissions: string[];
+  /** Can open the Pipeline (`pipeline:view` or `*`) — the one permission fact the directory exposes. */
+  pipelineAccess: boolean;
   /** Inactive accounts stay in the list; pickers filter them out. */
   active: boolean;
   avatarUrl: string | null;
@@ -3992,7 +3993,7 @@ export function useAdminSetActive() {
 export function useChangeMyPassword() {
   return useMutation({
     mutationFn: (input: { currentPassword: string; newPassword: string }) =>
-      apiRequest<void>("/auth/change-password", { method: "POST", body: input }),
+      apiRequest<{ token: string }>("/auth/change-password", { method: "POST", body: input }),
   });
 }
 

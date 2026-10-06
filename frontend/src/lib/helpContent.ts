@@ -72,7 +72,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
           "Pipeline access is a separate set of permissions: \"View pipeline\", \"Create opportunities\", \"Edit own opportunities\", \"Edit all opportunities\", \"Delete own opportunities\", and \"Delete all opportunities\".",
           "Without a permission, the matching buttons and pages do not appear. Ask an admin if you need more access.",
           "You see projects where you are the TAM or the Solution Architect, plus every project of a customer you own. Roles with \"See all projects\" see every project.",
-          "By default: ADMIN has full access; TAM manages projects and tasks; SA views projects and works the Pipeline (creating opportunities, and editing and deleting only the ones they are the PIC for); SALES views the Pipeline and adds notes; STAKEHOLDER views every project read-only; PENDING has no access until an admin assigns a role.",
+          "By default: ADMIN has full access; TAM manages projects and tasks; SA views projects and works the Pipeline (creating opportunities, and editing and deleting only the ones they are the PIC for); SALES views the Pipeline and adds notes; STAKEHOLDER views the projects it is attached to, read-only; PENDING has no access until an admin assigns a role.",
           "Admins can change what each role may do in Admin › Roles. Only the PENDING role is reserved.",
         ],
       },

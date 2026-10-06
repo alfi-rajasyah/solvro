@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiRequest, getToken, setToken } from "./api";
+import { apiRequest, getToken, setToken, UNAUTHENTICATED_EVENT } from "./api";
 
 // Built-in role names referenced structurally by backend (project visibility,
 // requireAdmin gate). Custom roles created via Admin > Roles tab use other
@@ -88,6 +88,8 @@ interface AuthContextValue {
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
   logout: () => void;
+  /** Swap in a token the server issued mid-session (after a password change). */
+  replaceToken: (token: string) => void;
 }
 
 const USER_STORAGE_KEY = "solvro.user";
@@ -192,6 +194,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const replaceToken = useCallback((next: string) => {
+    setToken(next);
+    setTokenState(next);
+  }, []);
+
   const logout = useCallback(() => {
     setToken(null);
     setTokenState(null);
@@ -204,9 +211,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .forEach((k) => localStorage.removeItem(k));
   }, []);
 
+  // Any authenticated request answered with 401 (lib/api.ts) ends the
+  // session here too — the server now revokes tokens (password change,
+  // admin reset, deactivation), and a revoked session must not keep
+  // showing cached pages behind failing requests.
+  useEffect(() => {
+    window.addEventListener(UNAUTHENTICATED_EVENT, logout);
+    return () => window.removeEventListener(UNAUTHENTICATED_EVENT, logout);
+  }, [logout]);
+
   const value = useMemo(
-    () => ({ user, token, status, userVerified, login, loginWithGoogle, logout }),
-    [user, token, status, userVerified, login, loginWithGoogle, logout],
+    () => ({ user, token, status, userVerified, login, loginWithGoogle, logout, replaceToken }),
+    [user, token, status, userVerified, login, loginWithGoogle, logout, replaceToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
