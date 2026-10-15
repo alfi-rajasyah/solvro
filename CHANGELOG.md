@@ -15,6 +15,19 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-10-12 — Document links on projects and customers
+
+Projects and customers get the same label + URL document links that Pipeline deals have. Plan: `docs/plans/project-customer-links.md`.
+
+- **Schema** (**`backend/prisma/schema.prisma`** + migration `project_customer_links`): new `ProjectLink` (`project_links`) and `CustomerLink` (`customer_links`) tables — uuid id, `label`, `url`, `createdAt`, and a foreign key to the project or customer that deletes the links with it.
+- **API** (new **`backend/src/routes/projectLinks.ts`** and **`backend/src/routes/customerLinks.ts`**, mounted in **`backend/src/app.ts`**): `GET/POST /projects/:id/links`, `PATCH/DELETE /projects/:id/links/:linkId`, and the same four routes under `/customers/:id/links`. Reads need `project:read`; writes need `project:write`. Anyone who can see the project or customer and holds `project:write` can add, edit, or remove its links — the TAM and project members with write access, not only the owner. The seeded SA role has no `project:write`, so a project's SA sees its links but cannot change them. A hidden project or customer answers 404 before any body validation; a link id that belongs to another project or customer answers 404. Labels are 1–200 characters; URLs must be `http://` or `https://` (up to 2000 characters).
+- **Project activity** (**`backend/src/lib/activity.ts`**, **`frontend/src/lib/activityText.ts`**): adding, editing, or removing a project link records a `project_link` event (added / updated / removed) in the same transaction. The event stores the link label only, never the URL; re-saving identical values records nothing. Customer links record no activity, because the activity log has no customer scope.
+- **Shared URL rule** (new **`backend/src/lib/linkSchemas.ts`**): the label and http(s) URL validation moves out of `backend/src/routes/opportunityItems.ts` so deal, project, and customer links use one definition. Deal-link behavior is unchanged.
+- **Shared links component** (new **`frontend/src/components/LinksSection.tsx`**): the deal page's links list, add form, inline edit, and delete confirmation move into one component with two outer treatments (`card`, `panel`). **`frontend/src/pages/OpportunityDetail.tsx`** uses it with no visible change.
+- **Where links appear**: a Links section in the project Context panel (**`frontend/src/components/layout/RightSidebar.tsx`**; fetched only once the panel opens) and a new Links tab after Services on the customer page (**`frontend/src/pages/CustomerDetail.tsx`**). Query hooks for both live in **`frontend/src/lib/queries.ts`**.
+- **Links are internal**: they never reach the guest timeline view or any export. A won deal's links are not copied to the project it hands off to.
+- **Tests**: new `backend/test/projectCustomerLinks.test.ts` (visibility, permissions incl. the SA's read-only access, URL validation, cross-entity ids, activity shape, cascade, order); `frontend/src/lib/activityText.test.ts` covers the `project_link` sentences.
+
 ### Security — 2026-10-06 — Penetration-test remediation (September 2026 report)
 
 Fixes for the six findings of the external grey-box penetration test (report v1.0, 2026-09-25). Plan and evidence: `docs/plans/pentest-remediation-2026-09.md`, `-progress.md`, `-report.md`.

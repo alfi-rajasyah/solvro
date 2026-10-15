@@ -3,13 +3,21 @@ import { Link } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { DateField } from "@/components/DateField";
+import { LinksSection } from "@/components/LinksSection";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { dateToDay, formatDisplay } from "@/lib/dateField";
 import { fmtDateTime, fmtDay } from "@/lib/formatDate";
 import { useGanttExport } from "@/lib/gantt/exportContext";
-import { type ProjectDetail as ProjectDetailType, useLockBaseline } from "@/lib/queries";
+import {
+  type ProjectDetail as ProjectDetailType,
+  useAddProjectLink,
+  useDeleteProjectLink,
+  useLockBaseline,
+  useProjectLinks,
+  useUpdateProjectLink,
+} from "@/lib/queries";
 
 interface RightSidebarProps {
   project: ProjectDetailType;
@@ -30,6 +38,20 @@ export function RightSidebar({ project, open, onClose }: RightSidebarProps) {
   const canLockBaseline = hasPermission(user, "project:write");
   const lockBaseline = useLockBaseline(project.id);
   const [confirmingBaseline, setConfirmingBaseline] = useState(false);
+
+  // Document links: same `project:write` gate as the backend's link routes.
+  // Not fetched until the panel is first opened (it mounts closed on every
+  // project page); the latch keeps the query on after that, so the list
+  // stays put while the panel slides out.
+  const canEditLinks = hasPermission(user, "project:write");
+  const [linksOpened, setLinksOpened] = useState(open);
+  useEffect(() => {
+    if (open) setLinksOpened(true);
+  }, [open]);
+  const links = useProjectLinks(linksOpened ? project.id : null);
+  const addLink = useAddProjectLink(project.id);
+  const updateLink = useUpdateProjectLink(project.id);
+  const deleteLink = useDeleteProjectLink(project.id);
   const [baselineAsOf, setBaselineAsOf] = useState<string>("");
   const [baselineNotice, setBaselineNotice] = useState<string | null>(null);
   const [baselineError, setBaselineError] = useState<string | null>(null);
@@ -158,6 +180,20 @@ export function RightSidebar({ project, open, onClose }: RightSidebarProps) {
               <dd className="font-medium text-on-surface">{project._count.tasks}</dd>
             </div>
           </dl>
+        </section>
+
+        <section>
+          <LinksSection
+            chrome="panel"
+            canEdit={canEditLinks}
+            links={links.data}
+            isLoading={links.isLoading}
+            isError={links.isError}
+            error={links.error}
+            addLink={addLink}
+            updateLink={updateLink}
+            deleteLink={deleteLink}
+          />
         </section>
 
         <section>
