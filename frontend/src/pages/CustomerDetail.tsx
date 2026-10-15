@@ -3,6 +3,7 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AccountHeader, sumProjectHealth } from "@/components/customer/AccountHeader";
 import { AccountOverview } from "@/components/customer/AccountOverview";
 import { ConfirmModal } from "@/components/ConfirmModal";
+import { LinksSection } from "@/components/LinksSection";
 import { CustomerFormModal } from "@/components/CustomerFormModal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { TicketPanel } from "@/components/itop/TicketPanel";
@@ -14,15 +15,19 @@ import { hasPermission, useAuth } from "@/lib/auth";
 import { canOwnCustomer, saveErrorMessage } from "@/lib/ownerAccess";
 import {
   type CustomerDetail as CustomerDetailType,
+  useAddCustomerLink,
   useCustomer,
+  useCustomerLinks,
   useCustomerTickets,
   useCustomerWeeklyUpdates,
   useDeleteCustomer,
+  useDeleteCustomerLink,
   useItopStatus,
+  useUpdateCustomerLink,
   useUpdateCustomerServices,
 } from "@/lib/queries";
 
-type Tab = "overview" | "services" | "tickets";
+type Tab = "overview" | "services" | "links" | "tickets";
 
 
 export function CustomerDetail() {
@@ -71,6 +76,7 @@ export function CustomerDetail() {
   const TAB_ITEMS: ReadonlyArray<{ key: Tab; label: string }> = [
     { key: "overview", label: "Overview" },
     { key: "services", label: "Services" },
+    { key: "links", label: "Links" },
     ...(ticketsAvailable ? [{ key: "tickets" as const, label: "Tickets" }] : []),
   ];
 
@@ -234,6 +240,7 @@ export function CustomerDetail() {
           />
         )}
         {tab === "services" && <ServicesTab customer={customer} canMutate={canMutate} />}
+        {tab === "links" && <LinksTab customerId={customer.id} canEdit={canMutate} />}
         {tab === "tickets" && ticketsAvailable && (
           <TicketsTab
             customerId={customer.id}
@@ -292,6 +299,27 @@ function ServicesTab({
       description={
         'Select the services this customer subscribes to and list the tools used for each — e.g. "Backup & Restore" → Acronis, Veeam.'
       }
+    />
+  );
+}
+
+// Document links (label + URL) on the account — same `project:write` gate as
+// the backend's customer link routes.
+function LinksTab({ customerId, canEdit }: { customerId: number; canEdit: boolean }) {
+  const links = useCustomerLinks(customerId);
+  const addLink = useAddCustomerLink(customerId);
+  const updateLink = useUpdateCustomerLink(customerId);
+  const deleteLink = useDeleteCustomerLink(customerId);
+  return (
+    <LinksSection
+      canEdit={canEdit}
+      links={links.data}
+      isLoading={links.isLoading}
+      isError={links.isError}
+      error={links.error}
+      addLink={addLink}
+      updateLink={updateLink}
+      deleteLink={deleteLink}
     />
   );
 }

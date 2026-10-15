@@ -443,6 +443,17 @@ function linkSentence(event: ActivityEvent, changes: Changes | null, label: stri
   return null;
 }
 
+// A document link on a project: the label only, never the URL (the event never
+// carries it). Reads against "the project" like the member sentences do.
+function projectLinkSentence(changes: Changes | null, action: ActivityEvent["action"]): Parts | null {
+  const linkLabel = strField(changes?.label);
+  const link: Parts = linkLabel ? [txt("the link "), ent(clip(linkLabel))] : [txt("a link")];
+  if (action === "added") return [txt("added "), ...link, txt(" to the project")];
+  if (action === "updated") return [txt("updated "), ...link, txt(" on the project")];
+  if (action === "removed") return [txt("removed "), ...link, txt(" from the project")];
+  return null;
+}
+
 function buildBody(event: ActivityEvent, canViewPipeline: boolean): Parts {
   const changes = isRecord(event.changes) ? event.changes : null;
   const label = typeof event.entityLabel === "string" && event.entityLabel ? event.entityLabel : null;
@@ -520,6 +531,11 @@ function buildBody(event: ActivityEvent, canViewPipeline: boolean): Parts {
       break;
     case "opportunity_link": {
       const body = linkSentence(event, changes, label);
+      if (body) return body;
+      break;
+    }
+    case "project_link": {
+      const body = projectLinkSentence(changes, event.action);
       if (body) return body;
       break;
     }

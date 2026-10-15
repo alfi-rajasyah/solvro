@@ -7,6 +7,7 @@ import { validate } from "../http/validate.js";
 import { ensureOpportunityEditable, PIC_SELECT } from "../lib/pipelineAccess.js";
 import { listActivityPage } from "../lib/activity.js";
 import { recordOpportunityChange } from "../lib/opportunityActivity.js";
+import { createLinkSchema, updateLinkSchema } from "../lib/linkSchemas.js";
 import { filterActiveUsersWhoCanSeeOpportunity, notifyForEvent } from "../lib/notifications.js";
 
 // Mounted at "/opportunities" in src/app.ts — paths below are relative to that.
@@ -31,33 +32,6 @@ const activityFeedQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).default(50),
   before: z.coerce.number().int().positive().optional(),
   actorId: z.coerce.number().int().positive().optional(),
-});
-
-// Matches VeloraApp's opportunity_links contract: label + a plain http(s) URL
-// (Velora's `documents` table stored file_name/file_url pairs that were
-// always links, never uploads — see docs/plans/pipeline-native-port-plan.md).
-const httpUrlSchema = z
-  .string()
-  .trim()
-  .min(1)
-  .max(2000)
-  .refine((value) => {
-    try {
-      const parsed = new URL(value);
-      return parsed.protocol === "http:" || parsed.protocol === "https:";
-    } catch {
-      return false;
-    }
-  }, "URL must be a valid http:// or https:// address");
-
-const createLinkSchema = z.object({
-  label: z.string().trim().min(1).max(200),
-  url: httpUrlSchema,
-});
-
-const updateLinkSchema = z.object({
-  label: z.string().trim().min(1).max(200).optional(),
-  url: httpUrlSchema.optional(),
 });
 
 async function ensureOpportunityExists(opportunityId: string) {

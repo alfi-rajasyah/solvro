@@ -242,6 +242,8 @@ export type ActivityEntityType =
   | "opportunity"
   | "opportunity_note"
   | "opportunity_link"
+  // A document link on a project (customer links record no activity).
+  | "project_link"
   | "share_link";
 export type ActivityAction =
   | "created"
@@ -778,6 +780,10 @@ export const queryKeys = {
   customerNotesRoot: (id: number) => ["customers", id, "notes"] as const,
   customerNotes: (id: number, limit: number) =>
     [...queryKeys.customerNotesRoot(id), limit] as const,
+  // Document links (label + URL) on a project / customer. One flat list per
+  // entity, so the key is the bare prefix the link mutations invalidate.
+  projectLinks: (id: number) => ["projects", id, "links"] as const,
+  customerLinks: (id: number) => ["customers", id, "links"] as const,
   tasks: (filter?: TasksFilter) => ["tasks", filter ?? {}] as const,
   comments: (taskId: number) => ["tasks", taskId, "comments"] as const,
   search: (q: string) => ["search", q] as const,
@@ -3085,6 +3091,129 @@ export function useCustomerNotes(customerId: number | null, limit: number) {
   });
 }
 
+// Document links on a project (GET/POST /projects/:id/links, PATCH/DELETE
+// .../:linkId) and a customer (same shape under /customers/:id/links). Same
+// label + URL rows as a deal's links; internal only, never exported.
+export interface ProjectLink {
+  id: string;
+  projectId: number;
+  label: string;
+  url: string;
+  createdAt: string;
+}
+
+export interface CustomerLink {
+  id: string;
+  customerId: number;
+  label: string;
+  url: string;
+  createdAt: string;
+}
+
+export interface CreateLinkInput {
+  label: string;
+  url: string;
+}
+
+export type UpdateLinkInput = Partial<CreateLinkInput>;
+
+export function useProjectLinks(projectId: number | null) {
+  const live = useLiveRefresh();
+  return useQuery({
+    ...live,
+    queryKey: projectId ? queryKeys.projectLinks(projectId) : ["projects", "noop", "links"],
+    queryFn: ({ signal }) => apiRequest<ProjectLink[]>(`/projects/${projectId}/links`, { signal }),
+    enabled: projectId !== null,
+  });
+}
+
+export function useAddProjectLink(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateLinkInput) =>
+      apiRequest<ProjectLink>(`/projects/${projectId}/links`, { method: "POST", body: input }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectLinks(projectId) });
+      // Link writes record a project activity event.
+      void invalidateProjectActivity(qc, projectId);
+    },
+  });
+}
+
+export function useUpdateProjectLink(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateLinkInput }) =>
+      apiRequest<ProjectLink>(`/projects/${projectId}/links/${id}`, {
+        method: "PATCH",
+        body: patch,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectLinks(projectId) });
+      void invalidateProjectActivity(qc, projectId);
+    },
+  });
+}
+
+export function useDeleteProjectLink(projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiRequest<void>(`/projects/${projectId}/links/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectLinks(projectId) });
+      void invalidateProjectActivity(qc, projectId);
+    },
+  });
+}
+
+export function useCustomerLinks(customerId: number | null) {
+  const live = useLiveRefresh();
+  return useQuery({
+    ...live,
+    queryKey: customerId ? queryKeys.customerLinks(customerId) : ["customers", "noop", "links"],
+    queryFn: ({ signal }) =>
+      apiRequest<CustomerLink[]>(`/customers/${customerId}/links`, { signal }),
+    enabled: customerId !== null,
+  });
+}
+
+export function useAddCustomerLink(customerId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateLinkInput) =>
+      apiRequest<CustomerLink>(`/customers/${customerId}/links`, { method: "POST", body: input }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.customerLinks(customerId) });
+    },
+  });
+}
+
+export function useUpdateCustomerLink(customerId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateLinkInput }) =>
+      apiRequest<CustomerLink>(`/customers/${customerId}/links/${id}`, {
+        method: "PATCH",
+        body: patch,
+      }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.customerLinks(customerId) });
+    },
+  });
+}
+
+export function useDeleteCustomerLink(customerId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      apiRequest<void>(`/customers/${customerId}/links/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.customerLinks(customerId) });
+    },
+  });
+}
+
 export function useAddComment(taskId: number, projectId: number) {
   const qc = useQueryClient();
   return useMutation({
@@ -4845,10 +4974,7 @@ export function useAddOpportunityActivity(opportunityId: string) {
   });
 }
 
-export interface CreateOpportunityLinkInput {
-  label: string;
-  url: string;
-}
+export type CreateOpportunityLinkInput = CreateLinkInput;
 
 export function useAddOpportunityLink(opportunityId: string) {
   const qc = useQueryClient();
@@ -4867,7 +4993,7 @@ export function useAddOpportunityLink(opportunityId: string) {
   });
 }
 
-export type UpdateOpportunityLinkInput = Partial<CreateOpportunityLinkInput>;
+export type UpdateOpportunityLinkInput = UpdateLinkInput;
 
 export function useUpdateOpportunityLink(opportunityId: string) {
   const qc = useQueryClient();
