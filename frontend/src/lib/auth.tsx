@@ -7,7 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import { apiRequest, getToken, setToken, UNAUTHENTICATED_EVENT } from "./api";
+import { ApiError, apiRequest, getToken, setToken, UNAUTHENTICATED_EVENT } from "./api";
 
 // Built-in role names referenced structurally by backend (project visibility,
 // requireAdmin gate). Custom roles created via Admin > Roles tab use other
@@ -141,9 +141,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUserVerified(true);
         setStatus("authenticated");
       })
-      .catch(() => {
+      .catch((err: unknown) => {
         if (cancelled) return;
-        setToken(null);
+        // Only a 401 says the stored token is bad. Any other failure — a
+        // timeout, a network error, or the request aborted because the page
+        // is navigating away — leaves it stored: a reload or a link opened
+        // right after sign-in aborts this call, and clearing the token then
+        // signed the next page out.
+        if (err instanceof ApiError && err.status === 401) setToken(null);
         setTokenState(null);
         setUser(null);
         setUserVerified(false);

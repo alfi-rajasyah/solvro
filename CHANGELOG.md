@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-10-16 — Leaving a page right after sign-in no longer signs the user out
+
+- **A reload or a page opened right after sign-in keeps the session.** Sign-in starts a check of the user against the server; leaving the page before it answers cancels it, and any failed check used to delete the stored session token, so the next page opened on the sign-in form. Now only a "not signed in" (401) answer deletes the token. A timeout or a network error still shows the sign-in form, but the token stays, so a reload signs the user back in (**`frontend/src/lib/auth.tsx`**).
+- An end-to-end test leaves the page while the user check is still in flight and expects the admin page, not the sign-in form (**`e2e/tests/auth.spec.ts`**).
+
 ### Added — 2026-10-12 — Document links on projects and customers
 
 Projects and customers get the same label + URL document links that Pipeline deals have. Plan: `docs/plans/project-customer-links.md`.
