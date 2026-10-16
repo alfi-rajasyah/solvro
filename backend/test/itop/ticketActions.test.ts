@@ -70,7 +70,7 @@ async function createUserWithEmail(email: string): Promise<{ userId: number; tok
       active: true,
     },
   });
-  const token = signToken({ sub: user.id, role: role.roleName, permissions: role.permissions as string[] });
+  const token = signToken({ sub: user.id, ver: 0 });
   return { userId: user.id, token };
 }
 
@@ -205,8 +205,8 @@ describe("preconditions", () => {
 });
 
 describe("task:write gating", () => {
-  // STAKEHOLDER (project:read + view-all) can see the ticket and SA holds
-  // project:read, but neither holds task:write — the permission check runs
+  // STAKEHOLDER and SA hold project:read but not task:write — the permission
+  // check runs
   // before validation, visibility and the personal-token check, so even a
   // valid saved token and a visible customer end in 403 `forbidden`.
   for (const roleName of ["STAKEHOLDER", "SA"]) {
@@ -253,7 +253,7 @@ describe("task:write gating", () => {
     });
     expect(write.status).toBe(200);
 
-    const stakeholder = await createUserWithRole("STAKEHOLDER");
+    const stakeholder = await createUserWithRole("AUDITOR");
     const read = await call("get", `/itop/tickets/${id}`, stakeholder.token);
     expect(read.status).toBe(200);
     expect(read.body.privateLog).toEqual([]);

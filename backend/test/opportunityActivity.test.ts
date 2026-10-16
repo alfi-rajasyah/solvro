@@ -43,7 +43,7 @@ async function userWith(permissions: string[]): Promise<{ userId: number; token:
   return {
     userId: user.id,
     username: user.username,
-    token: signToken({ sub: user.id, role: role.roleName, permissions }),
+    token: signToken({ sub: user.id, ver: 0 }),
   };
 }
 
@@ -707,7 +707,7 @@ describe("GET /notifications — visibility arms", () => {
     (await request(app).get("/notifications/unread-count").set(auth(token))).body.count as number;
 
   it("hides deal notifications from (and does not count them for) a caller without pipeline:view; view-all still sees project ones", async () => {
-    const stakeholder = await createUserWithRole("STAKEHOLDER");
+    const stakeholder = await createUserWithRole("AUDITOR");
     const f = await seedBoth(stakeholder.userId);
     const res = await list(stakeholder.token);
     expect(res.body.notifications.map((n: { id: number }) => n.id)).toEqual([f.projectRow.id]);
@@ -747,13 +747,16 @@ describe("GET /notifications — visibility arms", () => {
     expect(await unread(admin.token)).toBe(2);
   });
 
-  it("a caller who loses pipeline:view (a token without it) stops seeing the rows already delivered", async () => {
+  it("a caller who loses pipeline:view (role changed in the database, same token) stops seeing the rows already delivered", async () => {
     const pic = await viewer();
     const f = await seedBoth(pic.userId);
     expect((await list(pic.token)).body.notifications.map((n: { id: number }) => n.id)).toEqual([f.dealRow.id]);
-    const demoted = signToken({ sub: pic.userId, role: "demoted", permissions: ["task:read"] });
-    expect((await list(demoted)).body.notifications).toEqual([]);
-    expect(await unread(demoted)).toBe(0);
+    // Permissions are read from the database on every request (http/auth.ts,
+    // 2026-10-06), so the SAME token loses access the moment the role changes.
+    const tam = await prisma.role.findUniqueOrThrow({ where: { roleName: "TAM" } });
+    await prisma.user.update({ where: { id: pic.userId }, data: { roleId: tam.id } });
+    expect((await list(pic.token)).body.notifications).toEqual([]);
+    expect(await unread(pic.token)).toBe(0);
   });
 });
 

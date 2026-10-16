@@ -202,10 +202,13 @@ export async function ensureCustomerVisible(
   }
 }
 
-// Owner-only gate for customers: changing a customer's owner or deleting it
-// needs ownership-level access (owner, unowned customer, a project the caller
-// is TAM of, or `project:view-all`) — a customer reached only as a project's
-// SA or member does not qualify. 404 first, then 403 `owner_only`.
+// Owner-only gate for customers: deleting a customer needs ownership-level
+// access (owner, unowned customer, a project the caller is TAM of, or
+// `project:view-all`) — a customer reached only as a project's SA or member
+// does not qualify. 404 first, then 403 `owner_only`. Changing a customer's
+// OWNER is stricter since 2026-10-06 (pentest finding M1): routes/customers.ts
+// PATCH allows it only for the current owner, an unowned customer, or a
+// view-all caller — the project-TAM arm does not qualify there.
 export async function ensureCustomerOwnerAccess(
   user: JwtPayload,
   customerId: number,

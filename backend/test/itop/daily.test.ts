@@ -180,10 +180,10 @@ describe("GET /itop/daily — permission gating", () => {
     expect(res.body.customers[0].recent.map((t: { id: number }) => t.id)).toEqual([ticket.id]);
   });
 
-  it("lets a STAKEHOLDER (view-all) see a TAM-owned mapped customer", async () => {
+  it("lets an AUDITOR (view-all) see a TAM-owned mapped customer", async () => {
     await configureItop();
     const owner = await createUserWithRole("TAM");
-    const stakeholder = await createUserWithRole("STAKEHOLDER");
+    const stakeholder = await createUserWithRole("AUDITOR");
     const customer = await createCustomer({ tamId: owner.userId, itopOrgId: 593, itopOrgName: "Owned Org" });
 
     const res = await call("get", "/itop/daily?date=2026-09-22", stakeholder.token);

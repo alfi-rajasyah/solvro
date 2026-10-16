@@ -14,7 +14,7 @@ import {
 import { useTheme, type ThemeChoice } from "@/lib/theme";
 
 export function Settings() {
-  const { user } = useAuth();
+  const { user, replaceToken } = useAuth();
   const change = useChangeMyPassword();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -39,7 +39,10 @@ export function Settings() {
       return;
     }
     try {
-      await change.mutateAsync({ currentPassword, newPassword });
+      const { token } = await change.mutateAsync({ currentPassword, newPassword });
+      // The change revoked every session of this account; the server issued
+      // a replacement for this one.
+      replaceToken(token);
       setSuccess(true);
       setCurrentPassword("");
       setNewPassword("");

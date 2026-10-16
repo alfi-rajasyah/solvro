@@ -2,7 +2,14 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma, WeeklyHealth, WeeklyStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, requirePermission, hasPermission, type JwtPayload } from "../http/auth.js";
+import {
+  requireAuth,
+  requireAnyPermission,
+  requirePermission,
+  hasPermission,
+  type JwtPayload,
+} from "../http/auth.js";
+import { logger } from "../logger.js";
 // services router lives in ./services.ts; this file owns the customer-side mapping.
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
@@ -183,7 +190,13 @@ const customersListQuerySchema = z.object({
     .optional(),
 });
 
-customersRouter.get("/", validate("query", customersListQuerySchema), async (req, res) => {
+// Read gates (pentest finding M2, 2026-10-06): the list and the detail need
+// `project:read` or `pipeline:view` (deals pick a customer) — a PENDING
+// account used to list every unowned customer here. Sub-resources keep
+// their own `project:read` / `project:write` gates.
+const customerReadGate = requireAnyPermission("project:read", "pipeline:view");
+
+customersRouter.get("/", customerReadGate, validate("query", customersListQuerySchema), async (req, res) => {
   const user = req.user!;
   const { today } = req.query as unknown as z.infer<typeof customersListQuerySchema>;
   const customers = await prisma.customer.findMany({
@@ -308,7 +321,7 @@ const customerDetailQuerySchema = z.object({
     .optional(),
 });
 
-customersRouter.get("/:id", validate("params", idParamSchema), validate("query", customerDetailQuerySchema), async (req, res) => {
+customersRouter.get("/:id", customerReadGate, validate("params", idParamSchema), validate("query", customerDetailQuerySchema), async (req, res) => {
   const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
   const { today } = req.query as unknown as z.infer<typeof customerDetailQuerySchema>;
   const customer = await prisma.customer.findFirst({
@@ -453,11 +466,21 @@ customersRouter.patch(
       throw new HttpError(404, "customer_not_found", "Customer not found");
     }
 
-    // Changing the owner is owner-only (a project member sees the customer
-    // through the project, but must not be able to take it over). Re-saving
-    // the current owner — the edit form's steady state — is not a change.
-    if (body.tamId !== undefined && body.tamId !== existing.tamId) {
-      await ensureCustomerOwnerAccess(user, id);
+    // Changing the owner (pentest finding M1, 2026-10-06): only the current
+    // owner, anyone on an unowned customer, or a view-all caller may do it.
+    // Being the TAM of ONE project under the customer used to satisfy the
+    // "own" arm, so a TAM could claim a colleague's customer and, through
+    // `customer.tamId`, every project under it. Re-saving the current owner
+    // — the edit form's steady state — is not a change.
+    const ownerChange = body.tamId !== undefined && body.tamId !== existing.tamId;
+    if (ownerChange) {
+      const mayReassign =
+        existing.tamId === user.sub ||
+        existing.tamId === null ||
+        hasPermission(user, "project:view-all");
+      if (!mayReassign) {
+        throw new HttpError(403, "owner_only", "Only the customer's current owner can reassign it");
+      }
     }
 
     const data: Prisma.CustomerUpdateInput = {};
@@ -492,6 +515,14 @@ customersRouter.patch(
       data,
       include: { tam: { select: { id: true, username: true } } },
     });
+    if (ownerChange) {
+      // ActivityEvent has no customer scope (project or deal only), so the
+      // owner change is recorded in the structured application log.
+      logger.info(
+        { event: "customer.owner_changed", customerId: id, actorId: user.sub, from: existing.tamId, to: updated.tamId },
+        "customer owner changed",
+      );
+    }
     res.json(updated);
   },
 );

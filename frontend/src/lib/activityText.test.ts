@@ -505,6 +505,33 @@ describe("describeActivity - Pipeline deals", () => {
   });
 });
 
+describe("describeActivity - project links", () => {
+  const link = (over: Partial<ActivityEvent> = {}) =>
+    ev({
+      entityType: "project_link",
+      entityId: null,
+      entityLabel: null,
+      changes: { linkId: "l1", label: "Proposal" },
+      ...over,
+    });
+
+  it("added / updated / removed name the label", () => {
+    expect(text(link({ action: "added" }))).toBe("maya.putri added the link Proposal to the project");
+    expect(text(link({ action: "updated" }))).toBe("maya.putri updated the link Proposal on the project");
+    expect(text(link({ action: "removed" }))).toBe("maya.putri removed the link Proposal from the project");
+  });
+
+  it("falls back to a generic link when the label is missing", () => {
+    expect(text(link({ action: "added", changes: null }))).toBe("maya.putri added a link to the project");
+  });
+
+  it("emphasises the label and never links to a task", () => {
+    const s = describeActivity(link({ action: "added" }));
+    expect(s.parts.filter((p) => p.kind === "entity").map((p) => p.text)).toEqual(["Proposal"]);
+    expect(s.taskId).toBeNull();
+  });
+});
+
 describe("describeActivity - guest links", () => {
   const link = (over: Partial<ActivityEvent> = {}) =>
     ev({ entityType: "share_link", entityLabel: "For Nusantara IT", ...over });

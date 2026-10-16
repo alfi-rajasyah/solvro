@@ -160,7 +160,7 @@ export function splitComment(
 /** The fields of a user the candidate lists read (a `UserSummary` satisfies it). */
 export interface DirectoryUser extends MentionUser {
   active: boolean;
-  permissions: readonly string[];
+  pipelineAccess: boolean;
 }
 
 function uniqueById<T extends MentionUser>(people: readonly (T | null | undefined)[]): T[] {
@@ -208,7 +208,5 @@ export function taskMentionPeople(input: {
  * mention is only useful to someone who can follow the link.
  */
 export function dealMentionCandidates(directory: readonly DirectoryUser[] | undefined): DirectoryUser[] {
-  return (directory ?? []).filter(
-    (u) => u.active && (u.permissions.includes("*") || u.permissions.includes("pipeline:view")),
-  );
+  return (directory ?? []).filter((u) => u.active && u.pipelineAccess);
 }

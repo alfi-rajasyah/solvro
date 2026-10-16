@@ -51,6 +51,7 @@ export function Overview() {
 }
 
 function OverviewBody({ data }: { data: OverviewResponse }) {
+  const { user } = useAuth();
   const { overdue, dueThisWeek, openRisks } = data.workCounts;
   // Per-project task-overdue and open-risk counts come from GET /projects
   // (server-computed `health`); the overview portfolio rows don't carry them.
@@ -178,16 +179,20 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
       </section>
 
       {/* Recent notes — the heading stays a direct child of this panel
-          (daily-review.spec.ts walks ancestor::div[1] from it). */}
-      <div className="min-w-0 rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-        <header className="mb-3 flex items-center justify-between">
-          <h3 className="font-display text-sm font-bold text-on-surface">Recent notes</h3>
-          <Link to="/daily-review" className="text-meta font-semibold text-primary hover:underline">
-            Daily Review →
-          </Link>
-        </header>
-        <RecentNotesFeed />
-      </div>
+          (daily-review.spec.ts walks ancestor::div[1] from it). GET
+          /notes/recent needs project:read (2026-10-06), so the panel is
+          hidden from roles without it instead of showing a load error. */}
+      {hasPermission(user, "project:read") && (
+        <div className="min-w-0 rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
+          <header className="mb-3 flex items-center justify-between">
+            <h3 className="font-display text-sm font-bold text-on-surface">Recent notes</h3>
+            <Link to="/daily-review" className="text-meta font-semibold text-primary hover:underline">
+              Daily Review →
+            </Link>
+          </header>
+          <RecentNotesFeed />
+        </div>
+      )}
     </>
   );
 }

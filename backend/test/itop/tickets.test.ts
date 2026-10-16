@@ -212,9 +212,9 @@ describe("permission gating", () => {
     expect((await call("get", "/itop/tickets/999999999", token)).status).toBe(403);
   });
 
-  it("lets a STAKEHOLDER (project:read + project:view-all) read a TAM-owned customer's tickets", async () => {
+  it("lets an AUDITOR (project:read + project:view-all) read a TAM-owned customer's tickets", async () => {
     const owner = await createUserWithRole("TAM");
-    const stakeholder = await createUserWithRole("STAKEHOLDER");
+    const stakeholder = await createUserWithRole("AUDITOR");
     const customer = await createCustomer({ tamId: owner.userId, itopOrgId: 81, itopOrgName: "Owned Org" });
     const ticket = await createTicket({ customerId: customer.id, orgId: 81, status: "new" });
 
@@ -253,9 +253,9 @@ describe("permission gating", () => {
 describe("private case log visibility", () => {
   const PRIVATE_NOTE = { date: "2026-09-20 10:00:00", author: "Rina S.", message: "agent-only: customer is hostile" };
 
-  it("returns the private log to a TAM (task:write) but an empty one to a STAKEHOLDER, on both single-ticket routes", async () => {
+  it("returns the private log to a TAM (task:write) but an empty one to an AUDITOR (read-only view-all), on both single-ticket routes", async () => {
     const tam = await createUserWithRole("TAM");
-    const stakeholder = await createUserWithRole("STAKEHOLDER");
+    const stakeholder = await createUserWithRole("AUDITOR");
     const customer = await createCustomer({ tamId: tam.userId, itopOrgId: 83, itopOrgName: "Log Org" });
     const ticket = await createTicket({ customerId: customer.id, orgId: 83, status: "new", privateLog: [PRIVATE_NOTE] });
 
