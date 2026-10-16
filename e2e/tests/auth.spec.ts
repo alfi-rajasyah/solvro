@@ -85,4 +85,24 @@ test.describe("auth: admin guard on a fresh page load", () => {
     await expect(page.getByRole("heading", { level: 1, name: /admin/i })).toBeVisible({ timeout: 10_000 });
     await expect(page).toHaveURL(/\/admin/);
   });
+
+  // Sign-in starts an /auth/me call; leaving the page before it answers
+  // aborts it, and that failure used to clear the stored token — the next
+  // page then opened signed out. A slow /auth/me makes the abort certain.
+  test("leaving the page while /auth/me is in flight keeps the session", async ({ page }) => {
+    await page.route("**/auth/me", async (route) => {
+      await new Promise((resolve) => setTimeout(resolve, 800));
+      // The first call is aborted by the navigation below.
+      await route.continue().catch(() => {});
+    });
+    await page.goto("/", { waitUntil: "networkidle" });
+    await page.fill('input[type="email"]', ADMIN_EMAIL);
+    await page.fill('input[type="password"]', ADMIN_PASSWORD);
+    const meRequest = page.waitForRequest("**/auth/me");
+    await page.click('button[type="submit"]');
+    await meRequest;
+    await page.goto("/admin");
+    await expect(page.getByRole("heading", { level: 1, name: /admin/i })).toBeVisible({ timeout: 10_000 });
+    await expect(page).toHaveURL(/\/admin/);
+  });
 });
