@@ -6,7 +6,7 @@ Solvro is a project management platform for **Technical Account Managers (TAMs)*
 
 The lifecycle Solvro is built around:
 
-1. An SA tracks an **opportunity** through the sales pipeline — nine stages from Assessment to Won (or Drop/Hold) on a drag-and-drop board.
+1. An SA tracks an **opportunity** through the sales pipeline — six stages from Assessment to Waiting Response on a drag-and-drop board — and closes it as Won, Lost, or Cancelled.
 2. A **won deal hands off** in one step: Solvro creates the delivery project from the deal inside a single database transaction, pre-filled and linked both ways.
 3. A TAM runs the delivery — Kanban, Gantt, risks, and **daily notes** per project and per customer — and rolls the week up into **Weekly Sync** tables for Monday's read.
 4. Leadership reads the **Executive** dashboard: every project across every TAM, plus pipeline analytics.
@@ -28,14 +28,15 @@ Eight tabs under `/projects/:id`: Overview, List, Kanban, Gantt, Epics, Timeline
 - **Epics** — project-scoped groupings across phases with an owner, a colour, a status and a target date; a top-level task carries at most one epic (shown as a chip in every view), and the Epics tab rolls up each epic's task count and done percentage. Removing an epic unlinks its tasks and never deletes them.
 - **Risk register** — category, probability × impact score, mitigation and contingency plans, open / mitigated / closed.
 - **Services** — a service catalogue with assignments at both the customer and the project level, each tagged with the tools in use.
+- **Header and Context panel** — the project header shows customer, dates, SA and TAM, a progress bar, and health (overdue tasks, schedule slip, open risks). The Context panel holds the baseline lock, the schedule export, and the project's **document links** (label + `http(s)` URL), which anyone with `project:write` who can see the project may edit.
 
 ### Customers, notes, and the weekly rhythm
 
-- **Customer directory** — each customer has an owning TAM, an account manager and SA of record, service assignments, and its projects.
+- **Customer directory** (`/customers`) — a sortable table with each customer's AM, TAM, project count, overdue tasks, open risks, and latest weekly update. Each customer has an owning TAM, an account manager and SA of record, service assignments, its projects, and a **Links** tab of document links.
 - **Daily Review** (`/daily-review`) — a weekly, per-customer page: dated notes per project, operations notes per customer for issues outside any project, an explicit "Mark reviewed" stamp, and actionable overdue-task and open-risk lists. One request loads the whole page.
 - **Weekly Sync** (`/weekly-sync`) — two tables for Monday's read. **Mid-week**: one row per highlight with its own risk and action. **Reflection**: one row per achievement with its outstanding issue, lesson learned, next-week focus, and manager decision (rows that need a decision pin to the top). Each customer carries a Green / Amber / Red health and a Draft / Done status. Both forms draft themselves from the week's notes, and "Copy as table" puts the rows on the clipboard as TSV and HTML for pasting into a document.
 - **Recent notes** — a seven-day feed of project and operations notes on the Overview page.
-- Notes carry an `INTERNAL` / `CUSTOMER_FACING` visibility. Internal notes never reach an export, a search result, or a guest link.
+- Notes carry an `INTERNAL` / `CUSTOMER_FACING` visibility. Internal notes never reach an export, a search result, or a guest link. Project and customer document links are internal too: they never reach a guest link or an export.
 
 ### Collaboration
 
@@ -48,20 +49,22 @@ Eight tabs under `/projects/:id`: Overview, List, Kanban, Gantt, Epics, Timeline
 
 ### Pipeline module (for SAs)
 
-- **Board** (`/pipeline`) — nine-stage opportunity Kanban: Assessment → RFP → PoC → Technical clarification → Deliver proposal → Waiting response → Won, plus Drop and Hold. Drag is permission-gated, Won and Drop ask for confirmation, Hold remembers the stage it came from, each column sums its deal value, and a KPI bar sits on top. **List**, **Swimlane** (PIC × stage), and **Quarter** (by request date) views share one switcher.
-- **Opportunity detail** (`/pipeline/:id`) — stage menu, reference links, an activity timeline with notes, win probability, lead source, and deadline. Edit and delete are gated by ownership (the deal's PIC). An unassigned deal can be claimed with **Assign PIC**.
-- **Won-deal handoff** — "Create project" on a won deal creates the delivery project, links the two records, and logs the activity in one transaction.
-- **Excel/CSV import** — template download, client-side validation preview, per-row server results, 500 rows per run, and an import history in Admin.
-- **Analytics** — an Overview panel plus Executive fold-ins: stage funnel, PIC leaderboard and performance table, 12-month trend, and a workload heatmap with per-PIC drill-down.
+- **Board** (`/pipeline`) — six-stage opportunity Kanban: Assessment → Technical clarification → PoC → RFP → Delivered proposal → Waiting response. A deal's stage, sub-status (Progress / Waiting for Sales input), status tag (Hold / Delayed), and outcome (Won / Lost / Cancelled) are separate fields, so closing or parking a deal never erases the stage it reached. Drag is permission-gated; the Technical clarification → RFP jump that skips PoC asks for a reason. Each card shows the next **owner** (the client on Waiting response, else the SA) and an **idle alert** (warning / critical) computed on every read from working days since the last activity or the Sales request, against a per-stage SLA table. Each column sums its deal value and a KPI bar sits on top. **List**, **Swimlane** (PIC × stage), and **Quarter** (by request date) views share one switcher; an Active / Closed switch shows closed deals grouped by outcome with a win-rate tile and the top close reasons.
+- **Opportunity detail** (`/pipeline/:id`) — stage menu, sub-status and tag actions, **Close deal** (outcome plus a reason category for Lost or Cancelled) and **Reopen**, reference links, an activity timeline with notes, win probability, lead source, and deadline. Edit and delete are gated by ownership (the deal's PIC). An unassigned deal can be claimed with **Assign PIC**. The `SALES` role reads the pipeline and answers in a deal's notes.
+- **Won-deal handoff** — "Create project" on a deal closed as Won creates the delivery project, links the two records, and logs the activity in one transaction. The deal's links are not copied to the project.
+- **Excel/CSV import** — template download, client-side validation preview, per-row server results, 500 rows per run, the six open stages only, and an import history in Admin.
+- **Analytics** — an Overview panel plus Executive fold-ins: stage funnel, PIC leaderboard and performance table, 12-month trend, win rate, close reasons by stage, and a workload heatmap with per-PIC drill-down.
 
 ### Portfolio and leadership
 
-- **Overview** (`/overview`) — the signed-in user's portfolio calendar, status and task counts, recent notes, and a pipeline snapshot.
+- **Overview** (`/overview`) — the signed-in user's Overdue, Due this week, and Open risks tiles, projects needing attention, the portfolio calendar, recent notes, and a pipeline snapshot.
+- **Projects** (`/projects`) — project cards with a progress bar, task counts, overdue and open-risk chips, a baseline marker, the date range, the TAM, and the SA.
+- **Tasks** (`/tasks`, not in the sidebar) — every visible task with saved views (All open, My open, Overdue, This week, All) synced to `?view=`.
 - **Executive** (`/executive`) — org-wide portfolio roll-up behind its own permission: an overdue-projects worklist, portfolio timelines for every project, and the pipeline analytics. Administrative container projects can be excluded from every roll-up.
 
 ### Platform
 
-- **Authentication** — email/password (JWT, 8-hour default) and Google sign-in with an admin-managed domain allowlist. Unknown Google users are auto-provisioned into a zero-permission `PENDING` role until an admin promotes them.
+- **Authentication** — email/password (JWT, 8-hour default) and Google sign-in with an admin-managed domain allowlist. Unknown Google users are auto-provisioned into a zero-permission `PENDING` role until an admin promotes them. A password change ends the account's other sessions; an admin reset, deactivation, or deletion ends all of them. A role change applies to live sessions on the next request.
 - **RBAC** — permission-based, with admin-managed custom roles. Built-in roles: `ADMIN`, `SA`, `SALES`, `TAM`, `STAKEHOLDER`, `PENDING`.
 - **Admin** (`/admin`) — Users, Roles, Sign-in (Google client ID and allowed domains, editable without a redeploy), Projects (bulk reassign), Pipeline (import history), and iTop (connection, sync, organisation and person matching, webhook secret, actions switch).
 - **Help** (`/help`) — in-app guide, one topic per page the caller can open; topics for pages the caller's permissions hide are hidden too.
@@ -100,7 +103,7 @@ Solvro connects to an external [iTop](https://www.itophub.io/) ITSM instance, co
 | Bootstrap | `index.ts`, `app.ts`, `env.ts` | `createApp()` is split from the listener for testability. Env is parsed once with Zod; the process exits on a bad config. |
 | HTTP plumbing | `http/auth.ts`, `http/validate.ts`, `http/errors.ts`, `http/requestLogger.ts`, `http/rateLimit.ts`, `http/trustProxy.ts` | Bearer-token auth and permission gates, Zod validation of body / params / query, one error handler that renders every failure as `{ error, code, details }`, a request logger that redacts bearer tokens, guest-link tokens and the webhook secret, an in-memory per-client rate limiter for the public routes, and the `TRUST_PROXY` parser. |
 | Routes | `routes/*.ts` | One router per resource. Every authenticated router calls `requireAuth` once at the top, then `requirePermission(...)` per mutating handler. |
-| Domain helpers | `lib/visibility.ts`, `lib/pipelineAccess.ts`, `lib/portfolio.ts`, `lib/taskOrdering.ts`, `lib/duplicate.ts`, `lib/dateBoundary.ts`, `lib/isoWeek.ts` | Row-level visibility filters (see-level and owner-level), the Pipeline ownership gate, the portfolio roll-up shared by Overview and Executive, dense sibling ordering for tasks, deep copy for tasks and sections, and the caller-local "today" contract. |
+| Domain helpers | `lib/visibility.ts`, `lib/pipelineAccess.ts`, `lib/pipelineSla.ts`, `lib/workingDays.ts`, `lib/portfolio.ts`, `lib/projectHealth.ts`, `lib/dailyReviewScope.ts`, `lib/taskOrdering.ts`, `lib/duplicate.ts`, `lib/dateBoundary.ts`, `lib/isoWeek.ts`, `lib/username.ts`, `lib/linkSchemas.ts` | Row-level visibility filters (see-level and owner-level), the Pipeline ownership gate, the per-stage SLA table and working-day counter behind the idle alerts, the portfolio roll-up shared by Overview and Executive, per-project health numbers, the Daily Review scope shared with the sidebar badge, dense sibling ordering for tasks, deep copy for tasks and sections, the caller-local "today" contract, the username rule, and the label + URL rule shared by deal, project, and customer links. |
 | Collaboration & integrations | `lib/activity.ts`, `lib/opportunityActivity.ts`, `lib/notifications.ts`, `lib/projectMembers.ts`, `lib/shareLinks.ts`, `lib/secretBox.ts`, `lib/itop/` | Activity events and notification fan-out (assignments, @mentions, deal events) for projects and deals, the member list and the assign-adds-member rule, the allow-listed guest payload, AES-256-GCM secrets at rest (`SECRETS_KEY`), and the iTop REST client, snapshot sync, scheduler and config. |
 | Data | `prisma.ts`, `prisma/schema.prisma`, `prisma/migrations/`, `prisma/seed.ts` | One shared Prisma client. Tables and columns are `@map`ped to snake_case; the TypeScript surface is camelCase. The seed upserts the six built-in roles and the auth-config singleton and creates no users. |
 
@@ -123,20 +126,21 @@ The PWA layer (vite-plugin-pwa / Workbox) precaches the app shell and serves `/a
 
 ### Data model (`backend/prisma/schema.prisma`)
 
-- **Identity** — `User`, `Role` (a JSON permission list), `AuthConfig` (Google client ID and allowed domains, one row).
-- **Delivery** — `Project` (TAM, optional SA, customer, status, WIP limits, baseline lock), `Section`, `Epic`, `Task` (status, priority, dates, milestone and critical-path flags, baseline dates, parent for subtasks, dense `position`, optional epic and iTop ticket reference), `TaskDependency` (HARD / SOFT), `Label`, `Comment` (with mentioned user ids), `Risk`, `ProjectReview`.
+- **Identity** — `User` (with a `tokenVersion` that revokes older sessions), `Role` (a JSON permission list), `AuthConfig` (Google client ID and allowed domains, one row).
+- **Delivery** — `Project` (TAM, optional SA, customer, status, WIP limits, baseline lock), `Section`, `Epic`, `Task` (status, priority, dates, milestone and critical-path flags, baseline dates, parent for subtasks, dense `position`, optional epic and iTop ticket reference), `TaskDependency` (HARD / SOFT), `Label`, `Comment` (with mentioned user ids), `Risk`, `ProjectReview`, `ProjectLink`.
 - **Collaboration** — `ProjectMember`, `ActivityEvent` (scoped to exactly one project or one opportunity), `Notification`, `ShareLink` (SHA-256 of the token only).
 - **iTop** — `ItopConfig` (one row: base URL, sealed application token and webhook secret, sync state, timezone, actions switch), `ItopTicket` (the local snapshot), `ItopTimeEntry`; `Customer` maps to an iTop organisation and `User` to an iTop person, user and sealed personal token.
-- **Customers & services** — `Customer`, `Service`, `CustomerService`, `ProjectService`.
+- **Customers & services** — `Customer`, `CustomerLink`, `Service`, `CustomerService`, `ProjectService`.
 - **Notes & weekly rhythm** — `ProjectNote`, `CustomerNote`, `WeeklyUpdate` with child `WeeklyHighlight` and `WeeklyAchievement` rows.
-- **Pipeline** — `Opportunity` (stage, PIC, deal value, win probability, `wonAt`, `preHoldStage`, optional link to the handed-off `Project`), `OpportunityActivity`, `OpportunityLink`, `PipelineImportLog`.
+- **Pipeline** — `Opportunity` (stage, `subStatus` with `waitingInputSince`, `statusTag`, `outcome` with a reason category and note, `closedAt`, `wonAt`, `lastActivityAt`, PIC, deal value, win probability, optional link to the handed-off `Project`), `OpportunityActivity`, `OpportunityLink`, `PipelineImportLog`.
 
 ### Authorization model
 
-- A sign-in returns a JWT whose payload is `{ sub, role, permissions[] }`. The permission list is copied from the role at sign-in. `*` is the wildcard that satisfies every check and is what makes a role an admin.
+- A sign-in returns a JWT whose payload is `{ sub, ver }` only. On every request `requireAuth` loads the account: it must exist, be active, and hold the token's `ver` (`User.tokenVersion`), else `401` (`token_revoked`, `account_disabled`, or `unauthenticated`). Role and permissions are read from the database on each request, never from the token. `*` is the wildcard that satisfies every check and is what makes a role an admin.
 - **Permissions** — `project:view-all`, `project:read`, `project:write`, `task:read`, `task:write`, `pipeline:view`, `pipeline:create`, `pipeline:edit_own`, `pipeline:edit_all`, `pipeline:delete_own`, `pipeline:delete_all`, `report:executive`.
-- **Built-in roles** — `ADMIN` = `*`. `TAM` = project read/write + task read/write. `SA` = project read + pipeline view / create / edit-own / delete-own. `SALES` = pipeline view. `STAKEHOLDER` = project read + view-all. `PENDING` = nothing.
-- **Project visibility** (`lib/visibility.ts`) — `project:view-all` sees everything. Everyone else sees a project where they are the TAM, the SA, the owning TAM of its customer, or a member. **Ownership** is narrower: only the TAM, the customer's owner, or a view-all user may reassign the TAM, customer or SA, delete the project, or manage guest links — a member or the SA gets `403 owner_only`. A **customer** is visible when the caller owns it, when nobody owns it, or when it has a visible project.
+- **Built-in roles** — `ADMIN` = `*`. `TAM` = project read/write + task read/write. `SA` = project read + pipeline view / create / edit-own / delete-own. `SALES` = pipeline view. `STAKEHOLDER` = project read (only the projects it is attached to). `PENDING` = nothing. The seed upserts these permission lists on every start.
+- **Project visibility** (`lib/visibility.ts`) — `project:view-all` sees everything. Everyone else sees a project where they are the TAM, the SA, the owning TAM of its customer, or a member. **Ownership** is narrower: only the TAM, the customer's owner, or a view-all user may reassign the TAM, customer or SA, delete the project, or manage guest links — a member or the SA gets `403 owner_only`. A **customer** is visible when the caller owns it, when nobody owns it, or when it has a visible project. A customer's owner (`tamId`) can be changed only by its current owner, on an unowned customer, or by a view-all user.
+- **Directory reads need a permission.** `GET /users`, `GET /customers`, and `GET /customers/:id` need `project:read` or `pipeline:view`; `GET /users` returns a `pipelineAccess` flag, never a permission list. A `PENDING` account gets `403`.
 - **Hidden means 404.** A resource outside the caller's visibility answers `404 not_found`, not `403`, so its existence is not revealed. A `customerId` sent as a body field answers `400 customer_not_found` instead.
 - **Pipeline ownership** (`lib/pipelineAccess.ts`) — `pipeline:edit_all` / `delete_all` act on any deal. `edit_own` / `delete_own` act only on a deal whose PIC is the caller. A deal with no PIC is locked for every write except **assign**, which an `edit_own` holder may use to claim it.
 - **Executive is org-wide by design.** `report:executive` is itself the grant, so the visibility filter is not applied to that report.
@@ -159,17 +163,17 @@ The backend is a JSON REST API. Routers mount without an `/api` prefix; the fron
 |---|---|---|
 | `/health` | `GET /` | public |
 | `/auth` | `POST /login`, `GET /google/config`, `POST /google`, `GET /me`, `POST /change-password` | sign-in routes public; the rest any signed-in user |
-| `/users` | `GET /` — user directory for assignee and PIC pickers | signed in |
+| `/users` | `GET /` — user directory for assignee and PIC pickers | `project:read` or `pipeline:view` |
 | `/overview` | `GET /?today=` — project and task counts plus the caller's portfolio rows; `GET /badges` — the sidebar's pending Daily Review count | signed in, visibility-scoped |
-| `/notes` | `GET /recent?today=` — the last seven days of project and operations notes | signed in, visibility-scoped |
-| `/daily-review` | `GET /?week=YYYY-Www&today=` — the whole Daily Review page in one payload: customers, projects, notes, overdue tasks, open risks, review stamps, weekly updates | signed in, visibility-scoped |
+| `/notes` | `GET /recent?today=` — the last seven days of project and operations notes | `project:read`, visibility-scoped |
+| `/daily-review` | `GET /?week=YYYY-Www&today=` — the whole Daily Review page in one payload: customers, projects, notes, overdue tasks, open risks, review stamps, weekly updates | `project:read`, visibility-scoped |
 | `/search` | `GET /?q=` — projects, top-level tasks, and customers; notes are never searched | signed in, visibility-scoped |
 | `/holidays` | `GET /?year=` — Indonesian public holidays for the Gantt | signed in |
-| `/customers` | `GET /`, `POST /`, `GET /:id`, `PATCH /:id`, `DELETE /:id`, `PUT /:id/services`, `GET` / `POST /:id/notes`, `PATCH` / `DELETE /:id/notes/:noteId`, `GET /:id/weekly-updates`, `PUT /:id/weekly-updates/:weekStart` | reads `project:read`, writes `project:write` |
-| `/projects` | `GET /`, `POST /`, `GET /:id`, `PATCH /:id`, `DELETE /:id`, `POST /:id/baseline`, `PUT /:id/services`; nested `GET` / `POST` for `tasks`, `sections`, `risks`, `notes`, `dependencies`, `labels`; `PATCH` / `DELETE /:id/notes/:noteId`; `POST /:id/reviews`, `DELETE /:id/reviews/:reviewDate`; `GET` / `POST /:id/epics`; `GET` / `POST /:id/members`, `DELETE /:id/members/:userId`; `GET` / `POST /:id/share-links`, `DELETE /:id/share-links/:linkId`; `GET /:id/activity` | reads visibility-scoped; writes `project:write` (`task:write` for dependencies); share links owner-only |
+| `/customers` | `GET /`, `POST /`, `GET /:id`, `PATCH /:id`, `DELETE /:id`, `PUT /:id/services`, `GET` / `POST /:id/notes`, `PATCH` / `DELETE /:id/notes/:noteId`, `GET /:id/weekly-updates`, `PUT /:id/weekly-updates/:weekStart`; `GET` / `POST /:id/links`, `PATCH` / `DELETE /:id/links/:linkId` | list and detail `project:read` or `pipeline:view`; other reads `project:read`; writes `project:write`; owner change owner-only |
+| `/projects` | `GET /`, `POST /`, `GET /:id`, `PATCH /:id`, `DELETE /:id`, `POST /:id/baseline`, `PUT /:id/services`; nested `GET` / `POST` for `tasks`, `sections`, `risks`, `notes`, `dependencies`, `labels`; `PATCH` / `DELETE /:id/notes/:noteId`; `POST /:id/reviews`, `DELETE /:id/reviews/:reviewDate`; `GET` / `POST /:id/epics`; `GET` / `POST /:id/members`, `DELETE /:id/members/:userId`; `GET` / `POST /:id/share-links`, `DELETE /:id/share-links/:linkId`; `GET` / `POST /:id/links`, `PATCH` / `DELETE /:id/links/:linkId`; `GET /:id/activity` | reads visibility-scoped; writes `project:write` (`task:write` for dependencies); share links owner-only |
 | `/epics` | `GET /:id`, `PATCH /:id`, `DELETE /:id` | read visibility-scoped; writes `project:write` |
 | `/notifications` | `GET /`, `GET /unread-count`, `POST /read-all`, `POST /:id/read` | signed in, own rows only |
-| `/tasks` | `GET /` (filters `status`, `priority`, `assignedToId`, `labelId`, `customerId`, `overdue`, `topLevel`, `today`), `PATCH /:id` (fields, status, labels, reorder, re-parent, move between sections), `DELETE /:id`, `POST /:id/duplicate`, `GET` / `POST /:id/comments` | writes `task:write` |
+| `/tasks` | `GET /` (filters `status`, `priority`, `assignedToId`, `labelId`, `customerId`, `overdue`, `open`, `dueFrom`, `dueTo`, `topLevel`, `today`; `sort` = `position` or `due`; total in `X-Total-Count`), `PATCH /:id` (fields, status, labels, reorder, re-parent, move between sections), `DELETE /:id`, `POST /:id/duplicate`, `GET` / `POST /:id/comments` | writes `task:write` |
 | `/sections` | `PATCH /:id`, `POST /:id/duplicate`, `DELETE /:id` | `project:write` |
 | `/labels`, `/dependencies` | `PATCH /:id`, `DELETE /:id` | `task:write` |
 | `/risks` | `PATCH /:id`, `DELETE /:id` | `project:write` |
@@ -186,15 +190,17 @@ The backend is a JSON REST API. Routers mount without an `/api` prefix; the fron
 
 ### Key flows
 
-**Sign-in.** `POST /auth/login` takes an email and password; `POST /auth/google` takes a Google ID token, which the server verifies against the admin-configured client ID and allowed domains, creating a `PENDING` user on first sight. Both return a JWT and the user's profile. The frontend stores the token in `localStorage` and sends it as a bearer header on every call; an old token without a permissions claim is treated as having none.
+**Sign-in.** `POST /auth/login` takes an email and password; `POST /auth/google` takes a Google ID token, which the server verifies against the admin-configured client ID and allowed domains, creating a `PENDING` user on first sight. Both return a JWT and the user's profile. The frontend stores the token in `localStorage` and sends it as a bearer header on every call; a `401` on any authenticated call signs the user out. `POST /auth/change-password` bumps `tokenVersion` and answers with a new token, so only the session that changed the password stays signed in.
 
 **Task ordering.** Top-level tasks share one dense `0..n-1` `position` per project; subtasks share one per parent. A `PATCH /tasks/:id` that carries `position`, `parentTaskId`, or `sectionId` moves the task inside a single transaction: the old sibling list closes its gap and the new one opens a slot, so List, Kanban, and Gantt always agree. Baseline dates are not accepted on this route.
 
 **Baseline.** `POST /projects/:id/baseline` copies every task's live start and due date into its baseline columns and stamps who locked the plan and when; `{ "clear": true }` resets both. The Gantt draws the baseline ghost bars, and the Daily Review reports the slip in days against it.
 
-**Stage moves.** `POST /opportunities/:id/move` with `stage` and `stageOrder` re-packs both the old and the new column to dense order, sets or clears `wonAt` on a transition into or out of `WON`, and stores or restores `preHoldStage` around `HOLD`.
+**Stage moves.** `POST /opportunities/:id/move` with `stage` and `stageOrder` re-packs both the old and the new column to dense order. The Technical clarification → RFP jump needs a `reason` (`400 skip_reason_required`), and a closed deal cannot move. Entering Waiting response clears the sub-status; leaving it restores Progress. Every real change writes an activity note and bumps `lastActivityAt`; a same-column reorder does not, so it never resets the idle alert.
 
-**Won-deal handoff.** `POST /opportunities/:id/handoff` takes the same body as `POST /projects`. It needs the deal-edit gate plus `project:write`, a deal in stage `WON`, and no existing link. Inside one transaction it creates the project, links the deal with a conditional update that also settles the race between two concurrent handoffs, and writes an activity entry. Conflicts answer `409 not_won` or `409 already_linked`.
+**Close and reopen.** `POST /opportunities/:id/close` takes `{ outcome, reasonCategory?, reason? }`; Lost and Cancelled need a reason category, Won refuses one and stamps `wonAt`, and the stage stays. A second close answers `409 already_closed`. `POST /opportunities/:id/reopen` clears the outcome, except on a deal that became a project (`409 handed_off`).
+
+**Won-deal handoff.** `POST /opportunities/:id/handoff` takes the same body as `POST /projects`. It needs the deal-edit gate plus `project:write`, a deal closed as Won, and no existing link. Inside one transaction it creates the project, links the deal with a conditional update that also settles the race between two concurrent handoffs, and writes an activity entry. Conflicts answer `409 not_won` or `409 already_linked`.
 
 **Pipeline import.** The dialog parses the workbook in the browser for a preview. `POST /opportunities/import` re-validates every row on the server, matches the PIC by username, creates the valid rows, and writes one `PipelineImportLog` with valid / skipped / invalid counts, which the Admin Pipeline tab lists through `GET /opportunities/imports`.
 
@@ -237,10 +243,10 @@ Prerequisites: Node.js 22 and PostgreSQL 15 (a local instance or a `postgres:15-
 ```bash
 # Backend
 cd backend
-cp .env.example .env          # DATABASE_URL; add JWT_SECRET (32+ characters)
+cp .env.example .env          # DATABASE_URL; set SECRETS_KEY (openssl rand -base64 32); add JWT_SECRET (32+ characters)
 npm ci
 npx prisma migrate dev        # apply migrations and generate the client
-npm run db:seed               # five built-in roles, no users
+npm run db:seed               # six built-in roles, no users
 npm run dev                   # API on http://localhost:3000
 
 # Frontend (second terminal)
@@ -257,6 +263,13 @@ ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=change-me npm run admin:create
 ```
 
 Google sign-in is configured inside the app (Admin → Sign-in), not through environment variables.
+
+To fill a development database with a readable demo workspace (customers, projects, tasks, notes, and Pipeline deals, dated relative to today), run the demo seed. It **empties every data table first** and refuses to run in production or without the confirmation variable:
+
+```bash
+cd backend
+DEMO_SEED_CONFIRM=wipe npx tsx scripts/seed-demo.ts
+```
 
 ### Run the production-shaped stack locally
 
@@ -281,9 +294,9 @@ The backend test setup refuses any database whose name does not end in `_test`, 
 
 | Path | Contents |
 |---|---|
-| `backend/` | Express API (`src/routes`, `src/lib`, `src/http`), Prisma schema and migrations, seed, `scripts/` (`create-admin.ts`; `import-velora.ts`, the one-time copy from the previous standalone opportunity tracker; `normalize-day-dates.ts`), Vitest suite in `test/` |
+| `backend/` | Express API (`src/routes`, `src/lib`, `src/http`), Prisma schema and migrations, seed, `scripts/` (`create-admin.ts`; `import-velora.ts`, the one-time copy from the previous standalone opportunity tracker; `normalize-day-dates.ts`; `seed-demo.ts`, the destructive demo-workspace loader), Vitest suite in `test/` |
 | `frontend/` | React SPA: pages and views, feature components, vendored drag engines, Base UI primitives, the CSS-first theme, and `nginx.conf` for the production image |
-| `e2e/` | Playwright suite — auth, Kanban and List drag, Gantt, date picker, Daily Review, Weekly Sync, Pipeline board and forms, search, PWA, smoke |
+| `e2e/` | Playwright suite — auth, Kanban and List drag, Gantt, date picker, Daily Review, Weekly Sync, Pipeline board and forms, epics, members, activity, mentions, notifications, guest links, the iTop board, tickets and timer, Utilization, Help, search, PWA, smoke |
 | `ci/` | The production-shaped compose stack GitHub Actions builds and tests |
 | `.github/workflows/` | `ci.yml` (merge gate) and `docker-publish.yml` (GHCR release) |
 | `setup.sh` | One-shot production installer and updater |
