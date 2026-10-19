@@ -5,6 +5,8 @@ import {
   PRIORITY_BORDER_HEX,
   WEEKEND_HEX,
   barFillHex,
+  cancelledBarHex,
+  HATCH_CANVAS_HEX_LIGHT,
   type ColorByMode,
 } from "./palette";
 import { PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/lib/labels";
@@ -312,9 +314,13 @@ export async function exportGanttToExcel(opts: ExportExcelOpts): Promise<void> {
     if (r.start && r.end && (r.kind === "task" || r.kind === "subtask")) {
       const status = r.status ?? "TODO";
       const priority = r.priority ?? "MEDIUM";
-      const fillHex = barFillHex(
+      const baseHex = barFillHex(
         { status, priority, sectionColor: r.sectionColor },
         colorBy,
+      );
+      // Cancelled: the flat, translucent treatment the live bar uses.
+      const fillHex = (
+        status === "CANCELLED" ? cancelledBarHex(baseHex, HATCH_CANVAS_HEX_LIGHT) : baseHex
       ).replace(/^#/, "");
       const borderHex = PRIORITY_BORDER_HEX[priority].replace(/^#/, "");
       const startMs = startOfDay(r.start).getTime();

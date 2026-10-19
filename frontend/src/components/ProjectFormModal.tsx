@@ -7,7 +7,7 @@ import { PROJECT_STATUS_LABEL, taskStatusOptions } from "@/lib/labels";
 import {
   type ProjectDetail,
   type ProjectStatus,
-  type TaskStatus,
+  type WipStatus,
   type WipLimits,
   useCreateProject,
   useCustomers,
@@ -23,12 +23,14 @@ const PROJECT_STATUSES: ProjectStatus[] = [
   "CANCELLED",
 ];
 
-const WIP_COLUMNS = taskStatusOptions;
+const WIP_COLUMNS = taskStatusOptions.filter(
+  (o): o is { value: WipStatus; label: string } => o.value !== "CANCELLED",
+);
 
 // Form-local representation: each column's limit as the literal <input>
 // string value ("" = no limit) so the field can be edited freely without
 // fighting number coercion on every keystroke.
-type WipLimitsForm = Record<TaskStatus, string>;
+type WipLimitsForm = Record<WipStatus, string>;
 
 function wipLimitsToForm(limits: WipLimits | null | undefined): WipLimitsForm {
   return {

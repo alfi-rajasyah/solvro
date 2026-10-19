@@ -163,6 +163,7 @@ const STATUS_DOT_TONE_CLASS: Record<TaskStatus, string> = {
   TODO: "bg-surface-container-highest",
   IN_PROGRESS: "bg-primary",
   DONE: "bg-chip-emerald-text",
+  CANCELLED: "bg-on-surface-variant/50",
 };
 
 /** Small colored status dot rendered before a task's name (SolvroGantt.tsx's

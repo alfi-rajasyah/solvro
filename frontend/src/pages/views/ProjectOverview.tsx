@@ -34,7 +34,7 @@ export function ProjectOverview() {
   const { data: tasks, isLoading, isError, error } = useProjectTasks(project.id);
 
   const stats = useMemo(() => computeStats(tasks ?? []), [tasks]);
-  const sCurve = useMemo(() => buildSCurve(tasks ?? []), [tasks]);
+  const sCurve = useMemo(() => buildSCurve((tasks ?? []).filter((t) => t.status !== "CANCELLED")), [tasks]);
   const taskIds = useMemo(() => new Set((tasks ?? []).map((t) => t.id)), [tasks]);
 
   if (isLoading) {
@@ -189,7 +189,7 @@ const PANEL_HEADING =
 function NeedsAttention({ tasks, projectId }: { tasks: Task[]; projectId: number }) {
   const today = dateToDay(startOfToday())!;
   const rows = tasks
-    .filter((t) => t.status !== "DONE" && t.dueDate)
+    .filter((t) => t.status !== "DONE" && t.status !== "CANCELLED" && t.dueDate)
     .map((t) => ({ task: t, delta: dayDelta(dayFromIso(t.dueDate!)!, today) }))
     .filter((r) => r.delta <= 7)
     .sort((a, b) => a.delta - b.delta);
@@ -241,7 +241,11 @@ function NeedsAttention({ tasks, projectId }: { tasks: Task[]; projectId: number
   );
 }
 
-function StatusBreakdown({ tasks }: { tasks: Task[] }) {
+function StatusBreakdown({ tasks: allTasks }: { tasks: Task[] }) {
+  // The bar and its percentages cover counted tasks only; the Cancelled row
+  // below is informational and sits outside the total.
+  const cancelled = allTasks.filter((t) => t.status === "CANCELLED").length;
+  const tasks = allTasks.filter((t) => t.status !== "CANCELLED");
   const done = tasks.filter((t) => t.status === "DONE").length;
   const inProgress = tasks.filter((t) => t.status === "IN_PROGRESS").length;
   const todo = tasks.length - done - inProgress;
@@ -250,13 +254,13 @@ function StatusBreakdown({ tasks }: { tasks: Task[] }) {
   return (
     <section className={PANEL_CLASS}>
       <h3 className={`${PANEL_HEADING} mb-3`}>Status breakdown</h3>
-      {tasks.length === 0 ? (
+      {allTasks.length === 0 ? (
         <PanelEmpty icon="list_alt" text="No tasks yet." />
       ) : (
         <>
           <div className="flex h-2 overflow-hidden rounded-full bg-surface-container-high">
-            {done > 0 && <div className="bg-primary" style={{ width: pct(done) }} />}
-            {inProgress > 0 && (
+            {tasks.length > 0 && done > 0 && <div className="bg-primary" style={{ width: pct(done) }} />}
+            {tasks.length > 0 && inProgress > 0 && (
               <div className="bg-primary/45" style={{ width: pct(inProgress) }} />
             )}
           </div>
@@ -264,6 +268,7 @@ function StatusBreakdown({ tasks }: { tasks: Task[] }) {
             <BreakdownRow swatch="bg-primary" label={TASK_STATUS_LABEL.DONE} count={done} />
             <BreakdownRow swatch="bg-primary/45" label={TASK_STATUS_LABEL.IN_PROGRESS} count={inProgress} />
             <BreakdownRow swatch="bg-surface-container-high" label={TASK_STATUS_LABEL.TODO} count={todo} />
+            <BreakdownRow swatch="bg-on-surface-variant/40" label={TASK_STATUS_LABEL.CANCELLED} count={cancelled} />
           </dl>
         </>
       )}
@@ -592,7 +597,9 @@ interface Stats {
   overdue: number;
 }
 
-function computeStats(tasks: Task[]): Stats {
+function computeStats(allTasks: Task[]): Stats {
+  // Cancelled tasks are removed from every total.
+  const tasks = allTasks.filter((t) => t.status !== "CANCELLED");
   const total = tasks.length;
   const topLevel = tasks.filter((t) => t.parentTaskId === null).length;
   const subtasks = total - topLevel;

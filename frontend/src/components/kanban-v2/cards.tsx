@@ -24,6 +24,7 @@ import { PriorityBadge } from "@/components/PriorityBadge";
 import { KanbanItemHandle } from "@/components/reui/kanban";
 import { dateToDay } from "@/lib/dateField";
 import { fmtDay, fmtDue, isTaskOverdue } from "@/lib/formatDate";
+import { countTasks } from "@/lib/taskCounts";
 import { type Epic, type Task } from "@/lib/queries";
 
 export function TaskCard({
@@ -56,13 +57,14 @@ export function TaskCard({
   onToggleSubtask?: (s: Task) => void;
 }) {
   const subtasks = subtaskMap.get(task.id) ?? [];
-  const subtasksDone = subtasks.filter((s) => s.status === "DONE").length;
+  const { done: subtasksDone, total: subtasksTotal } = countTasks(subtasks);
   // Due date replaces the old "N Days" duration. Open tasks read relative
   // (`fmtDue`: Today / Tomorrow / "6d late"); done tasks read the plain day
   // and never late. Overdue is the same predicate the Gantt tree uses.
   const done = task.status === "DONE";
+  const cancelled = task.status === "CANCELLED";
   const overdue = isTaskOverdue(task.status, task.dueDate, dateToDay(new Date()));
-  const dueLabel = task.dueDate ? (done ? fmtDay(task.dueDate) : fmtDue(task.dueDate)) : "";
+  const dueLabel = task.dueDate ? (done || cancelled ? fmtDay(task.dueDate) : fmtDue(task.dueDate)) : "";
   const epic = task.epicId !== null ? epicMap?.get(task.epicId) : undefined;
 
   function handleClick(e: React.MouseEvent) {
@@ -98,7 +100,12 @@ export function TaskCard({
               <span className="material-symbols-outlined text-[16px]">drag_indicator</span>
             </KanbanItemHandle>
           )}
-          <p className="min-w-0 text-[15px] font-bold leading-tight text-on-surface">
+          <p
+            className={[
+              "min-w-0 text-[15px] font-bold leading-tight",
+              cancelled ? "text-on-surface-variant line-through" : "text-on-surface",
+            ].join(" ")}
+          >
             {task.status === "DONE" && (
               <span className="material-symbols-outlined mr-1 align-text-bottom text-[14px] text-primary">
                 check_circle
@@ -153,7 +160,7 @@ export function TaskCard({
         <div className="mb-2">
           <div className="mb-1 flex items-center gap-1 font-display text-label-caps uppercase text-on-surface-variant">
             <span className="material-symbols-outlined text-[12px]">check_circle</span>
-            Subtasks {subtasksDone}/{subtasks.length}
+            Subtasks {subtasksDone}/{subtasksTotal}
           </div>
           <ul className="space-y-0.5 border-l border-outline-variant/60 pl-2">
             {subtasks.map((s) => (
@@ -220,6 +227,7 @@ export function SubtaskRow({
   onToggle?: () => void;
 }) {
   const done = task.status === "DONE";
+  const cancelled = task.status === "CANCELLED";
   return (
     <div className="flex touch-manipulation items-center gap-1.5 rounded-sm px-0.5 py-0.5 text-[12px]">
       {/* Toggle only, DONE<->TODO, permission-gated the same way the old
@@ -227,13 +235,14 @@ export function SubtaskRow({
           642-643). No drag surface — subtask dragging is retired. */}
       <button
         type="button"
-        disabled={!canToggle}
+        disabled={!canToggle || cancelled}
+        title={cancelled ? "Cancelled — change its status to reopen" : undefined}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
           onToggle?.();
         }}
-        aria-label={done ? "Mark not done" : "Mark done"}
+        aria-label={cancelled ? "Cancelled" : done ? "Mark not done" : "Mark done"}
         className={[
           "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors",
           done
@@ -246,7 +255,7 @@ export function SubtaskRow({
       </button>
       <span
         onPointerDown={(e) => e.stopPropagation()}
-        className={["flex-1 truncate", done ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}
+        className={["flex-1 truncate", done || cancelled ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}
       >
         {task.title}
       </span>

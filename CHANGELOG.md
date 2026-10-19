@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-10-19 — Cancelled task status
+
+- **Tasks can now be marked Cancelled**, a fourth status alongside To do, In progress and Done. It appears in every task status dropdown, the task form, the Tasks page filter, the Timeline and the Kanban board, which gets a "Cancelled" column after Done; dragging a card there cancels the task. A cancelled task stays visible with a grey "Cancelled" chip carrying a block icon, and a struck-through muted title on the List, Kanban, Tasks page, Timeline and Gantt tree. Its Gantt bar — and the bar in the PDF and Excel exports — renders as a flat, faded fill with no progress hatch. A cancelled subtask's checkbox is disabled; reopen it from its status dropdown. The project WIP-limit form stays To do / In progress / Done, with no limit for Cancelled. Epics cannot be cancelled: the epic status picker offers To do / In progress / Done, and `PATCH /epics/:id` rejects `CANCELLED`.
+- **Cancelled tasks are left out of every total.** Project, epic, portfolio and Daily Review progress, the project status breakdown, the project sidebar's Tasks count, subtask "x of y" counts, overdue counts and the open-task filter (`GET /tasks?open=true`) recalculate without them — a project with 11 done tasks and 1 cancelled shows 100% · 11 of 11. Their dates are ignored too: a cancelled task no longer moves a project's start or end date, its schedule slip against the baseline, or its portfolio overdue status, and a phase made up only of done and cancelled tasks counts as complete. Shared logic lives in `backend/src/lib/taskStatus.ts` and `frontend/src/lib/taskCounts.ts`.
+- **Guest share links** treat a phase as done once all of its non-cancelled tasks are done, and omit cancelled milestones.
+- Adds the database migration `20261019090000_task_cancelled_status` for the new `TaskStatus` value.
+
 ### Fixed — 2026-10-16 — Leaving a page right after sign-in no longer signs the user out
 
 - **A reload or a page opened right after sign-in keeps the session.** Sign-in starts a check of the user against the server; leaving the page before it answers cancels it, and any failed check used to delete the stored session token, so the next page opened on the sign-in form. Now only a "not signed in" (401) answer deletes the token. A timeout or a network error still shows the sign-in form, but the token stays, so a reload signs the user back in (**`frontend/src/lib/auth.tsx`**).

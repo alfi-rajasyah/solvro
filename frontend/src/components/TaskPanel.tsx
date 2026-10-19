@@ -19,6 +19,7 @@ import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { CommentBody, CommentComposer } from "@/components/CommentMentions";
 import { fmtAgo, fmtRange } from "@/lib/formatDate";
+import { countTasks } from "@/lib/taskCounts";
 import { useAssigneeMembership } from "@/lib/useAssigneeMembership";
 import { PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/lib/labels";
 import { taskMentionPeople } from "@/lib/mentions";
@@ -52,7 +53,7 @@ import {
   useUsers,
 } from "@/lib/queries";
 
-const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
 
 const PRIORITY_ORDER: Priority[] = ["LOW", "MEDIUM", "HIGH"];
 const PRIORITY_ICON_CLASS: Record<Priority, string> = {
@@ -118,7 +119,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
     // dense per-parent ordering rather than relying on GET /tasks's incidental
     // global (position asc, id asc) sort surviving the filter() above.
     .sort((a, b) => a.position - b.position || a.id - b.id);
-  const subtasksDone = subtasks.filter((s) => s.status === "DONE").length;
+  const { done: subtasksDone, total: subtasksTotal } = countTasks(subtasks);
 
   // Max depth is 1 (backend/src/lib/taskOrdering.ts's assertValidParent), so a
   // task with a parent can never have subtasks of its own — `isSubtask` is what
@@ -310,6 +311,8 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
   }
 
   function toggleSubtask(s: Task) {
+    // A cancelled subtask is revived only through its status dropdown.
+    if (s.status === "CANCELLED") return;
     updateTask.mutate({ id: s.id, patch: { status: s.status === "DONE" ? "TODO" : "DONE" } });
   }
 
@@ -808,7 +811,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
           {!isSubtask && (
             <div className="mt-4">
               <p className="mb-1.5 font-display text-label-caps uppercase text-on-surface-variant">
-                Subtasks {subtasks.length > 0 && `${subtasksDone}/${subtasks.length}`}
+                Subtasks {subtasks.length > 0 && `${subtasksDone}/${subtasksTotal}`}
               </p>
               <Sortable
                 value={subtasks}
@@ -844,9 +847,16 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                   >
                     <button
                       type="button"
-                      disabled={!canEdit}
+                      disabled={!canEdit || s.status === "CANCELLED"}
                       onClick={() => toggleSubtask(s)}
-                      aria-label={s.status === "DONE" ? "Mark not done" : "Mark done"}
+                      title={s.status === "CANCELLED" ? "Cancelled — change its status to reopen" : undefined}
+                      aria-label={
+                        s.status === "CANCELLED"
+                          ? "Cancelled"
+                          : s.status === "DONE"
+                            ? "Mark not done"
+                            : "Mark done"
+                      }
                       className={[
                         "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
                         s.status === "DONE"
@@ -889,7 +899,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                         title={s.title}
                         className={[
                           "min-w-0 flex-1 truncate rounded-sm text-left hover:text-primary outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring",
-                          s.status === "DONE"
+                          s.status === "DONE" || s.status === "CANCELLED"
                             ? "text-on-surface-variant line-through"
                             : "text-on-surface",
                         ].join(" ")}

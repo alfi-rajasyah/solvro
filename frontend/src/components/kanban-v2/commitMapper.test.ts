@@ -69,7 +69,7 @@ function globalOrder(tasks: Task[]): Task[] {
 
 /** groupedAll equivalent (ProjectKanban.tsx:204-209) — unfiltered per-status buckets, same ordering. */
 function groupedAll(tasks: Task[]): Record<TaskStatus, Task[]> {
-  const map: Record<TaskStatus, Task[]> = { TODO: [], IN_PROGRESS: [], DONE: [] };
+  const map: Record<TaskStatus, Task[]> = { TODO: [], IN_PROGRESS: [], DONE: [], CANCELLED: [] };
   for (const t of tasks) map[t.status].push(t);
   for (const status of Object.keys(map) as TaskStatus[]) {
     map[status].sort((a, b) => a.position - b.position || a.id - b.id);
@@ -869,6 +869,28 @@ describe("commitMapper — section 5: mobile move sheet", () => {
   });
 });
 
+describe("commitMapper — Cancelled column", () => {
+  it("dragging a card into the empty Cancelled column is a status-only patch", () => {
+    const { A, B, C, D, E } = referenceFixture();
+    const global = globalOrder([A, B, C, D, E]);
+    const previousValue = groupedAll(global);
+    const committedValue = { ...previousValue, TODO: [B, C], CANCELLED: [A] };
+    const meta: KanbanCommitMetaLike = {
+      kind: "item",
+      activeContainer: "TODO",
+      activeIndex: 0,
+      overContainer: "CANCELLED",
+      overIndex: 0,
+      previousValue,
+    };
+
+    expect(mapCommitToPatch(global, committedValue, meta)).toEqual({
+      taskId: A.id,
+      patch: { status: "CANCELLED" },
+    });
+  });
+});
+
 describe("commitMapper — column-kind commits", () => {
   it("kind: 'column' always fires no request (column reordering unsupported)", () => {
     const { A, B, C, D, E } = referenceFixture();
@@ -881,6 +903,7 @@ describe("commitMapper — column-kind commits", () => {
       TODO: previousValue.IN_PROGRESS,
       IN_PROGRESS: previousValue.TODO,
       DONE: previousValue.DONE,
+      CANCELLED: previousValue.CANCELLED,
     };
     const meta: KanbanCommitMetaLike = {
       kind: "column",

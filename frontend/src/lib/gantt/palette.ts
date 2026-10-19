@@ -9,6 +9,7 @@ export const STATUS_FILL_HEX: Record<TaskStatus, string> = {
   TODO: "#94a3b8",        // slate-400 — visibly "not started", solid
   IN_PROGRESS: "#3b82f6", // blue-500
   DONE: "#10b981",        // emerald-500
+  CANCELLED: "#6b7280",   // gray-500 — muted, reads as "out of play"
 };
 
 export const PRIORITY_BORDER_HEX: Record<Priority, string> = {
@@ -167,6 +168,18 @@ export function hatchCompositeHex(hex: string, canvasHex: string): string {
   return `#${toHexByte(r)}${toHexByte(g)}${toHexByte(b)}`;
 }
 
+// Cancelled bars drop the progress hatch and paint as one flat, translucent
+// fill: a colour-independent "out of play" cue that stays quieter than any
+// other status (the To do hatch averages ~0.63 alpha).
+export const CANCELLED_BAR_ALPHA = 0.35;
+
+/** Opaque stand-in for a cancelled bar: `hex` at CANCELLED_BAR_ALPHA over `canvasHex`. */
+export function cancelledBarHex(hex: string, canvasHex: string): string {
+  const [fr, fg, fb] = hexToRgbChannels(hex);
+  const [br, bg, bb] = hexToRgbChannels(canvasHex);
+  return `#${toHexByte(compositeChannel(fr, br, CANCELLED_BAR_ALPHA))}${toHexByte(compositeChannel(fg, bg, CANCELLED_BAR_ALPHA))}${toHexByte(compositeChannel(fb, bb, CANCELLED_BAR_ALPHA))}`;
+}
+
 export type ColorByMode = "status" | "section" | "priority";
 
 // Single fill-COLOR resolver for live bars AND both exports — keeps the
@@ -184,6 +197,8 @@ export function barFillHex(
   },
   mode: ColorByMode,
 ): string {
+  // A cancelled task is grey whichever Color-by mode is active.
+  if (opts.status === "CANCELLED") return STATUS_FILL_HEX.CANCELLED;
   if (mode === "status") return STATUS_FILL_HEX[opts.status ?? "TODO"];
   if (mode === "priority") return PRIORITY_BORDER_HEX[opts.priority ?? "MEDIUM"];
   return opts.sectionColor ?? DEFAULT_SECTION_COLOR;
@@ -239,6 +254,7 @@ export function legendEntries(
       [TASK_STATUS_LABEL.TODO, STATUS_FILL_HEX.TODO],
       [TASK_STATUS_LABEL.IN_PROGRESS, STATUS_FILL_HEX.IN_PROGRESS],
       [TASK_STATUS_LABEL.DONE, STATUS_FILL_HEX.DONE],
+      [TASK_STATUS_LABEL.CANCELLED, STATUS_FILL_HEX.CANCELLED],
     ];
   }
   if (mode === "priority") {

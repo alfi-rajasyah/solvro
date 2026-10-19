@@ -41,7 +41,7 @@ import {
 } from "@/lib/queries";
 
 const PRIORITIES: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
-const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
 
 const PRIORITY_COLOR: Record<Priority, string> = {
   LOW: "text-on-surface",
@@ -600,6 +600,8 @@ export function TaskFormModal(props: TaskFormModalProps) {
                     <input
                       type="checkbox"
                       checked={s.status === "DONE"}
+                      disabled={s.status === "CANCELLED"}
+                      title={s.status === "CANCELLED" ? "Cancelled — change its status to reopen" : undefined}
                       onChange={() =>
                         update.mutate({
                           id: s.id,
@@ -609,7 +611,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
                       className="h-3.5 w-3.5 accent-primary"
                     />
                     <span
-                      className={`flex-1 text-xs ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
+                      className={`flex-1 text-xs ${s.status === "DONE" || s.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
                     >
                       {s.title}
                     </span>

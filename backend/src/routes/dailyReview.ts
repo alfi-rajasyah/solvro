@@ -11,6 +11,7 @@ import {
 } from "../lib/dateBoundary.js";
 import { parseWeekKey } from "../lib/isoWeek.js";
 import { computeSlipDays, currentPhase } from "../lib/projectHealth.js";
+import { isClosedTaskStatus } from "../lib/taskStatus.js";
 
 // One-request payload for the Daily Review page (spec §5.1). Every
 // sub-collection is fetched with a single batched `findMany` keyed by an
@@ -223,7 +224,7 @@ dailyReviewRouter.get(
       const projectRisks = risksByProject.get(p.id) ?? [];
       const projectNotesForProject = notesByProject.get(p.id) ?? [];
       const projectReviews = reviewsByProject.get(p.id) ?? [];
-      const total = projectTasks.length;
+      const total = projectTasks.filter((t) => t.status !== "CANCELLED").length;
       const done = projectTasks.filter((t) => t.status === "DONE").length;
 
       return {
@@ -238,7 +239,7 @@ dailyReviewRouter.get(
         overdueTasks: projectTasks
           .filter(
             (t) =>
-              t.status !== "DONE" &&
+              !isClosedTaskStatus(t.status) &&
               t.dueDate !== null &&
               t.dueDate.getTime() < overdueBoundaryDate.getTime(),
           )

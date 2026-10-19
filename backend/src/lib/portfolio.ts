@@ -59,8 +59,13 @@ export async function computePortfolioRows(
     let startMs: number | null = null;
     let endMs: number | null = null;
     let doneTasks = 0;
+    let cancelledTasks = 0;
 
     for (const task of tasks) {
+      if (task.status === "CANCELLED") {
+        cancelledTasks += 1;
+        continue;
+      }
       if (task.startDate !== null) {
         const ms = task.startDate.getTime();
         if (startMs === null || ms < startMs) startMs = ms;
@@ -75,7 +80,8 @@ export async function computePortfolioRows(
     const start = startMs !== null ? new Date(startMs).toISOString() : null;
     const end = endMs !== null ? new Date(endMs).toISOString() : null;
 
-    const totalTasks = tasks.length;
+    // Cancelled tasks are in no total, so they leave the progress denominator.
+    const totalTasks = tasks.length - cancelledTasks;
     const progressPct = totalTasks === 0 ? 0 : Math.round((doneTasks / totalTasks) * 100);
 
     const isOverdue =

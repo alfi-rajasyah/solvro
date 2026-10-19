@@ -1495,7 +1495,10 @@ export function SolvroGantt(props: SolvroGanttProps) {
                     native title tooltip surfaces the full name even before
                     the user discovers the splitter, and stays useful for
                     names that still overflow the widened column. */}
-                  <span className="truncate" title={label}>
+                  <span
+                    className={cn("truncate", task?.status === "CANCELLED" && "text-on-surface-variant line-through")}
+                    title={label}
+                  >
                     {label}
                   </span>
                   {/* Fix round (T5) — user-requested visible row-menu

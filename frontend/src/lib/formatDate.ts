@@ -235,5 +235,5 @@ export function isTaskOverdue(
   todayDay: string | null,
 ): boolean {
   const dueDay = dayFromIso(dueDateIso);
-  return status !== "DONE" && dueDay !== null && todayDay !== null && dueDay < todayDay;
+  return status !== "DONE" && status !== "CANCELLED" && dueDay !== null && todayDay !== null && dueDay < todayDay;
 }

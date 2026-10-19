@@ -33,6 +33,7 @@ const TASK_TONE: Record<TaskStatus, Tone> = {
   TODO: "gray",
   IN_PROGRESS: "blue",
   DONE: "emerald",
+  CANCELLED: "gray",
 };
 
 // Tone classes for hand-rolled status controls (button-wrapped chips) that
@@ -41,6 +42,7 @@ export const TASK_STATUS_TONE_CLASS: Record<TaskStatus, string> = {
   TODO: TONE_CLASS[TASK_TONE.TODO],
   IN_PROGRESS: TONE_CLASS[TASK_TONE.IN_PROGRESS],
   DONE: TONE_CLASS[TASK_TONE.DONE],
+  CANCELLED: TONE_CLASS[TASK_TONE.CANCELLED],
 };
 
 // Exported (2026-09-25 flow-redesign review finding S4) so
@@ -61,6 +63,11 @@ export function ProjectStatusChip({ status }: { status: ProjectStatus }) {
 export function TaskStatusChip({ status }: { status: TaskStatus }) {
   return (
     <span className={`${CHIP_BASE} ${TONE_CLASS[TASK_TONE[status]]}`}>
+      {status === "CANCELLED" && (
+        <span aria-hidden="true" className="material-symbols-outlined text-[14px] leading-none">
+          block
+        </span>
+      )}
       {TASK_STATUS_LABEL[status]}
     </span>
   );
