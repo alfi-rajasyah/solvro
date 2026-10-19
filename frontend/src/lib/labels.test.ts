@@ -25,6 +25,7 @@ describe("label maps", () => {
       TODO: "To do",
       IN_PROGRESS: "In progress",
       DONE: "Done",
+      CANCELLED: "Cancelled",
     });
   });
 
@@ -99,6 +100,7 @@ describe("option lists", () => {
       { value: "TODO", label: "To do" },
       { value: "IN_PROGRESS", label: "In progress" },
       { value: "DONE", label: "Done" },
+      { value: "CANCELLED", label: "Cancelled" },
     ]);
     expect(priorityOptions.map((o) => o.value)).toEqual([
       "LOW",

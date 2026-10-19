@@ -55,7 +55,7 @@ export interface PublicSharePayload {
 }
 
 interface PhaseTaskFacts {
-  status: "TODO" | "IN_PROGRESS" | "DONE";
+  status: "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
   startDate: Date | null;
   dueDate: Date | null;
 }
@@ -63,10 +63,12 @@ interface PhaseTaskFacts {
 /**
  * One phase from its tasks. Start = earliest start (a task without one falls
  * back to its due date), end = latest due (falling back to start). Done when
- * every task is DONE, not started when every task is TODO, in progress
- * otherwise. No tasks -> null dates, not started.
+ * every live task is DONE, not started when every live task is TODO, in progress
+ * otherwise. Cancelled tasks are ignored entirely (dates included); a phase
+ * with no live tasks (none, or all cancelled) has null dates and is not started.
  */
-export function derivePhase(name: string, tasks: PhaseTaskFacts[]): PublicPhase {
+export function derivePhase(name: string, allTasks: PhaseTaskFacts[]): PublicPhase {
+  const tasks = allTasks.filter((t) => t.status !== "CANCELLED");
   let start: Date | null = null;
   let end: Date | null = null;
   for (const t of tasks) {
@@ -99,7 +101,7 @@ export async function buildPublicSharePayload(
         },
       },
       tasks: {
-        where: { isMilestone: true },
+        where: { isMilestone: true, status: { not: "CANCELLED" } },
         orderBy: { id: "asc" },
         select: { title: true, status: true, startDate: true, dueDate: true },
       },

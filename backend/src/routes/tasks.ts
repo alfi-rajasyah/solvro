@@ -26,6 +26,7 @@ import { duplicateTaskTree } from "../lib/duplicate.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
 import { diffTaskChanges, recordActivity } from "../lib/activity.js";
 import { filterActiveUsersWhoCanSeeProject, notifyForEvent } from "../lib/notifications.js";
+import { OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -113,7 +114,7 @@ const tasksListQuerySchema = z
       .union([z.literal("true"), z.literal("false")])
       .transform((v) => v === "true")
       .optional(),
-    // open=true adds "status is not DONE"; open=false is a no-op.
+    // open=true adds "status is not DONE or CANCELLED"; open=false is a no-op.
     open: z
       .union([z.literal("true"), z.literal("false")])
       .transform((v) => v === "true")
@@ -242,18 +243,18 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
   }
   if (topLevel) where.parentTaskId = null;
   if (status) and.push({ status });
-  if (open) and.push({ status: { not: "DONE" } });
+  if (open) and.push({ status: OPEN_TASK_STATUS_FILTER });
   if (overdue) {
     // Overdue = due before the CALLER's calendar day (param `today`),
-    // falling back to the server's UTC day; DONE always excluded. See
+    // falling back to the server's UTC day; DONE and CANCELLED always excluded. See
     // lib/dateBoundary.ts for the full contract (shared with
     // lib/portfolio.ts's isOverdue/daysOverdue).
-    // Overdue is not Done: the not-DONE exclusion always applies, and an
+    // Overdue is not Done: the closed-status (DONE/CANCELLED) exclusion always applies, and an
     // explicit ?status filter narrows by INTERSECTION rather than being
     // silently overwritten — status=TODO&overdue=true returns overdue
-    // TODOs; status=DONE&overdue=true is a contradiction and returns
+    // TODOs; status=DONE or CANCELLED with overdue=true is a contradiction and returns
     // nothing, by construction.
-    and.push({ dueDate: { lt: overdueBoundary(today) } }, { status: { not: "DONE" } });
+    and.push({ dueDate: { lt: overdueBoundary(today) } }, { status: OPEN_TASK_STATUS_FILTER });
   }
   if (dueFrom) and.push({ dueDate: { gte: utcMidnightOfDayString(dueFrom) } });
   if (dueTo) {

@@ -1,5 +1,6 @@
 import { prisma } from "../prisma.js";
 import { overdueBoundary } from "./dateBoundary.js";
+import { COUNTED_TASK_STATUS_FILTER, OPEN_TASK_STATUS_FILTER } from "./taskStatus.js";
 
 // Per-project health numbers shared by GET /projects, GET /projects/:id and
 // the nested projects[] of GET /customers/:id. Four queries in one
@@ -10,7 +11,7 @@ import { overdueBoundary } from "./dateBoundary.js";
 export interface ProjectHealth {
   /** All tasks, subtasks included (matches the project Overview's "7 of 17"). */
   progress: { done: number; total: number };
-  /** status != DONE and dueDate < overdueBoundary(today). */
+  /** status open (not DONE/CANCELLED) and dueDate < overdueBoundary(today). */
   overdueCount: number;
   /** Risk.status = OPEN. */
   openRiskCount: number;
@@ -54,7 +55,7 @@ export async function computeProjectHealth(
     }),
     prisma.task.groupBy({
       by: ["projectId"],
-      where: { ...inScope, status: { not: "DONE" }, dueDate: { lt: boundary } },
+      where: { ...inScope, status: OPEN_TASK_STATUS_FILTER, dueDate: { lt: boundary } },
       _count: { _all: true },
     }),
     prisma.risk.groupBy({
@@ -64,7 +65,7 @@ export async function computeProjectHealth(
     }),
     prisma.task.groupBy({
       by: ["projectId"],
-      where: inScope,
+      where: { ...inScope, status: COUNTED_TASK_STATUS_FILTER },
       _min: { startDate: true },
       _max: { dueDate: true },
     }),
@@ -73,6 +74,8 @@ export async function computeProjectHealth(
   for (const row of statusCounts) {
     const h = result.get(row.projectId);
     if (!h) continue;
+    // Cancelled tasks leave every total (and the progress denominator).
+    if (row.status === "CANCELLED") continue;
     h.progress.total += row._count._all;
     if (row.status === "DONE") h.progress.done += row._count._all;
   }
@@ -102,7 +105,7 @@ export interface PhaseTask {
   section: { id: number; name: string; position: number } | null;
 }
 
-// Earliest section (by position) that still has a non-DONE task. Mirrors
+// Earliest section (by position) that still has a still-open task (cancelled tasks do not count). Mirrors
 // currentPhase() in the frontend exactly, including the two terminal
 // strings ("All phases complete" when every section is done, "—" when the
 // project has no sections at all).
@@ -116,8 +119,12 @@ export function currentPhase(tasks: PhaseTask[]): string {
     const e =
       bySection.get(t.section.id) ??
       { name: t.section.name, pos: t.section.position, total: 0, done: 0 };
-    e.total++;
-    if (t.status === "DONE") e.done++;
+    // Cancelled tasks are in no total, but the section still registers (a
+    // section with only done/cancelled tasks counts as complete).
+    if (t.status !== "CANCELLED") {
+      e.total++;
+      if (t.status === "DONE") e.done++;
+    }
     bySection.set(t.section.id, e);
   }
   const ordered = [...bySection.values()].sort((a, b) => a.pos - b.pos);
@@ -127,6 +134,8 @@ export function currentPhase(tasks: PhaseTask[]): string {
 }
 
 export interface SlipTask {
+  /** Cancelled tasks are ignored (omit for callers that pre-filter). */
+  status?: string;
   dueDate: Date | null;
   baselineDueDate: Date | null;
 }
@@ -142,6 +151,7 @@ export function computeSlipDays(
   let maxDue: number | null = null;
   let maxBaselineDue: number | null = null;
   for (const t of tasks) {
+    if (t.status === "CANCELLED") continue;
     if (t.dueDate) {
       const ms = t.dueDate.getTime();
       if (maxDue === null || ms > maxDue) maxDue = ms;

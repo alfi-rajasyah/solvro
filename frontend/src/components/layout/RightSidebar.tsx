@@ -177,7 +177,7 @@ export function RightSidebar({ project, open, onClose }: RightSidebarProps) {
             )}
             <div className="flex justify-between">
               <dt className="text-on-surface-variant">Tasks</dt>
-              <dd className="font-medium text-on-surface">{project._count.tasks}</dd>
+              <dd className="font-medium text-on-surface">{project.health?.progress.total ?? project._count.tasks}</dd>
             </div>
           </dl>
         </section>

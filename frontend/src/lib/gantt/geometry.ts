@@ -80,7 +80,8 @@ interface BuildRowsOpts {
  */
 export function progressForTask(task: Task, childrenById: Map<number, Task[]>): number {
   if (task.status === "DONE") return 100;
-  const children = childrenById.get(task.id) ?? [];
+  // Cancelled subtasks leave the denominator; all-cancelled reads 0%, never NaN.
+  const children = (childrenById.get(task.id) ?? []).filter((c) => c.status !== "CANCELLED");
   if (children.length === 0) return 0;
   const done = children.filter((c) => c.status === "DONE").length;
   return Math.round((done / children.length) * 100);

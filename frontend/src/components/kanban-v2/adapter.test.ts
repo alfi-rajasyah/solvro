@@ -49,9 +49,20 @@ describe("adapter — projectToColumns", () => {
     expect(columns.DONE.map((t) => t.title)).toEqual(["E"]);
   });
 
-  it("always includes all three status columns, empty arrays allowed, on an empty input", () => {
+  it("places cancelled tasks in their own column, after Done", () => {
+    const tasks = [
+      ...referenceFixture(),
+      makeTask({ id: 9, title: "X", status: "CANCELLED", position: 9 }),
+    ];
+    const columns = projectToColumns(tasks);
+    expect(columns.CANCELLED.map((t) => t.title)).toEqual(["X"]);
+    expect(columns.DONE.map((t) => t.title)).toEqual(["E"]);
+    expect(Object.keys(columns)).toEqual(["TODO", "IN_PROGRESS", "DONE", "CANCELLED"]);
+  });
+
+  it("always includes all four status columns, empty arrays allowed, on an empty input", () => {
     const columns = projectToColumns([]);
-    expect(columns).toEqual({ TODO: [], IN_PROGRESS: [], DONE: [] });
+    expect(columns).toEqual({ TODO: [], IN_PROGRESS: [], DONE: [], CANCELLED: [] });
   });
 
   it("orders within a column by position ascending, id ascending tiebreak (out-of-order input, tied positions)", () => {
@@ -95,7 +106,7 @@ describe("adapter — projectToColumns", () => {
     // in the input list at all.
     expect(columns.TODO.map((t) => t.id)).toEqual([1, 2, 3]);
     // No subtask (parentTaskId !== null) ends up in any column.
-    const allColumnTasks = [...columns.TODO, ...columns.IN_PROGRESS, ...columns.DONE];
+    const allColumnTasks = [...columns.TODO, ...columns.IN_PROGRESS, ...columns.DONE, ...columns.CANCELLED];
     expect(allColumnTasks.some((t) => t.parentTaskId !== null)).toBe(false);
     expect(allColumnTasks.map((t) => t.id)).not.toContain(6);
     expect(allColumnTasks.map((t) => t.id)).not.toContain(7);

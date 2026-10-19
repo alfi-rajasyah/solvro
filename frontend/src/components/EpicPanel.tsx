@@ -8,7 +8,7 @@ import { hasPermission, useAuth } from "@/lib/auth";
 import { fmtRange } from "@/lib/formatDate";
 import { TASK_STATUS_LABEL } from "@/lib/labels";
 import {
-  type TaskStatus,
+  type WipStatus,
   type UpdateEpicInput,
   useCreateTask,
   useEpic,
@@ -16,7 +16,8 @@ import {
   useUsers,
 } from "@/lib/queries";
 
-const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+// Epics cannot be cancelled (tasks only).
+const STATUSES: WipStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
 
 interface EpicPanelProps {
   projectId: number;
@@ -233,7 +234,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
             value={epic.status}
             disabled={!canEdit}
             aria-label="Epic status"
-            onChange={(e) => patch({ status: e.target.value as TaskStatus })}
+            onChange={(e) => patch({ status: e.target.value as WipStatus })}
             className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-hidden disabled:cursor-default"
           >
             {STATUSES.map((s) => (
@@ -332,7 +333,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
                     title={t.title}
                     className={[
                       "min-w-0 flex-1 truncate rounded-sm text-left hover:text-primary outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring",
-                      t.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface",
+                      t.status === "DONE" || t.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface",
                     ].join(" ")}
                   >
                     {t.title}

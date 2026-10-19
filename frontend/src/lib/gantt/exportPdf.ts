@@ -11,6 +11,8 @@ import {
   PROGRESS_OVERLAY_ALPHA,
   WEEKEND_HEX,
   barFillHex,
+  cancelledBarHex,
+  HATCH_CANVAS_HEX_LIGHT,
   type ColorByMode,
 } from "./palette";
 import {
@@ -801,7 +803,10 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
             { status, priority, sectionColor: row.sectionColor },
             colorBy,
           );
-          const [fr, fg, fb] = hexToRgb(fillHex);
+          // Cancelled: the flat, translucent treatment the live bar uses.
+          const [fr, fg, fb] = hexToRgb(
+            status === "CANCELLED" ? cancelledBarHex(fillHex, HATCH_CANVAS_HEX_LIGHT) : fillHex,
+          );
           pdf.setFillColor(fr, fg, fb);
           fillRoundedRect(pdf, bx, by, bw, bh, 1.5);
 

@@ -13,6 +13,7 @@ import {
 } from "../lib/dateBoundary.js";
 import { parseWeekKey, weekKeyOf } from "../lib/isoWeek.js";
 import { resolveDailyReviewScope } from "../lib/dailyReviewScope.js";
+import { OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 
 export const overviewRouter = Router();
 
@@ -83,7 +84,7 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
         where: {
           ...taskListScope,
           parentTaskId: null,
-          status: { not: "DONE" },
+          status: OPEN_TASK_STATUS_FILTER,
           dueDate: { lt: todayBoundary },
         },
       }),
@@ -91,7 +92,7 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
         where: {
           ...taskListScope,
           parentTaskId: null,
-          status: { not: "DONE" },
+          status: OPEN_TASK_STATUS_FILTER,
           dueDate: { gte: todayBoundary, lt: weekEnd },
         },
       }),
@@ -100,8 +101,12 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
       }),
     ]);
 
+  // CANCELLED is left out of the shape entirely: cancelled tasks are in no total.
   const taskCounts = { TODO: 0, IN_PROGRESS: 0, DONE: 0 };
-  for (const g of taskGroups) taskCounts[g.status] = g._count._all;
+  for (const g of taskGroups) {
+    if (g.status === "CANCELLED") continue;
+    taskCounts[g.status] = g._count._all;
+  }
 
   const projectStatusCounts = Object.fromEntries(
     projectsByStatus.map((g) => [g.status, g._count._all]),

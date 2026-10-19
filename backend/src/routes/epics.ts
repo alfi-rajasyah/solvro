@@ -9,6 +9,7 @@ import { validate } from "../http/validate.js";
 import { ensureProjectVisible } from "../lib/visibility.js";
 import { recordActivity, shortLabel } from "../lib/activity.js";
 import { diffEpicChanges, epicSnapshotSelect } from "../lib/epicActivity.js";
+import { COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 
 // Resolve the epic's owning project and 404 if the caller can't see it.
 // Mirrors ensureSectionVisible (backend/src/routes/sections.ts) — 404, never
@@ -31,7 +32,8 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 const updateEpicSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).nullable().optional(),
-  status: z.nativeEnum(TaskStatus).optional(),
+  // Epics share the TaskStatus enum but only tasks can be cancelled.
+  status: z.nativeEnum(TaskStatus).refine((s) => s !== "CANCELLED", "Epics cannot be cancelled").optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   ownerId: z.number().int().positive().nullable().optional(),
   startDate: z.coerce.date().nullable().optional(),
@@ -81,14 +83,16 @@ async function insertEpicAt(
 /**
  * Progress for one epic: `total` is its top-level tasks (subtasks never
  * carry epicId — see lib/epics.ts), `done` is however many of them are
- * DONE. Same definition GET /:id derives from its already-fetched `tasks`
+ * DONE; cancelled tasks are in neither count. Same definition GET /:id derives from its already-fetched `tasks`
  * list (no extra query there) and GET /projects/:id/epics derives from one
  * groupBy across every epic in the project; this is the single-epic case —
  * used by PATCH /:id, which doesn't otherwise fetch the task list.
  */
 async function getEpicProgress(epicId: number): Promise<{ done: number; total: number }> {
   const [total, done] = await Promise.all([
-    prisma.task.count({ where: { epicId, parentTaskId: null } }),
+    prisma.task.count({
+      where: { epicId, parentTaskId: null, status: COUNTED_TASK_STATUS_FILTER },
+    }),
     prisma.task.count({ where: { epicId, parentTaskId: null, status: "DONE" } }),
   ]);
   return { done, total };
@@ -115,9 +119,10 @@ epicsRouter.get("/:id", validate("params", idParamSchema), async (req, res) => {
     orderBy: [{ position: "asc" }, { id: "asc" }],
     include: TASK_ROW_INCLUDE,
   });
-  const done = tasks.filter((t) => t.status === "DONE").length;
+  const counted = tasks.filter((t) => t.status !== "CANCELLED");
+  const done = counted.filter((t) => t.status === "DONE").length;
 
-  res.json({ ...epic, progress: { done, total: tasks.length }, tasks });
+  res.json({ ...epic, progress: { done, total: counted.length }, tasks });
 });
 
 epicsRouter.patch(

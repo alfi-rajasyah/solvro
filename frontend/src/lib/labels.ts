@@ -17,6 +17,7 @@ export const TASK_STATUS_LABEL: Record<TaskStatus, string> = {
   TODO: "To do",
   IN_PROGRESS: "In progress",
   DONE: "Done",
+  CANCELLED: "Cancelled",
 };
 
 export const PRIORITY_LABEL: Record<Priority, string> = {

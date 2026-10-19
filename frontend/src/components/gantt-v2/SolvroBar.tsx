@@ -4,6 +4,8 @@ import {
   DEFAULT_SECTION_COLOR,
   HATCH_CANVAS_HEX_DARK,
   HATCH_CANVAS_HEX_LIGHT,
+  CANCELLED_BAR_ALPHA,
+  cancelledBarHex,
   hatchCompositeHex,
   progressHatchBackground,
 } from "@/lib/gantt/palette";
@@ -257,7 +259,9 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
   // reads doneWidth/showHatch, stays exactly as before.
   const doneWidth =
     rawProgress === null ? 100 : Math.min(Math.max(Math.round(rawProgress), 0), 100);
-  const showHatch = doneWidth < 100;
+  const cancelled = task.status === "CANCELLED";
+  // Cancelled bars skip the hatch and render flat and translucent (see below).
+  const showHatch = doneWidth < 100 && !cancelled;
 
   // T3 phase-review fix: the hatch layer paints its two translucent bands
   // (see the `backdrop` JSX below) directly over the theme's plain canvas
@@ -275,7 +279,11 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
   // than the pure hex depending on the theme's canvas, enough to flip the
   // 0.6 luminance threshold for some palette colors (e.g. TODO-status
   // slate, HIGH-priority amber) and land unreadable text on the hatch.
-  const labelBackgroundHex = doneWidth === 0 ? hatchCompositeHex(color, canvasHex) : color;
+  const labelBackgroundHex = cancelled
+    ? cancelledBarHex(color, canvasHex)
+    : doneWidth === 0
+      ? hatchCompositeHex(color, canvasHex)
+      : color;
   const textColor = insideLabelTextColor(labelBackgroundHex);
 
   // Selection affordance uses `outline` rather than `ring` so it can coexist
@@ -402,7 +410,11 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
       <span
         aria-hidden
         className="absolute inset-y-0 start-0"
-        style={{ width: `${doneWidth}%`, backgroundColor: color }}
+        style={
+          cancelled
+            ? { width: "100%", backgroundColor: color, opacity: CANCELLED_BAR_ALPHA }
+            : { width: `${doneWidth}%`, backgroundColor: color }
+        }
       />
       {/* Critical Path mark (plan §3): a violet inset ring, painted LAST
           (after the hatch and the progress fill) so it sits above both.

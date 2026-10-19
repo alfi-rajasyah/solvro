@@ -46,7 +46,7 @@ import { formatIDR } from "@/lib/pipelineFormat";
 import {
   type Opportunity,
   type ProjectStatus,
-  type TaskStatus,
+  type WipStatus,
   type WipLimits,
   useCustomers,
   useHandoffOpportunity,
@@ -133,7 +133,7 @@ const PROJECT_STATUSES: ProjectStatus[] = [
   "CANCELLED",
 ];
 
-const WIP_COLUMNS: { id: TaskStatus; label: string }[] = [
+const WIP_COLUMNS: { id: WipStatus; label: string }[] = [
   { id: "TODO", label: TASK_STATUS_LABEL.TODO },
   { id: "IN_PROGRESS", label: TASK_STATUS_LABEL.IN_PROGRESS },
   { id: "DONE", label: TASK_STATUS_LABEL.DONE },
@@ -141,7 +141,7 @@ const WIP_COLUMNS: { id: TaskStatus; label: string }[] = [
 
 // Duplicated verbatim from ProjectFormModal.tsx (private there, and this
 // task must not edit that shared file — see this file's header doc).
-type WipLimitsForm = Record<TaskStatus, string>;
+type WipLimitsForm = Record<WipStatus, string>;
 
 function wipLimitsToForm(limits: WipLimits | null | undefined): WipLimitsForm {
   return {

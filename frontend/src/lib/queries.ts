@@ -37,7 +37,7 @@ export type ProjectStatus =
   | "COMPLETED"
   | "CANCELLED";
 
-export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE";
+export type TaskStatus = "TODO" | "IN_PROGRESS" | "DONE" | "CANCELLED";
 
 export type Priority = "LOW" | "MEDIUM" | "HIGH" | "URGENT";
 
@@ -160,6 +160,9 @@ export interface CustomerDetail extends CustomerSummary {
 
 // Per-status-column WIP cap. null (or an absent key) means "no limit".
 // Visual only — see ProjectKanban's amber count-pill logic.
+// CANCELLED has no WIP limit (cancelled cards are out of play).
+export type WipStatus = Exclude<TaskStatus, "CANCELLED">;
+
 export interface WipLimits {
   TODO?: number | null;
   IN_PROGRESS?: number | null;
@@ -432,7 +435,7 @@ export interface PortfolioProjectRow {
 export interface OverviewResponse {
   projectCount: number;
   projectStatusCounts: Partial<Record<ProjectStatus, number>>;
-  taskCounts: Record<TaskStatus, number>;
+  taskCounts: Record<WipStatus, number>;
   portfolio: PortfolioProjectRow[];
   // Open-work tiles: `overdue` = open and due before today; `dueThisWeek` =
   // open and due from today through the ISO week's Sunday; `openRisks` =

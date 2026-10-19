@@ -63,6 +63,12 @@ function formFrom(t: Task, over: Partial<TaskFormValues> = {}): TaskFormValues {
   };
 }
 
+describe("formatConflictValue — status", () => {
+  it("reads the Cancelled status in words", () => {
+    expect(formatConflictValue("status", "CANCELLED")).toBe("Cancelled");
+  });
+});
+
 describe("buildExpected", () => {
   const task = makeTask();
 
