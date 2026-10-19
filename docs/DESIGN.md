@@ -344,6 +344,7 @@ Nothing else gets a shadow. No card shadows, no hover-lift shadows, no focus-rin
 | `TaskStatusChip` | TODO | gray | `bg-surface-container-high text-on-surface-variant` |
 | | IN_PROGRESS | blue | `bg-primary/10 text-primary` |
 | | DONE | emerald | `bg-chip-emerald-bg text-chip-emerald-text` |
+| | CANCELLED | gray + `block` glyph | `bg-surface-container-high text-on-surface-variant` |
 | `StageChip` | ASSESSMENT | gray | `bg-surface-container-high text-on-surface-variant` |
 | | TECHNICAL_CLARIFICATION / POC / RFP | blue | `bg-primary/10 text-primary` |
 | | DELIVER_PROPOSAL | amber | `bg-chip-amber-bg text-chip-amber-text` |

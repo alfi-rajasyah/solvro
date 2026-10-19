@@ -66,7 +66,7 @@ function nextPriority(p: Priority): Priority {
   return PRIORITY_ORDER[(idx + 1) % PRIORITY_ORDER.length];
 }
 
-const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
 
 interface TaskNode {
   task: Task;
@@ -278,6 +278,7 @@ export function ProjectList() {
   }
 
   function toggleTaskDone(task: Task) {
+    if (task.status === "CANCELLED") return; // revived only via the status dropdown
     updateTask.mutate({
       id: task.id,
       patch: { status: task.status === "DONE" ? "TODO" : "DONE" },
@@ -902,7 +903,8 @@ function TaskRow({
           <span
             className={[
               "truncate text-sm",
-              task.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface",
+              task.status === "DONE" || task.status === "CANCELLED"
+                ? "text-on-surface-variant line-through" : "text-on-surface",
             ].join(" ")}
           >
             {task.title}
@@ -925,7 +927,7 @@ function TaskRow({
             canEdit={canEdit}
             startISO={task.startDate}
             dueISO={task.dueDate}
-            done={task.status === "DONE"}
+            done={task.status === "DONE" || task.status === "CANCELLED"}
             onSave={(s, d) => onSetDates(task, s, d)}
           />
         </span>
@@ -976,7 +978,8 @@ function TaskRow({
           <span
             className={[
               "min-w-0 flex-1 truncate text-sm",
-              task.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface",
+              task.status === "DONE" || task.status === "CANCELLED"
+                ? "text-on-surface-variant line-through" : "text-on-surface",
             ].join(" ")}
           >
             {task.title}
@@ -994,7 +997,7 @@ function TaskRow({
         <div className="flex items-center justify-between gap-2 pl-0">
           <span className="flex items-center gap-1.5">
             <AssigneeAvatar user={task.assignedTo} size="xs" />
-            <span className="text-meta text-on-surface-variant">{fmt(task.dueDate, task.status === "DONE")}</span>
+            <span className="text-meta text-on-surface-variant">{fmt(task.dueDate, task.status === "DONE" || task.status === "CANCELLED")}</span>
           </span>
           <span
             className={[
@@ -1077,12 +1080,13 @@ function SubtaskRow({
       </span>
       <button
         type="button"
-        disabled={!canEdit}
+        disabled={!canEdit || task.status === "CANCELLED"}
         onClick={(e) => {
           e.stopPropagation();
           onToggleDone(task);
         }}
-        aria-label={done ? "Mark not done" : "Mark done"}
+        title={task.status === "CANCELLED" ? "Cancelled — change its status to reopen" : undefined}
+        aria-label={task.status === "CANCELLED" ? "Cancelled" : done ? "Mark not done" : "Mark done"}
         className={[
           "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors",
           done ? "border-emerald-500 bg-emerald-500 text-white" : "border-outline-variant hover:border-primary",
@@ -1092,7 +1096,7 @@ function SubtaskRow({
         {done && <span className="material-symbols-outlined text-meta leading-none">check</span>}
       </button>
       <span className="flex min-w-0 items-center gap-1">
-        <span className={["truncate", done ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
+        <span className={["truncate", done || task.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
           {task.title}
         </span>
         {task.isCriticalPath && <CriticalPathMark variant="glyph" className="shrink-0" />}

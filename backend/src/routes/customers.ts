@@ -27,6 +27,7 @@ import {
   ensureCustomerVisible,
   projectVisibilityFilter,
 } from "../lib/visibility.js";
+import { OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -236,7 +237,7 @@ customersRouter.get("/", customerReadGate, validate("query", customersListQueryS
           by: ["projectId"],
           where: {
             projectId: { in: projectIds },
-            status: { not: "DONE" },
+            status: OPEN_TASK_STATUS_FILTER,
             dueDate: { lt: boundary },
           },
           _count: { _all: true },

@@ -40,7 +40,7 @@ import {
   useUsers,
 } from "@/lib/queries";
 
-const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
 const PRIORITY_ORDER: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
 // Stable empty-array reference for `data:` while `useTasks` is loading —
@@ -208,7 +208,15 @@ export function Tasks() {
         header: ({ column }) => <DataGridColumnHeader column={column} title="Title" />,
         enableSorting: false,
         cell: ({ row }) => (
-          <span className="font-medium text-on-surface">{row.original.title}</span>
+          <span
+            className={
+              row.original.status === "CANCELLED"
+                ? "font-medium text-on-surface-variant line-through"
+                : "font-medium text-on-surface"
+            }
+          >
+            {row.original.title}
+          </span>
         ),
         meta: { skeleton: <Skeleton className="h-3.5 w-32" /> },
       },
@@ -279,7 +287,7 @@ export function Tasks() {
           // comparison is calendar-correct (dateField.ts). `todayDay` is
           // hoisted above (once per render, not once per cell).
           const isOverdue =
-            task.dueDate && task.status !== "DONE" && dayFromIso(task.dueDate)! < todayDay!;
+            task.dueDate && task.status !== "DONE" && task.status !== "CANCELLED" && dayFromIso(task.dueDate)! < todayDay!;
           return (
             <span
               className={
@@ -288,7 +296,7 @@ export function Tasks() {
                   : "text-[12px] text-on-surface-variant"
               }
             >
-              {fmt(task.dueDate, task.status === "DONE")}
+              {fmt(task.dueDate, task.status === "DONE" || task.status === "CANCELLED")}
             </span>
           );
         },
@@ -438,7 +446,7 @@ export function Tasks() {
   );
 }
 
-// Done tasks show the plain date — "Nd late" would misreport a finished task.
+// Done and cancelled tasks show the plain date — "Nd late" would misreport a finished task.
 function fmt(iso: string | null, done: boolean) {
   return (done ? fmtDay(iso) : fmtDue(iso)) || "—";
 }

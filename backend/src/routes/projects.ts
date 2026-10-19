@@ -33,6 +33,7 @@ import {
 } from "../lib/taskOrdering.js";
 import { assertEpicNotOnSubtask, assertValidEpic } from "../lib/epics.js";
 import { computeProjectHealth, computeSlipDays } from "../lib/projectHealth.js";
+import { COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
 import {
   diffProjectChanges,
@@ -259,7 +260,7 @@ projectsRouter.get("/:id", validate("params", idParamSchema), validate("query", 
     computeProjectHealth([id], today),
     project.baselineLockedAt
       ? prisma.task.findMany({
-          where: { projectId: id },
+          where: { projectId: id, status: COUNTED_TASK_STATUS_FILTER },
           select: { dueDate: true, baselineDueDate: true },
         })
       : Promise.resolve([]),
@@ -701,6 +702,7 @@ projectsRouter.get(
     });
     const progressByEpic = new Map<number, { done: number; total: number }>();
     for (const row of counts) {
+      if (row.status === "CANCELLED") continue;
       const epicId = row.epicId!;
       const entry = progressByEpic.get(epicId) ?? { done: 0, total: 0 };
       entry.total += row._count._all;

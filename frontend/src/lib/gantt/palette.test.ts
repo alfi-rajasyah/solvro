@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
+  barFillHex,
+  cancelledBarHex,
+  CANCELLED_BAR_ALPHA,
+  STATUS_FILL_HEX,
   HATCH_BASE_ALPHA,
   HATCH_CANVAS_HEX_DARK,
   HATCH_CANVAS_HEX_LIGHT,
@@ -94,5 +98,22 @@ describe("hatchCompositeHex", () => {
     const composite = hatchCompositeHex("#ffffff", HATCH_CANVAS_HEX_DARK);
     expect(composite).not.toBe("#ffffff");
     expect(composite).not.toBe(HATCH_CANVAS_HEX_DARK);
+  });
+});
+
+describe("barFillHex — cancelled tasks", () => {
+  it("is grey in every Color-by mode", () => {
+    for (const mode of ["status", "section", "priority"] as const) {
+      expect(
+        barFillHex({ status: "CANCELLED", priority: "URGENT", sectionColor: "#8b5cf6" }, mode),
+      ).toBe(STATUS_FILL_HEX.CANCELLED);
+    }
+  });
+});
+
+describe("cancelledBarHex", () => {
+  it("blends the bar colour at CANCELLED_BAR_ALPHA over the canvas, quieter than the base", () => {
+    expect(cancelledBarHex("#000000", "#ffffff")).toBe("#a6a6a6");
+    expect(CANCELLED_BAR_ALPHA).toBeLessThan(0.5);
   });
 });

@@ -22,6 +22,7 @@ enum TaskStatus {
   TODO
   IN_PROGRESS
   DONE
+  CANCELLED
 }
 
 enum Priority {

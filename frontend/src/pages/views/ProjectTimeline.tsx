@@ -15,7 +15,7 @@ import { fmtRange } from "@/lib/formatDate";
 import { TASK_STATUS_LABEL } from "@/lib/labels";
 import { type Priority, type Task, type TaskStatus, useProjectTasks, useUpdateTask } from "@/lib/queries";
 
-const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
 const PRIORITY_ORDER: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
 
 // SOLVRO PATCH: status -> TimelineIndicator color, transplanted verbatim from the
@@ -31,6 +31,7 @@ const STATUS_INDICATOR_CLASS: Record<TaskStatus, string> = {
   DONE: "border-surface-container-lowest bg-chip-emerald-text",
   IN_PROGRESS: "border-surface-container-lowest bg-primary",
   TODO: "border-surface-container-lowest bg-surface-container-highest",
+  CANCELLED: "border-surface-container-lowest bg-on-surface-variant/50",
 };
 
 export function ProjectTimeline() {
@@ -154,7 +155,7 @@ function TaskTimelineItem({
   // Compare calendar days, not instants —
   // lexicographic "yyyy-MM-dd" comparison is calendar-correct (dateField.ts).
   // `todayDay` is hoisted by the caller (once per render, not once per item).
-  const overdue = task.dueDate && task.status !== "DONE" && dayFromIso(task.dueDate)! < todayDay!;
+  const overdue = task.dueDate && task.status !== "DONE" && task.status !== "CANCELLED" && dayFromIso(task.dueDate)! < todayDay!;
 
   return (
     <TimelineItem
@@ -192,7 +193,7 @@ function TaskTimelineItem({
           <button
             type="button"
             onClick={onEdit}
-            className="block text-left text-sm font-medium text-on-surface hover:text-primary"
+            className={`block text-left text-sm font-medium hover:text-primary ${task.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
           >
             {task.title}
           </button>
@@ -214,7 +215,7 @@ function TaskTimelineItem({
             {subtasks.map((s) => (
               <li
                 key={s.id}
-                className={`text-[12px] ${s.status === "DONE" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
+                className={`text-[12px] ${s.status === "DONE" || s.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
               >
                 {s.status === "DONE" ? "✓" : "·"} {s.title}
               </li>

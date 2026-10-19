@@ -1,10 +1,10 @@
 import type { Task, TaskStatus } from "@/lib/queries";
 
 // Column order mirrors the old board's `COLUMNS` constant
-// (ProjectKanban.tsx) — TODO / IN_PROGRESS / DONE. All three are always
+// (ProjectKanban.tsx) — TODO / IN_PROGRESS / DONE, plus CANCELLED. All four are always
 // present in a projected value, empty arrays allowed, so ReUI's Kanban never
 // sees a missing column key.
-export const KANBAN_STATUSES: readonly TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE"];
+export const KANBAN_STATUSES: readonly TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
 
 /**
  * Canonical global top-level order comparator: position ascending, id
@@ -31,7 +31,7 @@ export type TaskVisibilityPredicate = (task: Task) => boolean;
  * see below) + a visibility predicate for the currently active filters ->
  * `Record<TaskStatus, Task[]>` shaped for ReUI Kanban's `value` prop.
  *
- * - Columns TODO/IN_PROGRESS/DONE are always present, empty arrays allowed.
+ * - Columns TODO/IN_PROGRESS/DONE/CANCELLED are always present, empty arrays allowed.
  * - Ordering within a column: position ascending, id ascending tiebreak —
  *   identical to the old board's `groupedAll`/`grouped`
  *   (`ProjectKanban.tsx:204-217`).
@@ -51,7 +51,7 @@ export function projectToColumns(
   topLevelTasks: Task[],
   isVisible: TaskVisibilityPredicate = () => true,
 ): Record<TaskStatus, Task[]> {
-  const columns: Record<TaskStatus, Task[]> = { TODO: [], IN_PROGRESS: [], DONE: [] };
+  const columns: Record<TaskStatus, Task[]> = { TODO: [], IN_PROGRESS: [], DONE: [], CANCELLED: [] };
   for (const task of topLevelTasks) {
     if (task.parentTaskId !== null) continue;
     if (!isVisible(task)) continue;

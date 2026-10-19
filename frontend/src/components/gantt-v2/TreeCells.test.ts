@@ -35,6 +35,7 @@ describe("isTaskOverdue", () => {
 
   it("is NEVER overdue once DONE, regardless of how far in the past the due date is", () => {
     expect(isTaskOverdue("DONE", "2020-01-01T00:00:00.000Z", TODAY)).toBe(false);
+    expect(isTaskOverdue("CANCELLED", "2020-01-01T00:00:00.000Z", TODAY)).toBe(false);
   });
 
   it("is not overdue with no due date", () => {

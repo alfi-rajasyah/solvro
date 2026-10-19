@@ -402,6 +402,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
   // permission-gated the same way drag is (`dragEnabled`, passed as
   // `canToggleSubtasks` below).
   function toggleSubtaskStatus(sub: Task) {
+    if (sub.status === "CANCELLED") return; // revived only via the status dropdown
     const next: TaskStatus = sub.status === "DONE" ? "TODO" : "DONE";
     updateTask.mutate({ id: sub.id, patch: { status: next } });
   }
@@ -632,12 +633,12 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
             624-634. */}
         <div
           ref={boardScrollRef}
-          className="flex h-full snap-x snap-mandatory gap-4 overflow-x-auto md:grid md:min-h-0 md:flex-1 md:grid-cols-3 md:overflow-visible md:snap-none"
+          className="flex h-full snap-x snap-mandatory gap-4 overflow-x-auto md:grid md:min-h-0 md:flex-1 md:grid-cols-4 md:overflow-visible md:snap-none"
         >
           <KanbanBoard className="contents">
             {KANBAN_STATUSES.map((status, idx) => {
               const columnTasks = columns[status];
-              const wipLimit = project.wipLimits?.[status] ?? null;
+              const wipLimit = (status === "CANCELLED" ? null : project.wipLimits?.[status]) ?? null;
               const overLimit = wipLimit !== null && columnTasks.length > wipLimit;
 
               return (
