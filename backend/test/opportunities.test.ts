@@ -1003,3 +1003,44 @@ describe("lastActivityAt bumps (§3.7)", () => {
     expect(Date.parse(closed.body.lastActivityAt)).toBeGreaterThanOrEqual(Date.parse(reAssigned.body.lastActivityAt));
   });
 });
+
+// docs/archive/plans/application-review-2026-10-22.md, F-09: the permission check for `/assign` ran on
+// a pre-lock snapshot only. Two `edit_own` holders claiming the same
+// unassigned deal at once both passed it; the second transaction then saw
+// the first claimant as PIC and silently overwrote the claim.
+describe("POST /opportunities/:id/assign — concurrent claims", () => {
+  it("lets exactly one of two simultaneous edit_own claimants win; the other gets 403", async () => {
+    const manager = await createManagerLikeUser();
+    const a = await createSaLikeUser();
+    const b = await createSaLikeUser();
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+    expect(created.body.pic).toBeNull();
+
+    const [resA, resB] = await Promise.all([
+      assignOpportunity(a.token, id, { picId: a.userId }),
+      assignOpportunity(b.token, id, { picId: b.userId }),
+    ]);
+    const statuses = [resA.status, resB.status].sort();
+    expect(statuses).toEqual([200, 403]);
+
+    const winner = resA.status === 200 ? a : b;
+    const row = await prisma.opportunity.findUniqueOrThrow({ where: { id }, select: { picId: true } });
+    expect(row.picId).toBe(winner.userId);
+
+    const activities = await activitiesFor(id);
+    expect(activities).toHaveLength(1);
+    expect(activities[0].note).toBe(`Assigned to ${winner.username}`);
+  });
+
+  it("still lets an edit_all holder reassign a deal that was claimed under it", async () => {
+    const manager = await createManagerLikeUser();
+    const a = await createSaLikeUser();
+    const created = await createOpportunity(manager.token, {});
+    const id = created.body.id as string;
+    expect((await assignOpportunity(a.token, id, { picId: a.userId })).status).toBe(200);
+    const res = await assignOpportunity(manager.token, id, { picId: manager.userId });
+    expect(res.status).toBe(200);
+    expect(res.body.pic.id).toBe(manager.userId);
+  });
+});

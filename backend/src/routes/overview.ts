@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, type JwtPayload } from "../http/auth.js";
+import { requireAnyPermission, requireAuth, type JwtPayload } from "../http/auth.js";
 import { validate } from "../http/validate.js";
 import { projectVisibilityFilter } from "../lib/visibility.js";
 import { computePortfolioRows } from "../lib/portfolio.js";
@@ -17,7 +17,9 @@ import { OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 
 export const overviewRouter = Router();
 
-overviewRouter.use(requireAuth);
+// Same read gate as routes/projects.ts (docs/archive/plans/application-review-2026-10-22.md, F-03). `pipeline:view`
+// stays in the any-of list: the landing page serves SALES its deal cards.
+overviewRouter.use(requireAuth, requireAnyPermission("project:read", "pipeline:view"));
 
 // Single source of truth for project scoping — permission-based, shared
 // with the projects router (no role-name logic).

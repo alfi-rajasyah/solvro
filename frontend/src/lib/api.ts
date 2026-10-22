@@ -29,6 +29,54 @@ interface RequestOptions {
   body?: unknown;
   signal?: AbortSignal;
   auth?: boolean;
+  /** Per-request override of the default timeout, in ms (0 disables it). */
+  timeoutMs?: number;
+}
+
+/**
+ * Every request gives up after this long (docs/archive/plans/application-review-2026-10-22.md, F-15):
+ * before, only the boot-time `/auth/me` call had a timeout, so a backend that
+ * accepted the connection and never answered left every page on its loading
+ * skeleton forever — no error state, nothing to retry.
+ */
+export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
+
+/**
+ * The signal `fetch` gets: the caller's own signal (React Query cancellation)
+ * combined with the timeout. Exported for the unit test.
+ */
+export function requestSignal(
+  callerSignal: AbortSignal | undefined,
+  timeoutMs: number = DEFAULT_REQUEST_TIMEOUT_MS,
+): AbortSignal | undefined {
+  if (timeoutMs <= 0) return callerSignal;
+  const timeout = timeoutSignal(timeoutMs);
+  if (!callerSignal) return timeout;
+  return anySignal([callerSignal, timeout]);
+}
+
+// `AbortSignal.timeout` (Safari 16+) and `AbortSignal.any` (Safari 17.4+,
+// Chrome 116+, Firefox 124+) are not polyfilled by the build. Older browsers
+// — an iPhone on iOS 17.3 opening the PWA — must not lose every request to a
+// TypeError, so both fall back to a plain AbortController.
+function timeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === "function") return AbortSignal.timeout(ms);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(new DOMException("signal timed out", "TimeoutError")), ms);
+  return controller.signal;
+}
+
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  if (typeof AbortSignal.any === "function") return AbortSignal.any(signals);
+  const controller = new AbortController();
+  for (const s of signals) {
+    if (s.aborted) {
+      controller.abort(s.reason);
+      break;
+    }
+    s.addEventListener("abort", () => controller.abort(s.reason), { once: true });
+  }
+  return controller.signal;
 }
 
 export async function apiRequest<T>(path: string, options: RequestOptions = {}): Promise<T> {
@@ -41,7 +89,7 @@ export async function apiRequest<T>(path: string, options: RequestOptions = {}):
  */
 export async function apiRequestWithHeaders<T>(
   path: string,
-  { method = "GET", body, signal, auth = true }: RequestOptions = {},
+  { method = "GET", body, signal, auth = true, timeoutMs }: RequestOptions = {},
 ): Promise<{ data: T; headers: Headers }> {
   const headers: Record<string, string> = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
@@ -49,14 +97,28 @@ export async function apiRequestWithHeaders<T>(
   const token = auth ? getToken() : null;
   if (token) headers["Authorization"] = `Bearer ${token}`;
 
-  const res = await fetch(`${BASE_URL}${path}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal,
-  });
+  let res: Response;
+  let text: string;
+  try {
+    res = await fetch(`${BASE_URL}${path}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: requestSignal(signal, timeoutMs),
+    });
+    // Reading the body is covered by the same signal — a timeout can also
+    // strike while a slow response streams in.
+    text = await res.text();
+  } catch (err) {
+    // A timeout surfaces as a DOMException named "TimeoutError"; give it a
+    // message a page can show as-is. A caller-side abort passes through
+    // unchanged so React Query keeps treating it as a cancellation.
+    if (err instanceof DOMException && err.name === "TimeoutError") {
+      throw new ApiError(0, "The server did not answer in time. Check your connection and retry.", null);
+    }
+    throw err;
+  }
 
-  const text = await res.text();
   const parsed: unknown = text ? safeJsonParse(text) : null;
 
   if (!res.ok) {

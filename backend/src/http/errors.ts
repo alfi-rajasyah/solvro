@@ -7,6 +7,8 @@ export class HttpError extends Error {
   status: number;
   code: string;
   details?: unknown;
+  /** For 429s: seconds until the caller may retry, sent as `Retry-After`. */
+  retryAfterSec?: number;
 
   constructor(status: number, code: string, message: string, details?: unknown) {
     super(message);
@@ -22,6 +24,9 @@ export const notFoundHandler: RequestHandler = (req, res) => {
 
 export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
   if (err instanceof HttpError) {
+    if (err.retryAfterSec !== undefined) {
+      res.setHeader("Retry-After", String(err.retryAfterSec));
+    }
     res
       .status(err.status)
       .json({ error: err.message, code: err.code, details: err.details });

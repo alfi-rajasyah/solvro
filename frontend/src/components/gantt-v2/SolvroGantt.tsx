@@ -557,10 +557,11 @@ export function SolvroGantt(props: SolvroGanttProps) {
       const patch = eventPatch(update);
       if (!patch) return false;
       setActionError(null);
-      updateTask.mutate(patch, {
-        onError: (err) => {
-          setActionError(err instanceof ApiError ? err.message : "Could not update task dates.");
-        },
+      // mutateAsync, not mutate + callbacks: TanStack fires mutate-level
+      // callbacks for the latest call only, so two quick bar drags where the
+      // first failed showed no message (docs/archive/plans/application-review-2026-10-22.md, F-18).
+      void updateTask.mutateAsync(patch).catch((err: unknown) => {
+        setActionError(err instanceof ApiError ? err.message : "Could not update task dates.");
       });
       return true;
     },
@@ -638,14 +639,9 @@ export function SolvroGantt(props: SolvroGanttProps) {
         if (parentId !== taskNodeId(moved.parentTaskId)) return false;
         if (index === moved.position) return false; // no-op
         setActionError(null);
-        updateTask.mutate(
-          { id: taskId, patch: { position: index } },
-          {
-            onError: (err) => {
-              setActionError(err instanceof ApiError ? err.message : "Could not reorder subtask.");
-            },
-          },
-        );
+        void updateTask.mutateAsync({ id: taskId, patch: { position: index } }).catch((err: unknown) => {
+          setActionError(err instanceof ApiError ? err.message : "Could not reorder subtask.");
+        });
         return;
       }
 
@@ -695,14 +691,9 @@ export function SolvroGantt(props: SolvroGanttProps) {
       if (crossSection) patch.sectionId = targetSectionId;
       if (position !== undefined) patch.position = position;
       setActionError(null);
-      updateTask.mutate(
-        { id: taskId, patch },
-        {
-          onError: (err) => {
-            setActionError(err instanceof ApiError ? err.message : "Could not move task.");
-          },
-        },
-      );
+      void updateTask.mutateAsync({ id: taskId, patch }).catch((err: unknown) => {
+        setActionError(err instanceof ApiError ? err.message : "Could not move task.");
+      });
       return;
     },
     [canEdit, resources, sections, tasks, taskById, updateTask, updateSection],
@@ -740,14 +731,11 @@ export function SolvroGantt(props: SolvroGanttProps) {
   const handleUpdateDates = useCallback(
     (taskId: number, startISO: string | null, dueISO: string | null) => {
       setActionError(null);
-      updateTask.mutate(
-        { id: taskId, patch: { startDate: startISO, dueDate: dueISO } },
-        {
-          onError: (err) => {
-            setActionError(err instanceof ApiError ? err.message : "Could not update dates.");
-          },
-        },
-      );
+      void updateTask
+        .mutateAsync({ id: taskId, patch: { startDate: startISO, dueDate: dueISO } })
+        .catch((err: unknown) => {
+          setActionError(err instanceof ApiError ? err.message : "Could not update dates.");
+        });
     },
     [updateTask],
   );

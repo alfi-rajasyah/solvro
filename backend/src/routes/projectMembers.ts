@@ -1,7 +1,7 @@
 import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { requireAuth, requirePermission } from "../http/auth.js";
+import { permissionsOf, requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { ensureProjectVisible } from "../lib/visibility.js";
@@ -113,9 +113,18 @@ projectMembersRouter.post(
     }
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { active: true, username: true },
+      select: { active: true, username: true, role: { select: { permissions: true } } },
     });
     if (!user) throw new HttpError(404, "user_not_found", "User not found");
+    // Membership is a visibility grant; it must not reach an account that has
+    // no permission to read anything (PENDING — docs/archive/plans/application-review-2026-10-22.md, F-03).
+    if (permissionsOf(user.role.permissions).length === 0) {
+      throw new HttpError(
+        400,
+        "user_has_no_access",
+        "This account has no role permissions yet. Assign a role in Admin > Users first.",
+      );
+    }
     // Already a member -> idempotent 200, even if the user was deactivated
     // since; only a NEW membership requires an active user.
     const existing = await prisma.projectMember.findUnique({

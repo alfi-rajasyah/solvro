@@ -1,4 +1,5 @@
-import { test, expect, loginViaUi, ADMIN_EMAIL, ADMIN_PASSWORD } from "../fixtures/test";
+import { test, expect, loginViaUi, submitLoginForm, ADMIN_EMAIL, ADMIN_PASSWORD } from "../fixtures/test";
+import { login } from "../fixtures/seed";
 
 // The seeded QA stack has Google sign-in NOT configured (no clientId, no
 // allowed domains — see backend/prisma/seed.ts). Login renders no Google
@@ -104,5 +105,71 @@ test.describe("auth: admin guard on a fresh page load", () => {
     await page.goto("/admin");
     await expect(page.getByRole("heading", { level: 1, name: /admin/i })).toBeVisible({ timeout: 10_000 });
     await expect(page).toHaveURL(/\/admin/);
+  });
+});
+
+// docs/archive/plans/application-review-2026-10-22.md, F-08: signing out used to leave React Query's
+// cache in place, so the next account to sign in on the same browser saw the
+// previous account's project list (served from cache; the list query has a
+// 30 s staleTime, so it was not even refetched).
+test.describe("auth — sign-out clears the previous account's cached data", () => {
+  test("a second account signed in on the same tab never sees the first account's projects", async ({
+    page,
+  }, testInfo) => {
+    // The top-bar user menu is opened through its username/role label, which
+    // the phone layout hides below `md:` — same desktop-only rule as the other
+    // layout-dependent specs.
+    test.skip(testInfo.project.name !== "desktop", "Top-bar user menu label asserted at desktop width");
+    const base = new URL(testInfo.project.use.baseURL ?? "http://localhost:8080").origin;
+    const stamp = Date.now();
+    const admin = await login(base);
+    const headers = { Authorization: `Bearer ${admin.token}`, "Content-Type": "application/json" };
+
+    // A project only the admin can see, and a TAM with no projects at all.
+    const customer = await (
+      await fetch(`${base}/api/customers`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({ name: `Cache Co ${stamp}`, description: "e2e cache-clear fixture" }),
+      })
+    ).json();
+    const projectName = `Cache Project ${stamp}`;
+    await fetch(`${base}/api/projects`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ name: projectName, customerId: customer.id }),
+    });
+    // The throwaway TAM reuses the fixture admin password (fixtures/seed.ts,
+    // ignored by secret scanning) — the test is about cache isolation, not
+    // credentials, and a second literal here would be flagged as a secret.
+    const tamEmail = `cache-tam-${stamp}@solvro.test`;
+    const tamPassword = ADMIN_PASSWORD;
+    const tamUsername = `cachetam${stamp}`;
+    await fetch(`${base}/api/admin/users`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ email: tamEmail, username: tamUsername, password: tamPassword, role: "TAM" }),
+    });
+
+    // Admin sees the project on the Projects page (fills the cache).
+    await loginViaUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    await page.goto("/projects", { waitUntil: "networkidle" });
+    await expect(page.getByText(projectName)).toBeVisible();
+
+    // Sign out through the top-bar menu, then sign in as the TAM.
+    await page.locator("header button").filter({ hasText: /admin/i }).first().click();
+    await page.getByRole("button", { name: /sign out/i }).click();
+    await page.waitForURL(/login/i, { timeout: 10_000 });
+    await submitLoginForm(page, tamEmail, tamPassword);
+    await page.waitForURL(/overview|projects|\/$/i, { timeout: 10_000 });
+
+    // Client-side navigation (not page.goto): a full page load would create
+    // a fresh QueryClient and hide the bug — the leak lives in the in-memory
+    // cache of the tab the first account used.
+    await page.getByRole("link", { name: "Projects" }).first().click();
+    await expect(page).toHaveURL(/\/projects$/);
+    // Give a stale cache every chance to paint before asserting.
+    await page.waitForTimeout(1000);
+    await expect(page.getByText(projectName)).toHaveCount(0);
   });
 });

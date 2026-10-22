@@ -10,7 +10,7 @@ import {
   TaskStatus,
 } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { hasPermission, requireAuth, requirePermission } from "../http/auth.js";
+import { hasPermission, requireAnyPermission, requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import {
@@ -154,7 +154,13 @@ const taskListQuerySchema = z.object({
 
 export const projectsRouter = Router();
 
-projectsRouter.use(requireAuth);
+// Read gate (docs/archive/plans/application-review-2026-10-22.md, F-03): visibility alone is not
+// enough — an account with no permissions at all (PENDING) that a TAM added
+// as a member or assignee could read every task, INTERNAL note and comment of
+// the project. `project:read` or `pipeline:view` is the same any-of rule the
+// user directory and the customer list use (pentest M2): the SA role reaches
+// its projects through the `saId` arm with `pipeline:view` only.
+projectsRouter.use(requireAuth, requireAnyPermission("project:read", "pipeline:view"));
 
 projectsRouter.get("/", validate("query", projectListQuerySchema), async (req, res) => {
   const { customerId, today } = req.query as unknown as z.infer<

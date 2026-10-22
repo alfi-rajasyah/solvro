@@ -77,7 +77,9 @@ adminRouter.get("/users", async (_req, res) => {
 });
 
 const createUserSchema = z.object({
-  email: z.string().email(),
+  // Stored lower-case (docs/archive/plans/application-review-2026-10-22.md, F-13) so the password and
+  // Google sign-in paths resolve the same row whatever case was typed.
+  email: z.string().trim().toLowerCase().email(),
   // Length only here; the character rule and the case-insensitive clash
   // check run in the handler (lib/username.ts, pentest finding L1).
   username: z.string().min(1).max(USERNAME_MAX * 2),

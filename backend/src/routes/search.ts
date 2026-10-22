@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { requireAuth } from "../http/auth.js";
+import { requireAnyPermission, requireAuth } from "../http/auth.js";
 import { validate } from "../http/validate.js";
 import { customerVisibilityFilter, projectVisibilityFilter } from "../lib/visibility.js";
 
@@ -23,7 +23,8 @@ const GROUP_LIMIT = 8;
 
 export const searchRouter = Router();
 
-searchRouter.use(requireAuth);
+// Same read gate as routes/projects.ts (docs/archive/plans/application-review-2026-10-22.md, F-03).
+searchRouter.use(requireAuth, requireAnyPermission("project:read", "pipeline:view"));
 
 searchRouter.get("/", validate("query", searchQuerySchema), async (req, res) => {
   const { q } = req.query as unknown as z.infer<typeof searchQuerySchema>;
