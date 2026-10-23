@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-10-23 — CI e2e jobs get a 30-minute budget
+
+- `.github/workflows/ci.yml`: the `e2e` job's `timeout-minutes` rises from 20 to 30. The desktop project runs about 15 minutes of tests after about 3 minutes of stack build and browser setup, and one run spent 5 minutes installing Playwright's system packages, so the job was cancelled at test 176 of 190 with every test passing. The budget now covers a slow runner.
+
 ### Changed — 2026-10-23 — Test credentials no longer look like secrets
 
 - `backend/test/setupSh.test.ts` builds the throwaway `ADMIN_PASSWORD` it feeds the setup.sh shim at run time in a helper (`throwawayAdminSecret`), and `e2e/tests/auth.spec.ts` reuses the fixture admin password (`e2e/fixtures/seed.ts`) for its throwaway TAM instead of a second literal — secret scanning flagged both literals on the pull request; neither value ever reaches a real system.
