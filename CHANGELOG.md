@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Security — 2026-10-23 — Backend dependency patches and a pinned JWT algorithm
+
+- **Backend dependencies patched.** `express` 4.22.2 → 4.22.3, with in-range updates of `proxy-addr` 2.0.7 → 2.0.8 (GHSA-jqcg-44mw-7w3h, IP spoofing through an IPv4-mapped IPv6 trust subnet), `body-parser` 1.20.5 → 1.20.9, `qs` 6.15.3 → 6.16.1, `js-yaml` 4.1.1 → 4.3.2, `moment` 2.30.1 → 2.31.0 and `tsx` 4.21.0 → 4.23.15 (esbuild 0.27.7 → 0.28.2). `npm audit --omit=dev` in `backend/` now reports no vulnerabilities (was 1 critical, 1 high, 4 moderate, 1 low). Request parsing, trusted-proxy client addresses and error responses behave as before.
+- **Session tokens are HS256 only.** `backend/src/http/auth.ts` signs with `algorithm: "HS256"` and verifies with `algorithms: ["HS256"]`; a token signed with HS384 or HS512 under the same secret is refused with 401. Existing sessions keep working, since they were already HS256. Adds two cases to `backend/test/sessionRevocation.test.ts`.
+
 ### Changed — 2026-10-23 — CI e2e jobs get a 30-minute budget
 
 - `.github/workflows/ci.yml`: the `e2e` job's `timeout-minutes` rises from 20 to 30. The desktop project runs about 15 minutes of tests after about 3 minutes of stack build and browser setup, and one run spent 5 minutes installing Playwright's system packages, so the job was cancelled at test 176 of 190 with every test passing. The budget now covers a slow runner.
