@@ -69,9 +69,11 @@ function ShellLayout() {
           whatever's left rather than assuming a fixed TopBar height. */}
       <InstallBanner />
       {bootError && (
+        // Shifted past the fixed sidebar like <main>, or its first words sit
+        // underneath it (docs/archive/plans/application-review-2026-10-22.md, QA-02).
         <div
           role="alert"
-          className="flex flex-wrap items-center justify-between gap-2 border-b border-error/40 bg-error-container px-4 py-2 text-sm text-on-error-container"
+          className={`flex flex-wrap items-center justify-between gap-2 border-b border-error/40 bg-error-container px-4 py-2 text-sm text-on-error-container transition-[margin] duration-200 ease-out ${shift}`}
         >
           <span>Cannot reach the server to confirm your session: {bootError}</span>
           <button

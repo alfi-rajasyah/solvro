@@ -41,3 +41,51 @@ describe("requestSignal", () => {
     expect(DEFAULT_REQUEST_TIMEOUT_MS).toBe(30_000);
   });
 });
+
+// docs/archive/plans/application-review-2026-10-22.md, QA-04: no retry on a 4xx.
+import { ApiError, apiRequest, shouldRetryQuery } from "./api";
+import { afterEach, vi } from "vitest";
+
+describe("shouldRetryQuery", () => {
+  it("retries a network or 5xx failure once", () => {
+    expect(shouldRetryQuery(0, new ApiError(500, "boom", null))).toBe(true);
+    expect(shouldRetryQuery(1, new ApiError(500, "boom", null))).toBe(false);
+    expect(shouldRetryQuery(0, new ApiError(0, "offline", null))).toBe(true);
+    expect(shouldRetryQuery(0, new TypeError("Failed to fetch"))).toBe(true);
+  });
+
+  it("never retries a 4xx — a 404 or 403 is a definite answer", () => {
+    for (const status of [400, 401, 403, 404, 409, 429]) {
+      expect(shouldRetryQuery(0, new ApiError(status, "no", null)), String(status)).toBe(false);
+    }
+  });
+});
+
+// docs/archive/plans/application-review-2026-10-22.md, QA-01: a failed network
+// call surfaces as a readable ApiError, not a bare TypeError.
+describe("apiRequest network failures", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    vi.unstubAllGlobals();
+  });
+
+  it("maps fetch's TypeError to ApiError(0) with a readable message", async () => {
+    globalThis.fetch = (async () => { throw new TypeError("Failed to fetch"); }) as typeof fetch;
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem() {}, removeItem() {} });
+    await expect(apiRequest("/projects")).rejects.toMatchObject({
+      status: 0,
+      message: expect.stringMatching(/could not reach the server|you are offline/i),
+    });
+  });
+
+  it("says 'offline' when the browser reports it", async () => {
+    globalThis.fetch = (async () => { throw new TypeError("Failed to fetch"); }) as typeof fetch;
+    vi.stubGlobal("localStorage", { getItem: () => null, setItem() {}, removeItem() {} });
+    vi.stubGlobal("navigator", { onLine: false });
+    await expect(apiRequest("/projects")).rejects.toMatchObject({
+      status: 0,
+      message: expect.stringMatching(/you are offline/i),
+    });
+  });
+});

@@ -53,6 +53,9 @@ describe("F-04 — sign-in brute-force guard", () => {
       const res = await login(user.email, "wrong");
       expect(res.status, `attempt ${i + 1}`).toBe(401);
     }
+    // Exactly `limit` failures end the allowance: the next attempt is refused
+    // whatever it carries (docs/archive/plans/application-review-2026-10-22.md,
+    // QA-03 — before, a correct password on the 11th attempt still got in).
     const blocked = await login(user.email, "wrong");
     expect(blocked.status).toBe(429);
     expect(blocked.body.code).toBe("rate_limited");
@@ -62,6 +65,14 @@ describe("F-04 — sign-in brute-force guard", () => {
     // limiter is checked before the credentials are compared.
     const correct = await login(user.email, PASSWORD);
     expect(correct.status).toBe(429);
+  });
+
+  it("refuses the correct password on the attempt right after the limit is reached (QA-03)", async () => {
+    const user = await createPasswordUser();
+    for (let i = 0; i < LOGIN_FAILURE_LIMIT_PER_ACCOUNT; i++) await login(user.email, "wrong");
+    const correct = await login(user.email, PASSWORD);
+    expect(correct.status).toBe(429);
+    expect(Number(correct.headers["retry-after"])).toBeGreaterThan(0);
   });
 
   it("does not count successful sign-ins, and clears nothing it should not", async () => {

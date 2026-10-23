@@ -5,6 +5,7 @@ import { BrowserRouter } from "react-router-dom";
 import { registerSW } from "virtual:pwa-register";
 import { App } from "./App";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { shouldRetryQuery } from "./lib/api";
 import { AuthProvider } from "./lib/auth";
 import { ThemeProvider } from "./lib/theme";
 import "./index.css";
@@ -16,7 +17,13 @@ registerSW({ immediate: true });
 
 const queryClient = new QueryClient({
   defaultOptions: {
-    queries: { staleTime: 30_000, retry: 1, refetchOnWindowFocus: false },
+    queries: { staleTime: 30_000, retry: shouldRetryQuery, refetchOnWindowFocus: false },
+    // "always": a write attempted while the browser is offline fails at once
+    // with a visible error instead of being paused silently and sent later
+    // without the user knowing — the task drawer sat on "Saving…" for as
+    // long as the network was down
+    // (docs/archive/plans/application-review-2026-10-22.md, QA-01).
+    mutations: { networkMode: "always" },
   },
 });
 

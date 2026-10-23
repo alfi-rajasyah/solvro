@@ -117,9 +117,13 @@ export function createRateLimiter(opts: {
     };
   }
 
+  // `>=`, unlike `hit()`'s `>`: a caller that checks before acting is refused
+  // once the limit is REACHED, so "10 failures" means exactly ten attempts —
+  // the eleventh is refused whatever it carries
+  // (docs/archive/plans/application-review-2026-10-22.md, QA-03).
   function blockedFor(key: string, now = Date.now()): number {
     const entry = hits.get(key);
-    if (!entry || entry.resetAt <= now || entry.count <= opts.limit) return 0;
+    if (!entry || entry.resetAt <= now || entry.count < opts.limit) return 0;
     return Math.max(1, Math.ceil((entry.resetAt - now) / 1000));
   }
 

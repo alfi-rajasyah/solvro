@@ -42,6 +42,17 @@ interface RequestOptions {
 export const DEFAULT_REQUEST_TIMEOUT_MS = 30_000;
 
 /**
+ * React Query retry rule for queries: one retry, and never for a 4xx — a
+ * 404 or 403 is a definite answer, and retrying it only delayed the
+ * not-found state behind a skeleton
+ * (docs/archive/plans/application-review-2026-10-22.md, QA-04).
+ */
+export function shouldRetryQuery(failureCount: number, error: unknown): boolean {
+  if (error instanceof ApiError && error.status >= 400 && error.status < 500) return false;
+  return failureCount < 1;
+}
+
+/**
  * The signal `fetch` gets: the caller's own signal (React Query cancellation)
  * combined with the timeout. Exported for the unit test.
  */
@@ -115,6 +126,18 @@ export async function apiRequestWithHeaders<T>(
     // unchanged so React Query keeps treating it as a cancellation.
     if (err instanceof DOMException && err.name === "TimeoutError") {
       throw new ApiError(0, "The server did not answer in time. Check your connection and retry.", null);
+    }
+    // `fetch` rejects with a TypeError when the network itself fails (offline,
+    // DNS, connection refused). Give pages a readable message instead of
+    // "Failed to fetch" (docs/archive/plans/application-review-2026-10-22.md, QA-01).
+    if (err instanceof TypeError) {
+      throw new ApiError(
+        0,
+        typeof navigator !== "undefined" && navigator.onLine === false
+          ? "You are offline. Check your connection and try again."
+          : "Could not reach the server. Check your connection and try again.",
+        null,
+      );
     }
     throw err;
   }

@@ -19,6 +19,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 - `backend/test/setupSh.test.ts` builds the throwaway `ADMIN_PASSWORD` it feeds the setup.sh shim at run time in a helper (`throwawayAdminSecret`), and `e2e/tests/auth.spec.ts` reuses the fixture admin password (`e2e/fixtures/seed.ts`) for its throwaway TAM instead of a second literal — secret scanning flagged both literals on the pull request; neither value ever reaches a real system.
 
+### Fixed — 2026-10-23 — Findings from the end-to-end QA pass (QA-01 to QA-05)
+
+- **A write attempted while offline now fails at once with a message** instead of leaving the task drawer on a disabled "Saving…" button until the network returned and then sending the change by itself. React Query mutations use `networkMode: "always"` (`frontend/src/main.tsx`), and `frontend/src/lib/api.ts` turns `fetch`'s bare `TypeError` into an `ApiError` that reads "You are offline…" or "Could not reach the server…". The draft stays in the form; a retry after reconnecting succeeds. Adds `e2e/tests/offline-write.spec.ts` and unit cases in `frontend/src/lib/api.test.ts`. (QA-01)
+- **The "Cannot reach the server" banner is no longer hidden behind the sidebar** on desktop: it carries the same left margin as the main column (`frontend/src/components/layout/Shell.tsx`). (QA-02)
+- **The sign-in limit is now exactly ten failures.** The pre-check refused a caller only once the counter went *past* the limit, so a correct password on the eleventh attempt still signed in; `blockedFor` in `backend/src/http/rateLimit.ts` now blocks when the limit is reached. The guest-link limiter's request counting is unchanged. New case in `backend/test/authRateLimit.test.ts`. (QA-03)
+- **A missing or hidden project shows its not-found message without a retry delay**: queries no longer retry a 4xx (`shouldRetryQuery` in `frontend/src/lib/api.ts`, used by the QueryClient); network and 5xx failures still retry once. (QA-04)
+- The cache-clear case in `e2e/tests/auth.spec.ts` is desktop-only, like the other specs that rely on the desktop top-bar layout; it timed out in the mobile project. (QA-05)
+
 ### Fixed — 2026-10-22 — Drawer keyboard focus and silent Kanban failures
 
 - **The slide-in Drawer now traps focus like Modal does** (`frontend/src/components/Drawer.tsx`): it uses `useDialogFocus`, carries `aria-modal="true"`, moves focus inside on open, keeps Tab/Shift+Tab within the panel, and returns focus to the opener on close. Before, keyboard and screen-reader users tabbed straight through into the page behind the drawer, and focus was lost on close.
