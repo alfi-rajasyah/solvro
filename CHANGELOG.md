@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Security — 2026-10-23 — Browser security headers on every page
+
+- **The web app now sends browser security headers.** `frontend/security-headers.conf` adds `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy` to every page and static file served by nginx; `frontend/nginx.conf` includes it in each location (nginx ignores server-level headers in a location that sets its own) and `frontend/Dockerfile` copies it into the image. The policy allows same-origin code plus Google sign-in, Google Fonts and Google profile pictures; inline scripts, `eval`, plugins and framing are blocked. Guest-link pages keep `no-referrer`, `noindex` and `no-store`. API responses are unchanged; they already carry HSTS from the backend (`docs/CONFIGURATION.md` 2.6).
+- Adds `e2e/tests/security-headers.spec.ts`: the headers on pages, the service worker, the manifest, a bundle and the guest page; a single CSP on API responses; and no CSP violation in the page while signing in and opening the main pages.
+
 ### Changed — 2026-10-23 — CI e2e jobs get a 45-minute budget
 
 - `.github/workflows/ci.yml`: the `e2e` job's `timeout-minutes` rises from 30 to 45. A run that changed `backend/package-lock.json` rebuilt the backend image (7 minutes) and spent another 7 minutes installing Playwright's system packages, so the desktop job was cancelled at test 191 of 193 with no test failing. 45 minutes covers the slowest setup seen plus the 15-minute desktop suite.
