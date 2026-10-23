@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma, Priority, TaskStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
+import { requireAnyPermission, requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { ensureTaskVisible, projectVisibilityFilter } from "../lib/visibility.js";
@@ -209,7 +209,9 @@ function buildVisibilityWhere(user: JwtPayload): Prisma.TaskWhereInput {
 
 export const tasksRouter = Router();
 
-tasksRouter.use(requireAuth);
+// Same read gate as routes/projects.ts (docs/archive/plans/application-review-2026-10-22.md, F-03): a zero-permission
+// member or assignee must not list tasks, read comments or post one.
+tasksRouter.use(requireAuth, requireAnyPermission("project:read", "pipeline:view"));
 
 // Cross-project list with filters
 tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) => {

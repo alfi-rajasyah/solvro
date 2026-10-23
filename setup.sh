@@ -352,6 +352,29 @@ if [[ -n "$TRUST_PROXY" ]]; then
   }
 fi
 
+# Data-loss guard. "Fresh install" is inferred from a missing ~/solvro/.env,
+# but the database volume is global to the Docker host: a run as a different
+# user, after a home-directory move, or after .env was lost would otherwise
+# reach the wipe below and delete a live database with no question asked.
+# Refuse while the volume exists unless the operator opts in explicitly.
+# Checked BEFORE .env is written: aborting after it would make the next run
+# take the update branch with a new POSTGRES_PASSWORD that no longer matches
+# the existing volume.
+if docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
+  if [[ "${FORCE_WIPE:-}" != "1" ]]; then
+    echo "ERROR: the Docker volume '$VOLUME_NAME' already exists but $ENV_FILE was not found."
+    echo "       This looks like an existing Solvro install (different user, moved home directory,"
+    echo "       or a lost .env). A fresh install would DELETE that database."
+    echo
+    echo "  To keep it:    restore ~/solvro/.env (POSTGRES_PASSWORD, JWT_SECRET, SECRETS_KEY) and re-run."
+    echo "  Back it up:    docker run --rm -v $VOLUME_NAME:/data -v \$PWD:/backup alpine \\"
+    echo "                   tar czf /backup/pg-\$(date +%F).tgz -C / data"
+    echo "  Start over:    FORCE_WIPE=1 bash setup.sh   (deletes the volume and all data)"
+    exit 1
+  fi
+  echo "FORCE_WIPE=1 set: the existing volume '$VOLUME_NAME' will be deleted."
+fi
+
 # hex (not base64): base64's `/` `+` `=` are unsafe in the DATABASE_URL
 # userinfo and truncate it (P1013 "invalid port number"). 24 bytes = 192 bits.
 POSTGRES_PASSWORD=$(openssl rand -hex 24)

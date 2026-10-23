@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
+import { useDialogFocus } from "@/hooks/useDialogFocus";
 
 interface DrawerProps {
   open: boolean;
@@ -43,6 +44,11 @@ export function Drawer({
 }: DrawerProps) {
   const [shown, setShown] = useState(false);
   const closedFiredRef = useRef(false);
+  // Same focus contract as Modal (docs/archive/plans/application-review-2026-10-22.md, F-17): focus
+  // moves into the panel on open, Tab/Shift+Tab stay inside it, and focus
+  // returns to the opener on close. Without it keyboard and screen-reader
+  // users tabbed straight through into the board behind the drawer.
+  const { ref: dialogRef, onKeyDown: onDialogKeyDown } = useDialogFocus(open);
 
   // Enter: off-screen on mount, slid in on the next frame so the
   // transform transition actually animates.
@@ -83,10 +89,14 @@ export function Drawer({
       onMouseDown={onClose}
     >
       <div
+        ref={dialogRef}
+        tabIndex={-1}
+        onKeyDown={onDialogKeyDown}
         role="dialog"
+        aria-modal="true"
         aria-label={title}
         className={[
-          "flex h-full w-full flex-col border-l border-outline-variant bg-surface-container-lowest shadow-overlay transition-transform duration-200 ease-out",
+          "focus:outline-hidden flex h-full w-full flex-col border-l border-outline-variant bg-surface-container-lowest shadow-overlay transition-transform duration-200 ease-out",
           widthClass,
           shown && !closing ? "translate-x-0" : "translate-x-full",
         ].join(" ")}

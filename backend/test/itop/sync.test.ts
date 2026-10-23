@@ -1122,3 +1122,36 @@ describe("parseItopInt", () => {
     expect(parseItopInt(Number.NaN)).toBeNull();
   });
 });
+
+// docs/archive/plans/application-review-2026-10-22.md, F-11: a ticket pass that succeeded while the
+// time-entry pass failed was recorded as a successful run — Admin > iTop
+// showed green and Utilization served a stale snapshot indefinitely.
+describe("syncTickets — a failed time-entry pass is a failed run", () => {
+  it("records lastSyncOk=false with the time-entry error, keeps the ticket rows, and still advances the ticket watermark", async () => {
+    const state = seedFakeItop();
+    state.disabledClasses.add("TimeSpent"); // iTop refuses the class (e.g. Time Tracking extension missing)
+    const { baseUrl } = await startFake(state);
+    await configureItop(baseUrl, FAKE_ITOP_TOKENS.app);
+    await createMappedCustomer(1, "Northwind Freight Sdn Bhd");
+    await createMappedCustomer(2, "PT Sinar Logistik");
+    // The time-entry pass only queries iTop when at least one Solvro user is
+    // mapped to an iTop user. The ticket pass re-runs the email match first,
+    // so the user needs a seeded iTop person's email (Rina, itop user 1).
+    const user = await createUserWithRole("TAM");
+    await prisma.user.update({ where: { id: user.userId }, data: { email: "rina.s@example.co.id" } });
+
+    const summary = await syncTickets({ full: true });
+    expect(summary.ran).toBe(true);
+    expect(summary.upserted).toBeGreaterThan(0);
+    expect(summary.timeEntriesError).toBeTruthy();
+
+    const config = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(config.lastSyncOk).toBe(false);
+    expect(config.lastSyncError).toMatch(/^Time entries: /);
+    // The ticket pass completed, so its watermark moves: a persistent
+    // time-entry failure must not turn every later tick into a full pull.
+    expect(config.lastSyncAt).not.toBeNull();
+    expect(config.lastFullSyncAt).not.toBeNull();
+    expect(await prisma.itopTicket.count()).toBe(summary.upserted);
+  });
+});

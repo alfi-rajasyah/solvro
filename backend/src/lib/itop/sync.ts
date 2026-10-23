@@ -727,16 +727,20 @@ async function writeConfigResult(
   ok: boolean,
   message: string | null,
   setFullSyncAt: boolean,
+  // Whether the TICKET pass completed — the only thing the incremental
+  // watermark tracks. Defaults to `ok`; a run whose tickets succeeded but
+  // whose time-entry pass failed passes `true` here with `ok = false`.
+  advanceWatermark: boolean = ok,
 ): Promise<void> {
   await prisma.itopConfig.update({
     where: { id: "default" },
     data: {
-      // Only a successful run advances the incremental watermark. A failed
-      // run must leave `lastSyncAt` where it was — otherwise a ticket
+      // Only a completed ticket pass advances the incremental watermark. A
+      // failed one must leave `lastSyncAt` where it was — otherwise a ticket
       // updated in iTop during an outage falls before the *next* run's
       // `last_update > lastSyncAt - 60s` cutoff and is silently skipped
       // until the next 24h full pull.
-      ...(ok ? { lastSyncAt: startedAt } : {}),
+      ...(advanceWatermark ? { lastSyncAt: startedAt } : {}),
       lastSyncOk: ok,
       lastSyncError: message ? message.slice(0, 500) : null,
       ...(setFullSyncAt ? { lastFullSyncAt: new Date() } : {}),
@@ -883,8 +887,9 @@ export async function syncTickets(opts: { full?: boolean } = {}): Promise<SyncSu
         // Time entries after tickets, inside the same advisory-lock-guarded
         // call — see syncTimeEntries's own doc comment for why this is the
         // chosen wiring over a separate syncAll(). A time-entry-only failure
-        // (e.g. TimeSpent missing on this install) is logged but doesn't
-        // fail the ticket sync that already succeeded above.
+        // (e.g. TimeSpent missing on this install) keeps the ticket rows
+        // written above and the watermark they earned, but the run is
+        // recorded as failed so the admin sees it (below).
         const timeEntryResult = await syncTimeEntries({ full });
         timeEntriesUpserted = timeEntryResult.upserted;
         timeEntriesRemoved = timeEntryResult.removed;
@@ -895,18 +900,26 @@ export async function syncTickets(opts: { full?: boolean } = {}): Promise<SyncSu
         }
 
         const totalSkipped = ticketsSkipped + timeEntriesSkipped;
-        // The run still succeeded (lastSyncOk stays true) — a skipped row is
-        // logged individually at `warn` already — but an admin watching only
-        // ItopConfig would otherwise have no visibility into it at all.
-        // Folded into `lastSyncError` as a non-fatal note rather than a
-        // schema change (no dedicated column): NOT an error, just the only
-        // admin-visible surface this integration has for "some rows didn't
-        // make it, check the server log".
-        const nonFatalNote =
+        // A skipped row is logged individually at `warn` already — but an
+        // admin watching only ItopConfig would otherwise have no visibility
+        // into it at all. Folded into `lastSyncError` as a non-fatal note
+        // rather than a schema change (no dedicated column).
+        const skippedNote =
           totalSkipped > 0
             ? `Skipped ${totalSkipped} row${totalSkipped === 1 ? "" : "s"} that could not be read (see server log)`
             : null;
-        await writeConfigResult(startedAt, true, nonFatalNote, full);
+        // A failed time-entry pass is reported as a FAILED run
+        // (docs/archive/plans/application-review-2026-10-22.md, F-11): before,
+        // `lastSyncOk` stayed true and Admin > iTop showed green while
+        // Utilization served a stale snapshot with a fresh timestamp. The
+        // ticket pass above did complete, so the incremental watermark still
+        // advances (`advanceWatermark`); the time-entry pass reads a fixed
+        // 8-week window on every tick and needs no watermark hold.
+        const ok = timeEntriesError === undefined;
+        const message = ok
+          ? skippedNote
+          : [`Time entries: ${timeEntriesError}`, skippedNote].filter(Boolean).join(" · ");
+        await writeConfigResult(startedAt, ok, message, full, true);
         logger.info(
           {
             full,

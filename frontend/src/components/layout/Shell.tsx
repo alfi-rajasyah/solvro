@@ -1,13 +1,19 @@
 import { useEffect, useRef, useState } from "react";
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
+import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
 import { InstallBanner } from "@/components/InstallBanner";
+import { useAuth } from "@/lib/auth";
 import { Sidebar } from "./Sidebar";
 import { SidebarProvider, useSidebar } from "./SidebarContext";
 import { TopBar } from "./TopBar";
 
 function ShellLayout() {
   const { open } = useSidebar();
+  const { bootError, retryBoot } = useAuth();
+  // Keyed on the path so a page-level error panel clears as soon as the user
+  // navigates elsewhere instead of sticking to every later page.
+  const { pathname } = useLocation();
   const [paletteOpen, setPaletteOpen] = useState(false);
   // Mirror of `paletteOpen` for the listener below, which stays mounted once
   // ([] deps) instead of re-attaching on every open/close — a passive
@@ -62,12 +68,32 @@ function ShellLayout() {
           takes its own row at the very top; main below is flex-1 so it fills
           whatever's left rather than assuming a fixed TopBar height. */}
       <InstallBanner />
+      {bootError && (
+        // Shifted past the fixed sidebar like <main>, or its first words sit
+        // underneath it (docs/archive/plans/application-review-2026-10-22.md, QA-02).
+        <div
+          role="alert"
+          className={`flex flex-wrap items-center justify-between gap-2 border-b border-error/40 bg-error-container px-4 py-2 text-sm text-on-error-container transition-[margin] duration-200 ease-out ${shift}`}
+        >
+          <span>Cannot reach the server to confirm your session: {bootError}</span>
+          <button
+            type="button"
+            className="rounded-sm border border-current px-2 py-0.5 text-sm font-semibold focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            onClick={retryBoot}
+          >
+            Retry
+          </button>
+        </div>
+      )}
       <Sidebar />
       <TopBar onOpenSearch={() => setPaletteOpen(true)} />
       <main
         className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background p-4 transition-[margin] duration-200 ease-out md:p-6 ${shift}`}
       >
-        <Outlet />
+        {/* A page-level render error keeps the sidebar and top bar usable. */}
+        <AppErrorBoundary scope="page" key={pathname}>
+          <Outlet />
+        </AppErrorBoundary>
       </main>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />
     </div>

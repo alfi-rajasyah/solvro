@@ -1130,6 +1130,12 @@ opportunitiesRouter.post(
         include: { pic: { select: PIC_SELECT } },
       });
       if (before.picId === pic.id) return before;
+      // Re-run the permission check on the LOCKED row (docs/archive/plans/application-review-2026-10-22.md, F-09,
+      // 2026-10-22): the check above saw an unassigned deal, but another
+      // `edit_own` holder may have claimed it between that read and this
+      // lock — and `edit_own` never allows taking a deal from a different
+      // PIC. Second claimant gets the same 403 a late claimant always got.
+      assertCanAssignOpportunity(req.user!, before);
 
       // lastActivityAt bumps here too (§3.7) — only reached for a real PIC
       // change (the short-circuits above and the check just made rule out

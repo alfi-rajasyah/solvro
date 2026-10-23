@@ -32,7 +32,8 @@ async function main() {
   const passwordHash = await bcrypt.hash(password, 10);
 
   const user = await prisma.user.upsert({
-    where: { email },
+    // Emails are stored lower-case (migration `lowercase_user_emails`).
+    where: { email: email.trim().toLowerCase() },
     update: {
       username,
       passwordHash,
@@ -41,7 +42,7 @@ async function main() {
     },
     create: {
       username,
-      email,
+      email: email.trim().toLowerCase(),
       passwordHash,
       roleId: adminRole.id,
     },

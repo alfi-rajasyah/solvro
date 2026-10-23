@@ -863,7 +863,7 @@ export const queryKeys = {
   itopContacts: (customerId: number) => ["itop", "customers", customerId, "contacts"] as const,
 };
 
-export function useOverview() {
+export function useOverview(enabled = true) {
   // The portfolio block's isOverdue/daysOverdue are badged against the
   // CALLER's local calendar day (backend/src/lib/dateBoundary.ts) — sent on
   // every request since the block is always present in the response. `today`
@@ -879,6 +879,9 @@ export function useOverview() {
     queryKey: [...queryKeys.overview, today],
     queryFn: ({ signal }) =>
       apiRequest<OverviewResponse>(`/overview?today=${today}`, { signal }),
+    // `GET /overview` needs project:read or pipeline:view; a caller with
+    // neither (a PENDING account) renders an explanation instead of a 403.
+    enabled,
     // The day-boundary key change (above) shouldn't flash a loading
     // skeleton on every render after midnight — keep showing the previous
     // day's data while the new key's request resolves in the background.
@@ -5223,6 +5226,10 @@ export function useHandoffOpportunity(id: string) {
       apiRequest<HandoffOpportunityResult>(`/opportunities/${id}/handoff`, {
         method: "POST",
         body: input,
+        // A long-running commit: a client-side timeout would show an error
+        // while the server still completes the write, and a retry would
+        // duplicate it. No timeout here (api.ts applies 30 s by default).
+        timeoutMs: 0,
       }),
     onSuccess: () => {
       // `pipelineKeys.root` (not just `list`/`detail(id)`): the deal's
@@ -5305,6 +5312,7 @@ export function useImportOpportunities() {
     mutationFn: (rows: ImportOpportunityRow[]) =>
       apiRequest<ImportOpportunitiesResult>("/opportunities/import", {
         method: "POST",
+        timeoutMs: 0, // bulk write — same reasoning as the handoff mutation
         body: { rows },
       }),
     // list (new opportunities land on the board) + imports (the admin

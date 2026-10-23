@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { prisma } from "../prisma.js";
-import { permissionsOf, requireAnyPermission, requireAuth } from "../http/auth.js";
+import { hasPermission, permissionsOf, requireAnyPermission, requireAuth } from "../http/auth.js";
 
 export const usersRouter = Router();
 
@@ -11,7 +11,7 @@ export const usersRouter = Router();
 // `pipelineAccess` replaces the role's full permission list.
 usersRouter.use(requireAuth, requireAnyPermission("project:read", "pipeline:view"));
 
-usersRouter.get("/", async (_req, res) => {
+usersRouter.get("/", async (req, res) => {
   const users = await prisma.user.findMany({
     select: {
       id: true,
@@ -23,8 +23,16 @@ usersRouter.get("/", async (_req, res) => {
     },
     orderBy: { username: "asc" },
   });
+  // An account with no permissions (PENDING, awaiting a role) is kept out of
+  // the pickers: it cannot be a member, assignee, PIC or mention target
+  // (docs/archive/plans/application-review-2026-10-22.md, F-03). Admins still see everyone here; Admin > Users is
+  // the place such accounts are promoted.
+  const isAdmin = hasPermission(req.user!, "*");
+  const listed = isAdmin
+    ? users
+    : users.filter((u) => permissionsOf(u.role.permissions).length > 0);
   res.json(
-    users.map((u) => {
+    listed.map((u) => {
       const permissions = permissionsOf(u.role.permissions);
       return {
         id: u.id,

@@ -1,4 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
+import { permissionsOf } from "../http/auth.js";
+import { HttpError } from "../http/errors.js";
 
 type Tx = Prisma.TransactionClient | PrismaClient;
 
@@ -13,7 +15,11 @@ type Tx = Prisma.TransactionClient | PrismaClient;
  *
  * An unknown or inactive assignee is a no-op here (the members API refuses
  * inactive users too), so the task write itself keeps reporting an unknown id
- * exactly as before. Callers invoke this only when the assignee actually
+ * exactly as before. An assignee whose role carries no permissions at all
+ * (PENDING) is refused with 400 `user_has_no_access` — membership is a
+ * visibility grant and must not reach an account the product defines as
+ * having no access (docs/archive/plans/application-review-2026-10-22.md, F-03; the members API applies
+ * the same rule). Callers invoke this only when the assignee actually
  * changes, so re-saving a task never re-adds a member who was removed.
  *
  * Returns the added member's username when a NEW membership row was created
@@ -38,9 +44,16 @@ export async function ensureAssigneeIsMember(
   if (!project || project.tamId === assigneeId || project.saId === assigneeId) return null;
   const assignee = await tx.user.findUnique({
     where: { id: assigneeId },
-    select: { active: true, username: true },
+    select: { active: true, username: true, role: { select: { permissions: true } } },
   });
   if (!assignee?.active) return null;
+  if (permissionsOf(assignee.role.permissions).length === 0) {
+    throw new HttpError(
+      400,
+      "user_has_no_access",
+      "This account has no role permissions yet. Assign a role in Admin > Users first.",
+    );
+  }
   const { count } = await tx.projectMember.createMany({
     data: [{ projectId, userId: assigneeId, addedById }],
     skipDuplicates: true,
