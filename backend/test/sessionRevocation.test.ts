@@ -175,6 +175,23 @@ describe("session revocation", () => {
     expect(res.body.code).toBe("token_revoked");
   });
 
+  // docs/archive/plans/application-review-2026-10-22.md, B-04: tokens are
+  // HS256 only. Without a pinned algorithm list, jsonwebtoken also accepts
+  // HS384 and HS512 under the same secret.
+  it.each(["HS384", "HS512"] as const)("a token signed with %s is refused", async (algorithm) => {
+    const u = await createUserWithRole("TAM");
+    const claims = { sub: u.userId, ver: 0 };
+    const other = jwt.sign(claims, env.JWT_SECRET, { algorithm, expiresIn: "1h" });
+    const res = await me(other);
+    expect(res.status).toBe(401);
+    expect(res.body.code).toBe("unauthenticated");
+
+    // The same claims signed with HS256 still work, so the refusal above is
+    // about the algorithm alone.
+    const hs256 = jwt.sign(claims, env.JWT_SECRET, { algorithm: "HS256", expiresIn: "1h" });
+    expect((await me(hs256)).status).toBe(200);
+  });
+
   it("a token with a stale version is refused even though the signature is valid", async () => {
     const u = await createUserWithRole("TAM");
     await prisma.user.update({ where: { id: u.userId }, data: { tokenVersion: { increment: 1 } } });

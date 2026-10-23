@@ -159,14 +159,15 @@ jobs:
   # `npm ci` layers inside the Dockerfiles are rebuilt only when a lock file
   # changes — on every other run the build is seconds, not minutes, and a
   # slow registry cannot stall the gate.
-  # The desktop project alone runs ~15 min of tests on top of ~3 min of
-  # stack build and browser setup; a slow apt step for Playwright's system
-  # dependencies has taken 5 min on its own. 20 minutes left no headroom
-  # and the job died at test 176 of 190 with every test green so far.
+  # The desktop project alone runs ~15 min of tests. Setup varies from ~3 to
+  # ~15 min: a lock-file change rebuilds the backend image's `npm ci` layers
+  # (7 min once), and the apt step for Playwright's system dependencies has
+  # taken from 15 s to 7 min. 20 and then 30 minutes both cancelled a run
+  # that was passing (at test 176 of 190, then at 191 of 193).
   e2e:
     name: e2e (${{ matrix.project }})
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     strategy:
       fail-fast: false
       matrix:
