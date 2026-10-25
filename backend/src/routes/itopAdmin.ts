@@ -222,7 +222,7 @@ const updateItopSettingsSchema = z.object({
   // Zod .refine() would produce.
   timezone: z.string().min(1).optional(),
   refreshMinutes: z.number().int().min(1).max(60).optional(),
-  readClasses: z.array(z.enum(READ_CLASSES)).min(1).optional(),
+  readClasses: z.array(z.enum(READ_CLASSES)).min(1).max(READ_CLASSES.length).optional(),
   capacityHoursPerWeek: z.number().int().min(1).max(80).optional(),
   actionsEnabled: z.boolean().optional(),
 });

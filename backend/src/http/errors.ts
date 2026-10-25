@@ -77,6 +77,9 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
       // a body that points at no row). Routes still pre-check where they can
       // give a field-specific code
       // (docs/archive/plans/application-review-2026-10-22.md, F-20, F-23).
+      // Logged at warn: a violation a route did not pre-check may be a bug on
+      // this side, not a bad request. Only Prisma's meta reaches the log.
+      logger.warn({ meta: err.meta }, "foreign-key violation");
       res.status(400).json({
         error: "Referenced record does not exist",
         code: "invalid_reference",

@@ -239,7 +239,13 @@ export function CustomerDetail() {
             onEdit={() => setEditOpen(true)}
           />
         )}
-        {tab === "services" && <ServicesTab customer={customer} canMutate={canMutate} />}
+        {tab === "services" && (
+          <ServicesTab
+            customer={customer}
+            canMutate={canMutate}
+            canCreateService={hasPermission(user, "*")}
+          />
+        )}
         {tab === "links" && <LinksTab customerId={customer.id} canEdit={canMutate} />}
         {tab === "tickets" && ticketsAvailable && (
           <TicketsTab
@@ -283,9 +289,11 @@ export function CustomerDetail() {
 function ServicesTab({
   customer,
   canMutate,
+  canCreateService,
 }: {
   customer: CustomerDetailType;
   canMutate: boolean;
+  canCreateService: boolean;
 }) {
   const update = useUpdateCustomerServices(customer.id);
 
@@ -294,6 +302,7 @@ function ServicesTab({
       assignments={customer.services}
       onSave={(assignments) => update.mutateAsync(assignments)}
       canMutate={canMutate}
+      canCreateService={canCreateService}
       saving={update.isPending}
       title="Service Catalogue Mapping"
       description={

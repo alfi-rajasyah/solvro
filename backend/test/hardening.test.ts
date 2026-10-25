@@ -1,14 +1,17 @@
 // Regression tests for the backend hardening findings in
 // docs/archive/plans/application-review-2026-10-22.md (F-20, F-21, F-22,
-// F-23) plus malformed-JSON handling (N-05).
+// F-23, F-31, F-32) plus malformed-JSON handling (N-05).
 import "./env.js";
 import { beforeAll, describe, expect, it, vi } from "vitest";
+import { readdirSync, readFileSync } from "node:fs";
 import request from "supertest";
 import { Prisma } from "@prisma/client";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/prisma.js";
 import { errorHandler } from "../src/http/errors.js";
 import { normalizeUsername } from "../src/lib/username.js";
+import { KNOWN_PERMISSIONS } from "../src/lib/permissions.js";
+import { ROLE_PERMISSIONS as SEED_ROLE_PERMISSIONS } from "../prisma/seed.js";
 import {
   baseUsernameFromEmail,
   decideCreateAdmin,
@@ -354,5 +357,162 @@ describe("F-21 — create-admin decisions", () => {
     for (const s of samples) {
       expect(scriptNormalizeUsername(s)).toBe(normalizeUsername(s));
     }
+  });
+});
+
+describe("F-31 — input bounds", () => {
+  it("rejects a dealValue beyond Number.MAX_SAFE_INTEGER on create and update with 400 validation_error", async () => {
+    const admin = await createAdminAndToken();
+    const create = await request(app)
+      .post("/opportunities")
+      .set(auth(admin.token))
+      .send({ title: uniq("Deal"), customerName: "Acme", dealValue: 1e30 });
+    expect(create.status).toBe(400);
+    expect(create.body.code).toBe("validation_error");
+
+    const ok = await request(app)
+      .post("/opportunities")
+      .set(auth(admin.token))
+      .send({ title: uniq("Deal"), customerName: "Acme", dealValue: Number.MAX_SAFE_INTEGER });
+    expect(ok.status).toBe(201);
+
+    const update = await request(app)
+      .patch(`/opportunities/${ok.body.id}`)
+      .set(auth(admin.token))
+      .send({ dealValue: 1e30 });
+    expect(update.status).toBe(400);
+    expect(update.body.code).toBe("validation_error");
+  });
+
+  it("rejects more than 50 labelIds on task create with 400", async () => {
+    const tam = await createUserWithRole("TAM");
+    const project = await prisma.project.create({
+      data: { name: uniq("Project"), tamId: tam.userId, status: "ACTIVE" },
+    });
+    const res = await request(app)
+      .post(`/projects/${project.id}/tasks`)
+      .set(auth(tam.token))
+      .send({ title: "Too many labels", labelIds: Array.from({ length: 51 }, (_, i) => i + 1) });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("validation_error");
+  });
+
+  it("rejects more than 50 tools on one service assignment for projects and customers", async () => {
+    const admin = await createAdminAndToken();
+    const customer = await createCustomer(admin.userId);
+    const project = await prisma.project.create({
+      data: { name: uniq("Project"), tamId: admin.userId, status: "ACTIVE" },
+    });
+    const service = await prisma.service.create({ data: { name: uniq("Service") } });
+    const tools = Array.from({ length: 51 }, (_, i) => `Tool ${i}`);
+
+    for (const path of [`/projects/${project.id}/services`, `/customers/${customer.id}/services`]) {
+      const tooMany = await request(app)
+        .put(path)
+        .set(auth(admin.token))
+        .send({ assignments: [{ serviceId: service.id, tools }] });
+      expect(tooMany.status, path).toBe(400);
+      expect(tooMany.body.code).toBe("validation_error");
+
+      const ok = await request(app)
+        .put(path)
+        .set(auth(admin.token))
+        .send({ assignments: [{ serviceId: service.id, tools: tools.slice(0, 50) }] });
+      expect(ok.status, path).toBe(200);
+    }
+  });
+
+  it("pins the 13 known permission values (the frontend's auth.test.ts pins the same list)", () => {
+    expect([...KNOWN_PERMISSIONS]).toEqual([
+      "*",
+      "project:view-all",
+      "project:read",
+      "project:write",
+      "task:read",
+      "task:write",
+      "pipeline:view",
+      "pipeline:create",
+      "pipeline:edit_own",
+      "pipeline:edit_all",
+      "pipeline:delete_own",
+      "pipeline:delete_all",
+      "report:executive",
+    ]);
+  });
+
+  it("POST /admin/roles rejects an unknown permission string and names it", async () => {
+    const admin = await createAdminAndToken();
+    const res = await request(app)
+      .post("/admin/roles")
+      .set(auth(admin.token))
+      .send({ roleName: `TYPO_${Date.now()}`, permissions: ["project:wrte"] });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("validation_error");
+    expect(JSON.stringify(res.body.details)).toContain("project:wrte");
+  });
+
+  it("PATCH /admin/roles/:id rejects an unknown permission, and accepts every known one", async () => {
+    const admin = await createAdminAndToken();
+    const roleName = `CUSTOM_${Date.now()}`;
+    const created = await request(app)
+      .post("/admin/roles")
+      .set(auth(admin.token))
+      .send({ roleName, permissions: ["project:read"] });
+    expect(created.status).toBe(201);
+    const roleId = created.body.id as number;
+
+    const bad = await request(app)
+      .patch(`/admin/roles/${roleId}`)
+      .set(auth(admin.token))
+      .send({ permissions: ["project:read", "admin"] });
+    expect(bad.status).toBe(400);
+
+    const good = await request(app)
+      .patch(`/admin/roles/${roleId}`)
+      .set(auth(admin.token))
+      .send({ permissions: [...KNOWN_PERMISSIONS] });
+    expect(good.status).toBe(200);
+  });
+
+  it("the permission vocabulary covers every literal the backend checks and every seeded grant", () => {
+    const known = new Set<string>(KNOWN_PERMISSIONS);
+    const srcDir = new URL("../src/", import.meta.url);
+    const used = new Set<string>();
+    for (const entry of readdirSync(srcDir, { recursive: true }) as string[]) {
+      if (!entry.endsWith(".ts")) continue;
+      const text = readFileSync(new URL(entry, srcDir), "utf8");
+      for (const m of text.matchAll(/"((?:project|task|pipeline|report)):([a-z_-]+)"/g)) {
+        used.add(`${m[1]}:${m[2]}`);
+      }
+    }
+    // lib/pipelineAccess.ts builds `pipeline:${action}_all|_own` from a template.
+    for (const action of ["edit", "delete"]) {
+      used.add(`pipeline:${action}_all`);
+      used.add(`pipeline:${action}_own`);
+    }
+    expect(used.size).toBeGreaterThan(5);
+    for (const permission of used) expect(known.has(permission), permission).toBe(true);
+
+    for (const [role, permissions] of Object.entries(SEED_ROLE_PERMISSIONS)) {
+      for (const permission of permissions) expect(known.has(permission), `${role}: ${permission}`).toBe(true);
+    }
+  });
+});
+
+describe("F-32 — foreign-key indexes", () => {
+  it("indexes the three actor / creator / adder columns", async () => {
+    const rows = await prisma.$queryRaw<{ indexname: string }[]>`
+      SELECT indexname FROM pg_indexes
+      WHERE schemaname = current_schema()
+        AND indexname IN (
+          'activity_events_actor_id_idx',
+          'share_links_created_by_id_idx',
+          'project_members_added_by_id_idx'
+        )`;
+    expect(rows.map((r) => r.indexname).sort()).toEqual([
+      "activity_events_actor_id_idx",
+      "project_members_added_by_id_idx",
+      "share_links_created_by_id_idx",
+    ]);
   });
 });

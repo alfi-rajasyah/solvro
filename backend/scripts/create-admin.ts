@@ -77,7 +77,9 @@ async function main() {
   // reset-admin / promote: the row exists. Its username is left as it is.
   const user = await prisma.user.update({
     where: { email: normalizedEmail },
-    data: { passwordHash, roleId: adminRole.id, active: true },
+    // tokenVersion bump: a password reset must end sessions issued before it,
+    // the same as the Admin reset route (http/auth.ts compares the claim).
+    data: { passwordHash, roleId: adminRole.id, active: true, tokenVersion: { increment: 1 } },
   });
   console.log(
     action === "promote"

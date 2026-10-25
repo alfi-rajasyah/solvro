@@ -121,6 +121,27 @@ describe("activities", () => {
     expect(res.status).toBe(201);
   });
 
+  it("returns at most 500 notes for a deal, newest first", async () => {
+    const viewer = await createViewer();
+    const opportunity = await createOpportunity();
+    const base = Date.now() - 10_000_000;
+    await prisma.opportunityActivity.createMany({
+      data: Array.from({ length: 501 }, (_, i) => ({
+        opportunityId: opportunity.id,
+        note: `note ${i}`,
+        createdAt: new Date(base + i * 1000),
+      })),
+    });
+
+    const list = await request(app)
+      .get(`/opportunities/${opportunity.id}/activities`)
+      .set("Authorization", `Bearer ${viewer.token}`);
+    expect(list.status).toBe(200);
+    expect(list.body).toHaveLength(500);
+    expect(list.body[0].note).toBe("note 500");
+    expect(list.body[499].note).toBe("note 1"); // the oldest note is the one left out
+  });
+
   it("404s GET activities for an unknown opportunity", async () => {
     const viewer = await createViewer();
     const res = await request(app)

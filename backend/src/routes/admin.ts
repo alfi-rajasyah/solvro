@@ -9,6 +9,8 @@ import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { bustAuthConfigCache } from "../authConfig.js";
 import { normalizeUsername, USERNAME_MAX } from "../lib/username.js";
+import { permissionsSchema } from "../lib/permissions.js";
+import { diffProjectSeats, projectSeatsSelect, recordProjectUpdate } from "../lib/projectSeats.js";
 
 export const adminRouter = Router();
 
@@ -235,11 +237,11 @@ adminRouter.delete(
       throw new HttpError(400, "self_delete", "Admins cannot delete themselves");
     }
 
-    // The blocker count and the delete run in one transaction so the friendly
-    // 400 below is decided on the same snapshot the delete sees. A row
-    // created in the gap between them can still trip a RESTRICT foreign key
-    // (READ COMMITTED), so a P2003 from the delete is converted to the same
-    // 400 rather than surfacing as a 500
+    // The blocker count and the delete run in one transaction. Under READ
+    // COMMITTED each statement still takes its own snapshot, so a row created
+    // in the gap between them can trip a RESTRICT foreign key on the delete;
+    // that P2003 is converted to the same friendly 400 rather than surfacing
+    // as a 500
     // (docs/archive/plans/application-review-2026-10-22.md, F-20).
     let username = "this user";
     await prisma.$transaction(async (tx) => {
@@ -356,7 +358,7 @@ const createRoleSchema = z.object({
     .min(1)
     .max(50)
     .regex(/^[A-Z0-9_]+$/, "Role name must be uppercase letters, digits, or underscores"),
-  permissions: z.array(z.string().min(1).max(100)).max(50).default([]),
+  permissions: permissionsSchema.default([]),
 });
 
 adminRouter.post(
@@ -392,7 +394,7 @@ adminRouter.post(
 );
 
 const updateRolePermissionsSchema = z.object({
-  permissions: z.array(z.string().min(1).max(100)).max(50),
+  permissions: permissionsSchema,
   // Optional rename. Same constraints as create; protected roles (PENDING)
   // can't be renamed and a reserved name can't be taken.
   roleName: z
@@ -614,15 +616,33 @@ adminRouter.put(
     // No role-name requirement: any active user can be a project's TAM
     // (admin's choice). Role names no longer gate this.
 
-    const updated = await prisma.project.update({
-      where: { id: projectId },
-      data: { tamId: newTamId },
-      include: {
-        sa: { select: { id: true, username: true } },
-        tam: { select: { id: true, username: true } },
-        customer: { select: { id: true, name: true } },
-        _count: { select: { tasks: true } },
-      },
+    // Same lock / diff / activity / notification path as PATCH /projects/:id:
+    // the handover shows in the project feed and the new TAM is notified
+    // (docs/archive/plans/application-review-2026-10-22.md, F-25). Reassigning
+    // to the current TAM records nothing.
+    const updated = await prisma.$transaction(async (tx) => {
+      await tx.$queryRaw`SELECT id FROM projects WHERE id = ${projectId} FOR NO KEY UPDATE`;
+      const before = await tx.project.findUniqueOrThrow({
+        where: { id: projectId },
+        select: { name: true, ...projectSeatsSelect },
+      });
+      const result = await tx.project.update({
+        where: { id: projectId },
+        data: { tamId: newTamId },
+        include: {
+          sa: { select: { id: true, username: true } },
+          tam: { select: { id: true, username: true } },
+          customer: { select: { id: true, name: true } },
+          _count: { select: { tasks: true } },
+        },
+      });
+      await recordProjectUpdate(tx, {
+        projectId,
+        actorId: req.user!.sub,
+        name: result.name,
+        changes: await diffProjectSeats(tx, before, result),
+      });
+      return result;
     });
     res.json(updated);
   },

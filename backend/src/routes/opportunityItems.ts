@@ -9,6 +9,7 @@ import { listActivityPage } from "../lib/activity.js";
 import { recordOpportunityChange } from "../lib/opportunityActivity.js";
 import { createLinkSchema, updateLinkSchema } from "../lib/linkSchemas.js";
 import { filterActiveUsersWhoCanSeeOpportunity, notifyForEvent } from "../lib/notifications.js";
+import { MAX_DEAL_ACTIVITIES } from "../lib/limits.js";
 
 // Mounted at "/opportunities" in src/app.ts — paths below are relative to that.
 
@@ -63,6 +64,7 @@ opportunityItemsRouter.get(
     const activities = await prisma.opportunityActivity.findMany({
       where: { opportunityId },
       orderBy: { createdAt: "desc" },
+      take: MAX_DEAL_ACTIVITIES,
       include: { user: { select: PIC_SELECT } },
     });
     res.json(activities);

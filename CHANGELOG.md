@@ -15,15 +15,27 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
-### Fixed — 2026-10-25 — Backend hardening (B-19, part 1)
+### Fixed — 2026-10-25 — Admin reassign in the activity feed, input bounds, permission list
 
-- Unique-constraint conflicts (HTTP 409) no longer return Prisma model or internal metadata. The response now carries only the violated column names, as `details.target`, when they are known. (F-22)
-- A request with a malformed JSON body now gets `400 invalid_json`, and a body over the size limit gets `413 payload_too_large`, instead of a 500 error. (N-05)
-- A foreign-key violation that no route checked beforehand now returns `400 invalid_reference` instead of a 500 error. (F-23)
-- Deleting a user in Admin now counts the records that block the delete and performs the delete in a single transaction. If a new reference appears in between, you get the same "still referenced" message (`400 user_in_use`) instead of a server error. (F-20)
-- Creating a project (or handing a won deal off to a project) with an unknown or inactive TAM or SA, creating a task with an unknown assignee, and creating or editing an epic with an unknown owner now return a specific 400 (`tam_not_found`, `sa_not_found`, `assignee_not_found`, `owner_not_found`) instead of a 500 error. Changing a project's TAM or SA to a user that does not exist now returns 400 instead of 404. (F-23)
-- `scripts/create-admin.ts` now applies the username rules used in Admin and appends `-2`, `-3`, … when the username derived from the email is already taken. It no longer silently promotes an existing non-admin account: it stops and changes nothing unless `FORCE_ADMIN=1` is set. Re-running it for an existing admin resets that admin's password and keeps its username. (F-21)
-- iTop routes that use the stored application token (`GET /itop/services`, `GET /itop/customers/:id/contacts`, `POST /itop/tickets`, and `POST /admin/itop/persons/match`) now answer 409 `itop_token_unreadable` when that token can no longer be decrypted (for example after `SECRETS_KEY` changes), instead of failing with a raw 500. A scheduled sync that hits the same condition now records a failed run whose message says the stored iTop token could not be decrypted and must be entered again. (F-30)
+- Project handovers through the admin reassign endpoint (`PUT /admin/projects/reassign`) now appear in the project activity feed with the old and new TAM and send the new TAM an "assigned" notification, the same as changing the TAM on a project. Reassigning to the current TAM records nothing. The TAM/SA change recording is shared between both routes (`backend/src/lib/projectSeats.ts`).
+- A deal value above `Number.MAX_SAFE_INTEGER` is now rejected with a 400 `validation_error` on opportunity create and update (and reported as an invalid row on import) instead of failing at the database with a 500.
+- Request arrays are now bounded: `labelIds` accepts at most 50 ids on task update (including its change-check snapshot) and project task create, service `assignments` at most 200 on projects and customers with at most 50 tools each, and the iTop `readClasses` setting at most the number of supported classes. A deal's activity feed returns at most the 500 newest entries.
+- Role permissions are validated against the known permission list (`backend/src/lib/permissions.ts`, the same 13 values the role editor offers); creating or editing a role with an unknown permission string such as a misspelt `project:wrte` now answers 400 `validation_error` naming the bad value instead of saving an inert grant. The role editor shows a stored permission that the app no longer offers as a ticked "no longer in the catalogue" row that can be unticked, and names a rejected value in its error, so such a role can still be saved.
+
+### Changed — 2026-10-25 — Service catalogue writes are admin-only; three new indexes
+
+- The global service catalogue can now be changed (create, rename, deactivate, delete) only by admins; `POST`, `PATCH` and `DELETE /services` require the `*` permission instead of `project:write`, because deleting a service removes it from every customer and project. Listing services and picking existing services for a project or customer stay open as before. The Service Catalogue section in Settings and the inline "Add service" form on a project's or customer's Services tab are shown to admins only, and the help text says so.
+- Database migration `20261025120000_fk_indexes` adds three indexes on foreign-key columns that had none: `activity_events.actor_id`, `share_links.created_by_id` and `project_members.added_by_id`, so deleting a user and the related lookups no longer scan those tables.
+
+### Fixed — 2026-10-25 — Clearer API errors, user-id checks, create-admin safety, iTop token errors
+
+- Unique-constraint conflicts (HTTP 409) no longer return Prisma model or internal metadata. The response now carries only the violated column names, as `details.target`, when they are known.
+- A request with a malformed JSON body now gets `400 invalid_json`, and a body over the size limit gets `413 payload_too_large`, instead of a 500 error.
+- A foreign-key violation that no route checked beforehand now returns `400 invalid_reference` instead of a 500 error.
+- Deleting a user in Admin now counts the records that block the delete and performs the delete in a single transaction. If a new reference appears in between, you get the same "still referenced" message (`400 user_in_use`) instead of a server error.
+- Creating a project (or handing a won deal off to a project) with an unknown or inactive TAM or SA, creating a task with an unknown assignee, and creating or editing an epic with an unknown owner now return a specific 400 (`tam_not_found`, `sa_not_found`, `assignee_not_found`, `owner_not_found`) instead of a 500 error. Changing a project's TAM or SA to a user that does not exist now returns 400 instead of 404.
+- `scripts/create-admin.ts` now applies the username rules used in Admin and appends `-2`, `-3`, … when the username derived from the email is already taken. It no longer silently promotes an existing non-admin account: it stops and changes nothing unless `FORCE_ADMIN=1` is set. Re-running it for an existing admin resets that admin's password, keeps its username, and signs out that admin's existing sessions, as the Admin reset does.
+- iTop routes that use the stored application token (`GET /itop/services`, `GET /itop/customers/:id/contacts`, `POST /itop/tickets`, and `POST /admin/itop/persons/match`) now answer 409 `itop_token_unreadable` when that token can no longer be decrypted (for example after `SECRETS_KEY` changes), instead of failing with a raw 500. A scheduled sync that hits the same condition now records a failed run whose message says the stored iTop token could not be decrypted and must be entered again.
 
 ### Security — 2026-10-23 — Browser security headers on every page
 

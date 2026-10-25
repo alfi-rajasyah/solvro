@@ -45,6 +45,8 @@ import {
 } from "../lib/activity.js";
 import { epicCreatedChanges } from "../lib/epicActivity.js";
 import { notifyForEvent } from "../lib/notifications.js";
+import { diffProjectSeats, projectSeatsSelect, recordProjectUpdate } from "../lib/projectSeats.js";
+import { MAX_LABEL_IDS, MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
 
 // Kanban WIP limits — one optional positive-int cap per top-level status
 // column, or null/absent for "no limit". Visual-only on the board (amber
@@ -123,7 +125,7 @@ const createTaskSchema = z
     assignedToId: z.number().int().positive().nullable().optional(),
     parentTaskId: z.number().int().positive().nullable().optional(),
     sectionId: z.number().int().positive().nullable().optional(),
-    labelIds: z.array(z.number().int().positive()).optional(),
+    labelIds: z.array(z.number().int().positive()).max(MAX_LABEL_IDS).optional(),
     epicId: z.number().int().positive().nullable().optional(),
   })
   .refine((b) => !b.isMilestone || b.dueDate != null, {
@@ -342,9 +344,9 @@ const assignServicesSchema = z.object({
   assignments: z.array(
     z.object({
       serviceId: z.number().int().positive(),
-      tools: z.array(z.string().trim().min(1).max(100)).default([]),
+      tools: z.array(z.string().trim().min(1).max(100)).max(MAX_SERVICE_TOOLS).default([]),
     }),
-  ),
+  ).max(MAX_SERVICE_ASSIGNMENTS),
 });
 
 projectsRouter.put(
@@ -461,8 +463,7 @@ projectsRouter.patch(
           name: true,
           status: true,
           customerId: true,
-          tam: { select: { id: true, username: true } },
-          sa: { select: { id: true, username: true } },
+          ...projectSeatsSelect,
         },
       });
       // A changed TAM or SA must exist (400 instead of a missing-row 404 /
@@ -479,34 +480,21 @@ projectsRouter.patch(
       }
       const result = await tx.project.update({ where: { id }, data });
       // Name, status, customer and the TAM / SA seats are logged (ids and
-      // usernames only); a re-save records nothing.
-      const changes: ActivityChanges = diffProjectChanges(
-        { name: before.name, status: before.status, customerId: before.customerId },
-        result,
-      );
-      for (const [key, beforeId, afterId] of [
-        ["tam", before.tam.id, result.tamId],
-        ["sa", before.sa?.id ?? null, result.saId],
-      ] as const) {
-        if (beforeId === afterId) continue;
-        const to =
-          afterId === null
-            ? null
-            : await tx.user.findUnique({ where: { id: afterId }, select: { id: true, username: true } });
-        changes[key] = { from: key === "tam" ? before.tam : before.sa, to } as Prisma.InputJsonObject;
-      }
-      const event = await recordActivity(tx, {
+      // usernames only); a re-save records nothing. The new TAM / SA get an
+      // `assigned` notification.
+      const changes: ActivityChanges = {
+        ...diffProjectChanges(
+          { name: before.name, status: before.status, customerId: before.customerId },
+          result,
+        ),
+        ...(await diffProjectSeats(tx, before, result)),
+      };
+      await recordProjectUpdate(tx, {
         projectId: id,
         actorId: req.user!.sub,
-        entityType: "project",
-        entityId: id,
-        action: "updated",
-        entityLabel: shortLabel(result.name),
+        name: result.name,
         changes,
       });
-      // The new TAM / SA (changes.tam / changes.sa `to`) get an `assigned`
-      // notification; the actor and inactive users are skipped inside.
-      await notifyForEvent(tx, event);
       return result;
     });
     res.json(updated);

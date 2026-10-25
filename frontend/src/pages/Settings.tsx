@@ -92,7 +92,8 @@ export function Settings() {
           (the PUT/DELETE routes 403 otherwise) — so the section is hidden without it. */}
       {hasPermission(user, "task:write") && <ItopTokenSection />}
 
-      {hasPermission(user, "project:write") && (
+      {/* The catalogue is global and its writes are admin-only on the server. */}
+      {hasPermission(user, "*") && (
         <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
           <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
             Service Catalogue
