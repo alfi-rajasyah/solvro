@@ -35,6 +35,7 @@ import {
   useUpdateAuthSettings,
 } from "@/lib/queries";
 import type { Role } from "@/lib/auth";
+import { TempPasswordNotice } from "@/components/admin/TempPasswordNotice";
 import { PermissionPicker } from "@/components/admin/PermissionPicker";
 import { roleSaveErrorMessage } from "@/components/admin/roleErrors";
 import { useAuth } from "@/lib/auth";
@@ -482,27 +483,11 @@ function UsersTab() {
         </div>
       )}
       {resetResult && (
-        <div className="rounded-sm border border-tertiary/40 bg-tertiary/10 px-3 py-3 text-sm text-on-surface">
-          <p className="font-display text-[12px] font-bold uppercase tracking-wider text-tertiary">
-            Temporary password generated
-          </p>
-          <p className="mt-1">
-            For <strong>{resetResult.username}</strong>:{" "}
-            <code className="rounded-sm bg-surface px-1.5 py-0.5 font-mono text-[13px]">
-              {resetResult.tempPassword}
-            </code>
-          </p>
-          <p className="mt-1 text-on-surface-variant">
-            Share this with the user via a secure channel. It will not be shown again.
-          </p>
-          <button
-            type="button"
-            onClick={() => setResetResult(null)}
-            className="mt-2 font-display text-sm text-on-surface-variant hover:text-on-surface font-semibold"
-          >
-            Dismiss
-          </button>
-        </div>
+        <TempPasswordNotice
+          username={resetResult.username}
+          tempPassword={resetResult.tempPassword}
+          onDismiss={() => setResetResult(null)}
+        />
       )}
       <form
         onSubmit={handleCreate}
@@ -744,6 +729,7 @@ function RolesTab() {
             {isEditing ? (
               <input
                 type="text"
+                aria-label="Role name"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 disabled={r.builtIn}
@@ -1481,6 +1467,7 @@ function SignInModal({
           >
             <input
               type="text"
+              aria-label="Allowed email domain"
               value={newDomain}
               onChange={(e) => setNewDomain(e.target.value)}
               placeholder="example.com"

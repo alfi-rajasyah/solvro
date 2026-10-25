@@ -5,7 +5,7 @@
 // workbook client-side with per-row validation, then POST the valid rows
 // through `useImportOpportunities` and show the server's per-row results.
 //
-// `xlsx` (SheetJS) is imported lazily (`await import("xlsx")`), both here
+// `xlsx` (SheetJS) is imported lazily (`loadXlsx()`), both here
 // and in `downloadTemplate` below, so the ~600KB parser never lands in the
 // main bundle for users who never open this dialog — the only approved new
 // frontend dependency this program introduces (root CLAUDE.md Guardrails).
@@ -25,6 +25,7 @@ import {
 } from "@/components/pipeline/importParse";
 import { Chip } from "@/components/StatusChip";
 import { ApiError } from "@/lib/api";
+import { loadXlsx, XLSX_LOAD_ERROR, XlsxLoadError, type XlsxModule } from "@/lib/loadXlsx";
 import { formatIDR, type PipelineStage } from "@/lib/pipelineFormat";
 import {
   useImportOpportunities,
@@ -40,52 +41,62 @@ interface Props {
 
 type Step = "upload" | "preview" | "done";
 
-/** Generates and downloads the import template workbook, client-side. */
-function downloadTemplate() {
-  void import("xlsx").then((XLSX) => {
-    const example = [
-      "Implementasi ERP",
-      "PT. Maju Jaya",
-      "500000000",
-      "Technical Clarification",
-      "",
-      "30/06/2026",
-      "ERP Implementation",
-      "70",
-      "Referral",
-      "Initial meeting done, client is interested in the finance module",
-    ];
-    const note = [
-      `* Valid stages: ${IMPORTABLE_STAGES.map((s) => s.toLowerCase()).join(", ")}`,
-      "",
-      "",
-      "",
-      "",
-      "* Format: DD/MM/YYYY",
-      "",
-      "* Number 0-100",
-      "",
-      "* Optional: seeds the deal's first activity note",
-    ];
+/**
+ * Generates and downloads the import template workbook, client-side. A failed
+ * chunk load (old tab after a deploy) is reported through `onLoadError`
+ * instead of surfacing as an uncaught rejection
+ * (docs/archive/plans/application-review-2026-10-22.md, F-40).
+ */
+async function downloadTemplate(onLoadError: (message: string) => void) {
+  let XLSX: XlsxModule;
+  try {
+    XLSX = await loadXlsx();
+  } catch (err) {
+    onLoadError(err instanceof XlsxLoadError ? err.message : XLSX_LOAD_ERROR);
+    return;
+  }
+  const example = [
+    "Implementasi ERP",
+    "PT. Maju Jaya",
+    "500000000",
+    "Technical Clarification",
+    "",
+    "30/06/2026",
+    "ERP Implementation",
+    "70",
+    "Referral",
+    "Initial meeting done, client is interested in the finance module",
+  ];
+  const note = [
+    `* Valid stages: ${IMPORTABLE_STAGES.map((s) => s.toLowerCase()).join(", ")}`,
+    "",
+    "",
+    "",
+    "",
+    "* Format: DD/MM/YYYY",
+    "",
+    "* Number 0-100",
+    "",
+    "* Optional: seeds the deal's first activity note",
+  ];
 
-    const ws = XLSX.utils.aoa_to_sheet([[...TEMPLATE_HEADERS], example, note]);
-    ws["!cols"] = [
-      { wch: 30 },
-      { wch: 25 },
-      { wch: 18 },
-      { wch: 24 },
-      { wch: 20 },
-      { wch: 15 },
-      { wch: 25 },
-      { wch: 16 },
-      { wch: 18 },
-      { wch: 30 },
-    ];
+  const ws = XLSX.utils.aoa_to_sheet([[...TEMPLATE_HEADERS], example, note]);
+  ws["!cols"] = [
+    { wch: 30 },
+    { wch: 25 },
+    { wch: 18 },
+    { wch: 24 },
+    { wch: 20 },
+    { wch: 15 },
+    { wch: 25 },
+    { wch: 16 },
+    { wch: 18 },
+    { wch: 30 },
+  ];
 
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Opportunities");
-    XLSX.writeFile(wb, "solvro-pipeline-import-template.xlsx");
-  });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, "Opportunities");
+  XLSX.writeFile(wb, "solvro-pipeline-import-template.xlsx");
 }
 
 export function PipelineImportDialog({ open, onClose }: Props) {
@@ -147,7 +158,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
     setRows([]);
 
     try {
-      const XLSX = await import("xlsx");
+      const XLSX = await loadXlsx();
       const buffer = await file.arrayBuffer();
       const wb = XLSX.read(buffer, { type: "array" });
       const firstSheet = wb.SheetNames[0];
@@ -163,8 +174,14 @@ export function PipelineImportDialog({ open, onClose }: Props) {
 
       setRows(parsed);
       setStep("preview");
-    } catch {
-      setParseError("Could not read the file. Make sure it's a valid .xlsx or .csv export.");
+    } catch (err) {
+      // A chunk that will not load is not the file's fault: say so, or the
+      // user re-exports a perfectly good workbook.
+      setParseError(
+        err instanceof XlsxLoadError
+          ? err.message
+          : "Could not read the file. Make sure it's a valid .xlsx or .csv export.",
+      );
     } finally {
       setParsing(false);
       // N4: without this, re-picking the SAME file (e.g. fixed externally
@@ -273,7 +290,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
             </p>
             <button
               type="button"
-              onClick={downloadTemplate}
+              onClick={() => void downloadTemplate(setParseError)}
               className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-surface-container"
             >
               <span className="material-symbols-outlined text-base" aria-hidden="true">

@@ -1370,6 +1370,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
             value={newSectionName}
             onChange={(e) => setNewSectionName(e.target.value)}
             placeholder="Section name"
+            aria-label="Section name"
             maxLength={100}
             className="w-64 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
           />

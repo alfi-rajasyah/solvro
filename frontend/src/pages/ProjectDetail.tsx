@@ -328,9 +328,12 @@ export function ProjectDetail() {
         onClose={() => setConfirmDeleteOpen(false)}
         onConfirm={() => void handleDelete()}
         title="Delete project"
+        // `_count.tasks` leaves cancelled tasks out (like every total), but the
+        // delete removes them too, so the text says so rather than undercount
+        // (docs/archive/plans/application-review-2026-10-22.md, F-26).
         body={`Delete project "${project.name}"? This permanently removes its ${project._count.tasks} ${
           project._count.tasks === 1 ? "task" : "tasks"
-        }, sections, labels, notes, risks and reviews, and unlinks any won deal. There is no undo.`}
+        } (plus any cancelled ones), sections, labels, notes, risks and reviews, and unlinks any won deal. There is no undo.`}
         confirmLabel="Delete"
         confirmTone="danger"
         busy={deleteProject.isPending}

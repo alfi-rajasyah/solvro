@@ -33,7 +33,7 @@ import {
 } from "../lib/taskOrdering.js";
 import { assertEpicNotOnSubtask, assertValidEpic } from "../lib/epics.js";
 import { computeProjectHealth, computeSlipDays } from "../lib/projectHealth.js";
-import { COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import { COUNTED_TASKS_COUNT, COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
 import { assertActiveUser } from "../lib/users.js";
 import {
@@ -105,7 +105,9 @@ const projectDetailInclude = {
   tam: { select: { id: true, username: true, email: true, avatarUrl: true } },
   customer: { select: { id: true, name: true, tamId: true } },
   baselineLockedBy: { select: { id: true, username: true } },
-  _count: { select: { tasks: true } },
+  // Cancelled tasks are in no total; the delete confirmation says so
+  // (docs/archive/plans/application-review-2026-10-22.md, F-26).
+  _count: COUNTED_TASKS_COUNT,
   services: {
     orderBy: { service: { name: "asc" } },
     include: { service: true },
@@ -175,7 +177,7 @@ projectsRouter.get("/", validate("query", projectListQuerySchema), async (req, r
     where,
     orderBy: { updatedAt: "desc" },
     include: {
-      _count: { select: { tasks: true } },
+      _count: COUNTED_TASKS_COUNT,
       sa: { select: { id: true, username: true } },
       tam: { select: { id: true, username: true } },
       customer: { select: { id: true, name: true } },

@@ -12,6 +12,7 @@ import { DailyReview } from "@/pages/DailyReview";
 import { Executive } from "@/pages/Executive";
 import { Help } from "@/pages/Help";
 import { Login } from "@/pages/Login";
+import { NotFound } from "@/pages/NotFound";
 import { OpportunityDetail } from "@/pages/OpportunityDetail";
 import { Overview } from "@/pages/Overview";
 import { Pipeline } from "@/pages/Pipeline";
@@ -119,9 +120,11 @@ export function App() {
             </AdminGuard>
           }
         />
+        {/* Unknown URL: a real 404 inside the shell (sidebar stays) instead of
+            a silent redirect to Overview
+            (docs/archive/plans/application-review-2026-10-22.md, F-45). */}
+        <Route path="*" element={<NotFound />} />
       </Route>
-
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

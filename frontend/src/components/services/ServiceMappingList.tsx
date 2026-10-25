@@ -223,6 +223,7 @@ export function ServiceMappingList({
                 {assigned && assignment && (
                   <div className="mt-2 border-t border-outline-variant/60 pt-2">
                     <ToolsEditor
+                      serviceName={s.name}
                       tools={assignment.tools}
                       canMutate={canMutate}
                       saving={saving}
@@ -280,12 +281,15 @@ export function ServiceMappingList({
   );
 }
 
-function ToolsEditor({
+export function ToolsEditor({
+  serviceName,
   tools,
   canMutate,
   saving,
   onChange,
 }: {
+  /** One editor renders per assigned service, so the service names its input. */
+  serviceName: string;
   tools: string[];
   canMutate: boolean;
   saving: boolean;
@@ -351,6 +355,7 @@ function ToolsEditor({
             onBlur={() => commit(draft)}
             disabled={saving}
             placeholder={tools.length === 0 ? "e.g. Acronis, Crowdstrike" : "Add tool…"}
+            aria-label={`Add tool for ${serviceName}`}
             className="min-w-[140px] flex-1 rounded-sm border border-outline-variant bg-surface px-2 py-0.5 text-[12px] focus:border-primary focus:outline-hidden disabled:opacity-50"
           />
         )}

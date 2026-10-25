@@ -15,6 +15,30 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-10-25 — UX fixes: task counts, form errors, accessibility
+
+- A project's task count (project cards and detail, the Admin projects table, and the API payloads, including a customer's project list) no longer includes cancelled tasks, so it matches the progress total. The delete-project confirmation now says it also removes any cancelled tasks.
+- Validation errors from the server now appear under the field they belong to in the project and task forms, with `aria-invalid` and `aria-describedby`, instead of only a generic "Invalid request". Rejected fields the form shows no input for (the task dates, the project TAM when its picker is hidden, and the like) are listed in the error alert as "Field: message".
+- Placeholder-only inputs and the subtask checkbox now have accessible names: link label and URL, task title, description, subtasks, risk text areas, label name, section name, service and tool fields (each tool input names its service), the risks search, and the Admin role-name and allowed-domain inputs. The task form's selects are labelled too. A unit test fails on any `<input>`, `<textarea>`, `<Input>` or `<Textarea>` that has no `aria-label`, no spread, and no enclosing `<label>` with text.
+- Added a `prefers-reduced-motion` rule that turns off transitions and animations app-wide for people who request reduced motion; loading spinners and skeleton pulses stop too.
+- The request-timeout message now ends "try again", the same as the offline message.
+- Removed the unused `pickContrast` helper.
+
+### Fixed — 2026-10-25 — Page titles, phone top bar, not-found page
+
+- Every page now sets its own browser-tab title ("Overview · Solvro", the project or customer name once loaded, "Not found · Solvro") instead of a bare "Solvro"; the tab gets its original title back when you leave the app (for example on sign-out). Paths match regardless of letter case, as routing does, so `/Overview` still counts as Overview.
+- The top-bar page title no longer collapses to a single letter on phones: the title takes the free width, the bar's spacing tightens, and the user-menu chevron and divider hide below 640 px. The desktop bar is unchanged.
+- An unknown URL (including a mistyped project view such as `/projects/12/board`) now shows a "Page not found" panel with the attempted path and a link to Overview, inside the app shell, instead of silently redirecting to Overview. The top bar reads "Not found" there, and sign-in and guest links behave as before.
+- Added an end-to-end spec (`e2e/tests/not-found.spec.ts`) covering the not-found page and per-page tab titles on desktop and mobile.
+
+### Fixed — 2026-10-25 — Offline banner, update notice, password copy button
+
+- A "You are offline. Changes cannot be saved until the connection returns." banner now appears at the top of the app while the browser has no connection and disappears by itself when it returns (new `useOnlineStatus` hook, `components/layout/ConnectionBanners.tsx`, rendered by `Shell`).
+- Open tabs now tell the user when a new version of Solvro has been deployed: a dismissible "A new version of Solvro is available." banner with a Reload button replaces the silent page reload after a service-worker update, so unsaved typing is no longer discarded. Tabs also check for a new version every 30 minutes, and a lazy-loaded chunk that no longer exists after a deploy shows the same banner.
+- The Pipeline import dialog no longer throws an uncaught error when the spreadsheet module fails to load (for example in a tab opened before a deploy); both "Download template" and file upload now show "Could not load the import module. Reload the page and try again."
+- The temporary password shown after an admin resets a user's password now has a "Copy temporary password" button that confirms with an inline "Copied" message.
+- Screen readers now announce the offline and "new version available" notices as they appear, through a single always-present live region, instead of relying on the banners being announced when they mount.
+
 ### Fixed — 2026-10-25 — Admin reassign in the activity feed, input bounds, permission list
 
 - Project handovers through the admin reassign endpoint (`PUT /admin/projects/reassign`) now appear in the project activity feed with the old and new TAM and send the new TAM an "assigned" notification, the same as changing the TAM on a project. Reassigning to the current TAM records nothing. The TAM/SA change recording is shared between both routes (`backend/src/lib/projectSeats.ts`).

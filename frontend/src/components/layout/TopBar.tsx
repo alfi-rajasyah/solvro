@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { formatElapsed, useRunningItopTimer } from "@/components/itop/useTicketTimer";
 import { useAuth } from "@/lib/auth";
 import { useCustomer, useOpportunity, useProject } from "@/lib/queries";
-import { buildCrumbs, matchRoute } from "@/lib/routeMeta";
+import { buildCrumbs, documentTitle, matchRoute } from "@/lib/routeMeta";
 import { useTheme } from "@/lib/theme";
 import { NotificationBell } from "./NotificationBell";
 import { useSidebar } from "./SidebarContext";
@@ -35,6 +35,28 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
     opportunityTitle: opportunity?.title,
   });
 
+  // Per-route browser-tab title, from the same route context as the
+  // breadcrumbs (docs/archive/plans/application-review-2026-10-22.md, F-35).
+  // Re-runs when the project/customer/opportunity name arrives.
+  const title = documentTitle(location.pathname, {
+    projectName: project?.name,
+    projectCustomer: project?.customer,
+    customerName: customer?.name,
+    opportunityTitle: opportunity?.title,
+  });
+  // Declared before the setter so it captures the static title first; leaving
+  // the app shell (sign-out → /login) hands the tab back to it instead of
+  // leaving the last page's name behind.
+  useEffect(() => {
+    const original = document.title;
+    return () => {
+      document.title = original;
+    };
+  }, []);
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+
   const initials = user
     ? user.username
         .split(/[.\s_-]/)
@@ -50,7 +72,7 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
 
   return (
     <header
-      className={`sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-outline-variant bg-surface-container-lowest px-4 font-display transition-[margin] duration-200 ease-out md:gap-4 md:px-6 ${
+      className={`sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-outline-variant bg-surface-container-lowest px-4 font-display transition-[margin] duration-200 ease-out sm:gap-3 md:gap-4 md:px-6 ${
         open ? "md:ml-sidebar" : "md:ml-sidebar-collapsed"
       }`}
     >
@@ -63,7 +85,10 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
         <span className="material-symbols-outlined">menu</span>
       </button>
 
-      <nav aria-label="Breadcrumb" className="min-w-0">
+      {/* flex-1 below md hands the title all the room the icon cluster leaves
+          (docs/archive/plans/application-review-2026-10-22.md, F-42); from md
+          up it hugs its content so the status chip stays beside it. */}
+      <nav aria-label="Breadcrumb" className="min-w-0 flex-1 md:flex-none">
         <ol className="flex min-w-0 items-center gap-2">
           {crumbs.map((crumb, i) => {
             const last = i === crumbs.length - 1;
@@ -107,7 +132,7 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
         </span>
       )}
 
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
         {runningTimer && (
           <Link
             to={`/customers/${runningTimer.timer.customerId}?tab=tickets&ticket=${runningTimer.timer.ticketId}`}
@@ -173,7 +198,7 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
           <button
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-2 rounded-sm border-l border-outline-variant pl-3 text-left hover:opacity-90"
+            className="flex items-center gap-2 rounded-sm border-outline-variant text-left hover:opacity-90 sm:border-l sm:pl-3"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[12px] font-bold text-white">
               {initials}
@@ -186,8 +211,13 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
                 {user?.role ?? ""}
               </span>
             </div>
-            <span className="material-symbols-outlined text-base text-on-surface-variant">
-              expand_more
+            {/* The icon font's unlayered stylesheet forces display on
+                .material-symbols-outlined, beating a `hidden` utility on the
+                glyph itself, so the wrapper does the hiding. */}
+            <span className="hidden sm:inline-flex">
+              <span className="material-symbols-outlined text-base text-on-surface-variant">
+                expand_more
+              </span>
             </span>
           </button>
           {menuOpen && (
