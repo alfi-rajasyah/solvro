@@ -238,7 +238,7 @@ docker compose exec -e ADMIN_EMAIL=you@example.com -e ADMIN_PASSWORD=your-passwo
 # equivalently, from backend/ on the host: npm run admin:create
 ```
 
-[backend/scripts/create-admin.ts](backend/scripts/create-admin.ts) upserts a user by email against the `ADMIN` role (errors if the seed hasn't run yet, since it looks the role up by name). It's idempotent — re-running with the same email resets that user's password, which doubles as the password-reset flow until a proper one exists. In production, [setup.sh](setup.sh) runs this automatically at the end of a fresh install using the `ADMIN_EMAIL` / `ADMIN_PASSWORD` it collected — see [2.13](#213--production-deployment-via-setupsh).
+[backend/scripts/create-admin.ts](backend/scripts/create-admin.ts) creates a user by email against the `ADMIN` role (errors if the seed hasn't run yet, since it looks the role up by name). The username comes from the email's local part through the same rule as Admin > Users, with `-2`, `-3`, … appended when that name is taken. Re-running it for an existing **admin** resets that admin's password (and keeps the username), which doubles as the password-reset flow until a proper one exists. An existing **non-admin** account with that email is left untouched and the script exits 1 — set `FORCE_ADMIN=1` to promote it and reset its password on purpose. In production, [setup.sh](setup.sh) runs this automatically at the end of a fresh install using the `ADMIN_EMAIL` / `ADMIN_PASSWORD` it collected — see [2.13](#213--production-deployment-via-setupsh).
 
 ### 2.9 — Auth & RBAC configuration
 

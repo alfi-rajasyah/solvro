@@ -537,7 +537,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       {
         title: "Service Catalogue",
         points: [
-          "Users who manage projects can add, edit, deactivate, and delete catalogue services here.",
+          "Only admins can add, edit, deactivate, and delete catalogue services; everyone else picks from the list on a customer or project.",
           "Deleting a service removes it from every customer and project that uses it.",
         ],
       },

@@ -27,6 +27,7 @@ import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
 import { diffTaskChanges, recordActivity } from "../lib/activity.js";
 import { filterActiveUsersWhoCanSeeProject, notifyForEvent } from "../lib/notifications.js";
 import { OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import { MAX_LABEL_IDS } from "../lib/limits.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -46,7 +47,7 @@ const expectedTaskSchema = z.object({
   parentTaskId: z.number().int().positive().nullable().optional(),
   isMilestone: z.boolean().optional(),
   isCriticalPath: z.boolean().optional(),
-  labelIds: z.array(z.number().int().positive()).optional(),
+  labelIds: z.array(z.number().int().positive()).max(MAX_LABEL_IDS).optional(),
 });
 type ExpectedTask = z.infer<typeof expectedTaskSchema>;
 
@@ -77,7 +78,7 @@ const updateTaskSchema = z
     assignedToId: z.number().int().positive().nullable().optional(),
     parentTaskId: z.number().int().positive().nullable().optional(),
     sectionId: z.number().int().positive().nullable().optional(),
-    labelIds: z.array(z.number().int().positive()).optional(),
+    labelIds: z.array(z.number().int().positive()).max(MAX_LABEL_IDS).optional(),
     epicId: z.number().int().positive().nullable().optional(),
     position: z.number().int().min(0).optional(),
     // Optional pin to one iTop ticket ref, e.g. "R-000123" (1-3 uppercase

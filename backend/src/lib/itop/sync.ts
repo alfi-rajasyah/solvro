@@ -9,6 +9,7 @@ import { Prisma, type ItopConfig } from "@prisma/client";
 import { prisma } from "../../prisma.js";
 import { logger } from "../../logger.js";
 import { ItopError, type ItopObjectRow } from "./client.js";
+import { SecretBoxError } from "../secretBox.js";
 import {
   bustItopConfigCache,
   getItopAppClient,
@@ -202,6 +203,13 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 function errorMessage(err: unknown): string {
   if (err instanceof ItopError) return err.message;
+  // The stored app token no longer decrypts (e.g. SECRETS_KEY was rotated):
+  // say so in the words an admin acts on, since this lands in
+  // `ItopConfig.lastSyncError` and Admin > iTop
+  // (docs/archive/plans/application-review-2026-10-22.md, F-30).
+  if (err instanceof SecretBoxError) {
+    return "The stored iTop token could not be decrypted (SECRETS_KEY changed?) — enter it again in Admin > iTop.";
+  }
   return err instanceof Error ? err.message : String(err);
 }
 

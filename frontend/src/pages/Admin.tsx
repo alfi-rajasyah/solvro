@@ -35,7 +35,9 @@ import {
   useUpdateAuthSettings,
 } from "@/lib/queries";
 import type { Role } from "@/lib/auth";
-import { PERMISSION_CATALOG, useAuth } from "@/lib/auth";
+import { PermissionPicker } from "@/components/admin/PermissionPicker";
+import { roleSaveErrorMessage } from "@/components/admin/roleErrors";
+import { useAuth } from "@/lib/auth";
 import { copyText } from "@/lib/clipboard";
 import { fmtDateTime } from "@/lib/formatDate";
 import { personNameSortingFn } from "@/lib/tableSort";
@@ -692,63 +694,6 @@ function AdminKpi({
 
 // ---- Roles tab ------------------------------------------------------------
 
-// Tick-box editor over the curated PERMISSION_CATALOG. "*" (Full access)
-// supersedes the rest: when it's on, the specific permissions show as
-// implied + disabled; ticking a specific one drops the wildcard.
-function PermissionPicker({
-  value,
-  onChange,
-}: {
-  value: string[];
-  onChange: (v: string[]) => void;
-}) {
-  const all = value.includes("*");
-  function toggle(perm: string) {
-    if (perm === "*") {
-      onChange(all ? [] : ["*"]);
-      return;
-    }
-    if (all) {
-      onChange([perm]); // selecting a specific permission drops the wildcard
-      return;
-    }
-    onChange(
-      value.includes(perm)
-        ? value.filter((p) => p !== perm)
-        : [...value, perm],
-    );
-  }
-  return (
-    <ul className="divide-y divide-outline-variant/60 rounded-sm border border-outline-variant bg-surface">
-      {PERMISSION_CATALOG.map((perm) => {
-        const isWildcard = perm.value === "*";
-        const checked = isWildcard ? all : all || value.includes(perm.value);
-        const disabled = all && !isWildcard;
-        return (
-          <li key={perm.value}>
-            <label
-              title={perm.hint}
-              className={`flex items-center gap-2.5 px-3 py-1.5 text-[13px] ${
-                disabled ? "opacity-50" : "cursor-pointer hover:bg-surface-container-low"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                disabled={disabled}
-                onChange={() => toggle(perm.value)}
-                className="accent-primary"
-              />
-              <span className="font-mono text-on-surface">{perm.value}</span>
-              <span className="text-on-surface-variant">— {perm.label}</span>
-            </label>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 function RolesTab() {
   const { data: roles, isLoading, isError } = useAdminRoles();
   // Loading-safe fallback (T1 DataGrid migration — same rationale as
@@ -981,7 +926,7 @@ function RolesTab() {
       setNewName("");
       setNewPerms([]);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not create role.");
+      setError(roleSaveErrorMessage(err, "Could not create role."));
     }
   }
 
@@ -1013,7 +958,7 @@ function RolesTab() {
       });
       setEditingId(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save role.");
+      setError(roleSaveErrorMessage(err, "Could not save role."));
     }
   }
 

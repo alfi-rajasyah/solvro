@@ -26,6 +26,7 @@ import { logger } from "../logger.js";
 // review. `wipLimitsSchema` isn't imported directly here — it only ever
 // appears nested inside `createProjectSchema`.
 import { createProjectSchema } from "./projects.js";
+import { assertActiveUser } from "../lib/users.js";
 
 // Pipeline module (native port of Velora — docs/plans/pipeline-native-port-plan.md).
 // CRUD + the single stage-transition writer for Opportunity. Deal visibility
@@ -56,7 +57,7 @@ const createOpportunitySchema = z
   .object({
     title: z.string().min(1).max(200),
     customerName: z.string().min(1).max(200),
-    dealValue: z.number().min(0).optional(),
+    dealValue: z.number().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
     picId: picIdField.optional(),
     deadline: dayStringSchema.nullable().optional(),
     requestDate: dayStringSchema.nullable().optional(),
@@ -79,7 +80,7 @@ const updateOpportunitySchema = z
   .object({
     title: z.string().min(1).max(200).optional(),
     customerName: z.string().min(1).max(200).optional(),
-    dealValue: z.number().min(0).optional(),
+    dealValue: z.number().min(0).max(Number.MAX_SAFE_INTEGER).optional(),
     picId: picIdField.optional(),
     deadline: dayStringSchema.nullable().optional(),
     requestDate: dayStringSchema.nullable().optional(),
@@ -566,8 +567,13 @@ opportunitiesRouter.post(
         }
 
         const dealValueRaw = raw.dealValue ?? 0;
-        if (typeof dealValueRaw !== "number" || Number.isNaN(dealValueRaw) || dealValueRaw < 0) {
-          reasons.push("Deal value must be a non-negative number");
+        if (
+          typeof dealValueRaw !== "number" ||
+          Number.isNaN(dealValueRaw) ||
+          dealValueRaw < 0 ||
+          dealValueRaw > Number.MAX_SAFE_INTEGER
+        ) {
+          reasons.push(`Deal value must be a non-negative number no larger than ${Number.MAX_SAFE_INTEGER}`);
         }
 
         const winProbabilityRaw = raw.winProbability ?? 50;
@@ -1252,6 +1258,11 @@ opportunitiesRouter.post(
       // the create itself is the tamId default applied above; it does no
       // baseline locking, section bootstrapping, or any other setup to
       // replicate here.
+      // Same 400 `tam_not_found` / `sa_not_found` POST /projects answers for
+      // an unknown or inactive seat holder, instead of a foreign-key 500
+      // (docs/archive/plans/application-review-2026-10-22.md, F-23).
+      await assertActiveUser(tx, tamId, "tam");
+      if (body.saId != null) await assertActiveUser(tx, body.saId, "sa");
       const project = await tx.project.create({
         data: {
           name: body.name,

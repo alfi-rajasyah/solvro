@@ -222,7 +222,7 @@ const updateItopSettingsSchema = z.object({
   // Zod .refine() would produce.
   timezone: z.string().min(1).optional(),
   refreshMinutes: z.number().int().min(1).max(60).optional(),
-  readClasses: z.array(z.enum(READ_CLASSES)).min(1).optional(),
+  readClasses: z.array(z.enum(READ_CLASSES)).min(1).max(READ_CLASSES.length).optional(),
   capacityHoursPerWeek: z.number().int().min(1).max(80).optional(),
   actionsEnabled: z.boolean().optional(),
 });
@@ -711,6 +711,9 @@ itopAdminRouter.get("/persons", async (_req, res) => {
 });
 
 itopAdminRouter.post("/persons/match", async (_req, res) => {
-  await syncUsers();
+  // syncUsers() builds its client through getItopAppClient(), which decrypts
+  // the stored app token — a SecretBoxError there is a 409, not a raw 500
+  // (docs/archive/plans/application-review-2026-10-22.md, F-30).
+  await callItop(() => syncUsers());
   res.json(await listPersonRows());
 });

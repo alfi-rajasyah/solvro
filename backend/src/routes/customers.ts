@@ -28,6 +28,8 @@ import {
   projectVisibilityFilter,
 } from "../lib/visibility.js";
 import { OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import { MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
+import { assertActiveUser } from "../lib/users.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -48,14 +50,6 @@ const updateCustomerSchema = z.object({
   description: z.string().min(1).max(5000).optional(),
   tamId: z.number().int().positive().nullable().optional(),
 });
-
-/** 400 `tam_not_found` instead of a raw P2003 → 500 on a bogus tamId. */
-async function assertTamExists(tamId: number): Promise<void> {
-  const user = await prisma.user.findUnique({ where: { id: tamId }, select: { id: true } });
-  if (!user) {
-    throw new HttpError(400, "tam_not_found", "Assigned TAM does not exist");
-  }
-}
 
 const dayStringSchema = z
   .string()
@@ -348,9 +342,9 @@ const assignServicesSchema = z.object({
   assignments: z.array(
     z.object({
       serviceId: z.number().int().positive(),
-      tools: z.array(z.string().trim().min(1).max(100)).default([]),
+      tools: z.array(z.string().trim().min(1).max(100)).max(MAX_SERVICE_TOOLS).default([]),
     }),
-  ),
+  ).max(MAX_SERVICE_ASSIGNMENTS),
 });
 
 customersRouter.put(
@@ -426,7 +420,7 @@ customersRouter.post(
       }
       tamId = null;
     } else {
-      await assertTamExists(body.tamId);
+      await assertActiveUser(prisma, body.tamId, "tam", { requireActive: false });
       tamId = body.tamId;
     }
     const data: Prisma.CustomerCreateInput = {
@@ -507,7 +501,7 @@ customersRouter.patch(
         }
         data.tam = { disconnect: true };
       } else {
-        await assertTamExists(body.tamId);
+        await assertActiveUser(prisma, body.tamId, "tam", { requireActive: false });
         data.tam = { connect: { id: body.tamId } };
       }
     }

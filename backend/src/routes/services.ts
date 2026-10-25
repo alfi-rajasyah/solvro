@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { requireAuth, requirePermission } from "../http/auth.js";
+import { requireAdmin, requireAuth } from "../http/auth.js";
 import { validate } from "../http/validate.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -18,6 +18,10 @@ export const servicesRouter = Router();
 
 servicesRouter.use(requireAuth);
 
+// The catalogue is global: deleting a service cascades to every customer and
+// project link, so reads are open to any authenticated user but writes are
+// admin-only (docs/archive/plans/application-review-2026-10-22.md, F-24).
+
 servicesRouter.get("/", async (_req, res) => {
   const services = await prisma.service.findMany({
     orderBy: [{ active: "desc" }, { name: "asc" }],
@@ -27,7 +31,7 @@ servicesRouter.get("/", async (_req, res) => {
 
 servicesRouter.post(
   "/",
-  requirePermission("project:write"),
+  requireAdmin,
   validate("body", createServiceSchema),
   async (req, res) => {
     const body = req.body as z.infer<typeof createServiceSchema>;
@@ -44,7 +48,7 @@ servicesRouter.post(
 
 servicesRouter.patch(
   "/:id",
-  requirePermission("project:write"),
+  requireAdmin,
   validate("params", idParamSchema),
   validate("body", updateServiceSchema),
   async (req, res) => {
@@ -66,7 +70,7 @@ servicesRouter.patch(
 
 servicesRouter.delete(
   "/:id",
-  requirePermission("project:write"),
+  requireAdmin,
   validate("params", idParamSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;

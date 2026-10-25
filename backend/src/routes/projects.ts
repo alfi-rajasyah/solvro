@@ -35,6 +35,7 @@ import { assertEpicNotOnSubtask, assertValidEpic } from "../lib/epics.js";
 import { computeProjectHealth, computeSlipDays } from "../lib/projectHealth.js";
 import { COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
+import { assertActiveUser } from "../lib/users.js";
 import {
   diffProjectChanges,
   recordActivity,
@@ -44,6 +45,8 @@ import {
 } from "../lib/activity.js";
 import { epicCreatedChanges } from "../lib/epicActivity.js";
 import { notifyForEvent } from "../lib/notifications.js";
+import { diffProjectSeats, projectSeatsSelect, recordProjectUpdate } from "../lib/projectSeats.js";
+import { MAX_LABEL_IDS, MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
 
 // Kanban WIP limits — one optional positive-int cap per top-level status
 // column, or null/absent for "no limit". Visual-only on the board (amber
@@ -122,7 +125,7 @@ const createTaskSchema = z
     assignedToId: z.number().int().positive().nullable().optional(),
     parentTaskId: z.number().int().positive().nullable().optional(),
     sectionId: z.number().int().positive().nullable().optional(),
-    labelIds: z.array(z.number().int().positive()).optional(),
+    labelIds: z.array(z.number().int().positive()).max(MAX_LABEL_IDS).optional(),
     epicId: z.number().int().positive().nullable().optional(),
   })
   .refine((b) => !b.isMilestone || b.dueDate != null, {
@@ -207,6 +210,10 @@ projectsRouter.post(
     // who holds the TAM and SA seats and the customer — ids and display names
     // only, never emails.
     const project = await prisma.$transaction(async (tx) => {
+      // 400 `tam_not_found` / `sa_not_found` instead of a foreign-key 500
+      // (docs/archive/plans/application-review-2026-10-22.md, F-23).
+      await assertActiveUser(tx, tamId, "tam");
+      if (body.saId != null) await assertActiveUser(tx, body.saId, "sa");
       const created = await tx.project.create({
         data: {
           name: body.name,
@@ -337,9 +344,9 @@ const assignServicesSchema = z.object({
   assignments: z.array(
     z.object({
       serviceId: z.number().int().positive(),
-      tools: z.array(z.string().trim().min(1).max(100)).default([]),
+      tools: z.array(z.string().trim().min(1).max(100)).max(MAX_SERVICE_TOOLS).default([]),
     }),
-  ),
+  ).max(MAX_SERVICE_ASSIGNMENTS),
 });
 
 projectsRouter.put(
@@ -456,40 +463,38 @@ projectsRouter.patch(
           name: true,
           status: true,
           customerId: true,
-          tam: { select: { id: true, username: true } },
-          sa: { select: { id: true, username: true } },
+          ...projectSeatsSelect,
         },
       });
+      // A changed TAM or SA must exist (400 instead of a missing-row 404 /
+      // foreign-key 500; docs/archive/plans/application-review-2026-10-22.md,
+      // F-23). An inactive account is still accepted here — activity.test.ts
+      // pins that an inactive new SA can be set and is simply not notified —
+      // unlike POST /projects, which requires an active one. Re-saving the
+      // current seat holder is not a change.
+      if (body.tamId !== undefined && body.tamId !== before.tam.id) {
+        await assertActiveUser(tx, body.tamId, "tam", { requireActive: false });
+      }
+      if (body.saId != null && body.saId !== before.sa?.id) {
+        await assertActiveUser(tx, body.saId, "sa", { requireActive: false });
+      }
       const result = await tx.project.update({ where: { id }, data });
       // Name, status, customer and the TAM / SA seats are logged (ids and
-      // usernames only); a re-save records nothing.
-      const changes: ActivityChanges = diffProjectChanges(
-        { name: before.name, status: before.status, customerId: before.customerId },
-        result,
-      );
-      for (const [key, beforeId, afterId] of [
-        ["tam", before.tam.id, result.tamId],
-        ["sa", before.sa?.id ?? null, result.saId],
-      ] as const) {
-        if (beforeId === afterId) continue;
-        const to =
-          afterId === null
-            ? null
-            : await tx.user.findUnique({ where: { id: afterId }, select: { id: true, username: true } });
-        changes[key] = { from: key === "tam" ? before.tam : before.sa, to } as Prisma.InputJsonObject;
-      }
-      const event = await recordActivity(tx, {
+      // usernames only); a re-save records nothing. The new TAM / SA get an
+      // `assigned` notification.
+      const changes: ActivityChanges = {
+        ...diffProjectChanges(
+          { name: before.name, status: before.status, customerId: before.customerId },
+          result,
+        ),
+        ...(await diffProjectSeats(tx, before, result)),
+      };
+      await recordProjectUpdate(tx, {
         projectId: id,
         actorId: req.user!.sub,
-        entityType: "project",
-        entityId: id,
-        action: "updated",
-        entityLabel: shortLabel(result.name),
+        name: result.name,
         changes,
       });
-      // The new TAM / SA (changes.tam / changes.sa `to`) get an `assigned`
-      // notification; the actor and inactive users are skipped inside.
-      await notifyForEvent(tx, event);
       return result;
     });
     res.json(updated);
@@ -576,6 +581,7 @@ projectsRouter.post(
       // Assigning someone who cannot see the project adds them as a member
       // (same transaction as the task write).
       if (body.assignedToId != null) {
+        await assertActiveUser(tx, body.assignedToId, "assignee", { requireActive: false });
         const added = await ensureAssigneeIsMember(tx, id, body.assignedToId, req.user!.sub);
         if (added) {
           await recordActivity(tx, {
@@ -747,6 +753,9 @@ projectsRouter.post(
     });
     const position = (max._max.position ?? -1) + 1;
     const epic = await prisma.$transaction(async (tx) => {
+      if (body.ownerId != null) {
+        await assertActiveUser(tx, body.ownerId, "owner", { requireActive: false });
+      }
       const created = await tx.epic.create({
         data: {
           projectId: id,

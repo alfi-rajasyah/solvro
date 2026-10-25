@@ -1,5 +1,11 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
+import {
+  baseUsernameFromEmail,
+  decideCreateAdmin,
+  isForceFlag,
+  resolveUsername,
+} from "./createAdminPolicy.js";
 
 const prisma = new PrismaClient();
 
@@ -28,27 +34,58 @@ async function main() {
     );
   }
 
-  const username = email.split("@")[0];
+  const normalizedEmail = email.trim().toLowerCase();
   const passwordHash = await bcrypt.hash(password, 10);
 
-  const user = await prisma.user.upsert({
-    // Emails are stored lower-case (migration `lowercase_user_emails`).
-    where: { email: email.trim().toLowerCase() },
-    update: {
-      username,
-      passwordHash,
-      roleId: adminRole.id,
-      active: true,
-    },
-    create: {
-      username,
-      email: email.trim().toLowerCase(),
-      passwordHash,
-      roleId: adminRole.id,
-    },
+  // Emails are stored lower-case (migration `lowercase_user_emails`).
+  const existing = await prisma.user.findUnique({
+    where: { email: normalizedEmail },
+    select: { id: true, username: true, roleId: true, role: { select: { roleName: true } } },
   });
+  const action = decideCreateAdmin(
+    existing === null ? null : { isAdmin: existing.roleId === adminRole.id },
+    isForceFlag(process.env.FORCE_ADMIN),
+  );
 
-  console.log(`Admin user ready: ${user.email} (id=${user.id})`);
+  if (action === "refuse") {
+    throw new Error(
+      `${normalizedEmail} already exists with role ${existing?.role.roleName} (username "${existing?.username}"). ` +
+        "Nothing was changed. Re-run with FORCE_ADMIN=1 to promote it to ADMIN and reset its password.",
+    );
+  }
+
+  if (action === "create") {
+    const base = baseUsernameFromEmail(normalizedEmail);
+    if (base === null) {
+      throw new Error("Could not derive a valid username from ADMIN_EMAIL");
+    }
+    // Same case-insensitive clash rule as POST /admin/users; the email is
+    // new here, so any match belongs to a different account.
+    const username = await resolveUsername(base, async (candidate) => {
+      const clash = await prisma.$queryRaw<Array<{ id: number }>>`
+        SELECT id FROM users WHERE lower(username) = lower(${candidate}) LIMIT 1
+      `;
+      return clash.length > 0;
+    });
+    const user = await prisma.user.create({
+      data: { username, email: normalizedEmail, passwordHash, roleId: adminRole.id },
+    });
+    console.log(`Admin user created: ${user.email} (id=${user.id}, username=${user.username})`);
+    return;
+  }
+
+  // reset-admin / promote: the row exists. Its username is left as it is.
+  const user = await prisma.user.update({
+    where: { email: normalizedEmail },
+    // tokenVersion bump: a password reset must end sessions issued before it,
+    // the same as the Admin reset route (http/auth.ts compares the claim).
+    data: { passwordHash, roleId: adminRole.id, active: true, tokenVersion: { increment: 1 } },
+  });
+  console.log(
+    action === "promote"
+      ? `FORCE_ADMIN: promoted ${user.email} (id=${user.id}) to ADMIN and reset its password`
+      : `Admin user already exists: ${user.email} (id=${user.id}); password reset and account re-activated`,
+  );
 }
 
 main()

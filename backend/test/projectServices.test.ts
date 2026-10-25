@@ -108,13 +108,44 @@ describe("PUT /projects/:id/services", () => {
     expect(secondRes.body.services[0].tools).toEqual(["Veeam", "Rubrik"]);
   });
 
-  it("allows a TAM to create catalogue services (project:write gate regression)", async () => {
+  it("gates catalogue writes to admins; every authenticated user can still read (F-24)", async () => {
     const tam = await createUserWithRole("TAM");
-    const serviceRes = await request(app)
+    const serviceId = await createService(); // admin create succeeds
+
+    const tamPost = await request(app)
       .post("/services")
       .set("Authorization", `Bearer ${tam.token}`)
       .send({ name: `TAM Service ${Date.now()}-${Math.random()}` });
-    expect(serviceRes.status).toBe(201);
+    expect(tamPost.status).toBe(403);
+
+    const tamPatch = await request(app)
+      .patch(`/services/${serviceId}`)
+      .set("Authorization", `Bearer ${tam.token}`)
+      .send({ name: "Renamed by TAM" });
+    expect(tamPatch.status).toBe(403);
+
+    const tamDelete = await request(app)
+      .delete(`/services/${serviceId}`)
+      .set("Authorization", `Bearer ${tam.token}`);
+    expect(tamDelete.status).toBe(403);
+
+    for (const t of [tam.token, token]) {
+      const list = await request(app).get("/services").set("Authorization", `Bearer ${t}`);
+      expect(list.status).toBe(200);
+      expect((list.body as { id: number }[]).some((s) => s.id === serviceId)).toBe(true);
+    }
+
+    const adminPatch = await request(app)
+      .patch(`/services/${serviceId}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ name: "Renamed by admin" });
+    expect(adminPatch.status).toBe(200);
+    expect(adminPatch.body.name).toBe("Renamed by admin");
+
+    const adminDelete = await request(app)
+      .delete(`/services/${serviceId}`)
+      .set("Authorization", `Bearer ${token}`);
+    expect(adminDelete.status).toBe(204);
   });
 
   it("rejects a read-only STAKEHOLDER from writing services or assignments", async () => {

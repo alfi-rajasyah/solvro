@@ -34,7 +34,7 @@ import { ensureCustomerVisible, customerVisibilityFilter, isCustomerVisible } fr
 import { getItopAppClient, getItopConfig, isItopConfigured, makeItopClient } from "../lib/itop/config.js";
 import { requestSync } from "../lib/itop/scheduler.js";
 import { open, SecretBoxError } from "../lib/secretBox.js";
-import { ItopError, type ItopGetResult, type ItopObjectRow } from "../lib/itop/client.js";
+import { ItopError, type ItopClient, type ItopGetResult, type ItopObjectRow } from "../lib/itop/client.js";
 import { TIME_ENTRY_WINDOW_MS, formatItopDate, upsertTicketFromItop, upsertTimeEntryFromItop } from "../lib/itop/sync.js";
 import {
   ITOP_LNK_PERSON_TO_TEAM_OUTPUT_FIELDS,
@@ -928,6 +928,30 @@ itopRouter.post(
 // data — not itself a write) before the create is attempted with the user's
 // token. See docs/archive/plans/itop-integration.md Task 6.2.
 
+/**
+ * Builds the read-only application client for a REQUEST handler. `getItopAppClient()`
+ * decrypts the stored application token itself, so a `SecretBoxError` (the saved
+ * token can no longer be decrypted, e.g. `SECRETS_KEY` was rotated) surfaces here
+ * and must answer 409 `itop_token_unreadable` — same shape as itopAdmin.ts's
+ * `callItop` — instead of reaching the global handler as a raw 500
+ * (docs/archive/plans/application-review-2026-10-22.md, F-30). Not used by the
+ * post-write re-reads, which already catch every failure themselves.
+ */
+async function getItopAppClientOr409(): Promise<ItopClient> {
+  try {
+    return await getItopAppClient();
+  } catch (err) {
+    if (err instanceof SecretBoxError) {
+      throw new HttpError(
+        409,
+        "itop_token_unreadable",
+        "The stored iTop token could not be decrypted (SECRETS_KEY changed?) — an admin must enter it again.",
+      );
+    }
+    throw err;
+  }
+}
+
 /** Maps a read-only iTop failure (GET /services, GET /customers/:id/contacts, and the caller-in-org check below) to a 502 — these never surface iTop's error as a 409 since there's no "refusal" concept for a plain read. */
 function mapItopReadError(err: unknown): never {
   if (err instanceof ItopError) {
@@ -969,7 +993,7 @@ itopRouter.get("/services", async (_req, res) => {
 
   // Throws 409 itop_not_configured itself when the admin hasn't connected
   // iTop yet — no separate isItopConfigured check needed here.
-  const appClient = await getItopAppClient();
+  const appClient = await getItopAppClientOr409();
 
   let result: ItopGetResult<ItopServiceFields>;
   try {
@@ -1004,7 +1028,7 @@ itopRouter.get(
       return;
     }
 
-    const appClient = await getItopAppClient();
+    const appClient = await getItopAppClientOr409();
     let result: ItopGetResult<ItopPersonFields>;
     try {
       result = await appClient.get<ItopPersonFields>(
@@ -1143,7 +1167,7 @@ itopRouter.post(
     // checked with the read-only application client (a fact about iTop's
     // own data, not a write) before spending the user's own token on a
     // create that iTop would refuse anyway.
-    const appClient = await getItopAppClient();
+    const appClient = await getItopAppClientOr409();
     let callerCheck: ItopGetResult<ItopPersonFields>;
     try {
       callerCheck = await appClient.get<ItopPersonFields>(

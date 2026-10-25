@@ -146,6 +146,38 @@ describe("assigned", () => {
   });
 });
 
+describe("admin project reassign (F-25)", () => {
+  it("records one activity event with changes.tam and notifies the new TAM; the same TAM records nothing", async () => {
+    const { tam, other, project } = await fixture();
+    const admin = await createUserWithRole("ADMIN");
+    const reassign = (newTamId: number) =>
+      request(app)
+        .put("/admin/projects/reassign")
+        .set(auth(admin.token))
+        .send({ projectId: project.id, newTamId });
+
+    expect((await reassign(other.userId)).status).toBe(200);
+    const events = await prisma.activityEvent.findMany({ where: { projectId: project.id } });
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      entityType: "project",
+      action: "updated",
+      actorId: admin.userId,
+    });
+    const changes = events[0]!.changes as { tam: { from: { id: number }; to: { id: number } } };
+    expect(changes.tam.from.id).toBe(tam.userId);
+    expect(changes.tam.to.id).toBe(other.userId);
+    const rows = await notesFor(other.userId);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ reason: "assigned", activityEventId: events[0]!.id });
+
+    // Same TAM again: nothing new.
+    expect((await reassign(other.userId)).status).toBe(200);
+    expect(await prisma.activityEvent.count({ where: { projectId: project.id } })).toBe(1);
+    expect(await notesFor(other.userId)).toHaveLength(1);
+  });
+});
+
 describe("commented", () => {
   it("a comment by someone else notifies the task's assignee once", async () => {
     const { tam, other, project } = await fixture();

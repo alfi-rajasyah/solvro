@@ -25,11 +25,12 @@ export interface AuthUser {
   permissions: string[];
 }
 
-// The permission vocabulary the app actually understands, for the Admin >
-// Roles tick-box editor. The backend stores permissions as a free-form
-// string array, so this is a curated catalogue (not enforced server-side) —
-// keep it in sync with the `requirePermission(...)` / `hasPermission(...)`
-// strings used across backend + frontend. "*" is full access (admin).
+// The permission vocabulary for the Admin > Roles tick-box editor. The backend
+// validates role writes against the same list (`KNOWN_PERMISSIONS` in
+// backend/src/lib/permissions.ts), so a value added here must be added there
+// too, or saving a role that carries it is refused. Each side pins its copy of
+// the 13 values in a test (auth.test.ts here, hardening.test.ts there). "*" is
+// full access (admin).
 export interface PermissionDef {
   value: string;
   label: string;
@@ -54,8 +55,8 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
 /**
  * Permission check used by UI gates. Wildcard "*" grants everything; a
  * specific permission grants just that one. Custom roles created in
- * Admin > Roles can list any permission strings; the built-in roles'
- * exact grants live in backend/prisma/seed.ts.
+ * Admin > Roles can combine the permissions in PERMISSION_CATALOG; the
+ * built-in roles' exact grants live in backend/prisma/seed.ts.
  */
 export function hasPermission(
   user: AuthUser | null | undefined,
