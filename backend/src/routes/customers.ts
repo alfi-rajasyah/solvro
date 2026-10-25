@@ -27,7 +27,7 @@ import {
   ensureCustomerVisible,
   projectVisibilityFilter,
 } from "../lib/visibility.js";
-import { OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import { COUNTED_TASKS_COUNT, OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 import { MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
 import { assertActiveUser } from "../lib/users.js";
 
@@ -297,7 +297,7 @@ function customerInclude(user: JwtPayload) {
       include: {
         tam: { select: { id: true, username: true } },
         sa: { select: { id: true, username: true } },
-        _count: { select: { tasks: true } },
+        _count: COUNTED_TASKS_COUNT,
       },
     },
     services: {

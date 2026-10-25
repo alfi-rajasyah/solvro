@@ -4,6 +4,7 @@ import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
 import { InstallBanner } from "@/components/InstallBanner";
 import { useAuth } from "@/lib/auth";
+import { ConnectionAnnouncer, OfflineBanner, UpdateBanner } from "./ConnectionBanners";
 import { Sidebar } from "./Sidebar";
 import { SidebarProvider, useSidebar } from "./SidebarContext";
 import { TopBar } from "./TopBar";
@@ -68,6 +69,9 @@ function ShellLayout() {
           takes its own row at the very top; main below is flex-1 so it fills
           whatever's left rather than assuming a fixed TopBar height. */}
       <InstallBanner />
+      <ConnectionAnnouncer />
+      <OfflineBanner shift={shift} />
+      <UpdateBanner shift={shift} />
       {bootError && (
         // Shifted past the fixed sidebar like <main>, or its first words sit
         // underneath it (docs/archive/plans/application-review-2026-10-22.md, QA-02).

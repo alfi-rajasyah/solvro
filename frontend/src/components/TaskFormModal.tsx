@@ -16,6 +16,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { commitDraft, dayFromIso, isoFromDay } from "@/lib/dateField";
+import { fieldErrorsFrom, formErrorMessage } from "@/lib/formErrors";
 import { PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/lib/labels";
 import {
   diffTaskForm,
@@ -42,6 +43,21 @@ import {
 
 const PRIORITIES: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
+
+// Request fields this form shows a server message under (F-34); any other
+// rejected field (labelIds, isCriticalPath, ...) is listed in the alert. The two
+// dates are not here: DateRangeField is a popover trigger with no way to carry
+// aria-invalid / aria-describedby, so their messages go to the alert instead.
+const INLINE_ERROR_FIELDS = [
+  "title",
+  "description",
+  "status",
+  "priority",
+  "assignedToId",
+  "parentTaskId",
+  "sectionId",
+  "epicId",
+] as const;
 
 const PRIORITY_COLOR: Record<Priority, string> = {
   LOW: "text-on-surface",
@@ -98,6 +114,8 @@ export function TaskFormModal(props: TaskFormModalProps) {
   const [labelIds, setLabelIds] = useState<number[]>([]);
   const [isCriticalPath, setIsCriticalPath] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Server validation messages by request field (docs/archive/plans/application-review-2026-10-22.md, F-34).
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   // Drive the drawer's slide-out: every close path sets `closing`, and
   // the parent's real `onClose` (which unmounts us) only runs once the
   // exit transition has finished.
@@ -121,6 +139,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setFieldErrors({});
     setConflict(null);
     if (editingTask) {
       baseTaskRef.current = editingTask;
@@ -192,6 +211,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setFieldErrors({});
     if (!title.trim()) {
       setError("Title is required.");
       return;
@@ -266,7 +286,8 @@ export function TaskFormModal(props: TaskFormModalProps) {
       }
       requestClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Save failed.");
+      setFieldErrors(fieldErrorsFrom(err));
+      setError(formErrorMessage(err, "Save failed.", INLINE_ERROR_FIELDS));
     }
   }
 
@@ -275,13 +296,15 @@ export function TaskFormModal(props: TaskFormModalProps) {
     if (!conflict) return;
     const { taskId, patch } = conflict;
     setError(null);
+    setFieldErrors({});
     try {
       await update.mutateAsync({ id: taskId, patch });
       setConflict(null);
       requestClose();
     } catch (err) {
       setConflict(null);
-      setError(err instanceof ApiError ? err.message : "Save failed.");
+      setFieldErrors(fieldErrorsFrom(err));
+      setError(formErrorMessage(err, "Save failed.", INLINE_ERROR_FIELDS));
     }
   }
 
@@ -311,6 +334,13 @@ export function TaskFormModal(props: TaskFormModalProps) {
   }
 
   const submitting = create.isPending || update.isPending || remove.isPending;
+
+  const errorId = (field: string) => `task-form-${field}-error`;
+  // aria-invalid + aria-describedby for a field the server rejected.
+  const invalidProps = (field: string) =>
+    fieldErrors[field]
+      ? { "aria-invalid": true as const, "aria-describedby": errorId(field) }
+      : {};
 
   async function handleDelete() {
     if (!isEdit || !editingTask) return;
@@ -393,26 +423,33 @@ export function TaskFormModal(props: TaskFormModalProps) {
     >
       <form id="task-form" onSubmit={handleSubmit} className="space-y-3.5">
         {/* Title */}
-        <div className="flex items-start gap-3">
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            maxLength={200}
-            autoFocus
-            placeholder="Task title"
-            className="flex-1 border-none bg-transparent text-lg font-bold text-on-surface outline-hidden placeholder:text-on-surface-variant/40 focus:outline-hidden"
-          />
+        <div>
+          <div className="flex items-start gap-3">
+            <input
+              type="text"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              maxLength={200}
+              autoFocus
+              placeholder="Task title"
+              aria-label="Task title"
+              {...invalidProps("title")}
+              className="flex-1 border-none bg-transparent text-lg font-bold text-on-surface outline-hidden placeholder:text-on-surface-variant/40 focus:outline-hidden"
+            />
+          </div>
+          <FieldError id={errorId("title")} message={fieldErrors.title} />
         </div>
 
         {/* Icon field rows */}
         <div className="space-y-2 rounded-xl border border-outline-variant bg-surface-container-low p-3">
           {/* Priority */}
-          <FieldRow icon="flag" label="Priority">
+          <FieldRow icon="flag" label="Priority" error={fieldErrors.priority} errorId={errorId("priority")}>
             <select
               value={priority}
               onChange={(e) => setPriority(e.target.value as Priority)}
               disabled={!canEdit}
+              aria-label="Priority"
+              {...invalidProps("priority")}
               className={`cursor-pointer border-none bg-transparent text-xs font-semibold focus:outline-hidden disabled:cursor-default ${PRIORITY_COLOR[priority]}`}
             >
               {PRIORITIES.map((p) => (
@@ -424,11 +461,13 @@ export function TaskFormModal(props: TaskFormModalProps) {
           </FieldRow>
 
           {/* Status */}
-          <FieldRow icon="radio_button_checked" label="Status">
+          <FieldRow icon="radio_button_checked" label="Status" error={fieldErrors.status} errorId={errorId("status")}>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as TaskStatus)}
               disabled={!canEdit}
+              aria-label="Status"
+              {...invalidProps("status")}
               className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
             >
               {STATUSES.map((s) => (
@@ -455,13 +494,15 @@ export function TaskFormModal(props: TaskFormModalProps) {
           </FieldRow>
 
           {/* Assignee */}
-          <FieldRow icon="group" label="Assignee">
+          <FieldRow icon="group" label="Assignee" error={fieldErrors.assignedToId} errorId={errorId("assignedToId")}>
             <select
               value={assignedToId === "" ? "" : String(assignedToId)}
               onChange={(e) =>
                 setAssignedToId(e.target.value === "" ? "" : Number(e.target.value))
               }
               disabled={!canEdit}
+              aria-label="Assignee"
+              {...invalidProps("assignedToId")}
               className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
             >
               <option value="">Unassigned</option>
@@ -495,13 +536,15 @@ export function TaskFormModal(props: TaskFormModalProps) {
           </FieldRow>
 
           {/* Parent task */}
-          <FieldRow icon="account_tree" label="Parent">
+          <FieldRow icon="account_tree" label="Parent" error={fieldErrors.parentTaskId} errorId={errorId("parentTaskId")}>
             <select
               value={parentTaskId === "" ? "" : String(parentTaskId)}
               onChange={(e) =>
                 setParentTaskId(e.target.value === "" ? "" : Number(e.target.value))
               }
               disabled={!canEdit}
+              aria-label="Parent task"
+              {...invalidProps("parentTaskId")}
               className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
             >
               <option value="">Top level</option>
@@ -514,13 +557,15 @@ export function TaskFormModal(props: TaskFormModalProps) {
           </FieldRow>
 
           {/* Section */}
-          <FieldRow icon="folder" label="Section">
+          <FieldRow icon="folder" label="Section" error={fieldErrors.sectionId} errorId={errorId("sectionId")}>
             <select
               value={sectionId === "" ? "" : String(sectionId)}
               onChange={(e) =>
                 setSectionId(e.target.value === "" ? "" : Number(e.target.value))
               }
               disabled={!canEdit}
+              aria-label="Section"
+              {...invalidProps("sectionId")}
               className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
             >
               <option value="">No section</option>
@@ -535,12 +580,14 @@ export function TaskFormModal(props: TaskFormModalProps) {
           {/* Epic — disabled + cleared when a parent is chosen above (§4:
               epicId is only ever set on a top-level task; the backend
               rejects it on a subtask with epic_on_subtask). */}
-          <FieldRow icon="workspaces" label="Epic">
+          <FieldRow icon="workspaces" label="Epic" error={fieldErrors.epicId} errorId={errorId("epicId")}>
             <div className="flex items-center gap-1.5">
               <select
                 value={epicId === "" ? "" : String(epicId)}
                 onChange={(e) => setEpicId(e.target.value === "" ? "" : Number(e.target.value))}
                 disabled={!canEdit || parentTaskId !== ""}
+                aria-label="Epic"
+                {...invalidProps("epicId")}
                 className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
               >
                 <option value="">No epic</option>
@@ -580,9 +627,14 @@ export function TaskFormModal(props: TaskFormModalProps) {
             rows={3}
             maxLength={2000}
             placeholder="Add a description…"
+            aria-label="Description"
             disabled={!canEdit}
-            className="w-full resize-y rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 disabled:cursor-default"
+            {...invalidProps("description")}
+            className={`w-full resize-y rounded-lg border bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 disabled:cursor-default ${
+              fieldErrors.description ? "border-error" : "border-outline-variant"
+            }`}
           />
+          <FieldError id={errorId("description")} message={fieldErrors.description} />
         </div>
 
         {/* Subtasks */}
@@ -596,46 +648,20 @@ export function TaskFormModal(props: TaskFormModalProps) {
             ) : (
               <ul className="divide-y divide-outline-variant rounded-xl border border-outline-variant">
                 {subtasks.map((s, index) => (
-                  <li key={s.id} className="flex items-center gap-2 px-3 py-2">
-                    <input
-                      type="checkbox"
-                      checked={s.status === "DONE"}
-                      disabled={s.status === "CANCELLED"}
-                      title={s.status === "CANCELLED" ? "Cancelled — change its status to reopen" : undefined}
-                      onChange={() =>
-                        update.mutate({
-                          id: s.id,
-                          patch: { status: s.status === "DONE" ? "TODO" : "DONE" },
-                        })
-                      }
-                      className="h-3.5 w-3.5 accent-primary"
-                    />
-                    <span
-                      className={`flex-1 text-xs ${s.status === "DONE" || s.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
-                    >
-                      {s.title}
-                    </span>
-                    <div className="flex shrink-0 items-center gap-0.5">
-                      <button
-                        type="button"
-                        onClick={() => moveSubtask(index, -1)}
-                        disabled={!canEdit || index === 0}
-                        aria-label="Move subtask up"
-                        className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
-                      >
-                        <span className="material-symbols-outlined text-sm">keyboard_arrow_up</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => moveSubtask(index, 1)}
-                        disabled={!canEdit || index === subtasks.length - 1}
-                        aria-label="Move subtask down"
-                        className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
-                      >
-                        <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
-                      </button>
-                    </div>
-                  </li>
+                  <SubtaskRow
+                    key={s.id}
+                    subtask={s}
+                    canEdit={canEdit}
+                    isFirst={index === 0}
+                    isLast={index === subtasks.length - 1}
+                    onToggle={() =>
+                      update.mutate({
+                        id: s.id,
+                        patch: { status: s.status === "DONE" ? "TODO" : "DONE" },
+                      })
+                    }
+                    onMove={(direction) => moveSubtask(index, direction)}
+                  />
                 ))}
               </ul>
             )}
@@ -688,13 +714,76 @@ export function TaskFormModal(props: TaskFormModalProps) {
   );
 }
 
+/** One subtask line of the edit form: done checkbox, title, reorder buttons. */
+export function SubtaskRow({
+  subtask: s,
+  canEdit,
+  isFirst,
+  isLast,
+  onToggle,
+  onMove,
+}: {
+  subtask: Pick<Task, "id" | "title" | "status">;
+  canEdit: boolean;
+  isFirst: boolean;
+  isLast: boolean;
+  onToggle: () => void;
+  onMove: (direction: -1 | 1) => void;
+}) {
+  return (
+    <li className="flex items-center gap-2 px-3 py-2">
+      <input
+        type="checkbox"
+        checked={s.status === "DONE"}
+        disabled={s.status === "CANCELLED"}
+        title={s.status === "CANCELLED" ? "Cancelled — change its status to reopen" : undefined}
+        // A checkbox with no label has no accessible name
+        // (docs/archive/plans/application-review-2026-10-22.md, F-37).
+        aria-label={`Mark subtask "${s.title}" done`}
+        onChange={onToggle}
+        className="h-3.5 w-3.5 accent-primary"
+      />
+      <span
+        className={`flex-1 text-xs ${s.status === "DONE" || s.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
+      >
+        {s.title}
+      </span>
+      <div className="flex shrink-0 items-center gap-0.5">
+        <button
+          type="button"
+          onClick={() => onMove(-1)}
+          disabled={!canEdit || isFirst}
+          aria-label="Move subtask up"
+          className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
+        >
+          <span className="material-symbols-outlined text-sm">keyboard_arrow_up</span>
+        </button>
+        <button
+          type="button"
+          onClick={() => onMove(1)}
+          disabled={!canEdit || isLast}
+          aria-label="Move subtask down"
+          className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
+        >
+          <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+        </button>
+      </div>
+    </li>
+  );
+}
+
 function FieldRow({
   icon,
   label,
+  error,
+  errorId,
   children,
 }: {
   icon: string;
   label: string;
+  /** The server's validation message for this row's field. */
+  error?: string;
+  errorId?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -703,7 +792,19 @@ function FieldRow({
         {icon}
       </span>
       <span className="w-20 shrink-0 text-xs text-on-surface-variant">{label}</span>
-      <div className="flex-1">{children}</div>
+      <div className="flex-1">
+        {children}
+        <FieldError id={errorId} message={error} />
+      </div>
     </div>
+  );
+}
+
+function FieldError({ id, message }: { id?: string; message: string | undefined }) {
+  if (!message) return null;
+  return (
+    <p id={id} className="mt-1 text-xs text-error">
+      {message}
+    </p>
   );
 }

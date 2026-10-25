@@ -132,6 +132,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             rows={2}
             className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
             placeholder="What could go wrong?"
+            aria-label="Risk description"
           />
         </div>
 
@@ -231,6 +232,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             rows={3}
             className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
             placeholder="Steps to reduce probability or impact."
+            aria-label="Mitigation plan"
           />
         </div>
 
@@ -244,6 +246,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             rows={3}
             className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
             placeholder="What to do if the risk materialises."
+            aria-label="Contingency plan"
           />
         </div>
       </div>

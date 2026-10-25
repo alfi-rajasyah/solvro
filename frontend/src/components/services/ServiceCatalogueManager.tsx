@@ -83,6 +83,7 @@ export function ServiceCatalogueManager() {
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
             maxLength={100}
+            aria-label="Service name"
             className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-hidden"
           />
         ) : (
@@ -109,6 +110,7 @@ export function ServiceCatalogueManager() {
             value={editDesc}
             onChange={(e) => setEditDesc(e.target.value)}
             maxLength={1000}
+            aria-label="Service description"
             className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-hidden"
           />
         ) : (

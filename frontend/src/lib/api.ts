@@ -125,7 +125,7 @@ export async function apiRequestWithHeaders<T>(
     // message a page can show as-is. A caller-side abort passes through
     // unchanged so React Query keeps treating it as a cancellation.
     if (err instanceof DOMException && err.name === "TimeoutError") {
-      throw new ApiError(0, "The server did not answer in time. Check your connection and retry.", null);
+      throw new ApiError(0, "The server did not answer in time. Check your connection and try again.", null);
     }
     // `fetch` rejects with a TypeError when the network itself fails (offline,
     // DNS, connection refused). Give pages a readable message instead of

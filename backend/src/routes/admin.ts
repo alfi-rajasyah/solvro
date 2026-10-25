@@ -11,6 +11,7 @@ import { bustAuthConfigCache } from "../authConfig.js";
 import { normalizeUsername, USERNAME_MAX } from "../lib/username.js";
 import { permissionsSchema } from "../lib/permissions.js";
 import { diffProjectSeats, projectSeatsSelect, recordProjectUpdate } from "../lib/projectSeats.js";
+import { COUNTED_TASKS_COUNT } from "../lib/taskStatus.js";
 
 export const adminRouter = Router();
 
@@ -588,7 +589,7 @@ adminRouter.get("/projects", async (_req, res) => {
       sa: { select: { id: true, username: true } },
       tam: { select: { id: true, username: true } },
       customer: { select: { id: true, name: true } },
-      _count: { select: { tasks: true } },
+      _count: COUNTED_TASKS_COUNT,
     },
   });
   res.json(projects);
@@ -633,7 +634,7 @@ adminRouter.put(
           sa: { select: { id: true, username: true } },
           tam: { select: { id: true, username: true } },
           customer: { select: { id: true, name: true } },
-          _count: { select: { tasks: true } },
+          _count: COUNTED_TASKS_COUNT,
         },
       });
       await recordProjectUpdate(tx, {

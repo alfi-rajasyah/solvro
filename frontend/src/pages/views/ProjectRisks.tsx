@@ -139,6 +139,7 @@ export function ProjectRisks() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search description, mitigation, contingency…"
+          aria-label="Search risks"
           className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden sm:w-72"
         />
         <Select
