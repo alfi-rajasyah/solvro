@@ -413,3 +413,46 @@ describe("POST /itop/tickets", () => {
     expect(writes).toHaveLength(1);
   });
 });
+
+// docs/archive/plans/application-review-2026-10-22.md, F-30: these three routes
+// build the read-only application client with getItopAppClient(), which
+// decrypts the stored token itself — a token that no longer opens (SECRETS_KEY
+// rotated) used to escape as a raw 500.
+describe("an unreadable stored application token", () => {
+  beforeEach(async () => {
+    // Well-formed sealed-value shape that the current SECRETS_KEY cannot open.
+    await prisma.itopConfig.update({
+      where: { id: "default" },
+      data: { appTokenEnc: "v1:anVuaw==:anVuaw==:anVuaw==" },
+    });
+    bustItopConfigCache();
+    bustItopServicesCache();
+  });
+
+  it("GET /itop/services answers 409 itop_token_unreadable", async () => {
+    const res = await call("get", "/itop/services", fixture.rina.token);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("itop_token_unreadable");
+  });
+
+  it("GET /itop/customers/:id/contacts answers 409 itop_token_unreadable", async () => {
+    const res = await call("get", `/itop/customers/${fixture.customer1Id}/contacts`, fixture.rina.token);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("itop_token_unreadable");
+  });
+
+  it("POST /itop/tickets answers 409 itop_token_unreadable and creates nothing in iTop", async () => {
+    await linkPersonalToken(fixture.rina.userId, FAKE_ITOP_TOKENS.rina);
+
+    const res = await call("post", "/itop/tickets", fixture.rina.token, {
+      customerId: fixture.customer1Id,
+      class: "UserRequest",
+      title: "Never created",
+      description: "The app token cannot be read, so the caller-in-org check cannot run.",
+      callerId: 1,
+    });
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("itop_token_unreadable");
+    expect(fixture.state.writeLog.filter((w) => w.operation === "core/create")).toHaveLength(0);
+  });
+});

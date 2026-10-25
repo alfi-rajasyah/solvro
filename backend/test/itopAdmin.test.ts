@@ -530,6 +530,21 @@ describe("organizations + customer↔org mapping", () => {
     expect(testRes.body.code).toBe("itop_token_unreadable");
   });
 
+  // docs/archive/plans/application-review-2026-10-22.md, F-30: syncUsers()
+  // builds its client through getItopAppClient() outside any error mapping, so
+  // an unreadable stored app token was a raw 500 on this route.
+  it("POST /persons/match with an unreadable stored token: 409 itop_token_unreadable, not a 500", async () => {
+    await prisma.itopConfig.update({
+      where: { id: "default" },
+      data: { appTokenEnc: "v1:anVuaw==:anVuaw==:anVuaw==" },
+    });
+    bustItopConfigCache();
+
+    const res = await call("post", "/admin/itop/persons/match", adminToken);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("itop_token_unreadable");
+  });
+
   it("PATCH /customers/:id maps to a valid org (happy path)", async () => {
     const customer = await createCustomer({ name: "Some Other Name" });
     const res = await call("patch", `/admin/itop/customers/${customer.id}`, adminToken).send({ itopOrgId: 2 });

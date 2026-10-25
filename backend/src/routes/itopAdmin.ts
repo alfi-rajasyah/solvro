@@ -711,6 +711,9 @@ itopAdminRouter.get("/persons", async (_req, res) => {
 });
 
 itopAdminRouter.post("/persons/match", async (_req, res) => {
-  await syncUsers();
+  // syncUsers() builds its client through getItopAppClient(), which decrypts
+  // the stored app token — a SecretBoxError there is a 409, not a raw 500
+  // (docs/archive/plans/application-review-2026-10-22.md, F-30).
+  await callItop(() => syncUsers());
   res.json(await listPersonRows());
 });

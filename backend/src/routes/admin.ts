@@ -235,56 +235,75 @@ adminRouter.delete(
       throw new HttpError(400, "self_delete", "Admins cannot delete themselves");
     }
 
-    const target = await prisma.user.findUnique({
-      where: { id },
-      include: {
-        _count: {
-          select: {
-            projectsAsTAM: true,
-            projectsAsSA: true,
-            projectBaselinesLocked: true,
-            assignedTasks: true,
-            comments: true,
-            // CustomerNote.author and WeeklyUpdate.author are RESTRICT FKs,
-            // same as ProjectNote.author (projectNotes) — without these,
-            // deleting an author 500s on a raw P2003 instead of the
-            // friendly 400 below.
-            projectNotes: true,
-            customerNotes: true,
-            weeklyUpdates: true,
+    // The blocker count and the delete run in one transaction so the friendly
+    // 400 below is decided on the same snapshot the delete sees. A row
+    // created in the gap between them can still trip a RESTRICT foreign key
+    // (READ COMMITTED), so a P2003 from the delete is converted to the same
+    // 400 rather than surfacing as a 500
+    // (docs/archive/plans/application-review-2026-10-22.md, F-20).
+    let username = "this user";
+    await prisma.$transaction(async (tx) => {
+      const target = await tx.user.findUnique({
+        where: { id },
+        include: {
+          _count: {
+            select: {
+              projectsAsTAM: true,
+              projectsAsSA: true,
+              projectBaselinesLocked: true,
+              assignedTasks: true,
+              comments: true,
+              // CustomerNote.author and WeeklyUpdate.author are RESTRICT FKs,
+              // same as ProjectNote.author (projectNotes) — without these,
+              // deleting an author 500s on a raw P2003 instead of the
+              // friendly 400 below.
+              projectNotes: true,
+              customerNotes: true,
+              weeklyUpdates: true,
+            },
           },
         },
-      },
+      });
+      if (!target) throw new HttpError(404, "user_not_found", "User not found");
+      username = target.username;
+
+      const blockers: string[] = [];
+      if (target._count.projectsAsTAM > 0)
+        blockers.push(`${target._count.projectsAsTAM} project(s) as TAM`);
+      if (target._count.projectsAsSA > 0)
+        blockers.push(`${target._count.projectsAsSA} project(s) as SA`);
+      if (target._count.projectBaselinesLocked > 0)
+        blockers.push(`${target._count.projectBaselinesLocked} locked baseline(s)`);
+      if (target._count.assignedTasks > 0)
+        blockers.push(`${target._count.assignedTasks} assigned task(s)`);
+      if (target._count.comments > 0)
+        blockers.push(`${target._count.comments} comment(s)`);
+      if (target._count.projectNotes > 0)
+        blockers.push(`${target._count.projectNotes} daily note(s)`);
+      if (target._count.customerNotes > 0)
+        blockers.push(`${target._count.customerNotes} customer note(s)`);
+      if (target._count.weeklyUpdates > 0)
+        blockers.push(`${target._count.weeklyUpdates} weekly update(s)`);
+
+      if (blockers.length > 0) {
+        throw new HttpError(
+          400,
+          "user_in_use",
+          `Cannot delete ${target.username}: still has ${blockers.join(", ")}. Reassign or remove these first.`,
+        );
+      }
+
+      await tx.user.delete({ where: { id } });
+    }).catch((err: unknown) => {
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
+        throw new HttpError(
+          400,
+          "user_in_use",
+          `Cannot delete ${username}: it is still referenced by other records. Reassign or remove these first.`,
+        );
+      }
+      throw err;
     });
-    if (!target) throw new HttpError(404, "user_not_found", "User not found");
-
-    const blockers: string[] = [];
-    if (target._count.projectsAsTAM > 0)
-      blockers.push(`${target._count.projectsAsTAM} project(s) as TAM`);
-    if (target._count.projectsAsSA > 0)
-      blockers.push(`${target._count.projectsAsSA} project(s) as SA`);
-    if (target._count.projectBaselinesLocked > 0)
-      blockers.push(`${target._count.projectBaselinesLocked} locked baseline(s)`);
-    if (target._count.assignedTasks > 0)
-      blockers.push(`${target._count.assignedTasks} assigned task(s)`);
-    if (target._count.comments > 0)
-      blockers.push(`${target._count.comments} comment(s)`);
-    if (target._count.projectNotes > 0)
-      blockers.push(`${target._count.projectNotes} daily note(s)`);
-    if (target._count.customerNotes > 0)
-      blockers.push(`${target._count.customerNotes} customer note(s)`);
-    if (target._count.weeklyUpdates > 0)
-      blockers.push(`${target._count.weeklyUpdates} weekly update(s)`);
-
-    if (blockers.length > 0) {
-      throw new HttpError(
-        400,
-        "user_in_use",
-        `Cannot delete ${target.username}: still has ${blockers.join(", ")}. Reassign or remove these first.`,
-      );
-    }
-
-    await prisma.user.delete({ where: { id } });
     res.status(204).end();
   },
 );

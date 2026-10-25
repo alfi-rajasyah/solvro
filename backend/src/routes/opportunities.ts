@@ -26,6 +26,7 @@ import { logger } from "../logger.js";
 // review. `wipLimitsSchema` isn't imported directly here — it only ever
 // appears nested inside `createProjectSchema`.
 import { createProjectSchema } from "./projects.js";
+import { assertActiveUser } from "../lib/users.js";
 
 // Pipeline module (native port of Velora — docs/plans/pipeline-native-port-plan.md).
 // CRUD + the single stage-transition writer for Opportunity. Deal visibility
@@ -1252,6 +1253,11 @@ opportunitiesRouter.post(
       // the create itself is the tamId default applied above; it does no
       // baseline locking, section bootstrapping, or any other setup to
       // replicate here.
+      // Same 400 `tam_not_found` / `sa_not_found` POST /projects answers for
+      // an unknown or inactive seat holder, instead of a foreign-key 500
+      // (docs/archive/plans/application-review-2026-10-22.md, F-23).
+      await assertActiveUser(tx, tamId, "tam");
+      if (body.saId != null) await assertActiveUser(tx, body.saId, "sa");
       const project = await tx.project.create({
         data: {
           name: body.name,

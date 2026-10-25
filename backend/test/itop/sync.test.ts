@@ -1155,3 +1155,32 @@ describe("syncTickets — a failed time-entry pass is a failed run", () => {
     expect(await prisma.itopTicket.count()).toBe(summary.upserted);
   });
 });
+
+// docs/archive/plans/application-review-2026-10-22.md, F-30: a stored app token
+// that no longer decrypts (SECRETS_KEY rotated) must end the scheduled sync as
+// a failed run an admin can act on, not crash the process.
+describe("syncTickets — an unreadable stored app token", () => {
+  it("resolves as a failed run whose recorded message names the token", async () => {
+    await prisma.itopConfig.upsert({
+      where: { id: "default" },
+      create: { id: "default", baseUrl: "http://127.0.0.1:9", appTokenEnc: "v1:anVuaw==:anVuaw==:anVuaw==" },
+      update: {
+        baseUrl: "http://127.0.0.1:9",
+        appTokenEnc: "v1:anVuaw==:anVuaw==:anVuaw==",
+        lastSyncAt: null,
+        lastSyncOk: null,
+        lastSyncError: null,
+        lastFullSyncAt: null,
+      },
+    });
+    bustItopConfigCache();
+
+    const summary = await syncTickets({ full: true });
+    expect(summary.ran).toBe(true);
+    expect(summary.error).toMatch(/iTop token could not be decrypted/);
+
+    const config = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(config.lastSyncOk).toBe(false);
+    expect(config.lastSyncError).toMatch(/iTop token could not be decrypted/);
+  });
+});

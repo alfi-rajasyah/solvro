@@ -35,6 +35,7 @@ import { assertEpicNotOnSubtask, assertValidEpic } from "../lib/epics.js";
 import { computeProjectHealth, computeSlipDays } from "../lib/projectHealth.js";
 import { COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
+import { assertActiveUser } from "../lib/users.js";
 import {
   diffProjectChanges,
   recordActivity,
@@ -207,6 +208,10 @@ projectsRouter.post(
     // who holds the TAM and SA seats and the customer — ids and display names
     // only, never emails.
     const project = await prisma.$transaction(async (tx) => {
+      // 400 `tam_not_found` / `sa_not_found` instead of a foreign-key 500
+      // (docs/archive/plans/application-review-2026-10-22.md, F-23).
+      await assertActiveUser(tx, tamId, "tam");
+      if (body.saId != null) await assertActiveUser(tx, body.saId, "sa");
       const created = await tx.project.create({
         data: {
           name: body.name,
@@ -460,6 +465,18 @@ projectsRouter.patch(
           sa: { select: { id: true, username: true } },
         },
       });
+      // A changed TAM or SA must exist (400 instead of a missing-row 404 /
+      // foreign-key 500; docs/archive/plans/application-review-2026-10-22.md,
+      // F-23). An inactive account is still accepted here — activity.test.ts
+      // pins that an inactive new SA can be set and is simply not notified —
+      // unlike POST /projects, which requires an active one. Re-saving the
+      // current seat holder is not a change.
+      if (body.tamId !== undefined && body.tamId !== before.tam.id) {
+        await assertActiveUser(tx, body.tamId, "tam", { requireActive: false });
+      }
+      if (body.saId != null && body.saId !== before.sa?.id) {
+        await assertActiveUser(tx, body.saId, "sa", { requireActive: false });
+      }
       const result = await tx.project.update({ where: { id }, data });
       // Name, status, customer and the TAM / SA seats are logged (ids and
       // usernames only); a re-save records nothing.
@@ -576,6 +593,7 @@ projectsRouter.post(
       // Assigning someone who cannot see the project adds them as a member
       // (same transaction as the task write).
       if (body.assignedToId != null) {
+        await assertActiveUser(tx, body.assignedToId, "assignee", { requireActive: false });
         const added = await ensureAssigneeIsMember(tx, id, body.assignedToId, req.user!.sub);
         if (added) {
           await recordActivity(tx, {
@@ -747,6 +765,9 @@ projectsRouter.post(
     });
     const position = (max._max.position ?? -1) + 1;
     const epic = await prisma.$transaction(async (tx) => {
+      if (body.ownerId != null) {
+        await assertActiveUser(tx, body.ownerId, "owner", { requireActive: false });
+      }
       const created = await tx.epic.create({
         data: {
           projectId: id,

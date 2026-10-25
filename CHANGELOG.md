@@ -15,6 +15,16 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-10-25 — Backend hardening (B-19, part 1)
+
+- Unique-constraint conflicts (HTTP 409) no longer return Prisma model or internal metadata. The response now carries only the violated column names, as `details.target`, when they are known. (F-22)
+- A request with a malformed JSON body now gets `400 invalid_json`, and a body over the size limit gets `413 payload_too_large`, instead of a 500 error. (N-05)
+- A foreign-key violation that no route checked beforehand now returns `400 invalid_reference` instead of a 500 error. (F-23)
+- Deleting a user in Admin now counts the records that block the delete and performs the delete in a single transaction. If a new reference appears in between, you get the same "still referenced" message (`400 user_in_use`) instead of a server error. (F-20)
+- Creating a project (or handing a won deal off to a project) with an unknown or inactive TAM or SA, creating a task with an unknown assignee, and creating or editing an epic with an unknown owner now return a specific 400 (`tam_not_found`, `sa_not_found`, `assignee_not_found`, `owner_not_found`) instead of a 500 error. Changing a project's TAM or SA to a user that does not exist now returns 400 instead of 404. (F-23)
+- `scripts/create-admin.ts` now applies the username rules used in Admin and appends `-2`, `-3`, … when the username derived from the email is already taken. It no longer silently promotes an existing non-admin account: it stops and changes nothing unless `FORCE_ADMIN=1` is set. Re-running it for an existing admin resets that admin's password and keeps its username. (F-21)
+- iTop routes that use the stored application token (`GET /itop/services`, `GET /itop/customers/:id/contacts`, `POST /itop/tickets`, and `POST /admin/itop/persons/match`) now answer 409 `itop_token_unreadable` when that token can no longer be decrypted (for example after `SECRETS_KEY` changes), instead of failing with a raw 500. A scheduled sync that hits the same condition now records a failed run whose message says the stored iTop token could not be decrypted and must be entered again. (F-30)
+
 ### Security — 2026-10-23 — Browser security headers on every page
 
 - **The web app now sends browser security headers.** `frontend/security-headers.conf` adds `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy` to every page and static file served by nginx; `frontend/nginx.conf` includes it in each location (nginx ignores server-level headers in a location that sets its own) and `frontend/Dockerfile` copies it into the image. The policy allows same-origin code plus Google sign-in, Google Fonts and Google profile pictures; inline scripts, `eval`, plugins and framing are blocked. Guest-link pages keep `no-referrer`, `noindex` and `no-store`. API responses are unchanged; they already carry HSTS from the backend (`docs/CONFIGURATION.md` 2.6).

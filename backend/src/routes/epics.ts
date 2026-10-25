@@ -10,6 +10,7 @@ import { ensureProjectVisible } from "../lib/visibility.js";
 import { recordActivity, shortLabel } from "../lib/activity.js";
 import { diffEpicChanges, epicSnapshotSelect } from "../lib/epicActivity.js";
 import { COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import { assertActiveUser } from "../lib/users.js";
 
 // Resolve the epic's owning project and 404 if the caller can't see it.
 // Mirrors ensureSectionVisible (backend/src/routes/sections.ts) — 404, never
@@ -156,6 +157,9 @@ epicsRouter.patch(
     const updated = await prisma.$transaction(async (tx) => {
       // Lock first so overlapping identical saves serialise and record one event.
       await tx.$queryRaw`SELECT id FROM epics WHERE id = ${id} FOR NO KEY UPDATE`;
+      if (body.ownerId != null) {
+        await assertActiveUser(tx, body.ownerId, "owner", { requireActive: false });
+      }
       const before = await tx.epic.findUniqueOrThrow({
         where: { id },
         select: epicSnapshotSelect,
