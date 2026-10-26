@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-10-26 — Move and resize Gantt bars from the keyboard
+
+- With a Gantt bar focused, Left/Right moves it one day (Shift: one week) and Alt+Left/Right moves its end date (Shift: one week; never before the start). The change previews on the bar and saves once after a short pause, on Enter, or when focus leaves; Escape cancels it. The new dates are announced to screen readers. Read-only users, section summary bars and milestone resizing stay locked exactly as with the mouse, and a mouse drag on a bar always wins over a keyboard change that has not been saved yet (`frontend/src/components/gantt-v2/keyboardNudge.ts`, `useGanttKeyboardNudge.ts`, `SolvroGantt.tsx`).
+
 ### Added — 2026-10-26 — Database backups, scripted installs, non-root backend container
 
 - `backup.sh` (next to `setup.sh`) takes a consistent `pg_dump` of the running database into `~/solvro/backups/solvro-<timestamp>.dump` (directory mode 700, files mode 600). A failed dump leaves no partial file and exits non-zero. Dumps older than `RETENTION_DAYS` (default 14) are deleted, and only files with its own name pattern. `bash backup.sh --print-cron` prints a suggested crontab line that carries the backup settings; nothing is scheduled automatically. `docs/CONFIGURATION.md` §2.13 documents backups and a restore drill.
