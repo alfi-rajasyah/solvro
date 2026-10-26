@@ -41,7 +41,15 @@ function throwawayAdminSecret(): string {
   return ["shim", process.pid, Date.now().toString(36)].join("-");
 }
 
-function runSetup(opts: { volumeExists: boolean; extraEnv?: Record<string, string> }): Run {
+function runSetup(opts: {
+  volumeExists: boolean;
+  extraEnv?: Record<string, string>;
+  // Env vars to leave unset (the default for POSTGRES_PORT, for instance).
+  omitEnv?: string[];
+  // Run under setsid: a new session has no controlling terminal, so opening
+  // /dev/tty fails — the situation of cron, CI and `ssh host 'bash setup.sh'`.
+  noTty?: boolean;
+}): Run {
   const root = mkdtempSync(join(tmpdir(), "solvro-setup-sh-"));
   dirs.push(root);
   const bin = join(root, "bin");
@@ -72,22 +80,25 @@ function runSetup(opts: { volumeExists: boolean; extraEnv?: Record<string, strin
     { mode: 0o755 },
   );
 
-  const result = spawnSync("bash", [SETUP_SH], {
+  const env: Record<string, string> = {
+    PATH: `${bin}:${process.env.PATH ?? ""}`,
+    HOME: home,
+    ADMIN_EMAIL: "ops@example.com",
+    ADMIN_PASSWORD: throwawayAdminSecret(),
+    FRONTEND_PORT: "80",
+    BACKEND_PORT: "3000",
+    POSTGRES_PORT: "5432",
+    BIND_ADDR: "127.0.0.1",
+    ...(opts.extraEnv ?? {}),
+  };
+  for (const k of opts.omitEnv ?? []) delete env[k];
+
+  const result = spawnSync(opts.noTty ? "setsid" : "bash", opts.noTty ? ["-w", "bash", SETUP_SH] : [SETUP_SH], {
     cwd: root,
     encoding: "utf8",
     stdio: ["ignore", "pipe", "pipe"],
     timeout: 60_000,
-    env: {
-      PATH: `${bin}:${process.env.PATH ?? ""}`,
-      HOME: home,
-      ADMIN_EMAIL: "ops@example.com",
-      ADMIN_PASSWORD: throwawayAdminSecret(),
-      FRONTEND_PORT: "80",
-      BACKEND_PORT: "3000",
-      POSTGRES_PORT: "5432",
-      BIND_ADDR: "127.0.0.1",
-      ...(opts.extraEnv ?? {}),
-    },
+    env,
   });
 
   return {
@@ -108,6 +119,9 @@ describe.skipIf(!HAS_SETUP_SH)("setup.sh fresh-install data-loss guard (F-01)", 
 
   it("refuses when the volume exists and .env is missing — nothing written, nothing removed", () => {
     const run = runSetup({ volumeExists: true });
+    // The backup hint must work with nothing installed: no backup.sh, no compose file.
+    expect(run.stdout).toContain("docker exec solvro-postgres pg_dump -U solvro -Fc solvro");
+    expect(run.stdout).not.toContain("bash backup.sh");
     expect(run.status).toBe(1);
     expect(run.stdout).toMatch(/already exists/);
     expect(run.stdout).toMatch(/FORCE_WIPE=1/);
@@ -121,5 +135,41 @@ describe.skipIf(!HAS_SETUP_SH)("setup.sh fresh-install data-loss guard (F-01)", 
     expect(run.status).toBe(0);
     expect(run.dockerCalls).toContain("volume rm solvro_pgdata");
     expect(run.envWritten).toBe(true);
+  });
+});
+
+// docs/archive/plans/application-review-2026-10-22.md, N-03: `[[ -r /dev/tty ]]`
+// is true even with no controlling terminal, so the optional port prompts
+// tried to open it and `set -e` aborted a run whose env vars covered
+// everything required. POSTGRES_PORT is unset by default (database stays
+// private), which is what reached the prompt.
+describe.skipIf(!HAS_SETUP_SH)("setup.sh without a terminal (N-03)", () => {
+  it("installs non-interactively when the required env vars are set and POSTGRES_PORT is not", () => {
+    const run = runSetup({ volumeExists: false, noTty: true, omitEnv: ["POSTGRES_PORT"] });
+    expect(run.stdout).not.toMatch(/Postgres host port/);
+    expect(run.status).toBe(0);
+    expect(run.envWritten).toBe(true);
+    expect(run.dockerCalls.some((c) => c.startsWith("compose up"))).toBe(true);
+  });
+
+  it("without ADMIN_EMAIL / ADMIN_PASSWORD and no terminal, fails with the clear error", () => {
+    const run = runSetup({
+      volumeExists: false,
+      noTty: true,
+      omitEnv: ["ADMIN_EMAIL", "ADMIN_PASSWORD"],
+    });
+    expect(run.status).toBe(1);
+    expect(run.stdout).toMatch(/no \/dev\/tty available and ADMIN_EMAIL\/ADMIN_PASSWORD not set/);
+    expect(run.envWritten).toBe(false);
+  });
+
+  it("have_tty works in POSIX mode too (true, not the special builtin ':')", () => {
+    const run = runSetup({
+      volumeExists: false,
+      noTty: true,
+      omitEnv: ["POSTGRES_PORT"],
+      extraEnv: { POSIXLY_CORRECT: "1" },
+    });
+    expect(run.status).toBe(0);
   });
 });
