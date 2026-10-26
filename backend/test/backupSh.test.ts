@@ -11,6 +11,7 @@ import {
   existsSync,
   readdirSync,
   statSync,
+  chmodSync,
   rmSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -98,7 +99,7 @@ describe.skipIf(!HAS_BACKUP_SH)("backup.sh", () => {
     ]);
   });
 
-  it("takes the database user and name from .env, and prints no secret", () => {
+  it("always dumps solvro/solvro: ambient POSTGRES_USER/POSTGRES_DB and .env are ignored and never printed", () => {
     const sb = sandbox("ok");
     // Built at run time so no literal in this file looks like a credential
     // to a secret scanner.
@@ -107,11 +108,34 @@ describe.skipIf(!HAS_BACKUP_SH)("backup.sh", () => {
       join(sb.deploy, ".env"),
       ["POSTGRES", "PASSWORD"].join("_") + `=${marker}\nPOSTGRES_USER=app\nPOSTGRES_DB="appdb"\n`,
     );
-    const r = sb.run();
+    const r = sb.run({ POSTGRES_USER: "other", POSTGRES_DB: "otherdb" });
     expect(r.status).toBe(0);
-    expect(sb.dockerCalls()[0]).toMatch(/pg_dump -U app -Fc appdb$/);
+    expect(sb.dockerCalls()[0]).toMatch(/pg_dump -U solvro -Fc solvro$/);
     expect(r.out).not.toContain(marker);
     expect(sb.dockerCalls().join("\n")).not.toContain(marker);
+  });
+
+  it("removes stale partial files after a successful dump, keeps fresh ones", () => {
+    const sb = sandbox("ok");
+    mkdirSync(sb.backups);
+    const stale = join(sb.backups, ".solvro-2020-01-01T000000.dump.partial");
+    const fresh = join(sb.backups, ".solvro-2020-01-02T000000.dump.partial");
+    writeFileSync(stale, "x");
+    writeFileSync(fresh, "x");
+    spawnSync("touch", ["-d", "3 hours ago", stale]);
+    expect(sb.run().status).toBe(0);
+    expect(existsSync(stale)).toBe(false);
+    expect(existsSync(fresh)).toBe(true);
+  });
+
+  it("does not re-mode an existing backup directory; warns when it is open", () => {
+    const sb = sandbox("ok");
+    mkdirSync(sb.backups);
+    chmodSync(sb.backups, 0o755);
+    const r = sb.run();
+    expect(r.status).toBe(0);
+    expect(modeOf(sb.backups)).toBe("755");
+    expect(r.out).toMatch(/WARNING: .* accessible to group\/others/);
   });
 
   it("a failing pg_dump leaves no file (not even a partial) and exits non-zero", () => {
@@ -183,12 +207,40 @@ describe.skipIf(!HAS_BACKUP_SH)("backup.sh", () => {
     expect(r.out).toMatch(/Run setup\.sh first/);
   });
 
-  it("--print-cron prints a crontab line and does nothing else", () => {
+  it("--print-cron prints a quoted line that round-trips settings and paths with spaces", () => {
     const sb = sandbox("ok");
-    const r = sb.run({}, ["--print-cron"]);
+    const spaced = join(sb.deploy, "my backups");
+    const r = sb.run({ BACKUP_DIR: spaced, RETENTION_DAYS: "7" }, ["--print-cron"]);
     expect(r.status).toBe(0);
-    expect(r.out).toMatch(/^17 2 \* \* \* .*backup\.sh/m);
+    const line = r.out.split("\n").find((l) => l.startsWith("17 2 * * * "));
+    expect(line).toBeDefined();
+    // The log lives in DEPLOY_DIR, which always exists (the redirect opens first).
+    expect(line).toContain(">> ");
+    expect(line).not.toContain(`${spaced}/backup.log`);
+    // Run the command part the way cron's sh would, with `echo` standing in for bash.
+    const cmd = line!.slice("17 2 * * * ".length).replace(/ bash /, " printf '%s\\n' ");
+    const out = spawnSync("bash", ["-c", `env ${cmd.replace(/ >> .*/, "")}`], { encoding: "utf8" });
+    expect(out.status).toBe(0);
+    const [script] = out.stdout.trim().split("\n");
+    expect(script).toBe(BACKUP_SH);
+    const env = spawnSync(
+      "bash",
+      ["-c", `${line!.slice("17 2 * * * ".length).replace(/ bash .*/, "")} bash -c 'printf "%s|%s|%s" "$DEPLOY_DIR" "$BACKUP_DIR" "$RETENTION_DAYS"'`],
+      { encoding: "utf8" },
+    );
+    expect(env.stdout).toBe(`${sb.deploy}|${spaced}|7`);
     expect(sb.dockerCalls()).toEqual([]);
-    expect(existsSync(sb.backups)).toBe(false);
+    expect(existsSync(spaced)).toBe(false);
+  });
+
+  it("--print-cron refuses when the script is not a regular file (bash <(...))", () => {
+    const sb = sandbox("ok");
+    const r = spawnSync("bash", ["-c", `bash <(cat "${BACKUP_SH}") --print-cron`], {
+      encoding: "utf8",
+      env: { PATH: process.env.PATH ?? "", HOME: join(sb.deploy, "..") },
+    });
+    expect(r.status).toBe(1);
+    expect(`${r.stdout}${r.stderr}`).toMatch(/needs backup\.sh saved as a file/);
+    expect(r.stdout).not.toMatch(/^17 2/m);
   });
 });

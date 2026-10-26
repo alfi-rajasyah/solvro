@@ -10,8 +10,8 @@
 #   DEPLOY_DIR      where setup.sh installed the stack   (default ~/solvro)
 #   BACKUP_DIR      where dumps go                       (default $DEPLOY_DIR/backups)
 #   RETENTION_DAYS  delete our dumps older than this     (default 14)
-#   POSTGRES_USER / POSTGRES_DB   default "solvro" / "solvro", matching the
-#                   compose file setup.sh writes; read from .env when set there.
+# The database role and name are fixed at solvro/solvro, as in the compose
+# file setup.sh writes; .env is not read.
 #
 # Dumps are custom-format (-Fc) files named solvro-YYYY-MM-DDTHHMMSS.dump,
 # mode 600 in a mode 700 directory. A dump is written under a temporary name
@@ -20,20 +20,30 @@
 # The database password is never read or printed: pg_dump runs inside the
 # postgres container over its local socket.
 #
-# Restore: see "Restore drill" in docs/CONFIGURATION.md.
+# Restore: see the "Restore drill" paragraph in docs/CONFIGURATION.md section 2.13.
 
 set -euo pipefail
 
 DEPLOY_DIR="${DEPLOY_DIR:-$HOME/solvro}"
 COMPOSE_FILE="$DEPLOY_DIR/docker-compose.yml"
-ENV_FILE="$DEPLOY_DIR/.env"
 BACKUP_DIR="${BACKUP_DIR:-$DEPLOY_DIR/backups}"
 RETENTION_DAYS="${RETENTION_DAYS:-14}"
 
 if [[ "${1:-}" == "--print-cron" ]]; then
-  script="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/$(basename "${BASH_SOURCE[0]}")"
+  # A crontab entry must point at a real file: under `bash <(curl ...)` the
+  # script is a pipe (/dev/fd/N) that is gone when the job fires.
+  script="${BASH_SOURCE[0]}"
+  if [[ ! -f "$script" ]]; then
+    echo "ERROR: --print-cron needs backup.sh saved as a file (this run reads '$script')." >&2
+    echo "       Save it first: curl -sSL <raw url of backup.sh> -o \"$DEPLOY_DIR/backup.sh\"" >&2
+    exit 1
+  fi
+  script="$(cd "$(dirname "$script")" && pwd)/$(basename "$script")"
+  line="$(printf '17 2 * * * DEPLOY_DIR=%q BACKUP_DIR=%q RETENTION_DAYS=%q bash %q >> %q 2>&1' \
+    "$DEPLOY_DIR" "$BACKUP_DIR" "$RETENTION_DAYS" "$script" "$DEPLOY_DIR/backup.log")"
   echo "# Solvro database backup, daily at 02:17 (add with: crontab -e)"
-  echo "17 2 * * * DEPLOY_DIR=$DEPLOY_DIR bash $script >> $BACKUP_DIR/backup.log 2>&1"
+  # `%` starts stdin data in a crontab and must be escaped.
+  echo "${line//%/\\%}"
   exit 0
 fi
 if [[ $# -gt 0 ]]; then
@@ -54,24 +64,19 @@ command -v docker >/dev/null 2>&1 || {
   exit 1
 }
 
-# Read one KEY from .env without sourcing the file (it holds secrets and is
-# only trusted to be KEY=value lines). Prints nothing when absent.
-env_value() {
-  local line
-  line="$(grep -m1 "^$1=" "$ENV_FILE" 2>/dev/null || true)"
-  line="${line#*=}"
-  line="${line%\"}"
-  printf '%s' "${line#\"}"
-}
-
-PG_USER="${POSTGRES_USER:-$(env_value POSTGRES_USER)}"
-PG_DB="${POSTGRES_DB:-$(env_value POSTGRES_DB)}"
-PG_USER="${PG_USER:-solvro}"
-PG_DB="${PG_DB:-solvro}"
+PG_USER=solvro
+PG_DB=solvro
 
 umask 077
-mkdir -p "$BACKUP_DIR"
-chmod 700 "$BACKUP_DIR"
+if [[ -d "$BACKUP_DIR" ]]; then
+  # Never re-mode a directory the operator chose; just say so when it is open.
+  if [[ -n "$(find "$BACKUP_DIR" -maxdepth 0 -perm /077)" ]]; then
+    echo "WARNING: $BACKUP_DIR is accessible to group/others; dumps hold all data (files are 600). Consider chmod 700." >&2
+  fi
+else
+  mkdir -p "$BACKUP_DIR"
+  chmod 700 "$BACKUP_DIR"
+fi
 
 stamp="$(date +%Y-%m-%dT%H%M%S)"
 final="$BACKUP_DIR/solvro-$stamp.dump"
@@ -90,6 +95,9 @@ fi
 chmod 600 "$partial"
 mv "$partial" "$final"
 echo "Backup written: $final ($(wc -c < "$final") bytes)"
+
+# Leftovers of a run that was killed mid-dump (the EXIT trap could not fire).
+find "$BACKUP_DIR" -maxdepth 1 -type f -name '.solvro-*.dump.partial' -mmin +60 -delete
 
 # Retention: only our own dump names, only older than RETENTION_DAYS.
 find "$BACKUP_DIR" -maxdepth 1 -type f -name 'solvro-????-??-??T??????.dump' \

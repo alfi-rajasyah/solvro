@@ -119,6 +119,9 @@ describe.skipIf(!HAS_SETUP_SH)("setup.sh fresh-install data-loss guard (F-01)", 
 
   it("refuses when the volume exists and .env is missing — nothing written, nothing removed", () => {
     const run = runSetup({ volumeExists: true });
+    // The backup hint must work with nothing installed: no backup.sh, no compose file.
+    expect(run.stdout).toContain("docker exec solvro-postgres pg_dump -U solvro -Fc solvro");
+    expect(run.stdout).not.toContain("bash backup.sh");
     expect(run.status).toBe(1);
     expect(run.stdout).toMatch(/already exists/);
     expect(run.stdout).toMatch(/FORCE_WIPE=1/);
@@ -158,5 +161,15 @@ describe.skipIf(!HAS_SETUP_SH)("setup.sh without a terminal (N-03)", () => {
     expect(run.status).toBe(1);
     expect(run.stdout).toMatch(/no \/dev\/tty available and ADMIN_EMAIL\/ADMIN_PASSWORD not set/);
     expect(run.envWritten).toBe(false);
+  });
+
+  it("have_tty works in POSIX mode too (true, not the special builtin ':')", () => {
+    const run = runSetup({
+      volumeExists: false,
+      noTty: true,
+      omitEnv: ["POSTGRES_PORT"],
+      extraEnv: { POSIXLY_CORRECT: "1" },
+    });
+    expect(run.status).toBe(0);
   });
 });

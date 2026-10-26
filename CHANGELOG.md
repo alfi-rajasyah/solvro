@@ -17,8 +17,8 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Added — 2026-10-26 — Database backups, scripted installs, non-root backend container
 
-- `backup.sh` (next to `setup.sh`) takes a consistent `pg_dump` of the running database into `~/solvro/backups/solvro-<timestamp>.dump` (directory mode 700, files mode 600). A failed dump leaves no partial file and exits non-zero. Dumps older than `RETENTION_DAYS` (default 14) are deleted, and only files with its own name pattern. `bash backup.sh --print-cron` prints a suggested crontab line; nothing is scheduled automatically. `docs/CONFIGURATION.md` §2.13 documents backups and a restore drill.
-- `setup.sh`: the install summary and the refusal on an existing database volume now point to `backup.sh` instead of a `tar` of the live volume, which is not a consistent copy of a running Postgres.
+- `backup.sh` (next to `setup.sh`) takes a consistent `pg_dump` of the running database into `~/solvro/backups/solvro-<timestamp>.dump` (directory mode 700, files mode 600). A failed dump leaves no partial file and exits non-zero. Dumps older than `RETENTION_DAYS` (default 14) are deleted, and only files with its own name pattern. `bash backup.sh --print-cron` prints a suggested crontab line that carries the backup settings; nothing is scheduled automatically. `docs/CONFIGURATION.md` §2.13 documents backups and a restore drill.
+- `setup.sh`: the refusal on an existing database volume now prints a self-contained `docker exec solvro-postgres pg_dump …` command (with the volume `tar` only for a stopped container, when it is consistent), and the install summary shows how to fetch and run `backup.sh`.
 - `setup.sh` no longer stops when it runs without a terminal (cron, CI, `ssh host 'bash setup.sh'`) and every required value comes from environment variables. It now checks whether `/dev/tty` can actually be opened and skips the optional port prompts when it cannot.
 - The backend production image now runs as the unprivileged `node` user instead of root (`backend/Dockerfile`).
 
