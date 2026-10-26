@@ -77,6 +77,7 @@ import {
 import { TableSkeleton } from "@/components/skeletons";
 import { GanttOverlay } from "./GanttOverlay";
 import { SolvroBar } from "./SolvroBar";
+import { useGanttKeyboardNudge } from "./useGanttKeyboardNudge";
 import {
   SectionColorCell,
   TaskDatesCell,
@@ -497,10 +498,55 @@ export function SolvroGantt(props: SolvroGanttProps) {
   const baselineLockedAtPretty = baselineLockedAt ? fmtDateTime(baselineLockedAt) : null;
 
   const resources = useMemo(() => buildResources(tasks, sections), [tasks, sections]);
-  const events = useMemo<GanttEvent<Task>[]>(
+  const baseEvents = useMemo<GanttEvent<Task>[]>(
     () => [...buildEvents(tasks, sections, colorBy, canEdit), ...buildRollupEvents(tasks, sections)],
     [tasks, sections, colorBy, canEdit],
   );
+  // The single commit behind both a pointer drop and a keyboard nudge
+  // (docs/archive/plans/application-review-2026-10-22.md, F-36). `events` is a
+  // controlled prop (see the removed comment this replaces), so nothing here
+  // needs to touch local state to "revert" a rejected gesture: on `false` the
+  // mutation never fires, the tasks-query cache never changes, and the next
+  // render's `events` memo (still derived from that unchanged cache) is what
+  // the engine paints — that IS the revert. `eventPatch` (adapter.ts) converts
+  // ReUI's exclusive `end` back to Solvro's inclusive `dueDate`.
+  const commitEventUpdate = useCallback(
+    (update: GanttProposedUpdate<Task>): Promise<void> | false => {
+      // Rollup pills (`section-rollup-*`, buildRollupEvents) are `readOnly:
+      // true`, which gantt-types.tsx:97/gantt-bar already excludes from
+      // drag/resize gestures entirely; they also carry no `data`, so
+      // eventPatch's `!task` branch below would reject them a second time
+      // even if a gesture somehow reached here. This id check is a third,
+      // belt-and-suspenders layer — not what's actually doing the work.
+      if (!canEdit || update.event.id.startsWith("section-rollup-")) return false;
+      const patch = eventPatch(update);
+      if (!patch) return false;
+      setActionError(null);
+      // mutateAsync, not mutate + callbacks: TanStack fires mutate-level
+      // callbacks for the latest call only, so two quick bar drags where the
+      // first failed showed no message (docs/archive/plans/application-review-2026-10-22.md, F-18).
+      return updateTask
+        .mutateAsync(patch)
+        .then(() => undefined)
+        .catch((err: unknown) => {
+          setActionError(err instanceof ApiError ? err.message : "Could not update task dates.");
+        });
+    },
+    [canEdit, updateTask],
+  );
+  // Arrow-key move/resize on a focused bar: previews on the bar, commits
+  // through `commitEventUpdate` (useGanttKeyboardNudge.ts).
+  const {
+    events,
+    onKeyDown: onBarKeyDown,
+    onBlur: onBarBlur,
+    discard: discardKeyboardPreview,
+  } = useGanttKeyboardNudge({
+    baseEvents,
+    canEdit,
+    commit: commitEventUpdate,
+    containerRef: ganttContainerRef,
+  });
   const years = useMemo(() => yearsCoveredBy(events), [events]);
   const { data: holidays = [] } = useHolidays(years);
 
@@ -538,34 +584,15 @@ export function SolvroGantt(props: SolvroGanttProps) {
   );
   const allDateRange = useMemo(() => rowsDateRange(allRows), [allRows]);
 
-  // Plan B Task 5 — drag/resize commit. `events` is a controlled prop (see
-  // the removed comment this replaces), so nothing here needs to touch local
-  // state to "revert" a rejected gesture: on `false` the mutation never
-  // fires, the tasks-query cache never changes, and the next render's
-  // `events` memo (still derived from that unchanged cache) is what the
-  // engine paints — that IS the revert. `eventPatch` (adapter.ts) converts
-  // ReUI's exclusive `end` back to Solvro's inclusive `dueDate`.
+  // Plan B Task 5 — drag/resize commit: the pointer path into
+  // `commitEventUpdate` above.
   const handleEventUpdate = useCallback(
     (update: GanttProposedUpdate<Task>): GanttUpdateResult => {
-      // Rollup pills (`section-rollup-*`, buildRollupEvents) are `readOnly:
-      // true`, which gantt-types.tsx:97/gantt-bar already excludes from
-      // drag/resize gestures entirely; they also carry no `data`, so
-      // eventPatch's `!task` branch below would reject them a second time
-      // even if a gesture somehow reached here. This id check is a third,
-      // belt-and-suspenders layer — not what's actually doing the work.
-      if (!canEdit || update.event.id.startsWith("section-rollup-")) return false;
-      const patch = eventPatch(update);
-      if (!patch) return false;
-      setActionError(null);
-      // mutateAsync, not mutate + callbacks: TanStack fires mutate-level
-      // callbacks for the latest call only, so two quick bar drags where the
-      // first failed showed no message (docs/archive/plans/application-review-2026-10-22.md, F-18).
-      void updateTask.mutateAsync(patch).catch((err: unknown) => {
-        setActionError(err instanceof ApiError ? err.message : "Could not update task dates.");
-      });
-      return true;
+      // A pointer gesture wins over an unsent keyboard preview of the same bar.
+      discardKeyboardPreview(update.event.id);
+      return commitEventUpdate(update) !== false;
     },
-    [canEdit, updateTask],
+    [commitEventUpdate, discardKeyboardPreview],
   );
 
   // Plan B Task 5 — tree-row reorder commit. Mirrors GanttFrame.tsx:420-569's
@@ -1417,7 +1444,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
       )}
 
       {!isLoading && !isError && resources.length > 0 && (
-        <div ref={ganttContainerRef} className="min-h-0 flex-1">
+        // Key handling for bars is delegated here: the focused bar button's
+        // keydown/blur bubble up (useGanttKeyboardNudge).
+        <div
+          ref={ganttContainerRef}
+          className="min-h-0 flex-1"
+          onKeyDown={onBarKeyDown}
+          onBlur={onBarBlur}
+        >
           <Gantt<Task>
             apiRef={apiRef}
             events={events}

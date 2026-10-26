@@ -15,6 +15,15 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-10-26 — iTop sync reads page by page and holds a session lock
+
+- The iTop sync now reads and writes tickets and time entries one page at a time instead of loading every page into memory first (`backend/src/lib/itop/client.ts`, `sync.ts`). In a synthetic benchmark with 20,000 tickets, peak heap dropped from about 590 MB to about 60 MB.
+- The sync's single-runner lock is now a Postgres session advisory lock held on its own dedicated connection for the whole run, instead of an open ten-minute transaction (`backend/src/lib/itop/syncLock.ts`, `createDedicatedClient` in `backend/src/prisma.ts`). A long sync can no longer lose its lock to a transaction timeout and overlap the next scheduled one; a heartbeat logs an error if the lock session is ever lost, and the lock is released when a run fails. The database connection must be direct or session-pooled — a transaction-mode pooler such as PgBouncer is not supported for this lock (`docs/CONFIGURATION.md` §2.17).
+
+### Added — 2026-10-26 — Move and resize Gantt bars from the keyboard
+
+- With a Gantt bar focused, Left/Right moves it one day (Shift: one week) and Alt+Left/Right moves its end date (Shift: one week; never before the start). The change previews on the bar and saves once after a short pause, on Enter, or when focus leaves; Escape cancels it. The new dates are announced to screen readers. Read-only users, section summary bars and milestone resizing stay locked exactly as with the mouse, and a mouse drag on a bar always wins over a keyboard change that has not been saved yet (`frontend/src/components/gantt-v2/keyboardNudge.ts`, `useGanttKeyboardNudge.ts`, `SolvroGantt.tsx`).
+
 ### Added — 2026-10-26 — Database backups, scripted installs, non-root backend container
 
 - `backup.sh` (next to `setup.sh`) takes a consistent `pg_dump` of the running database into `~/solvro/backups/solvro-<timestamp>.dump` (directory mode 700, files mode 600). A failed dump leaves no partial file and exits non-zero. Dumps older than `RETENTION_DAYS` (default 14) are deleted, and only files with its own name pattern. `bash backup.sh --print-cron` prints a suggested crontab line that carries the backup settings; nothing is scheduled automatically. `docs/CONFIGURATION.md` §2.13 documents backups and a restore drill.
