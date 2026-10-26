@@ -15,6 +15,29 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-10-26 — Faster, race-free reordering of tasks, sections and epics
+
+- Reordering tasks, sections and epics now rewrites positions with one set-based `UPDATE` that touches only the rows that actually move, instead of one `UPDATE` per sibling (`backend/src/lib/positionRepack.ts`, `backend/src/lib/taskOrdering.ts`). Moving the last task to the front of a 300-task list dropped from about 450 ms to under 70 ms of database time locally.
+- Position-changing writes now lock the project row first: task reorder and re-parent, task create and duplicate, section reorder and duplicate, and epic reorder. Two people reordering the same project at the same time can no longer leave duplicate or missing positions. Ordinary task edits that do not change order do not take this lock.
+- Creating a task dependency now runs its cycle check and its insert in one transaction under the same project lock, so two requests that would together form a cycle can no longer both succeed.
+
+### Security — 2026-10-26 — Server-side sign-out, session warning, search terms kept out of logs
+
+- New `POST /auth/logout` (`backend/src/routes/auth.ts`). The sign-out button in the top bar now revokes the session on the server, so the old token cannot be reused for the rest of its lifetime. This ends the session on every device where the account is signed in. The request never delays sign-out. The automatic sign-out after a rejected request, and the "Sign in again" action below, end only the current browser's session.
+- A banner five minutes before the session expires says the session ends soon and offers "Sign in again" (`frontend/src/components/layout/ConnectionBanners.tsx`, `frontend/src/lib/sessionExpiry.ts`). Screen readers announce it. When the session's expiry time passes, the app ends the session in that browser and opens the sign-in page.
+- Request logs now replace the query string of `/search` and `/search/` requests, of a `Referer` that points at one, and the parsed query object with `[redacted]` (`backend/src/http/requestLogger.ts`). Customer names and ticket text typed into search no longer reach the logs.
+- The iTop sync no longer stores invented values (`backend/src/lib/itop/sync.ts`). A ticket whose last-update time cannot be read, or a time entry whose duration cannot be read, is skipped and counted in the sync's skipped total. Before, the ticket got the current time and the time entry got zero minutes. Time entries skipped for a missing duration are logged as one summary line per sync.
+
+### Changed — 2026-10-26 — Pages load on demand; accessibility follow-ups
+
+- Pages now load on demand behind a loading skeleton: Admin, Pipeline, deal detail, Executive, Customers, Daily Review, Weekly Sync, Tasks, Utilization, Settings, Help, and every project tab (Overview, List, Kanban, Gantt, Epics, Risks, Services, Timeline) are separate chunks (`frontend/src/App.tsx`, `frontend/src/lib/lazyPage.ts`). The main bundle went from about 2.1 MB to about 0.96 MB. A page chunk that fails to download is retried once automatically.
+- The offline cache size limit is back to Workbox's 2 MiB default (`frontend/vite.config.ts`). A new `npm run check:bundle-size` (`frontend/scripts/check-bundle-size.mjs`) fails when the production entry chunk exceeds 1 MB, and CI runs it after a frontend build.
+- A "Skip to main content" link is now the first focusable element of the app shell.
+- Every `<select>` now has an accessible name, and the accessible-name unit test also checks `<select>`.
+- The Close deal dialog shows server validation errors under the field they belong to (reason category and note).
+- The top-bar user button now reports whether its panel is open, closes it with Escape and returns focus to the button. Its accessible name includes the username and role.
+- With reduced motion turned on, loading spinners keep turning slowly and skeletons show a static tint, so a loading state no longer looks frozen.
+
 ### Fixed — 2026-10-25 — UX fixes: task counts, form errors, accessibility
 
 - A project's task count (project cards and detail, the Admin projects table, and the API payloads, including a customer's project list) no longer includes cancelled tasks, so it matches the progress total. The delete-project confirmation now says it also removes any cancelled tasks.

@@ -416,6 +416,15 @@ async function upsertTicket(
     // try/catch count it in SyncSummary.skipped and move on to the next row.
     throw new Error(`iTop ticket ${row.key} (${cls}) has an unusable org_id: ${JSON.stringify(fields.org_id)}`);
   }
+  // lastUpdate is non-nullable on the model, and an invented "now" would
+  // claim a change time iTop never reported
+  // (docs/archive/plans/application-review-2026-10-22.md, F-29). Throw so the
+  // caller counts the row in `skipped` and logs it at warn with the iTop id
+  // only — no ticket text, no raw value.
+  const lastUpdate = parseItopDate(fields.last_update, timezone);
+  if (lastUpdate === null) {
+    throw new Error(`iTop ticket ${row.key} (${cls}) has an unparseable last_update`);
+  }
   const parsedAgentId = parseItopInt(fields.agent_id);
   const agentPersonId = parsedAgentId !== null && parsedAgentId > 0 ? parsedAgentId : null;
 
@@ -434,9 +443,7 @@ async function upsertTicket(
     orgId,
     customerId: orgIdToCustomerId.get(orgId) ?? null,
     startDate: parseItopDate(fields.start_date, timezone),
-    // lastUpdate is non-nullable on the model; fall back to "now" in the
-    // (unexpected) case iTop returns an unparseable value for it.
-    lastUpdate: parseItopDate(fields.last_update, timezone) ?? new Date(),
+    lastUpdate,
     // `tto`/`ttr` store the escalation DEADLINE (a point in time), read from
     // `tto_escalation_deadline`/`ttr_escalation_deadline` — confirmed
     // against a real iTop 3.2.2 install that the bare `tto`/`ttr` attributes
@@ -495,6 +502,7 @@ async function upsertTimeEntry(
   orgIdToCustomerId: Map<number, number>,
   ticketIdByRef: Map<string, number>,
   timezone: string,
+  noDurationKeys?: number[],
 ): Promise<boolean> {
   const fields = row.fields;
   // A time entry without a parseable start date can't be placed in a week;
@@ -506,6 +514,22 @@ async function upsertTimeEntry(
       { itopKey: row.key, startDate: fields.start_date ?? null },
       "iTop syncTimeEntries: skipping a TimeSpent row without a parseable start_date",
     );
+    return false;
+  }
+  // An unparseable duration would otherwise be stored as 0 minutes — hours
+  // iTop never reported (docs/archive/plans/application-review-2026-10-22.md,
+  // F-29). Skip and count it; the log carries iTop ids only. A blank
+  // duration (an entry still running) repeats on every tick, so a sync pass
+  // passes `noDurationKeys` and logs one aggregate warn instead of one per row.
+  const durationSeconds = parseItopInt(fields.duration);
+  if (durationSeconds === null) {
+    if (noDurationKeys) noDurationKeys.push(row.key);
+    else {
+      logger.warn(
+        { itopKey: row.key },
+        "iTop syncTimeEntries: skipping a TimeSpent row without a parseable duration",
+      );
+    }
     return false;
   }
   const itopUserId = parseItopInt(fields.user_id);
@@ -520,7 +544,6 @@ async function upsertTimeEntry(
   const ticketRef = fields[ITOP_TIME_SPENT_TICKET_REF_FIELD] || null;
   const ticketId = ticketRef ? (ticketIdByRef.get(ticketRef) ?? null) : null;
 
-  const durationSeconds = parseItopInt(fields.duration) ?? 0;
   const durationMinutes = Math.round(durationSeconds / (ITOP_TIME_SPENT_DURATION_IN_SECONDS ? 60 : 1));
 
   const data = {
@@ -622,6 +645,7 @@ export async function syncTimeEntries(opts: { full?: boolean } = {}): Promise<Ti
     const timezone = resolveConfiguredTimezone(config);
     const cutoff = new Date(Date.now() - TIME_ENTRY_WINDOW_MS);
     const seenIds = new Set<number>();
+    const noDurationKeys: number[] = [];
     // Tracked across the whole run (not per chunk) so one real "the ref
     // field name is wrong on this install" condition produces one warning,
     // not one per chunk.
@@ -667,7 +691,7 @@ export async function syncTimeEntries(opts: { full?: boolean } = {}): Promise<Ti
             // A row skipped for a bad start_date stays in seenIds on purpose: a
             // transient bad value must not make the full-sync prune delete hours
             // already stored from an earlier, valid response.
-            if (await upsertTimeEntry(row, itopUserIdToUserId, orgIdToCustomerId, ticketIdByRef, timezone)) {
+            if (await upsertTimeEntry(row, itopUserIdToUserId, orgIdToCustomerId, ticketIdByRef, timezone, noDurationKeys)) {
               upserted += 1;
             } else {
               skipped += 1;
@@ -681,6 +705,13 @@ export async function syncTimeEntries(opts: { full?: boolean } = {}): Promise<Ti
           }
         }
       }
+    }
+
+    if (noDurationKeys.length > 0) {
+      logger.warn(
+        { count: noDurationKeys.length, itopKeys: noDurationKeys.slice(0, 5) },
+        "iTop syncTimeEntries: skipped TimeSpent rows without a parseable duration",
+      );
     }
 
     if (rowsWithRef > 0 && rowsWithResolvedRef === 0) {

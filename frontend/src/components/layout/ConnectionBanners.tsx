@@ -1,4 +1,14 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth, useAuthToken } from "@/lib/auth";
 import { OFFLINE_MESSAGE, useOnlineStatus } from "@/lib/onlineStatus";
+import {
+  SESSION_EXPIRY_MESSAGE,
+  decodeTokenExpiryMs,
+  isSessionWarningDue,
+  scheduleAt,
+  sessionWarningAtMs,
+} from "@/lib/sessionExpiry";
 import { UPDATE_MESSAGE, useSwUpdate } from "@/lib/swUpdate";
 
 // Full-width notices in Shell's top rows, next to the boot-error banner. They
@@ -75,6 +85,90 @@ export function UpdateBanner({ shift }: { shift: string }) {
   return <UpdateNotice shift={shift} onReload={reload} onDismiss={dismiss} />;
 }
 
+/**
+ * True from five minutes before the current token expires
+ * (docs/archive/plans/application-review-2026-10-22.md, F-41). Follows the
+ * token: a new one (password change) or none (signed out) resets it. Re-checks
+ * when the tab becomes visible again, since a sleeping device delays timers.
+ */
+export function useSessionExpiryWarning(): boolean {
+  const token = useAuthToken();
+  const [due, setDue] = useState(() => isSessionWarningDue(token, Date.now()));
+
+  useEffect(() => {
+    const check = () => setDue(isSessionWarningDue(token, Date.now()));
+    check();
+    const at = sessionWarningAtMs(token);
+    if (at === null) return;
+    const cancel = scheduleAt(at, check);
+    const onVisible = () => {
+      if (document.visibilityState === "visible") check();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      cancel();
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [token]);
+
+  return due;
+}
+
+export function SessionExpiryNotice({ shift, onSignIn }: { shift: string; onSignIn: () => void }) {
+  return (
+    // aria-hidden text: announced by ConnectionAnnouncer; the button stays reachable.
+    <div className={`${ROW} border-chip-amber-text/40 bg-chip-amber-bg ${shift}`}>
+      <span className="material-symbols-outlined text-lg text-chip-amber-text" aria-hidden="true">
+        schedule
+      </span>
+      <span aria-hidden="true" className="min-w-0 flex-1">
+        {SESSION_EXPIRY_MESSAGE}
+      </span>
+      <button
+        type="button"
+        onClick={onSignIn}
+        className="rounded-sm bg-primary px-2.5 py-0.5 text-sm font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+      >
+        Sign in again
+      </button>
+    </div>
+  );
+}
+
+/** Warns shortly before the session token expires; "Sign in again" ends this browser's session (no server call) and opens /login. */
+export function SessionExpiryBanner({ shift }: { shift: string }) {
+  const due = useSessionExpiryWarning();
+  const token = useAuthToken();
+  const { endSessionLocally } = useAuth();
+  const navigate = useNavigate();
+
+  // Once the token's own expiry passes, "ends in a few minutes" would be
+  // wrong and every request answers 401 anyway: end the session locally (no
+  // server call) so the app lands on sign-in instead of a stale banner.
+  useEffect(() => {
+    const exp = decodeTokenExpiryMs(token);
+    if (exp === null) return;
+    return scheduleAt(exp, () => {
+      endSessionLocally();
+      navigate("/login", { replace: true });
+    });
+  }, [token, endSessionLocally, navigate]);
+
+  if (!due) return null;
+  return (
+    <SessionExpiryNotice
+      shift={shift}
+      onSignIn={() => {
+        // Local only: the explicit top-bar sign-out is the one that revokes
+        // the token (and so ends every device's session). A late revoke
+        // request here could also kill the token of a quick re-login.
+        endSessionLocally();
+        navigate("/login", { replace: true });
+      }}
+    />
+  );
+}
+
 /** Visually hidden live region; empty (but mounted) when there is nothing to say. */
 export function LiveAnnouncement({ message }: { message: string }) {
   return (
@@ -84,10 +178,17 @@ export function LiveAnnouncement({ message }: { message: string }) {
   );
 }
 
-/** Mount once in Shell: speaks the offline and update notices as they appear. */
+/** Mount once in Shell: speaks the offline, update and session-ending notices as they appear. */
 export function ConnectionAnnouncer() {
   const online = useOnlineStatus();
   const { available } = useSwUpdate();
-  const message = [online ? "" : OFFLINE_MESSAGE, available ? UPDATE_MESSAGE : ""].filter(Boolean).join(" ");
+  const sessionEnding = useSessionExpiryWarning();
+  const message = [
+    online ? "" : OFFLINE_MESSAGE,
+    available ? UPDATE_MESSAGE : "",
+    sessionEnding ? SESSION_EXPIRY_MESSAGE : "",
+  ]
+    .filter(Boolean)
+    .join(" ");
   return <LiveAnnouncement message={message} />;
 }

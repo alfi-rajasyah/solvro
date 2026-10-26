@@ -25,6 +25,24 @@ export interface AuthUser {
   permissions: string[];
 }
 
+/** How long the best-effort server-side sign-out may take before it is abandoned. */
+export const LOGOUT_TIMEOUT_MS = 3_000;
+
+/**
+ * Asks the server to revoke the current token (`POST /auth/logout` bumps the
+ * account's token version, which signs it out on every device). Best effort:
+ * no token, a network failure, a timeout or any error answer resolves
+ * quietly — sign-out must never depend on it. Exported for the unit test.
+ */
+export async function revokeSessionOnServer(): Promise<void> {
+  if (!getToken()) return;
+  try {
+    await apiRequest<null>("/auth/logout", { method: "POST", timeoutMs: LOGOUT_TIMEOUT_MS });
+  } catch {
+    // Ignored on purpose; the local session ends regardless.
+  }
+}
+
 // The permission vocabulary for the Admin > Roles tick-box editor. The backend
 // validates role writes against the same list (`KNOWN_PERMISSIONS` in
 // backend/src/lib/permissions.ts), so a value added here must be added there
@@ -97,7 +115,10 @@ interface AuthContextValue {
   retryBoot: () => void;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
+  /** Explicit sign-out: also revokes the token on the server, which ends the session on every device. */
   logout: () => void;
+  /** Ends this browser's session only — no server call, other devices stay signed in. */
+  endSessionLocally: () => void;
   /** Swap in a token the server issued mid-session (after a password change). */
   replaceToken: (token: string) => void;
 }
@@ -242,7 +263,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setTokenState(next);
   }, []);
 
-  const logout = useCallback(() => {
+  const endSession = useCallback(() => {
     setToken(null);
     setTokenState(null);
     setUser(null);
@@ -258,14 +279,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .forEach((k) => localStorage.removeItem(k));
   }, [queryClient]);
 
+  // User-initiated sign-out: revokes the token on the server too
+  // (docs/archive/plans/application-review-2026-10-22.md, N-01), then ends
+  // the session locally. The request is dispatched first — with the current
+  // token, which `apiRequest` reads synchronously — and not awaited, so a
+  // slow or unreachable server never delays the sign-out.
+  const logout = useCallback(() => {
+    void revokeSessionOnServer();
+    endSession();
+  }, [endSession]);
+
   // Any authenticated request answered with 401 (lib/api.ts) ends the
   // session here too — the server now revokes tokens (password change,
   // admin reset, deactivation), and a revoked session must not keep
-  // showing cached pages behind failing requests.
+  // showing cached pages behind failing requests. Local only: the token is
+  // already dead, and calling the logout endpoint would 401 again.
   useEffect(() => {
-    window.addEventListener(UNAUTHENTICATED_EVENT, logout);
-    return () => window.removeEventListener(UNAUTHENTICATED_EVENT, logout);
-  }, [logout]);
+    window.addEventListener(UNAUTHENTICATED_EVENT, endSession);
+    return () => window.removeEventListener(UNAUTHENTICATED_EVENT, endSession);
+  }, [endSession]);
 
   const value = useMemo(
     () => ({
@@ -278,12 +310,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       login,
       loginWithGoogle,
       logout,
+      endSessionLocally: endSession,
       replaceToken,
     }),
-    [user, token, status, userVerified, bootError, retryBoot, login, loginWithGoogle, logout, replaceToken],
+    [user, token, status, userVerified, bootError, retryBoot, login, loginWithGoogle, logout, endSession, replaceToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/** The current token, or null — also outside an AuthProvider (isolated renders), where `useAuth` throws. */
+export function useAuthToken(): string | null {
+  return useContext(AuthContext)?.token ?? null;
 }
 
 export function useAuth(): AuthContextValue {

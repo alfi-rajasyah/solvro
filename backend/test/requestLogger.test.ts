@@ -6,7 +6,7 @@ import request from "supertest";
 import { pino } from "pino";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/prisma.js";
-import { redactShareTokens } from "../src/http/requestLogger.js";
+import { redactSearchQueries, redactShareTokens } from "../src/http/requestLogger.js";
 import { createUserWithRole, seedRoles } from "./testAuth.js";
 
 beforeAll(async () => {
@@ -41,7 +41,52 @@ describe("redactShareTokens", () => {
   });
 });
 
+describe("redactSearchQueries", () => {
+  it("masks the whole query string of /search under any prefix", () => {
+    expect(redactSearchQueries("/search?q=Acme%20invoice&limit=5")).toBe("/search?[redacted]");
+    expect(redactSearchQueries("/api/search?q=x")).toBe("/api/search?[redacted]");
+    expect(redactSearchQueries("https://solvro.example/search?q=secret")).toBe(
+      "https://solvro.example/search?[redacted]",
+    );
+    // The trailing-slash form is served too (Express non-strict routing).
+    expect(redactSearchQueries("/search/?q=x")).toBe("/search/?[redacted]");
+    // `/search%3Fq=...` is not a search request (404), so it is left alone.
+    expect(redactSearchQueries("/projects?q=x")).toBe("/projects?q=x");
+    expect(redactSearchQueries("/searchable?q=x")).toBe("/searchable?q=x");
+  });
+});
+
 describe("request logging", () => {
+  it("the /search/ form is redacted too: url, referer and the parsed query object", async () => {
+    const { app, lines } = capturingApp();
+    const tam = await createUserWithRole("TAM");
+    const res = await request(app)
+      .get("/search/?q=SlashSecret")
+      .set("Authorization", `Bearer ${tam.token}`)
+      .set("Referer", "https://solvro.example/search/?q=SlashSecret");
+    expect(res.status).toBe(200);
+    expect(lines.join("")).not.toContain("SlashSecret");
+    const entry = JSON.parse(lines.at(-1)!) as LoggedEntry & { req: { query?: unknown } };
+    expect(entry.req.url).toBe("/search/?[redacted]");
+    expect(entry.req.headers.referer).toBe("https://solvro.example/search/?[redacted]");
+    expect(entry.req.query).toBe("[redacted]");
+  });
+
+  it("a search request logs /search?[redacted] and never the query text", async () => {
+    const { app, lines } = capturingApp();
+    const tam = await createUserWithRole("TAM");
+    const res = await request(app)
+      .get("/search?q=ConfidentialCustomerName")
+      .set("Authorization", `Bearer ${tam.token}`)
+      .set("Referer", "https://solvro.example/search?q=ConfidentialCustomerName");
+    expect(res.status).toBe(200);
+    const logged = lines.join("");
+    expect(logged).not.toContain("ConfidentialCustomerName");
+    const entry = JSON.parse(lines.at(-1)!) as LoggedEntry;
+    expect(entry.req.url).toBe("/search?[redacted]");
+    expect(entry.req.headers.referer).toBe("https://solvro.example/search?[redacted]");
+  });
+
   it("a public guest GET logs neither the token (url or referer) nor anything else secret", async () => {
     const { app, lines } = capturingApp();
     const tam = await createUserWithRole("TAM");

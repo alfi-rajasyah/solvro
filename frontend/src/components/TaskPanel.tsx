@@ -556,6 +556,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                 <select
                   autoFocus
                   value={task.assignedToId ?? ""}
+                  aria-label="Assignee"
                   onChange={(e) => {
                     patch({ assignedToId: e.target.value === "" ? null : Number(e.target.value) });
                     setEditingAssignee(false);
@@ -693,6 +694,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                 <select
                   autoFocus
                   value={task.sectionId ?? ""}
+                  aria-label="Section"
                   onChange={(e) => {
                     patch({ sectionId: e.target.value === "" ? null : Number(e.target.value) });
                     setEditingSection(false);
@@ -739,6 +741,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                       <select
                         autoFocus
                         value={task.epicId ?? ""}
+                        aria-label="Epic"
                         onChange={(e) => {
                           patch({ epicId: e.target.value === "" ? null : Number(e.target.value) });
                           setEditingEpic(false);

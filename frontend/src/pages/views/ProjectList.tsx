@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -109,6 +109,7 @@ function keyFromGroupId(id: string): GroupKey {
 }
 
 export function ProjectList() {
+  const filterUid = useId();
   const { project } = useProjectContext();
   const { user } = useAuth();
   const canEdit = hasPermission(user, "task:write");
@@ -445,10 +446,11 @@ export function ProjectList() {
               <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
               <div className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 shadow-overlay">
                 <div className="mb-3">
-                  <label className="mb-1 block text-label-caps uppercase text-on-surface-variant">
+                  <label htmlFor={`${filterUid}-epic`} className="mb-1 block text-label-caps uppercase text-on-surface-variant">
                     Epic
                   </label>
                   <select
+                    id={`${filterUid}-epic`}
                     value={filterEpicId === "" ? "" : filterEpicId === null ? "none" : String(filterEpicId)}
                     onChange={(e) => {
                       const v = e.target.value;

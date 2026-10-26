@@ -1,13 +1,16 @@
-import { useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import { AppErrorBoundary } from "@/components/AppErrorBoundary";
 import { CommandPalette } from "@/components/CommandPalette";
 import { InstallBanner } from "@/components/InstallBanner";
 import { useAuth } from "@/lib/auth";
-import { ConnectionAnnouncer, OfflineBanner, UpdateBanner } from "./ConnectionBanners";
+import { ConnectionAnnouncer, OfflineBanner, SessionExpiryBanner, UpdateBanner } from "./ConnectionBanners";
+import { RouteFallback } from "./RouteFallback";
 import { Sidebar } from "./Sidebar";
 import { SidebarProvider, useSidebar } from "./SidebarContext";
 import { TopBar } from "./TopBar";
+
+const MAIN_CONTENT_ID = "main-content";
 
 function ShellLayout() {
   const { open } = useSidebar();
@@ -65,6 +68,20 @@ function ShellLayout() {
   const shift = open ? "md:ml-sidebar" : "md:ml-sidebar-collapsed";
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-background text-on-surface">
+      {/* First focusable element: keyboard users jump past the sidebar and top
+          bar. Visually hidden until focused (docs/archive/plans/application-review-2026-10-22.md, F-34). */}
+      <a
+        href={`#${MAIN_CONTENT_ID}`}
+        className="sr-only focus:not-sr-only focus:fixed focus:left-4 focus:top-4 focus:z-200 focus:rounded-sm focus:border focus:border-outline-variant focus:bg-surface-container-lowest focus:px-3 focus:py-2 focus:text-sm focus:font-semibold focus:text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/30"
+        onClick={(e) => {
+          // Move focus directly: a bare hash href would add "#main-content"
+          // to the router's URL.
+          e.preventDefault();
+          document.getElementById(MAIN_CONTENT_ID)?.focus();
+        }}
+      >
+        Skip to main content
+      </a>
       {/* In normal flow (unlike Sidebar/TopBar, which are fixed/sticky) so it
           takes its own row at the very top; main below is flex-1 so it fills
           whatever's left rather than assuming a fixed TopBar height. */}
@@ -72,6 +89,7 @@ function ShellLayout() {
       <ConnectionAnnouncer />
       <OfflineBanner shift={shift} />
       <UpdateBanner shift={shift} />
+      <SessionExpiryBanner shift={shift} />
       {bootError && (
         // Shifted past the fixed sidebar like <main>, or its first words sit
         // underneath it (docs/archive/plans/application-review-2026-10-22.md, QA-02).
@@ -92,11 +110,15 @@ function ShellLayout() {
       <Sidebar />
       <TopBar onOpenSearch={() => setPaletteOpen(true)} />
       <main
-        className={`min-h-0 flex-1 overflow-y-auto overflow-x-hidden bg-background p-4 transition-[margin] duration-200 ease-out md:p-6 ${shift}`}
+        id={MAIN_CONTENT_ID}
+        tabIndex={-1}
+        className={`min-h-0 flex-1 overflow-y-auto focus:outline-none overflow-x-hidden bg-background p-4 transition-[margin] duration-200 ease-out md:p-6 ${shift}`}
       >
         {/* A page-level render error keeps the sidebar and top bar usable. */}
         <AppErrorBoundary scope="page" key={pathname}>
-          <Outlet />
+          <Suspense fallback={<RouteFallback />}>
+            <Outlet />
+          </Suspense>
         </AppErrorBoundary>
       </main>
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} />

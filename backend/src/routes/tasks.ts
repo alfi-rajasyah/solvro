@@ -21,6 +21,7 @@ import {
   siblingKeyEquals,
   type SiblingKey,
 } from "../lib/taskOrdering.js";
+import { lockProject } from "../lib/positionRepack.js";
 import { assertEpicNotOnSubtask, assertValidEpic } from "../lib/epics.js";
 import { duplicateTaskTree } from "../lib/duplicate.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
@@ -352,6 +353,20 @@ tasksRouter.patch(
     };
 
     const updated = await prisma.$transaction(async (tx) => {
+      // Lock order: project first, then the task row. Only a write that can
+      // re-pack siblings (an explicit position or a re-parent) takes the
+      // project lock, and it takes it BEFORE the task row lock; every other
+      // path (section duplicate, task duplicate, epic reorder) also goes
+      // project -> row. A plain save takes only the row lock and never waits
+      // for the project lock afterwards, so no wait cycle can form
+      // (docs/archive/plans/application-review-2026-10-22.md, F-10).
+      if (body.position !== undefined || body.parentTaskId !== undefined) {
+        const { projectId: lockedProjectId } = await tx.task.findUniqueOrThrow({
+          where: { id },
+          select: { projectId: true },
+        });
+        await lockProject(tx, lockedProjectId);
+      }
       // Lock the row before reading it, so two concurrent saves serialise and
       // each one sees (and diffs against) the other's result: the optimistic
       // check below, the assignee-change detection and the activity event all
@@ -580,6 +595,13 @@ tasksRouter.post(
     await ensureTaskVisible(req.user!, id);
 
     const newTask = await prisma.$transaction(async (tx) => {
+      // projectId never changes; parentTaskId can, so it is read AFTER the lock.
+      const { projectId: sourceProjectId } = await tx.task.findUniqueOrThrow({
+        where: { id },
+        select: { projectId: true },
+      });
+      // Before duplicateTaskTree appends / insertManyAfter re-packs.
+      await lockProject(tx, sourceProjectId);
       const source = await tx.task.findUniqueOrThrow({
         where: { id },
         select: { projectId: true, parentTaskId: true },

@@ -324,4 +324,17 @@
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+
+  /* Loading indicators are the exception: a frozen spinner reads as a hung
+     page. The spinner keeps turning, slowly (rotation, no flashing); the
+     skeleton pulse becomes a static tint, since the placeholder shape and the
+     "Loading…" live region already say "loading" without an opacity fade
+     (docs/archive/plans/application-review-2026-10-22.md, F-37). */
+  .animate-spin {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
+  .animate-pulse {
+    animation: none !important;
+  }
 }

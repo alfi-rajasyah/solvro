@@ -31,6 +31,7 @@ import {
   countSiblings,
   type SiblingKey,
 } from "../lib/taskOrdering.js";
+import { lockProject } from "../lib/positionRepack.js";
 import { assertEpicNotOnSubtask, assertValidEpic } from "../lib/epics.js";
 import { computeProjectHealth, computeSlipDays } from "../lib/projectHealth.js";
 import { COUNTED_TASKS_COUNT, COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
@@ -563,6 +564,9 @@ projectsRouter.post(
     const status = body.status ?? "TODO";
 
     const task = await prisma.$transaction(async (tx) => {
+      // The append position below is a sibling count: serialise with any
+      // in-flight re-pack in this project so the new row can't collide.
+      await lockProject(tx, id);
       if (body.parentTaskId) {
         // assertValidParent needs a real taskId to compare against for the
         // self-parent / subtask-depth checks; a not-yet-created task can't
@@ -1149,49 +1153,56 @@ projectsRouter.post(
       throw new HttpError(400, "self_dependency", "A task cannot depend on itself.");
     }
 
-    // Both endpoints must live on this project.
-    const tasks = await prisma.task.findMany({
-      where: { id: { in: [body.predecessorTaskId, body.successorTaskId] }, projectId: id },
-      select: { id: true },
-    });
-    if (tasks.length !== 2) {
-      throw new HttpError(400, "task_not_in_project", "Both tasks must belong to this project.");
-    }
-
-    // Reject cycles: walk forward from `successor` over existing edges; if we
-    // reach `predecessor` the new edge would close a loop.
-    const allEdges = await prisma.taskDependency.findMany({
-      where: { projectId: id },
-      select: { predecessorTaskId: true, successorTaskId: true },
-    });
-    const adj = new Map<number, number[]>();
-    for (const e of allEdges) {
-      const arr = adj.get(e.predecessorTaskId) ?? [];
-      arr.push(e.successorTaskId);
-      adj.set(e.predecessorTaskId, arr);
-    }
-    const seen = new Set<number>();
-    const stack = [body.successorTaskId];
-    while (stack.length > 0) {
-      const cur = stack.pop()!;
-      if (cur === body.predecessorTaskId) {
-        throw new HttpError(400, "cycle", "This dependency would create a cycle.");
-      }
-      if (seen.has(cur)) continue;
-      seen.add(cur);
-      for (const next of adj.get(cur) ?? []) stack.push(next);
-    }
-
+    // Cycle check and insert run under the project lock, so two requests that
+    // would together close a loop (A->B and B->A) can't both pass the check
+    // against the same snapshot (docs/archive/plans/application-review-2026-10-22.md, F-10).
     try {
-      const dep = await prisma.taskDependency.create({
-        data: {
-          projectId: id,
-          predecessorTaskId: body.predecessorTaskId,
-          successorTaskId: body.successorTaskId,
-          type: body.type ?? "HARD",
-          sourceHandle: body.sourceHandle ?? null,
-          targetHandle: body.targetHandle ?? null,
-        },
+      const dep = await prisma.$transaction(async (tx) => {
+        await lockProject(tx, id);
+
+        // Both endpoints must live on this project.
+        const tasks = await tx.task.findMany({
+          where: { id: { in: [body.predecessorTaskId, body.successorTaskId] }, projectId: id },
+          select: { id: true },
+        });
+        if (tasks.length !== 2) {
+          throw new HttpError(400, "task_not_in_project", "Both tasks must belong to this project.");
+        }
+
+        // Reject cycles: walk forward from `successor` over existing edges; if we
+        // reach `predecessor` the new edge would close a loop.
+        const allEdges = await tx.taskDependency.findMany({
+          where: { projectId: id },
+          select: { predecessorTaskId: true, successorTaskId: true },
+        });
+        const adj = new Map<number, number[]>();
+        for (const e of allEdges) {
+          const arr = adj.get(e.predecessorTaskId) ?? [];
+          arr.push(e.successorTaskId);
+          adj.set(e.predecessorTaskId, arr);
+        }
+        const seen = new Set<number>();
+        const stack = [body.successorTaskId];
+        while (stack.length > 0) {
+          const cur = stack.pop()!;
+          if (cur === body.predecessorTaskId) {
+            throw new HttpError(400, "cycle", "This dependency would create a cycle.");
+          }
+          if (seen.has(cur)) continue;
+          seen.add(cur);
+          for (const next of adj.get(cur) ?? []) stack.push(next);
+        }
+
+        return tx.taskDependency.create({
+          data: {
+            projectId: id,
+            predecessorTaskId: body.predecessorTaskId,
+            successorTaskId: body.successorTaskId,
+            type: body.type ?? "HARD",
+            sourceHandle: body.sourceHandle ?? null,
+            targetHandle: body.targetHandle ?? null,
+          },
+        });
       });
       res.status(201).json(dep);
     } catch (err) {

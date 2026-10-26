@@ -151,15 +151,39 @@ test.describe("auth — sign-out clears the previous account's cached data", () 
       body: JSON.stringify({ email: tamEmail, username: tamUsername, password: tamPassword, role: "TAM" }),
     });
 
-    // Admin sees the project on the Projects page (fills the cache).
-    await loginViaUi(page, ADMIN_EMAIL, ADMIN_PASSWORD);
+    // The first account is a throwaway ADMIN-role user, not the shared QA
+    // admin: signing out revokes every token of the account
+    // (docs/archive/plans/application-review-2026-10-22.md, N-01), and the
+    // seeded specs share the QA admin's token.
+    const firstEmail = `cache-admin-${stamp}@solvro.test`;
+    const firstUsername = `cacheadmin${stamp}`;
+    await fetch(`${base}/api/admin/users`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ email: firstEmail, username: firstUsername, password: tamPassword, role: "ADMIN" }),
+    });
+
+    // The first account sees the project on the Projects page (fills the cache).
+    await loginViaUi(page, firstEmail, tamPassword);
     await page.goto("/projects", { waitUntil: "networkidle" });
     await expect(page.getByText(projectName)).toBeVisible();
 
-    // Sign out through the top-bar menu, then sign in as the TAM.
+    // Sign out through the top-bar menu, then sign in as the TAM. The token is
+    // captured first: signing out must revoke it on the server, not only clear
+    // it from the browser.
+    const signedOutToken = await page.evaluate(() => localStorage.getItem("solvro.token"));
+    expect(signedOutToken).toBeTruthy();
     await page.locator("header button").filter({ hasText: /admin/i }).first().click();
     await page.getByRole("button", { name: /sign out/i }).click();
     await page.waitForURL(/login/i, { timeout: 10_000 });
+    // The logout request is fire-and-forget in the app, so poll until it lands.
+    await expect
+      .poll(
+        async () =>
+          (await fetch(`${base}/api/auth/me`, { headers: { Authorization: `Bearer ${signedOutToken}` } })).status,
+        { timeout: 10_000 },
+      )
+      .toBe(401);
     await submitLoginForm(page, tamEmail, tamPassword);
     await page.waitForURL(/overview|projects|\/$/i, { timeout: 10_000 });
 

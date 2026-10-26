@@ -7,6 +7,7 @@ import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { ensureProjectVisible } from "../lib/visibility.js";
 import { insertManyAfter, type SiblingKey } from "../lib/taskOrdering.js";
+import { lockProject, repackToOrder } from "../lib/positionRepack.js";
 import { duplicateTaskTree } from "../lib/duplicate.js";
 import { recordActivity } from "../lib/activity.js";
 
@@ -52,7 +53,7 @@ async function insertSectionAt(
   const siblings = await tx.section.findMany({
     where: { projectId, id: { not: sectionId } },
     orderBy: [{ position: "asc" }, { id: "asc" }],
-    select: { id: true },
+    select: { id: true, position: true },
   });
 
   const clamped = Math.max(0, Math.min(requestedPosition, siblings.length));
@@ -60,9 +61,7 @@ async function insertSectionAt(
   const ordered = siblings.map((s) => s.id);
   ordered.splice(clamped, 0, sectionId);
 
-  for (let i = 0; i < ordered.length; i++) {
-    await tx.section.update({ where: { id: ordered[i] }, data: { position: i } });
-  }
+  await repackToOrder(tx, "sections", siblings, ordered);
 
   return clamped;
 }
@@ -97,7 +96,7 @@ async function insertSectionAfter(
   const others = await tx.section.findMany({
     where: { projectId, id: { not: newSectionId } },
     orderBy: [{ position: "asc" }, { id: "asc" }],
-    select: { id: true },
+    select: { id: true, position: true },
   });
 
   const afterIndex = others.findIndex((s) => s.id === afterSectionId);
@@ -106,9 +105,7 @@ async function insertSectionAfter(
   const ordered = others.map((s) => s.id);
   ordered.splice(insertIndex, 0, newSectionId);
 
-  for (let i = 0; i < ordered.length; i++) {
-    await tx.section.update({ where: { id: ordered[i] }, data: { position: i } });
-  }
+  await repackToOrder(tx, "sections", others, ordered);
 }
 
 export const sectionsRouter = Router();
@@ -139,6 +136,8 @@ sectionsRouter.patch(
     // the list is never observed half-moved.
     const { position, ...rest } = body;
     const updated = await prisma.$transaction(async (tx) => {
+      // Serialise concurrent reorders in this project before reading siblings.
+      await lockProject(tx, projectId);
       if (Object.keys(rest).length > 0) {
         await tx.section.update({ where: { id }, data: rest });
       }
@@ -172,6 +171,8 @@ sectionsRouter.post(
     const { projectId } = await ensureSectionVisible(req.user!, id);
 
     const result = await prisma.$transaction(async (tx) => {
+      // First statement: serialise with other reorders in this project.
+      await lockProject(tx, projectId);
       const source = await tx.section.findUniqueOrThrow({
         where: { id },
         select: { name: true, color: true },
@@ -235,9 +236,10 @@ sectionsRouter.post(
       const finalSection = await tx.section.findUniqueOrThrow({ where: { id: newSection.id } });
       return { section: finalSection, taskCount };
     }, {
-      // Statement count scales with the whole project (every top-level row is
-      // re-packed); Prisma's default 5s interactive-transaction budget is too
-      // tight for a large section.
+      // The re-pack is a single statement now, but duplicateTaskTree still
+      // INSERTs per copied task (and subtask) and one activity event is
+      // recorded per copied top-level task, so a large section outgrows
+      // Prisma's default 5s interactive-transaction budget.
       timeout: 30_000,
       maxWait: 10_000,
     });

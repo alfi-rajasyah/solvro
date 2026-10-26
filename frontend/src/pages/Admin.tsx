@@ -239,6 +239,7 @@ function UsersTab() {
           >
             <select
               value={u.role}
+              aria-label={`Role for ${u.username}`}
               disabled={isSelf}
               onChange={(e) => handleRoleChange(u, e.target.value as Role)}
               // text-label-caps (12px/700/0.05em) replaces the carried-over
@@ -1621,6 +1622,7 @@ function ProjectsTab() {
         return (
           <select
             value={p.tamId}
+            aria-label={`Reassign TAM for ${p.name}`}
             onChange={(e) => handleReassign(p, Number(e.target.value))}
             className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-[13px] text-on-surface focus:border-primary focus:outline-hidden"
           >

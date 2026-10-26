@@ -200,3 +200,26 @@ describe("session revocation", () => {
     expect(res.body.code).toBe("token_revoked");
   });
 });
+
+describe("POST /auth/logout", () => {
+  it("revokes the caller's token (and other sessions); a second logout and an anonymous one get 401", async () => {
+    const u = await passwordUser("TAM");
+    const otherDevice = await request(app).post("/auth/login").send({ email: u.email, password: PASSWORD });
+    expect((await me(u.token)).status).toBe(200);
+
+    const out = await request(app).post("/auth/logout").set(auth(u.token));
+    expect(out.status).toBe(204);
+
+    for (const stale of [u.token, otherDevice.body.token as string]) {
+      const res = await me(stale);
+      expect(res.status).toBe(401);
+      expect(res.body.code).toBe("token_revoked");
+    }
+    expect((await request(app).post("/auth/logout").set(auth(u.token))).status).toBe(401);
+    expect((await request(app).post("/auth/logout")).status).toBe(401);
+
+    // Signing in again works and yields a live token.
+    const again = await request(app).post("/auth/login").send({ email: u.email, password: PASSWORD });
+    expect((await me(again.body.token)).status).toBe(200);
+  });
+});

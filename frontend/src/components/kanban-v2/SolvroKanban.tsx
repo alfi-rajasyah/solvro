@@ -27,7 +27,7 @@
 // own `setNodeRef`, breaking that column as a drop target) and React 18's
 // lack of ref-as-prop for non-forwardRef function components (rules out
 // refing `<KanbanBoard>` directly too).
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Kanban,
@@ -155,6 +155,7 @@ export interface SolvroKanbanProps {
 }
 
 export function SolvroKanban({ project }: SolvroKanbanProps) {
+  const filterUid = useId();
   const { user } = useAuth();
   const { data: tasks, isLoading, isError, error } = useProjectTasks(project.id);
   const { data: users } = useUsers();
@@ -515,10 +516,11 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
               <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
               <div className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 shadow-overlay">
                 <div className="mb-3">
-                  <label className="mb-1 block text-label-caps uppercase text-on-surface-variant">
+                  <label htmlFor={`${filterUid}-assignee`} className="mb-1 block text-label-caps uppercase text-on-surface-variant">
                     Assignee
                   </label>
                   <select
+                    id={`${filterUid}-assignee`}
                     value={filterAssigneeId === "" ? "" : String(filterAssigneeId)}
                     onChange={(e) =>
                       setFilterAssigneeId(e.target.value === "" ? "" : Number(e.target.value))
@@ -534,10 +536,11 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                   </select>
                 </div>
                 <div className="mb-3">
-                  <label className="mb-1 block text-label-caps uppercase text-on-surface-variant">
+                  <label htmlFor={`${filterUid}-priority`} className="mb-1 block text-label-caps uppercase text-on-surface-variant">
                     Priority
                   </label>
                   <select
+                    id={`${filterUid}-priority`}
                     value={filterPriority}
                     onChange={(e) => setFilterPriority(e.target.value as Priority | "")}
                     className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
@@ -551,10 +554,11 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                   </select>
                 </div>
                 <div className="mb-3">
-                  <label className="mb-1 block text-label-caps uppercase text-on-surface-variant">
+                  <label htmlFor={`${filterUid}-epic`} className="mb-1 block text-label-caps uppercase text-on-surface-variant">
                     Epic
                   </label>
                   <select
+                    id={`${filterUid}-epic`}
                     value={filterEpicId === "" ? "" : filterEpicId === null ? "none" : String(filterEpicId)}
                     onChange={(e) => {
                       const v = e.target.value;

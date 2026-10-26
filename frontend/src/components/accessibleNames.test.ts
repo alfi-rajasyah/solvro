@@ -7,7 +7,7 @@ import { LinkFields } from "@/components/LinksSection";
 import { ToolsEditor } from "@/components/services/ServiceMappingList";
 import { SubtaskRow } from "@/components/TaskFormModal";
 
-// A placeholder is not an accessible name: every input / textarea must carry an
+// A placeholder is not an accessible name: every input / textarea / select must carry an
 // aria-label (or sit inside a <label> with text)
 // (docs/archive/plans/application-review-2026-10-22.md, F-37).
 
@@ -92,10 +92,10 @@ function withoutComments(source: string): string {
     .replace(/^[ \t]*\/\/.*$/gm, blank);
 }
 
-/** Opening `<input>` / `<textarea>` / `<Input>` / `<Textarea>` tags of a JSX source, braces and quotes respected. */
+/** Opening `<input>` / `<textarea>` / `<select>` / `<Input>` / `<Textarea>` tags of a JSX source, braces and quotes respected. */
 function controlTags(source: string): { index: number; tag: string }[] {
   const found: { index: number; tag: string }[] = [];
-  const re = /<(input|textarea|Input|Textarea)(?=[\s/>])/g;
+  const re = /<(input|textarea|select|Input|Textarea)(?=[\s/>])/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source))) {
     let depth = 0;
@@ -115,6 +115,26 @@ function controlTags(source: string): { index: number; tag: string }[] {
     found.push({ index: m.index, tag: source.slice(m.index, i + 1) });
   }
   return found;
+}
+
+/** The brace-balanced JSX expression after `prefix` (which ends in `{`), quotes respected; null if absent. */
+function braceExpression(tag: string, prefix: RegExp): string | null {
+  const m = prefix.exec(tag);
+  if (!m) return null;
+  const start = m.index + m[0].length;
+  let depth = 1;
+  let quote: string | null = null;
+  for (let i = start; i < tag.length; i++) {
+    const c = tag[i];
+    if (quote) {
+      if (c === quote) quote = null;
+      continue;
+    }
+    if (c === '"' || c === "'" || c === "`") quote = c;
+    else if (c === "{") depth++;
+    else if (c === "}" && --depth === 0) return tag.slice(start, i).trim();
+  }
+  return null;
 }
 
 /**
@@ -140,8 +160,8 @@ function insideLabelOrField(source: string, index: number, tagLength: number): b
 // Files another change is still labelling; empty this list once they are done.
 const PENDING = new Set<string>();
 
-describe("source guard: no unlabelled input or textarea", () => {
-  it("every <input> / <textarea> / <Input> / <Textarea> has a non-empty aria-label, a spread, a <label htmlFor>, or an enclosing <label> with text", () => {
+describe("source guard: no unlabelled input, textarea or select", () => {
+  it("every <input> / <textarea> / <select> / <Input> / <Textarea> has a non-empty aria-label, a spread, a <label htmlFor>, or an enclosing <label> with text", () => {
     const offenders: string[] = [];
     for (const file of sourceFiles(SRC)) {
       const rel = relative(SRC, file).replace(/\\/g, "/");
@@ -152,6 +172,9 @@ describe("source guard: no unlabelled input or textarea", () => {
         if (/type="hidden"/.test(tag) || /className="hidden"/.test(tag)) continue;
         const id = /\bid="([^"]+)"/.exec(tag)?.[1];
         if (id && source.includes(`htmlFor="${id}"`)) continue;
+        // `id={`${uid}-x`}` paired with `htmlFor={`${uid}-x`}` (useId).
+        const idExpr = braceExpression(tag, /\bid=\{/);
+        if (idExpr && source.includes(`htmlFor={${idExpr}}`)) continue;
         // A non-empty aria-label / aria-labelledby. A `{...spread}` is trusted to
         // supply the name (CommentMentions builds its aria-label that way): the
         // guard cannot see inside it.

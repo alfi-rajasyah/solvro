@@ -295,6 +295,35 @@ describe("syncTickets", () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
+  it("a ticket with an unparseable last_update is skipped and counted, not stored with an invented time; good rows still sync", async () => {
+    const state = seedFakeItop();
+    const badId = state.nextId++;
+    state.tickets.set(
+      badId,
+      extraTicket({ id: badId, ref: "R-BADUPDATE-1", org_id: "1", last_update: "not-a-date" }),
+    );
+
+    const { baseUrl } = await startFake(state);
+    await configureItop(baseUrl, FAKE_ITOP_TOKENS.app);
+    await createMappedCustomer(1, "Northwind Freight Sdn Bhd");
+    await createMappedCustomer(2, "PT Sinar Logistik");
+
+    const summary = await syncTickets({ full: true });
+
+    expect(summary.ran).toBe(true);
+    expect(summary.error).toBeUndefined();
+    expect(summary.skipped).toBe(1);
+    expect(await prisma.itopTicket.findUnique({ where: { ref: "R-BADUPDATE-1" } })).toBeNull();
+    expect(await prisma.itopTicket.findUnique({ where: { ref: "R-004512" } })).not.toBeNull();
+
+    // A skip alone is a non-fatal note: the run is still ok and the
+    // incremental watermark advances.
+    const config = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(config.lastSyncOk).toBe(true);
+    expect(config.lastSyncError).toBe("Skipped 1 row that could not be read (see server log)");
+    expect(config.lastSyncAt).not.toBeNull();
+  });
+
   it("a duplicate ref triggers a REAL Postgres unique-constraint error mid-loop — the rest of the sync still completes", async () => {
     const state = seedFakeItop();
     // Same `ref` as the seeded R-004512 (Incident, org 1, id 1) but a
@@ -838,6 +867,35 @@ describe("syncTimeEntries", () => {
     // A start-date skip counts in `skipped`, same as a row that throws.
     expect(result.skipped).toBe(1);
     // Rina's well-formed fixture rows still land.
+    expect(await prisma.itopTimeEntry.count({ where: { itopUserId: 1 } })).toBeGreaterThan(0);
+  });
+
+  it("skips a TimeSpent row without a parseable duration instead of storing 0 minutes; good rows still land", async () => {
+    const state = seedFakeItop();
+    const { baseUrl } = await startFake(state);
+    await configureItop(baseUrl, "app-token-readonly");
+
+    const userA = await createUserWithRole("TAM");
+    await prisma.user.update({ where: { id: userA.userId }, data: { email: "rina.s@example.co.id" } });
+    await syncUsers();
+
+    const badId = state.nextId++;
+    state.timeSpent.set(badId, {
+      id: badId,
+      user_id: "1",
+      org_id: "1",
+      start_date: "2999-01-01 00:00:00",
+      end_date: "",
+      duration: "",
+      title: "no duration",
+      ticketRef: "R-004512",
+    });
+
+    const result = await syncTimeEntries({ full: true });
+    expect(result.error).toBeUndefined();
+    expect(result.ran).toBe(true);
+    expect(await prisma.itopTimeEntry.findUnique({ where: { id: badId } })).toBeNull();
+    expect(result.skipped).toBe(1);
     expect(await prisma.itopTimeEntry.count({ where: { itopUserId: 1 } })).toBeGreaterThan(0);
   });
 
