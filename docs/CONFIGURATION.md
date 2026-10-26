@@ -313,6 +313,31 @@ Backend container command in both cases: `prisma migrate deploy && prisma db see
 
 **`TRUST_PROXY`**: the generated compose file passes `TRUST_PROXY: "${TRUST_PROXY:-loopback, uniquelocal}"` through to the backend container, read from `~/solvro/.env` (or the environment of the run). The default trusts the bundled nginx (it sits on the Docker network, a private range) and a tunnel connector such as `cloudflared` running on the host or a private network — the shape this deployment uses (tunnel → nginx → backend) — and never a public address, so a client on the public internet cannot spoof its IP, whether or not a tunnel sits in front. The caveat: `uniquelocal` trusts every private address, so a client on the LAN/VPN (when `BIND_ADDR` exposes the ports), or a hop that rewrites the source to a private address without appending `X-Forwarded-For` (rootless Docker, an L4 forwarder), can still forge its address — the effect is limited to its guest-link and sign-in rate-limit buckets and the logged `clientIp`. The reverse matters more: a public CDN edge that `TRUST_PROXY` does not cover makes every user share one address, so 50 failed sign-ins from anyone block password sign-in for everyone for up to 15 minutes — set the hop count or list the edge's CIDRs in that topology. Set a hop count instead (`1` = nginx only, `2` = one public proxy in front of nginx) or list the proxy's addresses/CIDRs when a CDN with public addresses fronts nginx. `setup.sh` validates the value and saves it to `.env` on a fresh install and on an update run: `TRUST_PROXY=... bash setup.sh` on an existing install replaces the saved value; a run without it keeps what `.env` holds. The backend's own default, used outside `setup.sh` (dev stack, CI), is `1`.
 
+**Non-interactive install**: `setup.sh` prompts through `/dev/tty` only when a value is missing *and* a terminal can actually be opened (it tests by opening the device, not with `-r`, which is true even without a controlling terminal). For cron, CI or `ssh host 'bash setup.sh'`, set `ADMIN_EMAIL` and `ADMIN_PASSWORD`, plus any of `BIND_ADDR`, `FRONTEND_PORT`, `BACKEND_PORT`, `POSTGRES_PORT` or `TRUST_PROXY` you want to change. Unset ports take the defaults and Postgres stays unpublished. Without a terminal and without `ADMIN_EMAIL`/`ADMIN_PASSWORD`, the script stops with a clear error and writes nothing.
+
+**Container user**: the backend production image runs as the unprivileged `node` user (uid 1000). The API, `prisma migrate deploy`, the seed and `scripts/create-admin.ts` need no write access under `/app`.
+
+**Backups — [backup.sh](backup.sh)**: sits next to `setup.sh` in the repo; on a host installed with `curl | bash`, download it from the same place. It needs the stack running.
+
+```
+bash backup.sh                 # dump now, then prune old dumps
+bash backup.sh --print-cron    # print a suggested crontab line; add it with `crontab -e`
+```
+
+It runs `pg_dump -Fc` inside the `postgres` container (`docker compose exec -T`, over the container's local socket, so no password is read or printed) and writes `solvro-YYYY-MM-DDTHHMMSS.dump` to `BACKUP_DIR`. A dump is written to a hidden temporary file and renamed into place only when `pg_dump` succeeds and the file is not empty, so a failed run leaves no truncated dump and exits non-zero. Dumps older than `RETENTION_DAYS` are then deleted — only files with that exact name pattern. Settings (environment variables): `DEPLOY_DIR` (default `~/solvro`), `BACKUP_DIR` (default `$DEPLOY_DIR/backups`, mode 700; dumps mode 600), `RETENTION_DAYS` (default `14`), `POSTGRES_USER`/`POSTGRES_DB` (default `solvro`, also read from `.env`). Copy the backup directory off the host as well: a backup on the same disk does not survive losing the host. Back up `~/solvro/.env` separately — it is not in the dump, and a restore into a new install needs its original `JWT_SECRET` and especially `SECRETS_KEY` (without it, stored integration tokens cannot be decrypted).
+
+**Restore drill** — *not yet executed on a real host; run it once on a copy before relying on it.* From `~/solvro`, with `F` set to the dump file:
+
+```
+F=~/solvro/backups/solvro-YYYY-MM-DDTHHMMSS.dump
+docker compose stop backend frontend
+docker compose exec -T postgres pg_restore -U solvro -d solvro --clean --if-exists --no-owner < "$F"
+docker compose start backend frontend
+curl -sf http://127.0.0.1:3000/health        # use your BIND_ADDR / BACKEND_PORT
+```
+
+Then sign in and open a project you know exists. `pg_restore` may print warnings; an error that stops it needs investigating. The backend is stopped so the restore does not race live writes; its start command runs `prisma migrate deploy`, which brings an older dump up to the current schema.
+
 Google sign-in still needs a manual post-deploy step, since it's DB-config not env-config (see [2.9](#29--auth--rbac-configuration)): create an OAuth Client ID in Google Cloud Console, then set it + an allowed domain via Admin > Sign-in in the running app — no restart or rebuild needed.
 
 ### 2.14 — Bind-mount layout (dev stack)

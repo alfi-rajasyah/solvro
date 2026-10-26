@@ -65,6 +65,14 @@ cd "$DEPLOY_DIR"
 
 # ------------------------------------------------------------------ helpers
 
+# True only when /dev/tty can actually be opened. `-r /dev/tty` is not enough:
+# the node exists and is world-readable even with no controlling terminal
+# (cron, CI, `ssh host 'bash setup.sh'`), but opening it fails with ENXIO and
+# `set -e` would abort the run (docs/archive/plans/application-review-2026-10-22.md, N-03).
+have_tty() {
+  { : </dev/tty; } 2>/dev/null
+}
+
 # Valid TCP port: integer 1-65535. 10# forces base-10 so leading zeros
 # (e.g. "08") don't get misread as octal.
 is_port() {
@@ -262,7 +270,7 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 
 if [[ -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" ]]; then
-  if [[ ! -r /dev/tty ]]; then
+  if ! have_tty; then
     echo "ERROR: no /dev/tty available and ADMIN_EMAIL/ADMIN_PASSWORD not set."
     echo "Re-run with env vars:"
     echo "  ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=secret bash <(curl -sSL <url>)"
@@ -303,7 +311,7 @@ POSTGRES_PORT="${POSTGRES_PORT:-}"
 BIND_ADDR="${BIND_ADDR:-}"
 TRUST_PROXY="${TRUST_PROXY:-}"
 
-if [[ -r /dev/tty ]]; then
+if have_tty; then
   [[ -z "$FRONTEND_PORT" ]] && \
     read -r -p "Website port [80]: " FRONTEND_PORT </dev/tty
   [[ -z "$BACKEND_PORT" ]] && \
@@ -367,8 +375,7 @@ if docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
     echo "       or a lost .env). A fresh install would DELETE that database."
     echo
     echo "  To keep it:    restore ~/solvro/.env (POSTGRES_PASSWORD, JWT_SECRET, SECRETS_KEY) and re-run."
-    echo "  Back it up:    docker run --rm -v $VOLUME_NAME:/data -v \$PWD:/backup alpine \\"
-    echo "                   tar czf /backup/pg-\$(date +%F).tgz -C / data"
+    echo "  Back it up:    bash backup.sh   (needs the running stack; writes a consistent pg_dump)"
     echo "  Start over:    FORCE_WIPE=1 bash setup.sh   (deletes the volume and all data)"
     exit 1
   fi
@@ -481,7 +488,7 @@ echo "   2. Sign in as admin → Admin → Sign-in tab → paste the Client ID,"
 echo "      add at least one allowed email domain, click Save."
 echo "      No restart, no rebuild needed."
 echo
-echo " Backup the database before destructive operations:"
-echo "   docker run --rm -v $VOLUME_NAME:/data -v \$PWD:/backup alpine \\"
-echo "     tar czf /backup/pg-\$(date +%F).tgz -C / data"
+echo " Back up the database (consistent pg_dump, 14 days kept) — run it before"
+echo " destructive operations and schedule it:"
+echo "   bash backup.sh                 # from the repo checkout; see: bash backup.sh --print-cron"
 echo "============================================================"

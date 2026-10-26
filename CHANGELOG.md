@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-10-26 — Database backups, scripted installs, non-root backend container
+
+- `backup.sh` (next to `setup.sh`) takes a consistent `pg_dump` of the running database into `~/solvro/backups/solvro-<timestamp>.dump` (directory mode 700, files mode 600). A failed dump leaves no partial file and exits non-zero. Dumps older than `RETENTION_DAYS` (default 14) are deleted, and only files with its own name pattern. `bash backup.sh --print-cron` prints a suggested crontab line; nothing is scheduled automatically. `docs/CONFIGURATION.md` §2.13 documents backups and a restore drill.
+- `setup.sh`: the install summary and the refusal on an existing database volume now point to `backup.sh` instead of a `tar` of the live volume, which is not a consistent copy of a running Postgres.
+- `setup.sh` no longer stops when it runs without a terminal (cron, CI, `ssh host 'bash setup.sh'`) and every required value comes from environment variables. It now checks whether `/dev/tty` can actually be opened and skips the optional port prompts when it cannot.
+- The backend production image now runs as the unprivileged `node` user instead of root (`backend/Dockerfile`).
+
 ### Fixed — 2026-10-26 — Faster, race-free reordering of tasks, sections and epics
 
 - Reordering tasks, sections and epics now rewrites positions with one set-based `UPDATE` that touches only the rows that actually move, instead of one `UPDATE` per sibling (`backend/src/lib/positionRepack.ts`, `backend/src/lib/taskOrdering.ts`). Moving the last task to the front of a 300-task list dropped from about 450 ms to under 70 ms of database time locally.
