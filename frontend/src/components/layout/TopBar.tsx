@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { formatElapsed, useRunningItopTimer } from "@/components/itop/useTicketTimer";
@@ -16,6 +16,8 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuId = useId();
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   // Global "a timer is running somewhere" indicator (Task 7.1,
   // docs/archive/plans/itop-integration.md) — read-only. The hook returns
   // nothing unless a timer is stored AND the user holds task:write (logging
@@ -44,6 +46,18 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
     customerName: customer?.name,
     opportunityTitle: opportunity?.title,
   });
+  // The user menu is a disclosure: Escape closes it and returns focus to its button.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
   // Declared before the setter so it captures the static title first; leaving
   // the app shell (sign-out → /login) hands the tab back to it instead of
   // leaving the last page's name behind.
@@ -196,8 +210,15 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
 
         <div className="relative">
           <button
+            ref={menuButtonRef}
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
+            // The phone bar shows only the initials circle, which names nothing
+            // (docs/archive/plans/application-review-2026-10-22.md, F-34).
+            // Includes the visible username and role (WCAG 2.5.3, label in name).
+            aria-label={`User menu for ${user?.username ?? "Guest"}${user?.role ? `, ${user.role}` : ""}`}
+            aria-expanded={menuOpen}
+            aria-controls={menuOpen ? menuId : undefined}
             className="flex items-center gap-2 rounded-sm border-outline-variant text-left hover:opacity-90 sm:border-l sm:pl-3"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[12px] font-bold text-white">
@@ -228,7 +249,7 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
                 onClick={() => setMenuOpen(false)}
                 className="fixed inset-0 z-40 cursor-default"
               />
-              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+              <div id={menuId} className="absolute right-0 top-full z-50 mt-1 w-48 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
                 <div className="border-b border-outline-variant px-3 py-2 text-[12px] text-on-surface-variant">
                   <div className="font-medium text-on-surface">{user?.email}</div>
                   <div className="text-label-caps uppercase">

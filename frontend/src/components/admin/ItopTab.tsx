@@ -807,6 +807,7 @@ function CustomersCard() {
                 <td className="py-1.5 pr-3">
                   <select
                     value={row.itopOrgId ?? ""}
+                    aria-label={`iTop organisation for ${row.name}`}
                     onChange={(e) => void handleOrgChange(row, e.target.value)}
                     disabled={orgsQuery.isError || pendingRowId === row.id}
                     className="w-full max-w-[220px] rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-hidden disabled:opacity-60"

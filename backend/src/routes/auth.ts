@@ -395,3 +395,18 @@ authRouter.post(
     res.json({ token: signToken({ sub: user.id, ver: updated.tokenVersion }) });
   },
 );
+
+// Server-side sign-out (docs/archive/plans/application-review-2026-10-22.md, N-01).
+// Bumps tokenVersion — the same revocation a password change uses — so the
+// token that signed out (and every other token of this account) stops
+// verifying at once instead of living out its JWT_EXPIRES_IN. Signing out
+// therefore ends the session on every device. Nothing about the token is
+// logged.
+authRouter.post("/logout", requireAuth, async (req, res) => {
+  await prisma.user.update({
+    where: { id: req.user!.sub },
+    data: { tokenVersion: { increment: 1 } },
+    select: { id: true },
+  });
+  res.status(204).end();
+});

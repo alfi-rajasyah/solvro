@@ -81,6 +81,15 @@ jobs:
         env:
           TZ: Asia/Jakarta
 
+      # Route-level code splitting keeps the entry chunk under 1 MB; this fails
+      # the build if a static import pulls a heavy page back into it. `npx vite
+      # build` skips the `tsc -b` that `npm run build` would repeat.
+      - name: Build frontend and check bundle size
+        working-directory: frontend
+        run: |
+          npx vite build
+          npm run check:bundle-size
+
       - name: npm ci (e2e, retry once on failure)
         working-directory: e2e
         run: |

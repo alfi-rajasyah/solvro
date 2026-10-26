@@ -269,14 +269,14 @@ Login supports two paths, both minting the same `{sub, role, permissions}` JWT: 
 - **Shared logger**: imported from [backend/src/logger.ts](backend/src/logger.ts) — never `new Logger()` ad hoc.
 - **Level**: controlled by `LOG_LEVEL` env (default `info`; the dev compose stack sets `debug`).
 - **Format**: JSON in prod (default pino), pretty in dev if pino-pretty is wired.
-- **Redaction**: request lines go through [backend/src/http/requestLogger.ts](backend/src/http/requestLogger.ts), which masks the `Authorization`, `X-Solvro-Webhook-Secret`, `Cookie` and `Set-Cookie` headers and replaces the token segment of any `/share/<token>` URL or Referer with `[redacted]`. Every line also carries `clientIp` (Express's `req.ip`).
+- **Redaction**: request lines go through [backend/src/http/requestLogger.ts](backend/src/http/requestLogger.ts), which masks the `Authorization`, `X-Solvro-Webhook-Secret`, `Cookie` and `Set-Cookie` headers and replaces the token segment of any `/share/<token>` URL or Referer with `[redacted]`, and the query string of any `/search` or `/search/` request (URL, Referer and parsed query) with `[redacted]`. Every line also carries `clientIp` (Express's `req.ip`).
 - **Ops step after upgrading to this version — rotate `JWT_SECRET` once.** Before the redaction existed, every authenticated request wrote its full bearer token to the backend's stdout / `docker logs`. Anyone who kept those logs holds tokens that stay valid for `JWT_EXPIRES_IN` (default 8h) after they were written, and the old logs stay readable. Generate a fresh value (`openssl rand -hex 48`), replace `JWT_SECRET` in the deployment's `.env` (prod: the file `setup.sh` wrote), restart the backend, and clear or rotate the retained container logs. Every user is signed out once and signs back in.
 
 ### 2.11 — Frontend storage & client-side state
 
 | Storage key | Where it's written | Purpose |
 |---|---|---|
-| `localStorage["solvro.token"]` | [frontend/src/lib/auth.tsx](frontend/src/lib/auth.tsx) on login | JWT bearer; auto-injected by `apiRequest()` in [frontend/src/lib/api.ts](frontend/src/lib/api.ts). Cleared on logout/401. |
+| `localStorage["solvro.token"]` | [frontend/src/lib/auth.tsx](frontend/src/lib/auth.tsx) on login | JWT bearer; auto-injected by `apiRequest()` in [frontend/src/lib/api.ts](frontend/src/lib/api.ts). Cleared on logout/401. The top-bar sign-out also revokes the token server-side via `POST /auth/logout`, which ends the session on every device; the session-expiry banner and the automatic 401 sign-out are local only. |
 | `localStorage[<theme key>]` | [frontend/src/lib/theme.tsx](frontend/src/lib/theme.tsx) | Persisted light/dark preference. Read/write only via the theme provider — don't touch `document.documentElement.classList` directly. |
 
 ### 2.12 — Design-system configuration ("Technical Precision")
