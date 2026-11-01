@@ -1,10 +1,10 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { formatElapsed, useRunningItopTimer } from "@/components/itop/useTicketTimer";
 import { useAuth } from "@/lib/auth";
 import { useCustomer, useOpportunity, useProject } from "@/lib/queries";
-import { buildCrumbs, matchRoute } from "@/lib/routeMeta";
+import { buildCrumbs, documentTitle, matchRoute } from "@/lib/routeMeta";
 import { useTheme } from "@/lib/theme";
 import { NotificationBell } from "./NotificationBell";
 import { useSidebar } from "./SidebarContext";
@@ -16,6 +16,8 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
   const navigate = useNavigate();
   const location = useLocation();
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuId = useId();
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
   // Global "a timer is running somewhere" indicator (Task 7.1,
   // docs/archive/plans/itop-integration.md) — read-only. The hook returns
   // nothing unless a timer is stored AND the user holds task:write (logging
@@ -35,6 +37,40 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
     opportunityTitle: opportunity?.title,
   });
 
+  // Per-route browser-tab title, from the same route context as the
+  // breadcrumbs (docs/archive/plans/application-review-2026-10-22.md, F-35).
+  // Re-runs when the project/customer/opportunity name arrives.
+  const title = documentTitle(location.pathname, {
+    projectName: project?.name,
+    projectCustomer: project?.customer,
+    customerName: customer?.name,
+    opportunityTitle: opportunity?.title,
+  });
+  // The user menu is a disclosure: Escape closes it and returns focus to its button.
+  useEffect(() => {
+    if (!menuOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key !== "Escape") return;
+      setMenuOpen(false);
+      menuButtonRef.current?.focus();
+    }
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [menuOpen]);
+
+  // Declared before the setter so it captures the static title first; leaving
+  // the app shell (sign-out → /login) hands the tab back to it instead of
+  // leaving the last page's name behind.
+  useEffect(() => {
+    const original = document.title;
+    return () => {
+      document.title = original;
+    };
+  }, []);
+  useEffect(() => {
+    document.title = title;
+  }, [title]);
+
   const initials = user
     ? user.username
         .split(/[.\s_-]/)
@@ -50,7 +86,7 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
 
   return (
     <header
-      className={`sticky top-0 z-40 flex h-14 items-center gap-3 border-b border-outline-variant bg-surface-container-lowest px-4 font-display transition-[margin] duration-200 ease-out md:gap-4 md:px-6 ${
+      className={`sticky top-0 z-40 flex h-14 items-center gap-2 border-b border-outline-variant bg-surface-container-lowest px-4 font-display transition-[margin] duration-200 ease-out sm:gap-3 md:gap-4 md:px-6 ${
         open ? "md:ml-sidebar" : "md:ml-sidebar-collapsed"
       }`}
     >
@@ -63,7 +99,10 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
         <span className="material-symbols-outlined">menu</span>
       </button>
 
-      <nav aria-label="Breadcrumb" className="min-w-0">
+      {/* flex-1 below md hands the title all the room the icon cluster leaves
+          (docs/archive/plans/application-review-2026-10-22.md, F-42); from md
+          up it hugs its content so the status chip stays beside it. */}
+      <nav aria-label="Breadcrumb" className="min-w-0 flex-1 md:flex-none">
         <ol className="flex min-w-0 items-center gap-2">
           {crumbs.map((crumb, i) => {
             const last = i === crumbs.length - 1;
@@ -107,7 +146,7 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
         </span>
       )}
 
-      <div className="ml-auto flex items-center gap-3">
+      <div className="ml-auto flex shrink-0 items-center gap-1 sm:gap-3">
         {runningTimer && (
           <Link
             to={`/customers/${runningTimer.timer.customerId}?tab=tickets&ticket=${runningTimer.timer.ticketId}`}
@@ -171,9 +210,16 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
 
         <div className="relative">
           <button
+            ref={menuButtonRef}
             type="button"
             onClick={() => setMenuOpen((v) => !v)}
-            className="flex items-center gap-2 rounded-sm border-l border-outline-variant pl-3 text-left hover:opacity-90"
+            // The phone bar shows only the initials circle, which names nothing
+            // (docs/archive/plans/application-review-2026-10-22.md, F-34).
+            // Includes the visible username and role (WCAG 2.5.3, label in name).
+            aria-label={`User menu for ${user?.username ?? "Guest"}${user?.role ? `, ${user.role}` : ""}`}
+            aria-expanded={menuOpen}
+            aria-controls={menuOpen ? menuId : undefined}
+            className="flex items-center gap-2 rounded-sm border-outline-variant text-left hover:opacity-90 sm:border-l sm:pl-3"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-primary text-[12px] font-bold text-white">
               {initials}
@@ -186,8 +232,13 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
                 {user?.role ?? ""}
               </span>
             </div>
-            <span className="material-symbols-outlined text-base text-on-surface-variant">
-              expand_more
+            {/* The icon font's unlayered stylesheet forces display on
+                .material-symbols-outlined, beating a `hidden` utility on the
+                glyph itself, so the wrapper does the hiding. */}
+            <span className="hidden sm:inline-flex">
+              <span className="material-symbols-outlined text-base text-on-surface-variant">
+                expand_more
+              </span>
             </span>
           </button>
           {menuOpen && (
@@ -198,7 +249,7 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
                 onClick={() => setMenuOpen(false)}
                 className="fixed inset-0 z-40 cursor-default"
               />
-              <div className="absolute right-0 top-full z-50 mt-1 w-48 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+              <div id={menuId} className="absolute right-0 top-full z-50 mt-1 w-48 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
                 <div className="border-b border-outline-variant px-3 py-2 text-[12px] text-on-surface-variant">
                   <div className="font-medium text-on-surface">{user?.email}</div>
                   <div className="text-label-caps uppercase">

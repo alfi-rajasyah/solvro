@@ -157,17 +157,12 @@ export function LinksSection({
 
       {formOpen && (
         <div className="space-y-2 rounded-sm border border-outline-variant bg-surface-container-low p-3">
-          <input
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="Label (e.g. Proposal)"
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
-          />
-          <input
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://…"
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+          <LinkFields
+            label={label}
+            url={url}
+            onLabelChange={setLabel}
+            onUrlChange={setUrl}
+            withPlaceholders
           />
           {formError && <p className="text-xs text-error">{formError}</p>}
           <div className="flex justify-end gap-2">
@@ -237,6 +232,44 @@ export function LinksSection({
   );
 }
 
+// The label + URL inputs of the add form and of an edited row. A placeholder is
+// not an accessible name, so each input carries an aria-label
+// (docs/archive/plans/application-review-2026-10-22.md, F-37).
+export function LinkFields({
+  label,
+  url,
+  onLabelChange,
+  onUrlChange,
+  withPlaceholders = false,
+}: {
+  label: string;
+  url: string;
+  onLabelChange: (value: string) => void;
+  onUrlChange: (value: string) => void;
+  withPlaceholders?: boolean;
+}) {
+  const className =
+    "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30";
+  return (
+    <>
+      <input
+        value={label}
+        onChange={(e) => onLabelChange(e.target.value)}
+        placeholder={withPlaceholders ? "Label (e.g. Proposal)" : undefined}
+        aria-label="Link label"
+        className={className}
+      />
+      <input
+        value={url}
+        onChange={(e) => onUrlChange(e.target.value)}
+        placeholder={withPlaceholders ? "https://…" : undefined}
+        aria-label="Link URL"
+        className={className}
+      />
+    </>
+  );
+}
+
 function LinkRow({
   link,
   canEdit,
@@ -291,16 +324,7 @@ function LinkRow({
   if (editing) {
     return (
       <li className="space-y-2 py-2">
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
-        />
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
-        />
+        <LinkFields label={label} url={url} onLabelChange={setLabel} onUrlChange={setUrl} />
         {error && <p className="text-xs text-error">{error}</p>}
         <div className="flex justify-end gap-2">
           <button

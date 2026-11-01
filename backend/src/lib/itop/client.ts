@@ -65,6 +65,17 @@ export interface ItopClient {
     outputFields: string,
     options?: { pageSize?: number },
   ): Promise<ItopGetResult<T>>;
+  /**
+   * Same paging as `getAll`, but yields one page's (de-duplicated) rows at a
+   * time so a caller can process and discard each page — peak memory is one
+   * page, not the whole class (docs/archive/plans/application-review-2026-10-22.md, F-28).
+   */
+  getPages<T>(
+    cls: ItopTicketClass | string,
+    oql: string,
+    outputFields: string,
+    options?: { pageSize?: number },
+  ): AsyncGenerator<Array<ItopObjectRow<T>>, void, undefined>;
   listOperations(): Promise<ItopListOperationsResult>;
   probe(): Promise<ItopProbeResult[]>;
   create<T>(
@@ -224,14 +235,15 @@ export function createItopClient(options: ItopClientOptions): ItopClient {
     return { objects: flattenObjects<T>(raw.objects) };
   }
 
-  async function getAll<T>(
+  async function* getPages<T>(
     cls: string,
     oql: string,
     outputFields: string,
     getAllOptions: { pageSize?: number } = {},
-  ): Promise<ItopGetResult<T>> {
+  ): AsyncGenerator<Array<ItopObjectRow<T>>, void, undefined> {
     const pageSize = getAllOptions.pageSize ?? 100;
-    const rows: Array<ItopObjectRow<T>> = [];
+    // Keys only (small numbers) are remembered across pages, for the
+    // repeated-page guard below; rows themselves are never retained.
     const seenKeys = new Set<number>();
     let page = 1;
 
@@ -239,26 +251,38 @@ export function createItopClient(options: ItopClientOptions): ItopClient {
       if (page > MAX_GETALL_PAGES) {
         throw new ItopError({
           code: "paging",
-          message: `iTop getAll exceeded ${MAX_GETALL_PAGES} pages for class '${cls}' — the server may be ignoring limit/page`,
+          message: `iTop paging exceeded ${MAX_GETALL_PAGES} pages for class '${cls}' — the server may be ignoring limit/page`,
         });
       }
 
       const result = await get<T>(cls, oql, outputFields, { limit: pageSize, page });
-      let newRows = 0;
+      const fresh: Array<ItopObjectRow<T>> = [];
       for (const row of result.objects) {
         if (!seenKeys.has(row.key)) {
           seenKeys.add(row.key);
-          rows.push(row);
-          newRows += 1;
+          fresh.push(row);
         }
       }
+      if (fresh.length > 0) yield fresh;
 
-      if (result.objects.length < pageSize) break;
+      if (result.objects.length < pageSize) return;
       // A full page that contributed nothing new means the server isn't
       // advancing with `page` (or is repeating results) — stop instead of
       // looping toward MAX_GETALL_PAGES on data that will never change.
-      if (newRows === 0) break;
+      if (fresh.length === 0) return;
       page += 1;
+    }
+  }
+
+  async function getAll<T>(
+    cls: string,
+    oql: string,
+    outputFields: string,
+    getAllOptions: { pageSize?: number } = {},
+  ): Promise<ItopGetResult<T>> {
+    const rows: Array<ItopObjectRow<T>> = [];
+    for await (const pageRows of getPages<T>(cls, oql, outputFields, getAllOptions)) {
+      for (const row of pageRows) rows.push(row);
     }
     return { objects: rows };
   }
@@ -361,5 +385,5 @@ export function createItopClient(options: ItopClientOptions): ItopClient {
     return flattenObjects<T>(raw.objects)[0];
   }
 
-  return { get, getAll, listOperations, probe, create, update, applyStimulus };
+  return { get, getAll, getPages, listOperations, probe, create, update, applyStimulus };
 }

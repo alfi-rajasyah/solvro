@@ -2,7 +2,8 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { useAuth } from "@/lib/auth";
-import { saveErrorMessage } from "@/lib/ownerAccess";
+import { fieldErrorsFrom, formErrorMessage } from "@/lib/formErrors";
+import { isOwnerOnlyError, saveErrorMessage } from "@/lib/ownerAccess";
 import { PROJECT_STATUS_LABEL, taskStatusOptions } from "@/lib/labels";
 import {
   type ProjectDetail,
@@ -26,6 +27,18 @@ const PROJECT_STATUSES: ProjectStatus[] = [
 const WIP_COLUMNS = taskStatusOptions.filter(
   (o): o is { value: WipStatus; label: string } => o.value !== "CANCELLED",
 );
+
+// Request fields this form always shows a server message under (F-34); any
+// other rejected field is listed in the alert instead. `tamId` joins them only
+// while its picker is on screen (see `inlineErrorFields` in the component).
+const INLINE_ERROR_FIELDS = [
+  "name",
+  "description",
+  "customerId",
+  "saId",
+  "status",
+  "wipLimits",
+] as const;
 
 // Form-local representation: each column's limit as the literal <input>
 // string value ("" = no limit) so the field can be edited freely without
@@ -86,10 +99,13 @@ export function ProjectFormModal({
   const [wipLimits, setWipLimits] = useState<WipLimitsForm>(wipLimitsToForm(null));
   const [excludeFromPortfolio, setExcludeFromPortfolio] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Server validation messages by request field (docs/archive/plans/application-review-2026-10-22.md, F-34).
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!open) return;
     setError(null);
+    setFieldErrors({});
     if (project) {
       setName(project.name);
       setDescription(project.description ?? "");
@@ -121,10 +137,15 @@ export function ProjectFormModal({
   const sas = users ?? [];
   const tams = users ?? [];
   const canPickTam = user?.permissions?.includes("*") ?? false;
+  const showTamPicker = canPickTam && canChangeOwnership;
+  const inlineErrorFields: readonly string[] = showTamPicker
+    ? [...INLINE_ERROR_FIELDS, "tamId"]
+    : INLINE_ERROR_FIELDS;
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setFieldErrors({});
     if (!name.trim()) {
       setError("Name is required.");
       return;
@@ -168,11 +189,23 @@ export function ProjectFormModal({
       }
       onClose();
     } catch (err) {
-      setError(saveErrorMessage(err, "Save failed."));
+      setFieldErrors(fieldErrorsFrom(err));
+      setError(
+        isOwnerOnlyError(err)
+          ? saveErrorMessage(err, "Save failed.")
+          : formErrorMessage(err, "Save failed.", inlineErrorFields),
+      );
     }
   }
 
   const submitting = create.isPending || update.isPending;
+
+  const errorId = (field: string) => `project-form-${field}-error`;
+  // aria-invalid + aria-describedby for a field the server rejected.
+  const invalidProps = (field: string) =>
+    fieldErrors[field]
+      ? { "aria-invalid": true as const, "aria-describedby": errorId(field) }
+      : {};
 
   return (
     <Modal
@@ -201,35 +234,38 @@ export function ProjectFormModal({
       }
     >
       <form id="project-form" onSubmit={handleSubmit} className="space-y-4">
-        <Field label="Name" required>
+        <Field label="Name" required error={fieldErrors.name} errorId={errorId("name")}>
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
             maxLength={200}
             autoFocus
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            {...invalidProps("name")}
+            className={inputClass(fieldErrors.name)}
           />
         </Field>
 
-        <Field label="Description">
+        <Field label="Description" error={fieldErrors.description} errorId={errorId("description")}>
           <textarea
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             maxLength={2000}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            {...invalidProps("description")}
+            className={inputClass(fieldErrors.description)}
           />
         </Field>
 
-        <Field label="Customer" required>
+        <Field label="Customer" required error={fieldErrors.customerId} errorId={errorId("customerId")}>
           <select
             value={customerId === "" ? "" : String(customerId)}
             onChange={(e) =>
               setCustomerId(e.target.value === "" ? "" : Number(e.target.value))
             }
             disabled={isEdit && !canChangeOwnership}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-70"
+            {...invalidProps("customerId")}
+            className={`${inputClass(fieldErrors.customerId)} disabled:cursor-not-allowed disabled:opacity-70`}
           >
             <option value="">
               {customers && customers.length === 0
@@ -254,12 +290,13 @@ export function ProjectFormModal({
         </Field>
 
         <div className="grid grid-cols-2 gap-3">
-          <Field label="Solution Architect">
+          <Field label="Solution Architect" error={fieldErrors.saId} errorId={errorId("saId")}>
             <select
               value={saId === "" ? "" : String(saId)}
               onChange={(e) => setSaId(e.target.value === "" ? "" : Number(e.target.value))}
               disabled={isEdit && !canChangeOwnership}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-70"
+              {...invalidProps("saId")}
+              className={`${inputClass(fieldErrors.saId)} disabled:cursor-not-allowed disabled:opacity-70`}
             >
               <option value="">No SA</option>
               {sas.map((u) => (
@@ -275,11 +312,12 @@ export function ProjectFormModal({
             )}
           </Field>
 
-          <Field label="Status">
+          <Field label="Status" error={fieldErrors.status} errorId={errorId("status")}>
             <select
               value={status}
               onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              {...invalidProps("status")}
+              className={inputClass(fieldErrors.status)}
             >
               {PROJECT_STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -290,12 +328,13 @@ export function ProjectFormModal({
           </Field>
         </div>
 
-        {canPickTam && canChangeOwnership && (
-          <Field label="Technical Account Manager">
+        {showTamPicker && (
+          <Field label="Technical Account Manager" error={fieldErrors.tamId} errorId={errorId("tamId")}>
             <select
               value={tamId === "" ? "" : String(tamId)}
               onChange={(e) => setTamId(e.target.value === "" ? "" : Number(e.target.value))}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              {...invalidProps("tamId")}
+              className={inputClass(fieldErrors.tamId)}
             >
               <option value="">Defaults to current user</option>
               {tams.map((u) => (
@@ -307,7 +346,7 @@ export function ProjectFormModal({
           </Field>
         )}
 
-        <Field label="WIP limit — leave empty for none">
+        <Field label="WIP limit — leave empty for none" error={fieldErrors.wipLimits} errorId={errorId("wipLimits")}>
           <div className="grid grid-cols-3 gap-3">
             {WIP_COLUMNS.map((col) => (
               <label key={col.value} className="block">
@@ -324,7 +363,8 @@ export function ProjectFormModal({
                     setWipLimits((prev) => ({ ...prev, [col.value]: e.target.value }))
                   }
                   placeholder="—"
-                  className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+                  {...invalidProps("wipLimits")}
+                  className={inputClass(fieldErrors.wipLimits, true)}
                 />
               </label>
             ))}
@@ -359,22 +399,40 @@ export function ProjectFormModal({
   );
 }
 
+function inputClass(error: string | undefined, compact = false): string {
+  return `w-full rounded-lg border bg-surface-container-lowest text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 ${
+    compact ? "px-2 py-1.5" : "px-3 py-2"
+  } ${error ? "border-error" : "border-outline-variant"}`;
+}
+
 function Field({
   label,
   required,
+  error,
+  errorId,
   children,
 }: {
   label: string;
   required?: boolean;
+  /** The server's validation message for this field, shown under the input. */
+  error?: string;
+  errorId?: string;
   children: React.ReactNode;
 }) {
   return (
-    <label className="block">
-      <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
-        {label}
-        {required && <span className="ml-1 text-error">*</span>}
-      </span>
-      {children}
-    </label>
+    <div>
+      <label className="block">
+        <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+          {label}
+          {required && <span className="ml-1 text-error">*</span>}
+        </span>
+        {children}
+      </label>
+      {error && (
+        <p id={errorId} className="mt-1 text-xs text-error">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

@@ -13,3 +13,14 @@ export const OPEN_TASK_STATUS_FILTER = { notIn: CLOSED_TASK_STATUSES } as const;
 
 /** Prisma `status` filter matching every task that counts toward progress totals. */
 export const COUNTED_TASK_STATUS_FILTER = { not: "CANCELLED" } as const;
+
+/**
+ * Prisma `_count` select for a project's task total: counts every task except
+ * CANCELLED, the same set the progress denominator uses, so a "tasks" figure
+ * on a card, sidebar or admin table never disagrees with the progress bar
+ * (docs/archive/plans/application-review-2026-10-22.md, F-26). It is NOT the
+ * number deleting the project removes: cancelled tasks are deleted too.
+ */
+export const COUNTED_TASKS_COUNT = {
+  select: { tasks: { where: { status: COUNTED_TASK_STATUS_FILTER } } },
+} as const;

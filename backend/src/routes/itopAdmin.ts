@@ -184,6 +184,16 @@ itopAdminRouter.get("/settings", async (_req, res) => {
 const READ_CLASSES = ["UserRequest", "Incident"] as const;
 const HTTPS_URL_PATTERN = /^https:\/\/\S+$/i;
 
+/** Lower-cased host[:port] of a stored or submitted base URL; the raw string when it does not parse. */
+function hostOf(url: string | null | undefined): string {
+  if (!url) return "";
+  try {
+    return new URL(url).host.toLowerCase();
+  } catch {
+    return url.toLowerCase();
+  }
+}
+
 // All fields optional — `undefined` (not sent) leaves the column alone;
 // `null` clears baseUrl/appToken. Mirrors routes/admin.ts's
 // updateAuthSettingsSchema shape (transform-then-refine) for the same reason:
@@ -212,7 +222,7 @@ const updateItopSettingsSchema = z.object({
   // Zod .refine() would produce.
   timezone: z.string().min(1).optional(),
   refreshMinutes: z.number().int().min(1).max(60).optional(),
-  readClasses: z.array(z.enum(READ_CLASSES)).min(1).optional(),
+  readClasses: z.array(z.enum(READ_CLASSES)).min(1).max(READ_CLASSES.length).optional(),
   capacityHoursPerWeek: z.number().int().min(1).max(80).optional(),
   actionsEnabled: z.boolean().optional(),
 });
@@ -331,6 +341,42 @@ itopAdminRouter.patch(
         // a real change needs, or running it for a no-op PATCH.
         const currentConfig = await tx.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
 
+        // A different iTop host invalidates every stored token
+        // (docs/archive/plans/application-review-2026-10-22.md, F-12): the
+        // application token and every personal token were issued by the OLD
+        // server. Sending them to the new host — the next scheduled sync for
+        // the application token, the next ticket action for a personal one —
+        // would hand that host a credential for a different system. So a
+        // host change must carry the new server's application token in the
+        // same request, and personal tokens are cleared (users re-enter them;
+        // the person/user mapping stays and is refreshed by the next sync).
+        if (
+          body.baseUrl !== undefined &&
+          currentConfig.baseUrl !== null &&
+          hostOf(body.baseUrl) !== hostOf(currentConfig.baseUrl)
+        ) {
+          if (body.appToken === undefined) {
+            throw new HttpError(
+              400,
+              "token_required_for_new_host",
+              "Moving iTop to a different server needs that server's application token in the same request.",
+            );
+          }
+          const cleared = await tx.user.updateMany({
+            where: { itopTokenEnc: { not: null } },
+            data: {
+              itopTokenEnc: null,
+              itopTokenCheckedAt: null,
+              itopTokenPersonName: null,
+              itopTokenExpiresAt: null,
+            },
+          });
+          logger.warn(
+            { actorId: req.user!.sub, from: hostOf(currentConfig.baseUrl), to: hostOf(body.baseUrl), tokensCleared: cleared.count },
+            "iTop base URL moved to a different host; personal tokens cleared",
+          );
+        }
+
         if (body.timezone !== undefined) {
           data.timezone = body.timezone;
           if (body.timezone !== currentConfig.timezone) {
@@ -420,6 +466,17 @@ itopAdminRouter.post(
     const body = req.body as z.infer<typeof testConnectionSchema>;
     const config = await getItopConfig();
 
+    // A host supplied in the body must come with its own token
+    // (docs/archive/plans/application-review-2026-10-22.md, F-12): pairing the STORED application token with a
+    // caller-chosen host sent that secret, in clear, to any server an admin
+    // named. The stored token is only ever sent to the stored host.
+    if (body.baseUrl !== undefined && body.appToken === undefined) {
+      throw new HttpError(
+        400,
+        "token_required_for_new_host",
+        "Testing a different iTop URL needs the application token for that server in the same request.",
+      );
+    }
     const baseUrl = body.baseUrl ?? config.baseUrl ?? undefined;
     const token =
       body.appToken ?? (config.appTokenEnc ? await callItop(async () => open(config.appTokenEnc!)) : undefined);
@@ -654,6 +711,9 @@ itopAdminRouter.get("/persons", async (_req, res) => {
 });
 
 itopAdminRouter.post("/persons/match", async (_req, res) => {
-  await syncUsers();
+  // syncUsers() builds its client through getItopAppClient(), which decrypts
+  // the stored app token — a SecretBoxError there is a 409, not a raw 500
+  // (docs/archive/plans/application-review-2026-10-22.md, F-30).
+  await callItop(() => syncUsers());
   res.json(await listPersonRows());
 });

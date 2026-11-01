@@ -27,7 +27,7 @@
 // own `setNodeRef`, breaking that column as a drop target) and React 18's
 // lack of ref-as-prop for non-forwardRef function components (rules out
 // refing `<KanbanBoard>` directly too).
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import {
   Kanban,
@@ -40,6 +40,7 @@ import {
 } from "@/components/reui/kanban";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { TaskFormModal } from "@/components/TaskFormModal";
+import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { useDragActivityGuard } from "@/lib/dragActivity";
 import {
@@ -48,6 +49,7 @@ import {
   type ProjectDetail,
   type Task,
   type TaskStatus,
+  type UpdateTaskInput,
   useProjectEpics,
   useProjectTasks,
   useUpdateTask,
@@ -153,6 +155,7 @@ export interface SolvroKanbanProps {
 }
 
 export function SolvroKanban({ project }: SolvroKanbanProps) {
+  const filterUid = useId();
   const { user } = useAuth();
   const { data: tasks, isLoading, isError, error } = useProjectTasks(project.id);
   const { data: users } = useUsers();
@@ -167,6 +170,8 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
   // `null` = "No epic" (task.epicId === null), a number = one project epic.
   const [filterEpicId, setFilterEpicId] = useState<number | null | "">("");
   const [mobileSheetTask, setMobileSheetTask] = useState<Task | null>(null);
+  // Last refused board write, shown above the board (cleared on the next attempt).
+  const [actionError, setActionError] = useState<string | null>(null);
 
   // Built once from useProjectEpics, keyed by Epic.id — passed down to
   // TaskCard the same way subtaskMapAll is, so cards never call a per-card
@@ -395,7 +400,29 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
         : undefined;
     const result = mapCommitToPatch(unfilteredGlobalOrder, committedValue, { ...meta, appendToStatus });
     if (!result) return;
-    updateTask.mutate({ id: result.taskId, patch: result.patch });
+    void commitPatch(result.taskId, result.patch);
+  }
+
+  // Every board write goes through here (docs/archive/plans/application-review-2026-10-22.md, F-18):
+  // the hook's own `onError` only rolls the cache back, so a refused move
+  // (403, 409 stale write, network) snapped the card back with no message.
+  // `mutateAsync` (not `mutate` + callbacks) so a second drag before the
+  // first settles still reports the first failure — TanStack fires
+  // mutate-level callbacks for the latest call only.
+  function commitPatch(id: number, patch: UpdateTaskInput): Promise<void> {
+    setActionError(null);
+    return updateTask.mutateAsync({ id, patch }).then(
+      () => undefined,
+      (err: unknown) => {
+        setActionError(
+          err instanceof ApiError && err.status === 409
+            ? "Someone else changed this task first. The board has been refreshed — try the move again."
+            : err instanceof ApiError
+              ? err.message
+              : "Could not update the task.",
+        );
+      },
+    );
   }
 
   // Subtask checklist toggle (ProjectKanban.tsx:451-454) — DONE<->TODO,
@@ -404,7 +431,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
   function toggleSubtaskStatus(sub: Task) {
     if (sub.status === "CANCELLED") return; // revived only via the status dropdown
     const next: TaskStatus = sub.status === "DONE" ? "TODO" : "DONE";
-    updateTask.mutate({ id: sub.id, patch: { status: next } });
+    void commitPatch(sub.id, { status: next });
   }
 
   // Mobile move sheet (T8 item 3) — same column-append rule as a column-body
@@ -417,7 +444,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
       const unfilteredGlobalOrder = sortTasksCanonical(topLevelAll);
       const result = mapCommitToPatch(unfilteredGlobalOrder, committedValue, meta);
       if (result) {
-        updateTask.mutate({ id: result.taskId, patch: result.patch });
+        void commitPatch(result.taskId, result.patch);
       }
     }
     setMobileSheetTask(null);
@@ -456,6 +483,11 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
 
   return (
     <>
+      {actionError && (
+        <Alert variant="destructive" className="mb-3">
+          <AlertDescription className="text-xs">{actionError}</AlertDescription>
+        </Alert>
+      )}
       {/* Toolbar row: filter + add task (ProjectKanban.tsx:479-565) */}
       <div className="mb-3 flex items-center justify-end gap-2">
         <div className="relative">
@@ -484,10 +516,11 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
               <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
               <div className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 shadow-overlay">
                 <div className="mb-3">
-                  <label className="mb-1 block text-label-caps uppercase text-on-surface-variant">
+                  <label htmlFor={`${filterUid}-assignee`} className="mb-1 block text-label-caps uppercase text-on-surface-variant">
                     Assignee
                   </label>
                   <select
+                    id={`${filterUid}-assignee`}
                     value={filterAssigneeId === "" ? "" : String(filterAssigneeId)}
                     onChange={(e) =>
                       setFilterAssigneeId(e.target.value === "" ? "" : Number(e.target.value))
@@ -503,10 +536,11 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                   </select>
                 </div>
                 <div className="mb-3">
-                  <label className="mb-1 block text-label-caps uppercase text-on-surface-variant">
+                  <label htmlFor={`${filterUid}-priority`} className="mb-1 block text-label-caps uppercase text-on-surface-variant">
                     Priority
                   </label>
                   <select
+                    id={`${filterUid}-priority`}
                     value={filterPriority}
                     onChange={(e) => setFilterPriority(e.target.value as Priority | "")}
                     className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
@@ -520,10 +554,11 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                   </select>
                 </div>
                 <div className="mb-3">
-                  <label className="mb-1 block text-label-caps uppercase text-on-surface-variant">
+                  <label htmlFor={`${filterUid}-epic`} className="mb-1 block text-label-caps uppercase text-on-surface-variant">
                     Epic
                   </label>
                   <select
+                    id={`${filterUid}-epic`}
                     value={filterEpicId === "" ? "" : filterEpicId === null ? "none" : String(filterEpicId)}
                     onChange={(e) => {
                       const v = e.target.value;

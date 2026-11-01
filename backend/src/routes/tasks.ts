@@ -2,7 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import { Prisma, Priority, TaskStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
+import { requireAnyPermission, requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { ensureTaskVisible, projectVisibilityFilter } from "../lib/visibility.js";
@@ -21,12 +21,14 @@ import {
   siblingKeyEquals,
   type SiblingKey,
 } from "../lib/taskOrdering.js";
+import { lockProject } from "../lib/positionRepack.js";
 import { assertEpicNotOnSubtask, assertValidEpic } from "../lib/epics.js";
 import { duplicateTaskTree } from "../lib/duplicate.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
 import { diffTaskChanges, recordActivity } from "../lib/activity.js";
 import { filterActiveUsersWhoCanSeeProject, notifyForEvent } from "../lib/notifications.js";
 import { OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import { MAX_LABEL_IDS } from "../lib/limits.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
@@ -46,7 +48,7 @@ const expectedTaskSchema = z.object({
   parentTaskId: z.number().int().positive().nullable().optional(),
   isMilestone: z.boolean().optional(),
   isCriticalPath: z.boolean().optional(),
-  labelIds: z.array(z.number().int().positive()).optional(),
+  labelIds: z.array(z.number().int().positive()).max(MAX_LABEL_IDS).optional(),
 });
 type ExpectedTask = z.infer<typeof expectedTaskSchema>;
 
@@ -77,7 +79,7 @@ const updateTaskSchema = z
     assignedToId: z.number().int().positive().nullable().optional(),
     parentTaskId: z.number().int().positive().nullable().optional(),
     sectionId: z.number().int().positive().nullable().optional(),
-    labelIds: z.array(z.number().int().positive()).optional(),
+    labelIds: z.array(z.number().int().positive()).max(MAX_LABEL_IDS).optional(),
     epicId: z.number().int().positive().nullable().optional(),
     position: z.number().int().min(0).optional(),
     // Optional pin to one iTop ticket ref, e.g. "R-000123" (1-3 uppercase
@@ -209,7 +211,9 @@ function buildVisibilityWhere(user: JwtPayload): Prisma.TaskWhereInput {
 
 export const tasksRouter = Router();
 
-tasksRouter.use(requireAuth);
+// Same read gate as routes/projects.ts (docs/archive/plans/application-review-2026-10-22.md, F-03): a zero-permission
+// member or assignee must not list tasks, read comments or post one.
+tasksRouter.use(requireAuth, requireAnyPermission("project:read", "pipeline:view"));
 
 // Cross-project list with filters
 tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) => {
@@ -349,6 +353,20 @@ tasksRouter.patch(
     };
 
     const updated = await prisma.$transaction(async (tx) => {
+      // Lock order: project first, then the task row. Only a write that can
+      // re-pack siblings (an explicit position or a re-parent) takes the
+      // project lock, and it takes it BEFORE the task row lock; every other
+      // path (section duplicate, task duplicate, epic reorder) also goes
+      // project -> row. A plain save takes only the row lock and never waits
+      // for the project lock afterwards, so no wait cycle can form
+      // (docs/archive/plans/application-review-2026-10-22.md, F-10).
+      if (body.position !== undefined || body.parentTaskId !== undefined) {
+        const { projectId: lockedProjectId } = await tx.task.findUniqueOrThrow({
+          where: { id },
+          select: { projectId: true },
+        });
+        await lockProject(tx, lockedProjectId);
+      }
       // Lock the row before reading it, so two concurrent saves serialise and
       // each one sees (and diffs against) the other's result: the optimistic
       // check below, the assignee-change detection and the activity event all
@@ -577,6 +595,13 @@ tasksRouter.post(
     await ensureTaskVisible(req.user!, id);
 
     const newTask = await prisma.$transaction(async (tx) => {
+      // projectId never changes; parentTaskId can, so it is read AFTER the lock.
+      const { projectId: sourceProjectId } = await tx.task.findUniqueOrThrow({
+        where: { id },
+        select: { projectId: true },
+      });
+      // Before duplicateTaskTree appends / insertManyAfter re-packs.
+      await lockProject(tx, sourceProjectId);
       const source = await tx.task.findUniqueOrThrow({
         where: { id },
         select: { projectId: true, parentTaskId: true },

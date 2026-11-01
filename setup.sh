@@ -65,6 +65,15 @@ cd "$DEPLOY_DIR"
 
 # ------------------------------------------------------------------ helpers
 
+# True only when /dev/tty can actually be opened. `-r /dev/tty` is not enough:
+# the node exists and is world-readable even with no controlling terminal
+# (cron, CI, `ssh host 'bash setup.sh'`), but opening it fails with ENXIO and
+# `set -e` would abort the run (`true`, not `:` — a failed redirect on a POSIX
+# special builtin exits a shell in POSIX mode) (docs/archive/plans/application-review-2026-10-22.md, N-03).
+have_tty() {
+  { true </dev/tty; } 2>/dev/null
+}
+
 # Valid TCP port: integer 1-65535. 10# forces base-10 so leading zeros
 # (e.g. "08") don't get misread as octal.
 is_port() {
@@ -262,7 +271,7 @@ ADMIN_EMAIL="${ADMIN_EMAIL:-}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-}"
 
 if [[ -z "$ADMIN_EMAIL" || -z "$ADMIN_PASSWORD" ]]; then
-  if [[ ! -r /dev/tty ]]; then
+  if ! have_tty; then
     echo "ERROR: no /dev/tty available and ADMIN_EMAIL/ADMIN_PASSWORD not set."
     echo "Re-run with env vars:"
     echo "  ADMIN_EMAIL=you@example.com ADMIN_PASSWORD=secret bash <(curl -sSL <url>)"
@@ -303,7 +312,7 @@ POSTGRES_PORT="${POSTGRES_PORT:-}"
 BIND_ADDR="${BIND_ADDR:-}"
 TRUST_PROXY="${TRUST_PROXY:-}"
 
-if [[ -r /dev/tty ]]; then
+if have_tty; then
   [[ -z "$FRONTEND_PORT" ]] && \
     read -r -p "Website port [80]: " FRONTEND_PORT </dev/tty
   [[ -z "$BACKEND_PORT" ]] && \
@@ -350,6 +359,32 @@ if [[ -n "$TRUST_PROXY" ]]; then
     echo "ERROR: TRUST_PROXY must be a hop count 0-10 or a comma list of loopback, linklocal, uniquelocal, IP addresses or CIDRs (got '$TRUST_PROXY')."
     exit 1
   }
+fi
+
+# Data-loss guard. "Fresh install" is inferred from a missing ~/solvro/.env,
+# but the database volume is global to the Docker host: a run as a different
+# user, after a home-directory move, or after .env was lost would otherwise
+# reach the wipe below and delete a live database with no question asked.
+# Refuse while the volume exists unless the operator opts in explicitly.
+# Checked BEFORE .env is written: aborting after it would make the next run
+# take the update branch with a new POSTGRES_PASSWORD that no longer matches
+# the existing volume.
+if docker volume inspect "$VOLUME_NAME" >/dev/null 2>&1; then
+  if [[ "${FORCE_WIPE:-}" != "1" ]]; then
+    echo "ERROR: the Docker volume '$VOLUME_NAME' already exists but $ENV_FILE was not found."
+    echo "       This looks like an existing Solvro install (different user, moved home directory,"
+    echo "       or a lost .env). A fresh install would DELETE that database."
+    echo
+    echo "  To keep it:    restore ~/solvro/.env (POSTGRES_PASSWORD, JWT_SECRET, SECRETS_KEY) and re-run."
+    echo "  Back it up (database container running — consistent dump, needs no other file):"
+    echo "                 docker exec solvro-postgres pg_dump -U solvro -Fc solvro > solvro-\$(date +%F).dump"
+    echo "  Back it up (database container stopped — the volume is then consistent):"
+    echo "                 docker run --rm -v $VOLUME_NAME:/data -v \$PWD:/backup alpine \\"
+    echo "                   tar czf /backup/pg-\$(date +%F).tgz -C / data"
+    echo "  Start over:    FORCE_WIPE=1 bash setup.sh   (deletes the volume and all data)"
+    exit 1
+  fi
+  echo "FORCE_WIPE=1 set: the existing volume '$VOLUME_NAME' will be deleted."
 fi
 
 # hex (not base64): base64's `/` `+` `=` are unsafe in the DATABASE_URL
@@ -458,7 +493,9 @@ echo "   2. Sign in as admin → Admin → Sign-in tab → paste the Client ID,"
 echo "      add at least one allowed email domain, click Save."
 echo "      No restart, no rebuild needed."
 echo
-echo " Backup the database before destructive operations:"
-echo "   docker run --rm -v $VOLUME_NAME:/data -v \$PWD:/backup alpine \\"
-echo "     tar czf /backup/pg-\$(date +%F).tgz -C / data"
+echo " Back up the database: fetch backup.sh once, then run it (consistent"
+echo " pg_dump into $DEPLOY_DIR/backups, 14 days kept):"
+echo "   curl -sSL https://raw.githubusercontent.com/alfi-rajasyah/solvro/main/backup.sh -o $DEPLOY_DIR/backup.sh"
+echo "   bash $DEPLOY_DIR/backup.sh"
+echo "   bash $DEPLOY_DIR/backup.sh --print-cron   # suggested crontab line"
 echo "============================================================"

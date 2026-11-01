@@ -53,18 +53,26 @@ declare module "express-serve-static-core" {
   }
 }
 
+// Session tokens are HS256 only, signed and verified with one pinned
+// algorithm: without the list, jsonwebtoken also accepts HS384/HS512 under
+// the same secret (docs/archive/plans/application-review-2026-10-22.md, B-04).
+const JWT_ALGORITHM = "HS256" as const;
+
 /**
  * Issues a session token: the user id and the user's current
  * `tokenVersion`. Nothing else is embedded — role and permissions are read
  * from the database on every request.
  */
 export function signToken(claims: TokenClaims): string {
-  const opts: SignOptions = { expiresIn: env.JWT_EXPIRES_IN as SignOptions["expiresIn"] };
+  const opts: SignOptions = {
+    algorithm: JWT_ALGORITHM,
+    expiresIn: env.JWT_EXPIRES_IN as SignOptions["expiresIn"],
+  };
   return jwt.sign(claims, env.JWT_SECRET, opts);
 }
 
 export function verifyToken(token: string): TokenClaims {
-  const decoded = jwt.verify(token, env.JWT_SECRET);
+  const decoded = jwt.verify(token, env.JWT_SECRET, { algorithms: [JWT_ALGORITHM] });
   if (typeof decoded === "string") {
     throw new HttpError(401, "invalid_token", "Invalid token");
   }

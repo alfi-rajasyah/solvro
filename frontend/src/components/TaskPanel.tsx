@@ -522,6 +522,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                 onChange={(e) => setTitleDraft(e.target.value)}
                 onBlur={handleTitleSubmit}
                 maxLength={200}
+                aria-label="Task title"
                 className="w-full border-none bg-transparent text-lg font-bold text-on-surface outline-hidden focus:outline-hidden"
               />
             </form>
@@ -555,6 +556,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                 <select
                   autoFocus
                   value={task.assignedToId ?? ""}
+                  aria-label="Assignee"
                   onChange={(e) => {
                     patch({ assignedToId: e.target.value === "" ? null : Number(e.target.value) });
                     setEditingAssignee(false);
@@ -692,6 +694,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                 <select
                   autoFocus
                   value={task.sectionId ?? ""}
+                  aria-label="Section"
                   onChange={(e) => {
                     patch({ sectionId: e.target.value === "" ? null : Number(e.target.value) });
                     setEditingSection(false);
@@ -738,6 +741,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                       <select
                         autoFocus
                         value={task.epicId ?? ""}
+                        aria-label="Epic"
                         onChange={(e) => {
                           patch({ epicId: e.target.value === "" ? null : Number(e.target.value) });
                           setEditingEpic(false);
@@ -964,6 +968,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                     value={newSubtask}
                     onChange={(e) => setNewSubtask(e.target.value)}
                     placeholder="Add subtask"
+                    aria-label="Add subtask"
                     maxLength={200}
                     className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden"
                   />

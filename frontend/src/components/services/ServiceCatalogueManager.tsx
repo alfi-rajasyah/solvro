@@ -83,6 +83,7 @@ export function ServiceCatalogueManager() {
             value={editName}
             onChange={(e) => setEditName(e.target.value)}
             maxLength={100}
+            aria-label="Service name"
             className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-hidden"
           />
         ) : (
@@ -109,6 +110,7 @@ export function ServiceCatalogueManager() {
             value={editDesc}
             onChange={(e) => setEditDesc(e.target.value)}
             maxLength={1000}
+            aria-label="Service description"
             className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-hidden"
           />
         ) : (
@@ -275,9 +277,9 @@ export function ServiceCatalogueManager() {
   return (
     <div className="space-y-4">
       <p className="text-sm text-on-surface-variant">
-        Shared service catalogue. Any TAM can add services inline from a
-        customer's or project's Services tab; curate names, descriptions, and
-        availability here.
+        Shared service catalogue. Only admins can add, edit, or delete
+        services — inline from a customer's or project's Services tab, or
+        here; everyone else picks from the list.
       </p>
 
       {error && (
