@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-11-02 — Staging branch and automatic staging deploys
+
+- CI (`.github/workflows/ci.yml`) now also runs on the new `staging` branch, the release-candidate branch between `develop` and `main`. A green `staging` build publishes `:staging` and `:sha-<commit>` images (`.github/workflows/docker-publish.yml`). A new `deploy-staging` job then calls the staging server's Openship deploy webhook, and Openship restarts only the services whose image changed. The webhook address and its token come from the repository secrets `OPENSHIP_STAGING_HOOK_URL` and `OPENSHIP_STAGING_HOOK_TOKEN`; without them the job skips. `main` and release tags publish exactly as before and never deploy to staging.
+
 ### Changed — 2026-10-26 — iTop sync reads page by page and holds a session lock
 
 - The iTop sync now reads and writes tickets and time entries one page at a time instead of loading every page into memory first (`backend/src/lib/itop/client.ts`, `sync.ts`). In a synthetic benchmark with 20,000 tickets, peak heap dropped from about 590 MB to about 60 MB.
