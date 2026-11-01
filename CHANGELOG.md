@@ -15,6 +15,18 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-02 — e2e runs in four parallel shards
+
+- The e2e job in `.github/workflows/ci.yml` splits each Playwright project into four shards (`--shard=N/4`), each on its own stack and database, so a run waits about 9 minutes instead of about 21. Only the first desktop shard writes the Docker layer cache; the other shards read it. The e2e timeout drops to 20 minutes per shard.
+
+### Changed — 2026-11-02 — CI uses fewer GitHub Actions minutes
+
+- `.github/workflows/ci.yml` no longer runs on pushes to `develop`: every change reaches it through a PR that already ran CI, and nothing publishes from `develop`. Draft PRs wait until they are marked ready, and changes that touch only Markdown, `docs/`, `.claude/`, `notes/` or the licence don't run CI at all. Feature PRs into `develop` run desktop e2e only; PRs into `staging` or `main` run typecheck and backend tests; pushes to `staging` and `main`, which gate image publishing, still run the full suite with desktop and mobile e2e. A `workflow_dispatch` trigger allows a full run on demand.
+
+### Added — 2026-11-02 — Staging branch and automatic staging deploys
+
+- CI (`.github/workflows/ci.yml`) now also runs on the new `staging` branch, the release-candidate branch between `develop` and `main`. A green `staging` build publishes `:staging` and `:sha-<commit>` images (`.github/workflows/docker-publish.yml`). A new `deploy-staging` job then calls the staging server's Openship deploy webhook, and Openship restarts only the services whose image changed. The webhook address and its token come from the repository secrets `OPENSHIP_STAGING_HOOK_URL` and `OPENSHIP_STAGING_HOOK_TOKEN`; without them the job skips. `main` and release tags publish exactly as before and never deploy to staging.
+
 ### Changed — 2026-10-26 — iTop sync reads page by page and holds a session lock
 
 - The iTop sync now reads and writes tickets and time entries one page at a time instead of loading every page into memory first (`backend/src/lib/itop/client.ts`, `sync.ts`). In a synthetic benchmark with 20,000 tickets, peak heap dropped from about 590 MB to about 60 MB.
