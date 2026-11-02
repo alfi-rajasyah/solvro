@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-02 — Form field labels use the caps label role
+
+- Field labels in the project and customer forms and the iTop action and new-ticket sheets use the shared `text-label-caps` role instead of hand-set uppercase classes.
+
 ### Fixed — 2026-11-02 — Login labels and input focus
 
 - `frontend/src/pages/Login.tsx`: the eyebrow, feature pills, version line and footer were set at 10px; they now use the shared caps and meta roles (12px), and the version line is easier to read. The sign-in fields show the standard focus ring instead of a custom green glow.
