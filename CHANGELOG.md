@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Task done checkbox uses the primary colour
+
+- The done checkbox in the project list, kanban cards and task panel (`views/ProjectList.tsx`, `kanban-v2/cards.tsx`, `TaskPanel.tsx`) uses the theme's primary colour instead of a hard-coded emerald, and now shows the standard keyboard focus ring.
+
 ### Fixed — 2026-11-02 — Planning and on-hold bars visible on portfolio timelines
 
 - `frontend/src/components/portfolio/PortfolioCalendar.tsx`: Planning and on-hold projects are drawn in the solid amber tone instead of the pale chip background, which was nearly invisible on the light theme's white track. Affects the Overview and Executive timelines.

@@ -1092,8 +1092,8 @@ function SubtaskRow({
         title={task.status === "CANCELLED" ? "Cancelled — change its status to reopen" : undefined}
         aria-label={task.status === "CANCELLED" ? "Cancelled" : done ? "Mark not done" : "Mark done"}
         className={[
-          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors",
-          done ? "border-emerald-500 bg-emerald-500 text-white" : "border-outline-variant hover:border-primary",
+          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
+          done ? "border-primary bg-primary text-on-primary" : "border-outline-variant hover:border-primary",
           canEdit ? "cursor-pointer" : "cursor-default",
         ].join(" ")}
       >
