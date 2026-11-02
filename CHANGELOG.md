@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Settings banner and theme previews follow the theme
+
+- `frontend/src/pages/Settings.tsx`: the 'Password updated' banner uses the shared success alert, readable in both themes, instead of a light-only green box. The Light, Dark and System previews are drawn from the real theme colours instead of hard-coded navy hex values, with the sidebar strip dark in both, as in the app. Section headings and field labels use the shared caps label style.
+
 ### Fixed — 2026-11-02 — Risk statuses readable in dark mode
 
 - `frontend/src/pages/views/ProjectRisks.tsx`: the Mitigated and Closed status pills and the Medium and Low risk counters use the theme's amber and emerald status colours instead of light-only Tailwind tints, which rendered as bright light-mode pills in the dark theme. The counter labels use the shared caps label style.
