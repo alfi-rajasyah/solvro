@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-02 — Sidebar text uses the warm theme greys
+
+- `frontend/src/components/layout/Sidebar.tsx`: nav items, hover states, the wordmark and the collapse toggle use the theme's surface text colours instead of Tailwind slate and white. Slate is blue-tinted; the rest of the app uses warm greys. The rail stays dark in both themes.
+
 ### Fixed — 2026-11-02 — Task done checkbox uses the primary colour
 
 - The done checkbox in the project list, kanban cards and task panel (`views/ProjectList.tsx`, `kanban-v2/cards.tsx`, `TaskPanel.tsx`) uses the theme's primary colour instead of a hard-coded emerald, and now shows the standard keyboard focus ring.
