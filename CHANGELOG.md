@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Success and warning accents follow the theme
+
+- `frontend/src/pages/views/ProjectOverview.tsx`: the S-curve 'completed' legend, the schedule-slip text and the KPI accent use the theme's success colour instead of hard-coded emerald, so they read correctly in both themes and stay distinct from the green 'current' line.
+- `frontend/src/pages/Admin.tsx`: the Pending and Custom roles summary icons on the Users tab use the warning and success colours instead of fixed amber and emerald.
+
 ### Changed — 2026-11-02 — Light theme meets WCAG AA contrast; warning colour pair
 
 - `frontend/src/index.css`: in the light theme the emerald, amber and rose chip text tones are darker (`#15803D`, `#B45309`, `#B91C1C`) and the primary green moves from `#2D9042` to `#25823A`, so chip text, primary buttons and green links reach at least 4.5:1. Dark-theme values are unchanged.

@@ -474,8 +474,8 @@ function UsersTab() {
             is unchanged (still needed so every other computation below stays
             render-safe). */}
         <AdminKpi label="Users" value={isLoading ? "—" : rows.length} hint={`${activeCount} active · ${adminCount} admins`} icon="group" tone="primary" />
-        <AdminKpi label="Pending" value={isLoading ? "—" : pendingCount} hint="Needs role assignment" icon="hourglass_top" tone="amber" />
-        <AdminKpi label="Custom roles" value={isLoading ? "—" : customRoleCount} hint={`${(roles ?? []).length} total roles`} icon="shield_person" tone="emerald" />
+        <AdminKpi label="Pending" value={isLoading ? "—" : pendingCount} hint="Needs role assignment" icon="hourglass_top" tone="warning" />
+        <AdminKpi label="Custom roles" value={isLoading ? "—" : customRoleCount} hint={`${(roles ?? []).length} total roles`} icon="shield_person" tone="success" />
         <AdminKpi label="Inactive" value={isLoading ? "—" : rows.length - activeCount} hint="Cannot sign in" icon="block" tone="neutral" />
       </div>
       {error && (
@@ -654,15 +654,15 @@ function AdminKpi({
   value: number | string;
   hint?: string;
   icon: string;
-  tone: "primary" | "emerald" | "amber" | "neutral";
+  tone: "primary" | "success" | "warning" | "neutral";
 }) {
   const iconColor =
     tone === "primary"
       ? "text-primary"
-      : tone === "emerald"
-        ? "text-emerald-600"
-        : tone === "amber"
-          ? "text-amber-600"
+      : tone === "success"
+        ? "text-success"
+        : tone === "warning"
+          ? "text-warning"
           : "text-on-surface-variant";
   return (
     <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">

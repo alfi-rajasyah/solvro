@@ -92,7 +92,7 @@ export function ProjectOverview() {
           label="Completion"
           value={`${stats.pct}%`}
           hint={`${stats.done} of ${stats.total} done`}
-          accent={stats.pct === 100 ? "emerald" : undefined}
+          accent={stats.pct === 100 ? "success" : undefined}
           progress={stats.pct}
         />
         <Kpi
@@ -100,7 +100,7 @@ export function ProjectOverview() {
           label="Overdue"
           value={String(stats.overdue)}
           hint={stats.overdue > 0 ? "open tasks past due date" : "nothing overdue"}
-          accent={stats.overdue > 0 ? "error" : "emerald"}
+          accent={stats.overdue > 0 ? "error" : "success"}
         />
         <Kpi
           icon={project.baselineLockedAt ? "lock" : "lock_open"}
@@ -155,10 +155,10 @@ export function ProjectOverview() {
           <div className="mt-4 flex flex-wrap gap-4 border-t border-outline-variant pt-3 text-xs text-on-surface-variant">
             <Legend2 swatch="bg-on-surface-variant/40" label="Baseline (planned)" />
             <Legend2 swatch="bg-primary" label="Current (re-planned)" />
-            <Legend2 swatch="bg-emerald-500" label={`Completed today: ${stats.done}/${stats.total}`} />
+            <Legend2 swatch="bg-success" label={`Completed today: ${stats.done}/${stats.total}`} />
             <span className="ml-auto font-mono">
               Slip:{" "}
-              <span className={sCurve.slipDays > 0 ? "text-error" : "text-emerald-600"}>
+              <span className={sCurve.slipDays > 0 ? "text-error" : "text-success"}>
                 {sCurve.slipDays > 0 ? `+${sCurve.slipDays}` : sCurve.slipDays} days
               </span>
             </span>
@@ -439,12 +439,12 @@ function Kpi({
   label: string;
   value: string;
   hint?: string;
-  accent?: "primary" | "emerald" | "error";
+  accent?: "primary" | "success" | "error";
   progress?: number;
 }) {
   const accentClass =
-    accent === "emerald"
-      ? "text-emerald-600"
+    accent === "success"
+      ? "text-success"
       : accent === "error"
         ? "text-error"
         : accent === "primary"
@@ -454,7 +454,7 @@ function Kpi({
     <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
         <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
-        <span className={`material-symbols-outlined text-base ${accent === "primary" ? "text-primary" : accent === "emerald" ? "text-emerald-600" : accent === "error" ? "text-error" : "text-on-surface-variant"}`}>{icon}</span>
+        <span className={`material-symbols-outlined text-base ${accent === "primary" ? "text-primary" : accent === "success" ? "text-success" : accent === "error" ? "text-error" : "text-on-surface-variant"}`}>{icon}</span>
       </div>
       <div className={`mt-2 font-body text-3xl font-bold tabular-nums ${accentClass}`}>{value}</div>
       {progress !== undefined && (
