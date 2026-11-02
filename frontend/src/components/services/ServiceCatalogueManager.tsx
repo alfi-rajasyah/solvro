@@ -1,3 +1,4 @@
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useState, type FormEvent } from "react";
 import {
   getCoreRowModel,
@@ -84,7 +85,7 @@ export function ServiceCatalogueManager() {
             onChange={(e) => setEditName(e.target.value)}
             maxLength={100}
             aria-label="Service name"
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm ${FIELD_FOCUS}`}
           />
         ) : (
           <span className={["font-medium text-on-surface", s.active ? "" : "opacity-60"].join(" ")}>
@@ -111,7 +112,7 @@ export function ServiceCatalogueManager() {
             onChange={(e) => setEditDesc(e.target.value)}
             maxLength={1000}
             aria-label="Service description"
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm ${FIELD_FOCUS}`}
           />
         ) : (
           <span className={["text-on-surface-variant", s.active ? "" : "opacity-60"].join(" ")}>
@@ -302,7 +303,7 @@ export function ServiceCatalogueManager() {
             onChange={(e) => setNewName(e.target.value)}
             maxLength={100}
             placeholder="e.g. Penetration Testing"
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
           />
         </label>
         <label className="w-full md:flex-2 md:min-w-[240px]">
@@ -315,7 +316,7 @@ export function ServiceCatalogueManager() {
             onChange={(e) => setNewDesc(e.target.value)}
             maxLength={1000}
             placeholder="Short blurb shown in the catalogue"
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
           />
         </label>
         <button

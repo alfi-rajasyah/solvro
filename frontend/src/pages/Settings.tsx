@@ -1,3 +1,4 @@
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useState, type CSSProperties, type FormEvent } from "react";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { CardGridSkeleton } from "@/components/skeletons";
@@ -126,7 +127,7 @@ export function Settings() {
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
               required
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
             />
           </Field>
           <Field label="New password" required>
@@ -137,7 +138,7 @@ export function Settings() {
               autoComplete="new-password"
               minLength={8}
               required
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
             />
             <p className="mt-1 text-[12px] text-on-surface-variant">
               At least 8 characters. Must differ from the current password.
@@ -151,7 +152,7 @@ export function Settings() {
               autoComplete="new-password"
               minLength={8}
               required
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
             />
           </Field>
           <div className="flex justify-end">
@@ -253,7 +254,7 @@ function ItopTokenSection() {
             placeholder={token.set ? "•••••••• (set)" : "scope REST/JSON"}
             spellCheck={false}
             autoComplete="off"
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
           />
         </Field>
         <p className="text-[12px] text-on-surface-variant">
