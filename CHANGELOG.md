@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Readable warning button in confirm dialogs
+
+- `frontend/src/components/ConfirmModal.tsx`: the warning confirm button uses the new warning colour pair (it was white on amber at 2.2:1 contrast), and every dialog button uses the standard 4px corners and semibold weight.
+
 ### Fixed — 2026-11-02 — Success and warning accents follow the theme
 
 - `frontend/src/pages/views/ProjectOverview.tsx`: the S-curve 'completed' legend, the schedule-slip text and the KPI accent use the theme's success colour instead of hard-coded emerald, so they read correctly in both themes and stay distinct from the green 'current' line.
