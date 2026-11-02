@@ -93,10 +93,10 @@ const THEME_HEX = {
   onSurfaceVariant: "#4a4a47",
   outline: "#9a9a97",
   outlineVariant: "#d0d0cc",
-  // index.css :root --primary: 45 144 66 (light theme) — DESIGN.md's
+  // index.css :root --primary: 37 130 58 (light theme) — DESIGN.md's
   // Behavioral Rules table: "Primary is Elitery Green — never blue: #3aae51
-  // dark / #2d9042 light." PDF is light-background, so the light value wins.
-  primary: "#2d9042",
+  // dark / #25823a light." PDF is light-background, so the light value wins.
+  primary: "#25823a",
 } as const;
 
 // Ported from SolvroBar.tsx (itself ported from the old GanttBar.tsx:56-74)

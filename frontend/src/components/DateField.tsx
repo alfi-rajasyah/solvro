@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { dateToDay, dayToDate, formatDisplay } from "@/lib/dateField";
-import { cn } from "@/lib/utils";
+import { cn, FIELD_FOCUS } from "@/lib/utils";
 
 interface DateFieldProps {
   /**
@@ -47,7 +47,7 @@ const triggerBaseClasses =
 
 const variantClasses = {
   boxed:
-    "rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface focus:border-primary",
+    `rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface ${FIELD_FOCUS}`,
   bare: "border-none bg-transparent text-xs font-semibold text-on-surface",
 } as const;
 

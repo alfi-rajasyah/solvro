@@ -4,6 +4,7 @@ import { InlineDateRangeEditor } from "./InlineDateRangeEditor";
 import { TaskStatusChip } from "./StatusChip";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { fmtRange } from "@/lib/formatDate";
 import { TASK_STATUS_LABEL } from "@/lib/labels";
@@ -235,7 +236,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
             disabled={!canEdit}
             aria-label="Epic status"
             onChange={(e) => patch({ status: e.target.value as WipStatus })}
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-hidden disabled:cursor-default"
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface ${FIELD_FOCUS} disabled:cursor-default`}
           >
             {STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -254,7 +255,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
             onChange={(e) =>
               patch({ ownerId: e.target.value === "" ? null : Number(e.target.value) })
             }
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-hidden disabled:cursor-default"
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface ${FIELD_FOCUS} disabled:cursor-default`}
           >
             <option value="">Unassigned</option>
             {(users ?? []).map((u) => (
@@ -307,7 +308,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
             rows={4}
             maxLength={2000}
             placeholder="What does this epic cover?"
-            className="w-full resize-none rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-xs text-on-surface placeholder:text-on-surface-variant/60 focus:border-primary focus:outline-hidden disabled:cursor-default"
+            className={`w-full resize-none rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-xs text-on-surface placeholder:text-on-surface-variant/60 ${FIELD_FOCUS} disabled:cursor-default`}
           />
         </div>
 

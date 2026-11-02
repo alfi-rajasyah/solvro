@@ -79,7 +79,7 @@ export function Customers() {
     <div>
       <div className="mb-4 flex items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold text-on-surface">Customers</h1>
+          <h1 className="font-display text-h1 text-on-surface">Customers</h1>
           <p className="text-sm text-on-surface-variant">
             {viewAll
               ? "Customer database. Every project is mapped to a customer for cross-account visibility and reporting."

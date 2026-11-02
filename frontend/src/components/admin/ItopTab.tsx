@@ -5,6 +5,7 @@
 // router, not routes/admin.ts). Mirrors the in-file tab-as-function
 // convention Admin.tsx already uses for its Users/Roles/Sign-in tabs,
 // rather than splitting into separate component files.
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import { ApiError } from "@/lib/api";
 import { copyText } from "@/lib/clipboard";
@@ -265,7 +266,7 @@ function ConnectionCard() {
             placeholder="https://itop.example.com"
             spellCheck={false}
             autoComplete="off"
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm ${FIELD_FOCUS}`}
           />
         </label>
         <label className="block">
@@ -279,7 +280,7 @@ function ConnectionCard() {
             placeholder={settings.appTokenSet ? "•••••••• (set)" : "Auth-Token header"}
             spellCheck={false}
             autoComplete="off"
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm ${FIELD_FOCUS}`}
           />
         </label>
       </div>
@@ -318,7 +319,7 @@ function ConnectionCard() {
                 setForm((f) => (f ? { ...f, refreshMinutes: e.target.value } : f))
               }
               onBlur={handleRefreshMinutesBlur}
-              className="w-24 rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-hidden"
+              className={`w-24 rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm ${FIELD_FOCUS}`}
             />
             <span className="text-sm text-on-surface-variant">min</span>
           </div>
@@ -339,7 +340,7 @@ function ConnectionCard() {
                 )
               }
               onBlur={handleCapacityBlur}
-              className="w-24 rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-hidden"
+              className={`w-24 rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm ${FIELD_FOCUS}`}
             />
             <span className="text-sm text-on-surface-variant">h / week</span>
           </div>
@@ -354,7 +355,7 @@ function ConnectionCard() {
           <select
             value={form.timezone}
             onChange={(e) => setForm((f) => (f ? { ...f, timezone: e.target.value } : f))}
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm ${FIELD_FOCUS}`}
           >
             {timezoneGroups.map((group) => (
               <optgroup key={group.region} label={group.region}>
@@ -810,7 +811,7 @@ function CustomersCard() {
                     aria-label={`iTop organisation for ${row.name}`}
                     onChange={(e) => void handleOrgChange(row, e.target.value)}
                     disabled={orgsQuery.isError || pendingRowId === row.id}
-                    className="w-full max-w-[220px] rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm focus:border-primary focus:outline-hidden disabled:opacity-60"
+                    className={`w-full max-w-[220px] rounded-sm border border-outline-variant bg-surface px-2 py-1 text-sm ${FIELD_FOCUS} disabled:opacity-60`}
                   >
                     <option value="">Choose an organisation…</option>
                     {orgs.map((org) => (

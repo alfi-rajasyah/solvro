@@ -38,7 +38,7 @@ function NavItem({
     [
       "group relative flex items-center rounded-sm transition-colors duration-150",
       expanded ? "gap-2.5 px-3 py-2 text-[13px]" : "h-10 w-10 justify-center",
-      isActive ? "bg-primary/20 text-white" : "text-slate-400 hover:bg-white/5 hover:text-slate-100",
+      isActive ? "bg-primary/20 text-on-surface" : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
     ].join(" ");
 
   const content = ({ isActive }: { isActive: boolean }) => (
@@ -131,7 +131,7 @@ export function Sidebar() {
           // `dark` is pinned so the rail renders dark in both themes (fixed
           // brand element per DESIGN.md): token-based accents like `bg-primary`
           // resolve to their `.dark` values even when the app is in light mode.
-          "dark fixed left-0 top-0 z-50 h-screen flex-col overflow-hidden border-r border-black/30 font-display text-slate-300 transition-[width] duration-200 ease-out",
+          "dark fixed left-0 top-0 z-50 h-screen flex-col overflow-hidden border-r border-black/30 font-display text-on-surface-variant transition-[width] duration-200 ease-out",
           SIDEBAR_BG,
           expanded ? "flex w-sidebar" : "hidden w-sidebar-collapsed md:flex",
         ].join(" ")}
@@ -145,7 +145,7 @@ export function Sidebar() {
           {expanded && (
             <div className="flex min-w-0 items-center gap-3">
               <BrandMark className="h-8 w-8 shrink-0" />
-              <span className="truncate text-lg font-extrabold tracking-tight text-white">
+              <span className="truncate text-lg font-extrabold tracking-tight text-on-surface">
                 Solvro
               </span>
             </div>
@@ -154,7 +154,7 @@ export function Sidebar() {
             type="button"
             onClick={toggle}
             aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-            className="flex h-8 w-8 items-center justify-center rounded-sm text-slate-400 hover:bg-white/5 hover:text-slate-100"
+            className="flex h-8 w-8 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
           >
             <span className="material-symbols-outlined text-lg">
               {expanded ? "menu_open" : "menu"}

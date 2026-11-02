@@ -16,6 +16,36 @@ test.describe("Project header", () => {
     await expect(facts.getByText(/\d+% · \d+ of \d+/)).toBeVisible();
   });
 
+  // Risks tab (views/ProjectRisks.tsx): the Mitigated status control takes its
+  // colours from the theme-aware chip tokens, not the light-only amber palette.
+  test("Mitigated risk status uses theme chip tokens in dark mode", async ({
+    page,
+    seededProject,
+  }, testInfo) => {
+    // The status select lives in the desktop data grid; phones render RiskCard.
+    test.skip(testInfo.project.name !== "desktop", "risk status select is desktop-only");
+    const description = `Chip token risk ${Date.now()}`;
+    const res = await fetch(`${apiBase(testInfo)}/api/projects/${seededProject.projectId}/risks`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${seededProject.token}`,
+      },
+      body: JSON.stringify({ description, status: "MITIGATED" }),
+    });
+    expect(res.ok).toBe(true);
+
+    await page.addInitScript(() => localStorage.setItem("solvro.theme", "dark"));
+    await loginViaUi(page);
+    await page.goto(`/projects/${seededProject.projectId}/risks`, { waitUntil: "networkidle" });
+    await expect(page.locator("html")).toHaveClass(/dark/);
+
+    const status = page.getByLabel(`Status of risk: ${description}`);
+    await expect(status).toBeVisible();
+    await expect(status).toHaveClass(/bg-chip-amber-bg/);
+    await expect(status).not.toHaveClass(/bg-amber-100/);
+  });
+
   test("Delete project is reachable only through the more-actions menu", async ({
     page,
     seededProject,
