@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Visible keyboard focus in pickers and project views
+
+- The label picker, PIC assignment, epics, project list and risks fields show the shared focus ring instead of only a green border.
+
 ### Fixed — 2026-11-02 — Visible keyboard focus on admin, settings and service screens
 
 - Inputs and selects on the Admin, Settings and iTop admin screens and the service catalogue and mapping lists show the shared focus ring instead of a mix of green borders and per-screen rings.

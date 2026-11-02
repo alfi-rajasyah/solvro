@@ -1,3 +1,4 @@
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import {
   getCoreRowModel,
@@ -140,7 +141,7 @@ export function ProjectRisks() {
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search description, mitigation, contingency…"
           aria-label="Search risks"
-          className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden sm:w-72"
+          className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant ${FIELD_FOCUS} sm:w-72`}
         />
         <Select
           label="Category"
@@ -659,7 +660,7 @@ function Select({
       <select
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+        className={`rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-sm text-on-surface ${FIELD_FOCUS}`}
       >
         {options.map((o) => (
           <option key={o.value} value={o.value}>

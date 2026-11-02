@@ -1,3 +1,4 @@
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useState } from "react";
 import { LabelChip } from "./LabelChip";
 import { useCreateLabel, useProjectLabels, type Label } from "@/lib/queries";
@@ -103,7 +104,7 @@ export function LabelPicker({
               placeholder="Label name"
               aria-label="Label name"
               maxLength={50}
-              className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
+              className={`flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs ${FIELD_FOCUS}`}
             />
             <button
               type="button"

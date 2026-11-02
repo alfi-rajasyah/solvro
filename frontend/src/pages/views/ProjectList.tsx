@@ -1,3 +1,4 @@
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
 import {
   DndContext,
@@ -456,7 +457,7 @@ export function ProjectList() {
                       const v = e.target.value;
                       setFilterEpicId(v === "" ? "" : v === "none" ? null : Number(v));
                     }}
-                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+                    className={`w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
                   >
                     <option value="">All</option>
                     <option value="none">No epic</option>
@@ -589,7 +590,7 @@ export function ProjectList() {
               placeholder="Section name"
               aria-label="Section name"
               maxLength={100}
-              className="w-64 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
+              className={`w-64 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs ${FIELD_FOCUS}`}
             />
             <button
               type="submit"
@@ -731,7 +732,7 @@ function SectionGroup({
               maxLength={100}
               placeholder={section ? section.name : "Name this section to promote it"}
               aria-label="Section name"
-              className="w-64 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-0.5 text-sm font-semibold focus:border-primary focus:outline-hidden"
+              className={`w-64 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-0.5 text-sm font-semibold ${FIELD_FOCUS}`}
             />
             <button
               type="submit"
