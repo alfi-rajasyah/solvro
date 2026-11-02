@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Visible keyboard focus in panels and the comment box
+
+- The task panel, epic panel, deal card, comment composer and task form fields show the shared focus ring on keyboard focus instead of only a green border.
+
 ### Fixed — 2026-11-02 — Visible keyboard focus in form dialogs
 
 - New `FIELD_FOCUS` / `FIELD_FOCUS_WITHIN` classes in `frontend/src/lib/utils.ts`: the one focus treatment for form controls, a 2px primary ring on keyboard focus with no border change.

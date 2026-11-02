@@ -14,6 +14,7 @@ import {
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { Checkbox } from "@/components/ui/checkbox";
 import { ApiError } from "@/lib/api";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { commitDraft, dayFromIso, isoFromDay } from "@/lib/dateField";
 import { fieldErrorsFrom, formErrorMessage } from "@/lib/formErrors";
@@ -630,7 +631,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             aria-label="Description"
             disabled={!canEdit}
             {...invalidProps("description")}
-            className={`w-full resize-y rounded-lg border bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 disabled:cursor-default ${
+            className={`w-full resize-y rounded-lg border bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 ${FIELD_FOCUS} disabled:cursor-default ${
               fieldErrors.description ? "border-error" : "border-outline-variant"
             }`}
           />

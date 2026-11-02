@@ -38,6 +38,7 @@ import { OutcomeChip } from "./PipelineFlagChips";
 import { StageChip } from "./StageChip";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { fmtDateTime } from "@/lib/formatDate";
 import { computeHandoffDefaults } from "@/lib/handoffDefaults";
@@ -319,7 +320,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             onChange={(e) => setName(e.target.value)}
             maxLength={200}
             autoFocus
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 
@@ -329,7 +330,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
             maxLength={2000}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 
@@ -337,7 +338,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
           <select
             value={customerId === "" ? "" : String(customerId)}
             onChange={(e) => setCustomerId(e.target.value === "" ? "" : Number(e.target.value))}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           >
             <option value="">
               {customers_.length === 0
@@ -357,7 +358,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             <select
               value={saId === "" ? "" : String(saId)}
               onChange={(e) => setSaId(e.target.value === "" ? "" : Number(e.target.value))}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               <option value="">No SA</option>
               {users_.map((u) => (
@@ -372,7 +373,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             <select
               value={tamId === "" ? "" : String(tamId)}
               onChange={(e) => setTamId(e.target.value === "" ? "" : Number(e.target.value))}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               <option value="">Select TAM…</option>
               {users_.map((u) => (
@@ -388,7 +389,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           >
             {PROJECT_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -411,7 +412,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
                   value={wipLimits[col.id]}
                   onChange={(e) => setWipLimits((prev) => ({ ...prev, [col.id]: e.target.value }))}
                   placeholder="—"
-                  className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+                  className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
                 />
               </label>
             ))}
