@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-11-02 — Design guard checks in the quality gates
+
+- `.claude/scripts/gates.sh` gains four standing checks over app code (vendored UI and tests excluded): no raw Tailwind palette colour classes, no text below 12px (classes or inline `fontSize`), no `border-primary` focus styles, and no hand-rolled uppercase + `tracking-wider` labels. Each names the token or role to use instead, so this drift cannot creep back unnoticed.
+
 ### Fixed — 2026-11-02 — Progress chart labels at 12px
 
 - `frontend/src/pages/views/ProjectOverview.tsx`: the progress S-curve's axis ticks, tooltip label and legend were set at 11px; they now render at 12px, the app's minimum text size.
