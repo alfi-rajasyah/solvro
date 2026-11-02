@@ -6,6 +6,7 @@
 import { useState } from "react";
 import { Modal } from "@/components/Modal";
 import { ApiError } from "@/lib/api";
+import { FIELD_FOCUS } from "@/lib/utils";
 import {
   isStaleTicketCreate,
   useCreateTicket,
@@ -17,7 +18,7 @@ import {
 
 const LABEL_CLASS = "mb-1 block text-label-caps uppercase text-on-surface-variant";
 const FIELD_CLASS =
-  "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden";
+  `w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`;
 
 const CLASS_OPTIONS: ReadonlyArray<{ value: ItopTicketClass; label: string }> = [
   { value: "UserRequest", label: "User request" },

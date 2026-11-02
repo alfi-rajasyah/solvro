@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Visible keyboard focus in iTop sheets and links
+
+- Fields in the iTop action, new-ticket and ticket-log sheets, the task ticket field and the links section show the shared focus ring instead of only a green border.
+
 ### Fixed — 2026-11-02 — Visible keyboard focus in panels and the comment box
 
 - The task panel, epic panel, deal card, comment composer and task form fields show the shared focus ring on keyboard focus instead of only a green border.

@@ -5,6 +5,7 @@
 import { useId, useState, type FormEvent } from "react";
 import { fmtDateTime } from "@/lib/formatDate";
 import type { ItopTicketLogEntry } from "@/lib/queries";
+import { FIELD_FOCUS } from "@/lib/utils";
 
 type LogVisibility = "public" | "private";
 
@@ -135,7 +136,7 @@ export function TicketLog({
             rows={2}
             maxLength={LOG_MAX_LENGTH}
             aria-label="New log entry"
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
           {remaining < 200 && (
             <p className="text-xs text-on-surface-variant">
