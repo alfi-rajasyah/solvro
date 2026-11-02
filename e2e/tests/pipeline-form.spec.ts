@@ -227,6 +227,11 @@ test.describe("Pipeline opportunity form — desktop", () => {
     await expect(dialog).toBeVisible();
 
     const title = dialog.getByLabel("Title");
+    // Title is auto-focused when the dialog opens — blur it first so the
+    // "before" reading is the idle border, not an already-focused one.
+    await title.evaluate((el) => (el as HTMLElement).blur());
+    await expect(title).not.toBeFocused();
+    const shadowBefore = await title.evaluate((el) => getComputedStyle(el).boxShadow);
     const borderBefore = await title.evaluate((el) => getComputedStyle(el).borderTopColor);
     await title.focus();
     await expect(title).toBeFocused();
@@ -235,6 +240,7 @@ test.describe("Pipeline opportunity form — desktop", () => {
     // The ring is a box-shadow; the border must not switch to the primary colour.
     const shadow = await title.evaluate((el) => getComputedStyle(el).boxShadow);
     expect(shadow).not.toBe("none");
+    expect(shadow).not.toBe(shadowBefore);
     const borderAfter = await title.evaluate((el) => getComputedStyle(el).borderTopColor);
     expect(borderAfter).toBe(borderBefore);
   });

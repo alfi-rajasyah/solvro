@@ -257,10 +257,16 @@ else pass guardrail-itop-no-app-token-writes; fi
 # DESIGN.md drift guards (2026-11-02, docs/archive/plans/design-drift-fixes-spec.md
 # §8). App code only: vendored shadcn/ReUI (components/ui, components/reui) and
 # tests are excluded. Each prints the first offending lines on failure.
-design_grep() { # design_grep <ERE> [extra exclude ERE]
-  local ex='components/(ui|reui)/|\.test\.tsx?:'
-  [ -n "${2:-}" ] && ex="$ex|$2"
-  grep -rnE "$1" frontend/src --include='*.ts' --include='*.tsx' 2>/dev/null | grep -vE "$ex" || true
+design_grep() { # design_grep <ERE> [extra path-exclude ERE, relative to frontend/src/]
+  # Excludes are anchored to the path prefix of grep's "path:line:content"
+  # output, so a code line that merely mentions components/ui/ is still checked.
+  local ex='^frontend/src/(components/(ui|reui)/|[^:]*\.test\.tsx?:)'
+  [ -n "${2:-}" ] && ex="$ex|^frontend/src/$2"
+  local out rc
+  out="$(grep -rnE "$1" frontend/src --include='*.ts' --include='*.tsx')"; rc=$?
+  # grep exits 2 on a bad pattern or unreadable tree: report it, never pass silently.
+  if [ "$rc" -gt 1 ]; then echo "GREP-ERROR: grep exited $rc for pattern $1"; return; fi
+  echo "$out" | grep -vE "$ex" | sed '/^$/d' || true
 }
 design_check() { # design_check <gate> <reason> <hits>
   if [ -n "$3" ]; then fail "$1" "$2: $(echo "$3" | head -3 | cut -c1-160 | tr '\n' ' ')"

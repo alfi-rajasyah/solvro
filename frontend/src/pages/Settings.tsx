@@ -13,6 +13,7 @@ import {
   useSaveMyItopToken,
 } from "@/lib/queries";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
+import { LIGHT_PREVIEW_VARS } from "@/lib/themePreview";
 
 export function Settings() {
   const { user, replaceToken } = useAuth();
@@ -304,22 +305,12 @@ function ItopTokenSection() {
   );
 }
 
-// Light-theme triplets for the preview tile. The tokens resolve per element
-// (`rgb(var(--x))`), so a nested `.dark` scope renders the dark tile from the
-// real tokens, but there is no `.light` scope to nest inside a dark page: the
-// light tile re-declares the same three variables with the :root values.
-const LIGHT_PREVIEW_VARS = {
-  "--background": "249 249 247",
-  "--surface-container-lowest": "255 255 255",
-  "--outline-variant": "208 208 204",
-  "--primary": "37 130 58",
-} as CSSProperties;
 
 function ThemeSwatch({ scheme }: { scheme: "light" | "dark" }) {
   return (
     <div
       className={`flex h-full bg-background ${scheme === "dark" ? "dark" : ""}`}
-      style={scheme === "light" ? LIGHT_PREVIEW_VARS : undefined}
+      style={scheme === "light" ? (LIGHT_PREVIEW_VARS as CSSProperties) : undefined}
     >
       <div className="w-1/4 bg-sidebar" />
       <div className="flex flex-1 flex-col gap-1 p-1.5">

@@ -246,7 +246,7 @@ Single typeface app-wide: **Source Sans 3**, loaded 300–700 variable range, al
 
 | Class | Size | Weight | Line-height | Letter-spacing | Use |
 |---|---|---|---|---|---|
-| `text-h1` | 25px | 700 | 1.2 | — | page-title role: every page `<h1>` uses it |
+| `text-h1` | 25px | 700 | 1.2 | — | page-title role: every page title uses it (state messages and the dark Login hero are separate) |
 | `text-h2` | 24px | 600 | 1.2 | — | section headings |
 | `text-body-lg` | 16px | 450 | 1.5 | — | defined but unused; prominent body copy if ever needed |
 | `text-body-sm` | 15px | 450 | 1.5 | — | default body text — applied app-wide via `body { @apply ... font-body text-body-sm }` in `index.css` |
@@ -281,7 +281,7 @@ These seven named roles are also registered as `font-size` keys in the `tailwind
 | `xl` | `0.75rem` | 12px |
 | `full` | `9999px` | pill |
 
-**Usage.** `rounded-sm` (4px, the `DEFAULT` value) is the radius for buttons, cards and inputs. `rounded-xl` is for board column wells only. `rounded-lg` is legacy and converges to `rounded-sm`; don't introduce it in new work.
+**Usage.** `rounded-sm` (4px, the `DEFAULT` value) is the radius for buttons, cards and inputs. `rounded-xl` is for board column wells; its other uses (task form panels, project cards, pipeline board/swimlane/quarter wells) are legacy. `rounded-lg` is legacy and converges to `rounded-sm`; don't introduce either in new work.
 
 **Large radii are forbidden.** There is no `2xl`/`3xl` radius token — don't invent one. `full` is reserved for pill-shaped status chips and avatar circles only; never use it on cards, panels, or buttons.
 

@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useGoogleAuthConfig } from "@/lib/queries";
 import { safeRedirectPath } from "@/lib/safeRedirect";
+import { FIELD_FOCUS_WITHIN } from "@/lib/utils";
 import { BrandMark } from "@/components/BrandMark";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 
@@ -338,7 +339,7 @@ function PasswordForm({
         <span className="text-label-caps uppercase text-on-surface-variant">
           Email
         </span>
-        <div className="mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:ring-2 focus-within:ring-primary/30">
+        <div className={`mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 ${FIELD_FOCUS_WITHIN}`}>
           <span className="material-symbols-outlined text-base text-on-surface-variant">
             mail
           </span>
@@ -358,7 +359,7 @@ function PasswordForm({
         <span className="text-label-caps uppercase text-on-surface-variant">
           Password
         </span>
-        <div className="mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:ring-2 focus-within:ring-primary/30">
+        <div className={`mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 ${FIELD_FOCUS_WITHIN}`}>
           <span className="material-symbols-outlined text-base text-on-surface-variant">
             lock
           </span>

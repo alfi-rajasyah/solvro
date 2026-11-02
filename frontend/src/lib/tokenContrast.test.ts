@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { LIGHT_PREVIEW_VARS } from "./themePreview";
 
 // Pins WCAG AA (≥ 4.5:1, the small-text threshold — chips and buttons are
 // 12–15px) for the colour pairs the app renders as text on a fill, in both
@@ -49,6 +50,11 @@ const PAIRS: [string, string][] = [
   ["on-warning", "warning-solid"],
   ["on-error", "error"],
   ["on-error-container", "error-container"],
+  // The chip text tones double as the success / warning / danger text colours
+  // on plain surfaces (e.g. Project Overview accents, Admin icons).
+  ["emerald-text", "surface-container-lowest"],
+  ["amber-text", "surface-container-lowest"],
+  ["rose-text", "surface-container-lowest"],
 ];
 
 describe.each([":root", ".dark"] as const)("token contrast in %s", (selector) => {
@@ -65,5 +71,14 @@ describe("primary as text", () => {
   it("light --primary on --background is at least 4.5:1 (links, active labels)", () => {
     const light = block(":root");
     expect(contrast(light.primary, light.background)).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+describe("Settings light theme preview", () => {
+  it("re-declares the same values as :root", () => {
+    const light = block(":root");
+    for (const [name, value] of Object.entries(LIGHT_PREVIEW_VARS)) {
+      expect(value, name).toBe(light[name.slice(2)].join(" "));
+    }
   });
 });

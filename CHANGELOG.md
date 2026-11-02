@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Design fixes follow-ups
+
+- `frontend/src/lib/gantt/exportPdf.ts`: Gantt PDF exports use the updated light primary green (`#25823A`).
+- The contrast test also checks the success, warning and danger text colours on plain surfaces, and checks that the Settings light-theme preview (now in `frontend/src/lib/themePreview.ts`) stays in step with `index.css`.
+- Login's sign-in fields use the shared `FIELD_FOCUS_WITHIN` class; the baseline date field in the project context panel no longer adds a second focus ring of its own.
+- The design checks in `.claude/scripts/gates.sh` match their exclusions against the file path only and report a grep error instead of passing silently.
+- e2e: the dark-theme Risks check runs on desktop only (phones show risk cards, not the table), and the form-focus check now compares against the field's unfocused state.
+
 ### Changed — 2026-11-02 — Design system doc matches the shipped fixes
 
 - `docs/DESIGN.md`: records the darker light-theme primary and chip text tones, the solid warning colour pair, the 25px bold page-title role, the 4px default corner radius, the single app-wide keyboard focus ring and the automated design checks that enforce these rules.
@@ -22,7 +30,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Fixed — 2026-11-02 — One focus treatment on date fields, Kanban filters and the Gantt toolbar
 
-- `DateField.tsx`, `DateRangeField.tsx`, `kanban-v2/SolvroKanban.tsx` and `gantt-v2/SolvroGantt.tsx`: the green border on focus is gone. The date-field triggers, Kanban filter selects and Gantt search now show the shared focus ring (the date triggers previously had no ring at all), and the Gantt toolbar buttons keep their existing ring. Every form control in the app now uses the same keyboard focus treatment.
+- `DateField.tsx`, `DateRangeField.tsx`, `kanban-v2/SolvroKanban.tsx` and `gantt-v2/SolvroGantt.tsx`: the green border on focus is gone. The date-field triggers, Kanban filter selects and the Gantt section-name field now show the shared focus ring (the date triggers previously had no ring at all), and the Gantt toolbar buttons keep their existing ring. No form control changes its border on focus any more.
 
 ### Added — 2026-11-02 — Design guard checks in the quality gates
 
@@ -34,7 +42,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Fixed — 2026-11-02 — Visible keyboard focus in pickers and project views
 
-- The label picker, PIC assignment, epics, project list and risks fields show the shared focus ring instead of only a green border.
+- The label picker, PIC assignment, epics, project list and risks fields drop the green focus border and use the shared focus ring (added where a field had none).
 
 ### Fixed — 2026-11-02 — Visible keyboard focus on admin, settings and service screens
 
@@ -42,16 +50,16 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Fixed — 2026-11-02 — Visible keyboard focus in iTop sheets and links
 
-- Fields in the iTop action, new-ticket and ticket-log sheets, the task ticket field and the links section show the shared focus ring instead of only a green border.
+- Fields in the iTop action, new-ticket and ticket-log sheets, the task ticket field and the links section drop the green focus border and use the shared focus ring (added where a field had none).
 
 ### Fixed — 2026-11-02 — Visible keyboard focus in panels and the comment box
 
-- The task panel, epic panel, deal card, comment composer and task form fields show the shared focus ring on keyboard focus instead of only a green border.
+- The task panel, epic panel, deal card, comment composer and task form fields drop the green focus border and use the shared focus ring (added where a field had none).
 
 ### Fixed — 2026-11-02 — Visible keyboard focus in form dialogs
 
 - New `FIELD_FOCUS` / `FIELD_FOCUS_WITHIN` classes in `frontend/src/lib/utils.ts`: the one focus treatment for form controls, a 2px primary ring on keyboard focus with no border change.
-- The opportunity, risk, customer and project dialogs use it. Their fields previously only turned the border green on focus, with no ring at all.
+- The opportunity, risk, customer and project dialogs use it: the green focus border is gone, and the risk dialog's fields, which had no ring at all, now show one.
 - `e2e/tests/pipeline-form.spec.ts`: a check that a focused field shows the ring and keeps its border colour.
 
 ### Changed — 2026-11-02 — Caps labels on Risks, Admin, customer and services screens
@@ -68,7 +76,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Fixed — 2026-11-02 — Gantt toolbar text meets the 12px floor
 
-- `frontend/src/components/gantt-v2/SolvroGantt.tsx`: the toolbar's zoom pills, month label and controls use the shared `text-meta` role (12px) instead of a hand-set 11.5px, the only text in the app below the 12px minimum.
+- `frontend/src/components/gantt-v2/SolvroGantt.tsx`: the toolbar's zoom pills, month label and controls use the shared `text-meta` role (12px) instead of a hand-set 11.5px, below the 12px minimum.
 
 ### Changed — 2026-11-02 — Remaining page titles use the heading role
 

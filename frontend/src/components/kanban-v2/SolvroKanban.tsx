@@ -56,9 +56,9 @@ import {
   useUsers,
 } from "@/lib/queries";
 import { priorityOptions, TASK_STATUS_LABEL } from "@/lib/labels";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { BoardSkeleton } from "@/components/skeletons";
 import { KANBAN_STATUSES, projectToColumns, sortTasksCanonical } from "./adapter";
-import { FIELD_FOCUS } from "@/lib/utils";
 import { TaskCard } from "./cards";
 import { mapCommitToPatch, type KanbanCommitMetaLike } from "./commitMapper";
 import { MobileMoveSheet } from "./MobileMoveSheet";

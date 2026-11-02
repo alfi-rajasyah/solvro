@@ -22,6 +22,8 @@ test.describe("Project header", () => {
     page,
     seededProject,
   }, testInfo) => {
+    // The status select lives in the desktop data grid; phones render RiskCard.
+    test.skip(testInfo.project.name !== "desktop", "risk status select is desktop-only");
     const description = `Chip token risk ${Date.now()}`;
     const res = await fetch(`${apiBase(testInfo)}/api/projects/${seededProject.projectId}/risks`, {
       method: "POST",
