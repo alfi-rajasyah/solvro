@@ -25,7 +25,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Fixed — 2026-11-02 — Gantt toolbar text meets the 12px floor
 
-- `frontend/src/components/gantt-v2/SolvroGantt.tsx`: the toolbar's zoom pills, counts, month label and controls use the shared `text-meta` role (12px) instead of a hand-set 11.5px, the only text in the app below the 12px minimum.
+- `frontend/src/components/gantt-v2/SolvroGantt.tsx`: the toolbar's zoom pills, month label and controls use the shared `text-meta` role (12px) instead of a hand-set 11.5px, the only text in the app below the 12px minimum.
 
 ### Changed — 2026-11-02 — Remaining page titles use the heading role
 

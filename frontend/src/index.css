@@ -185,7 +185,7 @@
 
 @layer base {
   /* Light theme — off-white surfaces, Elitery Green primary darkened to
-     #2d9042 for WCAG contrast on white. Values from DESIGN.md frontmatter
+     #25823a for WCAG AA contrast on white (was #2d9042; F-1 note below). Values from DESIGN.md frontmatter
      light overrides; tokens the spec omits for light (inverse-*, *-container,
      secondary/tertiary, error family) are derived from the same palette —
      see CHANGELOG. */
