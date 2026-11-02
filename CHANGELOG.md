@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Planning and on-hold bars visible on portfolio timelines
+
+- `frontend/src/components/portfolio/PortfolioCalendar.tsx`: Planning and on-hold projects are drawn in the solid amber tone instead of the pale chip background, which was nearly invisible on the light theme's white track. Affects the Overview and Executive timelines.
+
 ### Fixed — 2026-11-02 — Readable warning button in confirm dialogs
 
 - `frontend/src/components/ConfirmModal.tsx`: the warning confirm button uses the new warning colour pair (it was white on amber at 2.2:1 contrast), and every dialog button uses the standard 4px corners and semibold weight.
