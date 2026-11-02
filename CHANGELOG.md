@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-02 — Design system doc matches the shipped fixes
+
+- `docs/DESIGN.md`: records the darker light-theme primary and chip text tones, the solid warning colour pair, the 25px bold page-title role, the 4px default corner radius, the single app-wide keyboard focus ring and the automated design checks that enforce these rules.
+- `docs/ISSUES.md`: a known-issue entry for inline-edit fields (task and subtask titles, the epic add-task field, a comment input) that show no keyboard focus indicator.
+
 ### Fixed — 2026-11-02 — One focus treatment on date fields, Kanban filters and the Gantt toolbar
 
 - `DateField.tsx`, `DateRangeField.tsx`, `kanban-v2/SolvroKanban.tsx` and `gantt-v2/SolvroGantt.tsx`: the green border on focus is gone. The date-field triggers, Kanban filter selects and Gantt search now show the shared focus ring (the date triggers previously had no ring at all), and the Gantt toolbar buttons keep their existing ring. Every form control in the app now uses the same keyboard focus treatment.
