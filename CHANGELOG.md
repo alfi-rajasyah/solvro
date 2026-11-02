@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Progress chart labels at 12px
+
+- `frontend/src/pages/views/ProjectOverview.tsx`: the progress S-curve's axis ticks, tooltip label and legend were set at 11px; they now render at 12px, the app's minimum text size.
+
 ### Fixed — 2026-11-02 — Visible keyboard focus in pickers and project views
 
 - The label picker, PIC assignment, epics, project list and risks fields show the shared focus ring instead of only a green border.

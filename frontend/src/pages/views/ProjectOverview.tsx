@@ -518,14 +518,14 @@ function SCurveChart({
           <CartesianGrid stroke="rgb(var(--outline-variant))" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="label"
-            tick={{ fontSize: 11, fill: "rgb(var(--on-surface-variant))" }}
+            tick={{ fontSize: 12, fill: "rgb(var(--on-surface-variant))" }}
             tickLine={false}
             axisLine={{ stroke: "rgb(var(--outline-variant))" }}
             interval="preserveStartEnd"
             minTickGap={32}
           />
           <YAxis
-            tick={{ fontSize: 11, fill: "rgb(var(--on-surface-variant))" }}
+            tick={{ fontSize: 12, fill: "rgb(var(--on-surface-variant))" }}
             tickLine={false}
             axisLine={{ stroke: "rgb(var(--outline-variant))" }}
             allowDecimals={false}
@@ -536,7 +536,7 @@ function SCurveChart({
               border: "1px solid rgb(var(--outline-variant))",
               fontSize: 12,
             }}
-            labelStyle={{ fontSize: 11, color: "rgb(var(--on-surface-variant))" }}
+            labelStyle={{ fontSize: 12, color: "rgb(var(--on-surface-variant))" }}
           />
           <Legend wrapperStyle={{ display: "none" }} />
           {todayIndex !== null && (
@@ -548,7 +548,7 @@ function SCurveChart({
                 value: "Today",
                 position: "insideTopRight",
                 fill: "rgb(var(--on-surface-variant))",
-                fontSize: 11,
+                fontSize: 12,
               }}
             />
           )}
