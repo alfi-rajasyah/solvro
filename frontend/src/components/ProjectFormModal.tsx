@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { useAuth } from "@/lib/auth";
 import { fieldErrorsFrom, formErrorMessage } from "@/lib/formErrors";
@@ -400,7 +401,7 @@ export function ProjectFormModal({
 }
 
 function inputClass(error: string | undefined, compact = false): string {
-  return `w-full rounded-lg border bg-surface-container-lowest text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 ${
+  return `w-full rounded-lg border bg-surface-container-lowest text-sm text-on-surface ${FIELD_FOCUS} ${
     compact ? "px-2 py-1.5" : "px-3 py-2"
   } ${error ? "border-error" : "border-outline-variant"}`;
 }

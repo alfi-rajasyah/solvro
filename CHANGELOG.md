@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Visible keyboard focus in form dialogs
+
+- New `FIELD_FOCUS` / `FIELD_FOCUS_WITHIN` classes in `frontend/src/lib/utils.ts`: the one focus treatment for form controls, a 2px primary ring on keyboard focus with no border change.
+- The opportunity, risk, customer and project dialogs use it. Their fields previously only turned the border green on focus, with no ring at all.
+- `e2e/tests/pipeline-form.spec.ts`: a check that a focused field shows the ring and keeps its border colour.
+
 ### Changed — 2026-11-02 — Caps labels on Risks, Admin, customer and services screens
 
 - Section headings and field labels on the Risks, Admin, customer account overview and Services screens use the shared `text-label-caps` role instead of hand-set uppercase sizes (12–15px). The risk status select and the Admin create-user role select use 12px semibold sentence case, matching the status chips.

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ConfirmModal } from "./ConfirmModal";
 import { Modal } from "./Modal";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { saveErrorMessage } from "@/lib/ownerAccess";
@@ -196,7 +197,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
             onChange={(e) => setName(e.target.value)}
             maxLength={200}
             autoFocus
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 
@@ -208,14 +209,14 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
               onChange={(e) => setAccountManager(e.target.value)}
               maxLength={200}
               placeholder="Free text — anyone, internal or external"
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             />
           </Field>
           <Field label="Solution Architect">
             <select
               value={solutionArchitect}
               onChange={(e) => setSolutionArchitect(e.target.value)}
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               <option value="">— None —</option>
               {solutionArchitectOptions.map((u) => (
@@ -234,7 +235,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
               value={tam}
               onChange={(e) => setTam(e.target.value)}
               disabled={isEdit && !canChangeOwner}
-              className="w-full disabled:cursor-not-allowed disabled:opacity-70 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              className={`w-full disabled:cursor-not-allowed disabled:opacity-70 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               {/* Always selectable for a view-all user; for a non-view-all
                   user only when it's the customer's current value on edit
@@ -263,7 +264,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
             onChange={(e) => setDescription(e.target.value)}
             rows={5}
             maxLength={5000}
-            className="w-full resize-y rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full resize-y rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 

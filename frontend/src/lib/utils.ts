@@ -43,3 +43,16 @@ const twMerge = extendTailwindMerge({
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
 }
+
+/**
+ * The one focus treatment for form controls (docs/DESIGN.md §4, reduced form):
+ * a 2px primary ring on keyboard focus, no border change, no glow. Append it to
+ * an input/select/textarea's class list. Use `FIELD_FOCUS_WITHIN` on a wrapper
+ * when the focusable element sits inside it
+ * (docs/archive/plans/design-drift-fixes-spec.md, Fix 11).
+ */
+export const FIELD_FOCUS =
+  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
+
+/** Wrapper variant of {@link FIELD_FOCUS} for controls nested in a styled box. */
+export const FIELD_FOCUS_WITHIN = "focus-within:ring-2 focus-within:ring-primary/30";
