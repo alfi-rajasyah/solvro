@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — One focus treatment on date fields, Kanban filters and the Gantt toolbar
+
+- `DateField.tsx`, `DateRangeField.tsx`, `kanban-v2/SolvroKanban.tsx` and `gantt-v2/SolvroGantt.tsx`: the green border on focus is gone. The date-field triggers, Kanban filter selects and Gantt search now show the shared focus ring (the date triggers previously had no ring at all), and the Gantt toolbar buttons keep their existing ring. Every form control in the app now uses the same keyboard focus treatment.
+
 ### Added — 2026-11-02 — Design guard checks in the quality gates
 
 - `.claude/scripts/gates.sh` gains four standing checks over app code (vendored UI and tests excluded): no raw Tailwind palette colour classes, no text below 12px (classes or inline `fontSize`), no `border-primary` focus styles, and no hand-rolled uppercase + `tracking-wider` labels. Each names the token or role to use instead, so this drift cannot creep back unnoticed.
