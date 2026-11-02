@@ -95,9 +95,9 @@
   --text-4xl: 37px;
   --text-4xl--line-height: 1.2;
   /* Named roles — canonical per DESIGN.md typography frontmatter */
-  --text-h1: 32px;
+  --text-h1: 25px;
   --text-h1--line-height: 1.2;
-  --text-h1--font-weight: 600;
+  --text-h1--font-weight: 700;
   --text-h2: 24px;
   --text-h2--line-height: 1.2;
   --text-h2--font-weight: 600;

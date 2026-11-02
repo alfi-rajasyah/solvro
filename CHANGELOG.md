@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-02 — One page-title size
+
+- `frontend/src/index.css`: the `text-h1` heading role is now 25px bold, the size most pages already rendered by hand. Overview, Projects and Customers use the role instead of ad-hoc classes; the guest project page title, which already used it, shrinks from 32px to 25px.
+
 ### Fixed — 2026-11-02 — Settings banner and theme previews follow the theme
 
 - `frontend/src/pages/Settings.tsx`: the 'Password updated' banner uses the shared success alert, readable in both themes, instead of a light-only green box. The Light, Dark and System previews are drawn from the real theme colours instead of hard-coded navy hex values, with the sidebar strip dark in both, as in the app. Section headings and field labels use the shared caps label style.
