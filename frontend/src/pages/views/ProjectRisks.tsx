@@ -32,8 +32,8 @@ import {
 
 const STATUS_TONE: Record<RiskStatus, string> = {
   OPEN: "bg-error-container text-on-error-container",
-  MITIGATED: "bg-amber-100 text-amber-800",
-  CLOSED: "bg-emerald-100 text-emerald-700",
+  MITIGATED: "bg-chip-amber-bg text-chip-amber-text",
+  CLOSED: "bg-chip-emerald-bg text-chip-emerald-text",
 };
 
 // Workflow order for the DataGrid's Status column (accessorFn below) —
@@ -684,14 +684,14 @@ function Stat({
     tone === "high"
       ? "border-error/40 bg-error-container text-on-error-container"
       : tone === "medium"
-        ? "border-amber-300 bg-amber-50 text-amber-800"
+        ? "border-chip-amber-bg bg-chip-amber-bg text-chip-amber-text"
         : tone === "low"
-          ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+          ? "border-chip-emerald-bg bg-chip-emerald-bg text-chip-emerald-text"
           : "border-outline-variant bg-surface-container-lowest text-on-surface-variant";
   return (
     <div
       className={[
-        "rounded-sm border px-3 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider",
+        "rounded-sm border px-3 py-1.5 font-display text-label-caps uppercase",
         toneClass,
       ].join(" ")}
     >

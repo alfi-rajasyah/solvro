@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-02 — Risk statuses readable in dark mode
+
+- `frontend/src/pages/views/ProjectRisks.tsx`: the Mitigated and Closed status pills and the Medium and Low risk counters use the theme's amber and emerald status colours instead of light-only Tailwind tints, which rendered as bright light-mode pills in the dark theme. The counter labels use the shared caps label style.
+- `e2e/tests/project-header.spec.ts`: a dark-theme check that a Mitigated risk's status control carries the theme colours.
+
 ### Changed — 2026-11-02 — Project card avatars use theme colour pairs
 
 - `frontend/src/pages/Projects.tsx`: the SA avatar on project cards picks from four theme colour pairs (violet, amber, emerald, neutral) instead of eight hard-coded hex colours that included a sky blue; the initials take the pair's text colour so they stay readable in both themes.
