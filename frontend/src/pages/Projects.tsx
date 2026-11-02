@@ -198,8 +198,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
           {project.sa && (
             <span
               title={`SA: ${project.sa.username}`}
-              className="flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface-container-lowest text-meta font-bold text-white"
-              style={{ background: avatarColor(project.sa.username) }}
+              className={`flex h-6 w-6 items-center justify-center rounded-full border-2 border-surface-container-lowest text-meta font-bold ${avatarClass(project.sa.username)}`}
             >
               {saInit}
             </span>
@@ -261,8 +260,13 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
   );
 }
 
-const AVATAR_PALETTE = ["#0d9488", "#7c3aed", "#dc2626", "#0ea5e9", "#9333ea", "#a78bfa", "#f59e0b", "#10b981"];
-function avatarColor(seed: string) {
+const AVATAR_PALETTE = [
+  "bg-chip-violet-bg text-chip-violet-text",
+  "bg-chip-amber-bg text-chip-amber-text",
+  "bg-chip-emerald-bg text-chip-emerald-text",
+  "bg-secondary-container text-on-secondary-container",
+];
+function avatarClass(seed: string) {
   let h = 0;
   for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0;
   return AVATAR_PALETTE[h % AVATAR_PALETTE.length];

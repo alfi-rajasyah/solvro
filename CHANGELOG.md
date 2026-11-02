@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-02 — Project card avatars use theme colour pairs
+
+- `frontend/src/pages/Projects.tsx`: the SA avatar on project cards picks from four theme colour pairs (violet, amber, emerald, neutral) instead of eight hard-coded hex colours that included a sky blue; the initials take the pair's text colour so they stay readable in both themes.
+
 ### Changed — 2026-11-02 — Sidebar text uses the warm theme greys
 
 - `frontend/src/components/layout/Sidebar.tsx`: nav items, hover states, the wordmark and the collapse toggle use the theme's surface text colours instead of Tailwind slate and white. Slate is blue-tinted; the rest of the app uses warm greys. The rail stays dark in both themes.
