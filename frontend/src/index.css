@@ -47,6 +47,10 @@
   --color-on-error: rgb(var(--on-error));
   --color-error-container: rgb(var(--error-container));
   --color-on-error-container: rgb(var(--on-error-container));
+  /* Solid warning surface + its text (e.g. ConfirmModal's warning button),
+     built like error/on-error (docs/archive/plans/design-drift-fixes-spec.md, Fix 05). */
+  --color-warning-solid: rgb(var(--warning-solid));
+  --color-on-warning: rgb(var(--on-warning));
   --color-background: rgb(var(--background));
   --color-on-background: rgb(var(--on-background));
   /* — Chip / status tones — */
@@ -200,7 +204,7 @@
     --inverse-on-surface: 240 237 232;
     --outline: 154 154 151;
     --outline-variant: 208 208 204;
-    --primary: 45 144 66;
+    --primary: 37 130 58;
     --on-primary: 255 255 255;
     --primary-container: 200 230 207;
     --on-primary-container: 15 43 22;
@@ -215,15 +219,20 @@
     --on-error: 255 255 255;
     --error-container: 255 218 214;
     --on-error-container: 147 0 10;
+    --warning-solid: 180 83 9;
+    --on-warning: 255 255 255;
     --background: 249 249 247;
     --on-background: 26 26 24;
-    /* Chip / status palette — light tone bg + saturated text. */
+    /* Chip / status palette — light tone bg + saturated text. Text tones are
+       darkened to reach WCAG AA (≥ 4.5:1) on their own bg and on white; the
+       contrast test in lib/tokenContrast.test.ts pins this
+       (docs/archive/plans/design-drift-fixes-spec.md, F-1). */
     --emerald-bg: 220 252 231;
-    --emerald-text: 22 163 74;
+    --emerald-text: 21 128 61;
     --amber-bg: 254 243 199;
-    --amber-text: 217 119 6;
+    --amber-text: 180 83 9;
     --rose-bg: 254 226 226;
-    --rose-text: 220 38 38;
+    --rose-text: 185 28 28;
     --violet-bg: 237 233 254;
     --violet-text: 109 40 217;
   }
@@ -260,6 +269,8 @@
     --on-error: 42 10 10;
     --error-container: 61 18 18;
     --on-error-container: 252 165 165;
+    --warning-solid: 120 53 15;
+    --on-warning: 253 230 138;
     --background: 26 26 24;
     --on-background: 240 237 232;
     --emerald-bg: 6 78 59;

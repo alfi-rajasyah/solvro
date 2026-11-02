@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-02 — Light theme meets WCAG AA contrast; warning colour pair
+
+- `frontend/src/index.css`: in the light theme the emerald, amber and rose chip text tones are darker (`#15803D`, `#B45309`, `#B91C1C`) and the primary green moves from `#2D9042` to `#25823A`, so chip text, primary buttons and green links reach at least 4.5:1. Dark-theme values are unchanged.
+- New `warning-solid` / `on-warning` colour pair for solid warning surfaces (light `#B45309` with white text, dark `#78350F` with `#FDE68A`), built like the existing error pair.
+- New `frontend/src/lib/tokenContrast.test.ts` reads the colour values from `index.css` and fails if any chip, primary, warning or error text/fill pair drops below 4.5:1 in either theme.
+
 ### Changed — 2026-11-02 — e2e runs in four parallel shards
 
 - The e2e job in `.github/workflows/ci.yml` splits each Playwright project into four shards (`--shard=N/4`), each on its own stack and database, so a run waits about 9 minutes instead of about 21. Only the first desktop shard writes the Docker layer cache; the other shards read it. The e2e timeout drops to 20 minutes per shard.

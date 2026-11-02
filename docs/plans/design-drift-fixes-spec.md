@@ -136,6 +136,7 @@ Line numbers are from `develop` as audited on 2026-11-01; re-grep at implementat
 | `--emerald-text` | `22 163 74` (#16A34A) | `21 128 61` (#15803D) | 4.57:1 on chip bg · 5.02:1 on white |
 | `--amber-text` | `217 119 6` (#D97706) | `180 83 9` (#B45309) | 4.51:1 on chip bg · 5.02:1 on white |
 | `--primary` | `45 144 66` (#2D9042) | `37 130 58` (#25823A) | white on it 4.85:1 · as text on `background` 4.6:1 |
+| `--rose-text` | `220 38 38` (#DC2626) | `185 28 28` (#B91C1C) | 5.3:1 on chip bg — found by the contrast test at implementation (3.95:1 before); required by this section's acceptance, so in scope |
 
 - `--inverse-primary` (dark) and `primary-container` keep their values. Light `--warning-solid` reuses `#B45309` (Fix 05), so one new hex serves both.
 - **Accept:** a contrast unit test (Vitest, pure function over the light/dark token triples parsed from `index.css`) asserts every chip text/bg pair, `on-primary`/`primary` and `on-warning`/`warning-solid` ≥ 4.5:1 in both themes.
