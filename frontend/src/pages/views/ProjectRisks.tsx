@@ -316,7 +316,7 @@ function RisksDataGrid({
                 <div className="mt-1 space-y-0.5 text-[12px] text-on-surface-variant">
                   {risk.mitigationPlan && (
                     <p className="line-clamp-2">
-                      <span className="font-display font-bold uppercase tracking-wider">
+                      <span className="font-display text-label-caps uppercase">
                         Mitigation:
                       </span>{" "}
                       {risk.mitigationPlan}
@@ -324,7 +324,7 @@ function RisksDataGrid({
                   )}
                   {risk.contingencyPlan && (
                     <p className="line-clamp-2">
-                      <span className="font-display font-bold uppercase tracking-wider">
+                      <span className="font-display text-label-caps uppercase">
                         Contingency:
                       </span>{" "}
                       {risk.contingencyPlan}
@@ -462,7 +462,7 @@ function RisksDataGrid({
               aria-label={`Status of risk: ${risk.description}`}
               onChange={(e) => onChange(risk.id, { status: e.target.value as RiskStatus })}
               className={[
-                "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider",
+                "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-meta font-semibold",
                 STATUS_TONE[risk.status],
               ].join(" ")}
             >
@@ -653,7 +653,7 @@ function Select({
 }) {
   return (
     <label className="flex items-center gap-2 text-[12px] text-on-surface-variant">
-      <span className="font-display font-bold uppercase tracking-wider">
+      <span className="font-display text-label-caps uppercase">
         {label}
       </span>
       <select

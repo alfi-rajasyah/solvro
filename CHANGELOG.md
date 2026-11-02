@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-02 — Caps labels on Risks, Admin, customer and services screens
+
+- Section headings and field labels on the Risks, Admin, customer account overview and Services screens use the shared `text-label-caps` role instead of hand-set uppercase sizes (12–15px). The risk status select and the Admin create-user role select use 12px semibold sentence case, matching the status chips.
+
 ### Changed — 2026-11-02 — Form field labels use the caps label role
 
 - Field labels in the project and customer forms and the iTop action and new-ticket sheets use the shared `text-label-caps` role instead of hand-set uppercase classes.

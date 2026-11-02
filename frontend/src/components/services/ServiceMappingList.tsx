@@ -139,7 +139,7 @@ export function ServiceMappingList({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
+        <h2 className="font-display text-label-caps uppercase text-on-surface">
           {title}
         </h2>
         <p className="text-[12px] text-on-surface-variant">{description}</p>
