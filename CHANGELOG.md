@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-02 — Remaining page titles use the heading role
+
+- Tasks, Utilization, Executive, Daily Review, Weekly Sync, Help, Admin, Settings, Pipeline, the deal page and the customer account header use the `text-h1` page-title role. Pipeline and the deal page grow from 24px to 25px and the customer name from 20px to 25px, so every page title matches.
+
 ### Changed — 2026-11-02 — One page-title size
 
 - `frontend/src/index.css`: the `text-h1` heading role is now 25px bold, the size most pages already rendered by hand. Overview, Projects and Customers use the role instead of ad-hoc classes; the guest project page title, which already used it, shrinks from 32px to 25px.

@@ -166,7 +166,7 @@ export function Pipeline() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h1 className="font-display text-h2 text-on-surface">Pipeline</h1>
+          <h1 className="font-display text-h1 text-on-surface">Pipeline</h1>
           <p className="text-sm text-on-surface-variant">Opportunity stages, at a glance.</p>
         </div>
 

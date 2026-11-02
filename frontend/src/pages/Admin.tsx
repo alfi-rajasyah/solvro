@@ -81,7 +81,7 @@ export function Admin() {
   return (
     <div className="flex h-full flex-col">
       <header className="border-b border-outline-variant px-4 py-4 md:px-6">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-on-surface">
+        <h1 className="font-display text-h1 text-on-surface">
           Admin
         </h1>
         <p className="mt-1 text-sm text-on-surface-variant">
