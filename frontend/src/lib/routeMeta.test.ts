@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
 import appSource from "@/App.tsx?raw";
-import { buildCrumbs, matchRoute, routeTitle } from "./routeMeta";
+import { buildCrumbs, documentTitle, matchRoute, routeTitle } from "./routeMeta";
 
 /**
  * Every concrete path App.tsx declares, read from the source so a new route
  * that forgets its title fails here. `projects/:id` owns the nested routes up
- * to its closing tag; `/login` (outside the shell) and the `*` catch-all are
- * not top-bar pages.
+ * to its closing tag; `/login` and `/share/:token` (outside the shell) and the `*`
+ * catch-all (the NotFound page) are not top-bar pages.
  */
 function appPaths(): string[] {
   const paths: string[] = [];
@@ -14,7 +14,7 @@ function appPaths(): string[] {
   const parentEnd = appSource.indexOf("</Route>", parentIdx);
   for (const m of appSource.matchAll(/path="([^"]+)"/g)) {
     const raw = m[1];
-    if (raw === "/login" || raw === "*") continue;
+    if (raw === "/login" || raw === "*" || raw.startsWith("/share/")) continue;
     const nested = m.index > parentIdx && m.index < parentEnd;
     const full = nested ? `/projects/:id/${raw}` : `/${raw}`;
     paths.push(full.replace(":id", "7"));
@@ -42,6 +42,9 @@ describe("routeMeta over App.tsx", () => {
       expect(crumb.label).not.toBe("Solvro");
     }
     expect(routeTitle(path)).not.toBe("Solvro");
+    // A declared route must never read as the catch-all (keeps PROJECT_VIEWS
+    // and STATIC_TITLES in step with App.tsx).
+    expect(matchRoute(path).kind).not.toBe("notFound");
   });
 });
 
@@ -66,9 +69,59 @@ describe("static pages", () => {
     expect(buildCrumbs("/projects")).toEqual([{ label: "Projects" }]);
   });
 
-  it("falls back to Overview for / and unknown paths, never Solvro", () => {
+  it("reads the bare root as Overview (it redirects there), never Solvro", () => {
     expect(routeTitle("/")).toBe("Overview");
-    expect(routeTitle("/nope/never")).toBe("Overview");
+  });
+});
+
+describe("unknown paths (the NotFound page)", () => {
+  it.each(["/no-such-page", "/nope/never", "/overview/extra", "/projects/12/board", "/projects/12/list/x", "/customers/5/edit", "/pipeline/abc/x", "/constructor"])(
+    "%s is Not found",
+    (path) => {
+      expect(matchRoute(path)).toMatchObject({ kind: "notFound", title: "Not found" });
+      expect(buildCrumbs(path)).toEqual([{ label: "Not found" }]);
+      expect(routeTitle(path)).toBe("Not found");
+    },
+  );
+
+  it("matches case-insensitively like the router, keeping the opportunity id's casing", () => {
+    expect(routeTitle("/Overview")).toBe("Overview");
+    expect(matchRoute("/Projects/12/Gantt")).toMatchObject({ kind: "project", projectId: 12 });
+    expect(matchRoute("/projects/12/Gantt").kind).toBe("project");
+    expect(matchRoute("/Customers/5").kind).toBe("customer");
+    expect(matchRoute("/Pipeline/AbC-1")).toMatchObject({ kind: "opportunity", opportunityId: "AbC-1" });
+    expect(documentTitle("/Daily-Review")).toBe("Daily Review · Solvro");
+    // a real unknown path stays Not found whatever its casing
+    expect(matchRoute("/No-Such-Page").kind).toBe("notFound");
+    expect(matchRoute("/Projects/12/Board").kind).toBe("notFound");
+  });
+
+  it("still resolves every project view and a trailing slash", () => {
+    expect(matchRoute("/projects/12/risks").kind).toBe("project");
+    expect(matchRoute("/projects/12/").kind).toBe("project");
+    expect(matchRoute("/overview/").kind).toBe("static");
+  });
+});
+
+describe("documentTitle", () => {
+  it("is '<page> · Solvro' for static pages", () => {
+    expect(documentTitle("/overview")).toBe("Overview · Solvro");
+    expect(documentTitle("/daily-review")).toBe("Daily Review · Solvro");
+    expect(documentTitle("/work-logs")).toBe("Utilization · Solvro");
+    expect(documentTitle("/pipeline")).toBe("Pipeline · Solvro");
+    expect(documentTitle("/no-such-page")).toBe("Not found · Solvro");
+  });
+
+  it("uses the loaded entity name, with the placeholder while loading", () => {
+    expect(documentTitle("/projects/12/gantt", { projectName: "Migration" })).toBe("Migration · Solvro");
+    expect(documentTitle("/projects/12")).toBe("Project · Solvro");
+    expect(documentTitle("/customers/5", { customerName: "Acme" })).toBe("Acme · Solvro");
+    expect(documentTitle("/pipeline/x", { opportunityTitle: "Rollout" })).toBe("Rollout · Solvro");
+  });
+
+  it("falls back to plain Solvro when the title is blank", () => {
+    // A whitespace-only project name is truthy, so it reaches the builder as the label.
+    expect(documentTitle("/projects/12", { projectName: "   " })).toBe("Solvro");
   });
 });
 

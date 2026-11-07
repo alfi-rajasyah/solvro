@@ -43,11 +43,12 @@ export default defineConfig({
       workbox: {
         // App shell precache — index.html + built assets (JS/CSS/fonts/icons).
         globPatterns: ["**/*.{js,css,html,png,svg,ico,webmanifest}"],
-        // The main bundle passed Workbox's 2 MiB default once the iTop,
-        // collaboration and Pipeline code shipped together; a precached file
-        // over the limit fails the build (not a warning). Raise the ceiling
-        // until the bundle is code-split (docs/ISSUES.md).
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        // Workbox's 2 MiB default: a precached file over the limit fails the
+        // build (not a warning). Routes are code-split, so the largest
+        // non-entry chunk (exceljs, ~0.9 MB) fits with room to spare; scripts/check-bundle-size.mjs
+        // keeps the entry chunk under 1 MB
+        // (docs/archive/plans/application-review-2026-10-22.md, F-16).
+        maximumFileSizeToCacheInBytes: 2 * 1024 * 1024,
         navigateFallback: "/index.html",
         // Navigations under /api/ must reach the network, never the cached
         // app shell — the NavigationRoute is registered before the NetworkOnly

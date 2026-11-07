@@ -15,6 +15,8 @@ export function ProjectServices() {
   const { project } = useProjectContext();
   const { user } = useAuth();
   const canMutate = hasPermission(user, "project:write");
+  // Adding a catalogue service is admin-only (the catalogue is global).
+  const canCreateService = hasPermission(user, "*");
 
   const update = useUpdateProjectServices(project.id);
   const { data: customer, isLoading: customerLoading } = useCustomer(project.customerId);
@@ -85,6 +87,7 @@ export function ProjectServices() {
             assignments={project.services}
             onSave={(assignments) => update.mutateAsync(assignments)}
             canMutate={canMutate}
+            canCreateService={canCreateService}
             saving={update.isPending}
             subscribedServiceIds={subscribedServiceIds}
             title="Services in Scope"

@@ -1,5 +1,6 @@
 import type { Prisma, PrismaClient } from "@prisma/client";
 import { HttpError } from "../http/errors.js";
+import { repackToOrder } from "./positionRepack.js";
 
 // A sibling list is the ordered set of tasks a `position` value is relative
 // to. For top-level tasks (parentTaskId null) that's EVERY top-level task in
@@ -42,11 +43,9 @@ async function closeGap(tx: Tx, key: SiblingKey, taskId: number): Promise<void> 
   const remaining = await tx.task.findMany({
     where: { ...siblingWhere(key), id: { not: taskId } },
     orderBy: [{ position: "asc" }, { id: "asc" }],
-    select: { id: true },
+    select: { id: true, position: true },
   });
-  for (let i = 0; i < remaining.length; i++) {
-    await tx.task.update({ where: { id: remaining[i].id }, data: { position: i } });
-  }
+  await repackToOrder(tx, "tasks", remaining, remaining.map((r) => r.id));
 }
 
 /**
@@ -67,7 +66,7 @@ async function insertAt(
   const others = await tx.task.findMany({
     where: { ...siblingWhere(key), id: { not: taskId } },
     orderBy: [{ position: "asc" }, { id: "asc" }],
-    select: { id: true },
+    select: { id: true, position: true },
   });
 
   const clamped =
@@ -78,9 +77,9 @@ async function insertAt(
   const ordered = [...others.map((o) => o.id)];
   ordered.splice(clamped, 0, taskId);
 
-  for (let i = 0; i < ordered.length; i++) {
-    await tx.task.update({ where: { id: ordered[i] }, data: { position: i } });
-  }
+  // `taskId` has a stale (or no) position in `others`' terms; it is never in
+  // `others`, so repackToOrder always writes its row.
+  await repackToOrder(tx, "tasks", others, ordered);
 
   return clamped;
 }
@@ -102,7 +101,8 @@ async function insertAt(
  * Used by the section-duplicate route to drop a batch of copied top-level
  * tasks right after the source section's last task, in one re-pack instead
  * of one `moveTaskWithinSiblings` call per copy. Must be called inside a
- * `prisma.$transaction`.
+ * `prisma.$transaction` that already holds `lockProject` (see
+ * `moveTaskWithinSiblings`).
  */
 export async function insertManyAfter(
   tx: Tx,
@@ -122,7 +122,7 @@ export async function insertManyAfter(
   const others = await tx.task.findMany({
     where: { ...siblingWhere(key), id: { notIn: newIds } },
     orderBy: [{ position: "asc" }, { id: "asc" }],
-    select: { id: true },
+    select: { id: true, position: true },
   });
 
   const afterIndex = afterTaskId === null ? -1 : others.findIndex((o) => o.id === afterTaskId);
@@ -131,9 +131,8 @@ export async function insertManyAfter(
   const ordered = others.map((o) => o.id);
   ordered.splice(insertIndex, 0, ...newIds);
 
-  for (let i = 0; i < ordered.length; i++) {
-    await tx.task.update({ where: { id: ordered[i] }, data: { position: i } });
-  }
+  // newIds are not in `others`, so they are always written.
+  await repackToOrder(tx, "tasks", others, ordered);
 }
 
 /**
@@ -141,7 +140,11 @@ export async function insertManyAfter(
  * place it at `requestedPosition` (append to the end when omitted). Always
  * leaves both the old and new sibling lists densely packed (0..n-1).
  *
- * Must be called inside a `prisma.$transaction`.
+ * Must be called inside a `prisma.$transaction` that already holds
+ * `lockProject(tx, projectId)` (taken before any sibling read) — the re-pack
+ * is one UPDATE of only the changed rows, so concurrent reorders in one
+ * project must serialise on that lock to keep positions dense
+ * (docs/archive/plans/application-review-2026-10-22.md, F-10).
  */
 export async function moveTaskWithinSiblings(
   tx: Tx,

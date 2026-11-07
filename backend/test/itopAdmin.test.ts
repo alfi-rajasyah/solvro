@@ -530,6 +530,21 @@ describe("organizations + customer↔org mapping", () => {
     expect(testRes.body.code).toBe("itop_token_unreadable");
   });
 
+  // docs/archive/plans/application-review-2026-10-22.md, F-30: syncUsers()
+  // builds its client through getItopAppClient() outside any error mapping, so
+  // an unreadable stored app token was a raw 500 on this route.
+  it("POST /persons/match with an unreadable stored token: 409 itop_token_unreadable, not a 500", async () => {
+    await prisma.itopConfig.update({
+      where: { id: "default" },
+      data: { appTokenEnc: "v1:anVuaw==:anVuaw==:anVuaw==" },
+    });
+    bustItopConfigCache();
+
+    const res = await call("post", "/admin/itop/persons/match", adminToken);
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("itop_token_unreadable");
+  });
+
   it("PATCH /customers/:id maps to a valid org (happy path)", async () => {
     const customer = await createCustomer({ name: "Some Other Name" });
     const res = await call("patch", `/admin/itop/customers/${customer.id}`, adminToken).send({ itopOrgId: 2 });
@@ -766,5 +781,74 @@ describe("persons match report + sync trigger", () => {
     const res = await call("post", "/admin/itop/sync", adminToken).send({});
     expect(res.status).toBe(409);
     expect(res.body.code).toBe("itop_not_configured");
+  });
+});
+
+// docs/archive/plans/application-review-2026-10-22.md, F-12: the stored application token must never be
+// sent to a host the caller names, and a host change must not leave personal
+// tokens (issued by the old server) in place.
+describe("F-12 — stored iTop secrets stay with the stored host", () => {
+  let server: Server | undefined;
+
+  afterEach(async () => {
+    if (server) {
+      await closeServer(server);
+      server = undefined;
+    }
+  });
+
+  it("POST /admin/itop/test refuses a body baseUrl without a body appToken, and makes no outbound call", async () => {
+    const state = seedFakeItop();
+    const started = await startFake(state);
+    server = started.server;
+    await configureItop(started.baseUrl); // stored token present
+    const before = state.requestCount;
+    const res = await call("post", "/admin/itop/test", adminToken).send({ baseUrl: "https://attacker.example" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("token_required_for_new_host");
+    expect(state.requestCount).toBe(before);
+  });
+
+  it("PATCH /admin/itop/settings to a different host needs a new app token and clears personal tokens; a path-only change keeps everything", async () => {
+    const started = await startFake(seedFakeItop());
+    server = started.server;
+    await configureItop(started.baseUrl); // stored host: the fake's 127.0.0.1
+    const tam = await createUserWithRole("TAM");
+    await prisma.user.update({
+      where: { id: tam.userId },
+      data: { itopTokenEnc: seal("personal-token"), itopTokenCheckedAt: new Date(), itopTokenPersonName: "T. Am" },
+    });
+    const storedAppToken = (await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } })).appTokenEnc;
+
+    // Host change WITHOUT a new application token: refused, nothing changes.
+    const refused = await call("patch", "/admin/itop/settings", adminToken).send({ baseUrl: "https://itop.example/itop" });
+    expect(refused.status).toBe(400);
+    expect(refused.body.code).toBe("token_required_for_new_host");
+    let config = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(config.baseUrl).toBe(started.baseUrl);
+    expect(config.appTokenEnc).toBe(storedAppToken);
+    let row = await prisma.user.findUniqueOrThrow({ where: { id: tam.userId } });
+    expect(open(row.itopTokenEnc!)).toBe("personal-token");
+
+    // Host change WITH the new server's token: accepted, personal tokens cleared.
+    const hostChange = await call("patch", "/admin/itop/settings", adminToken).send({
+      baseUrl: "https://itop.example/itop",
+      appToken: "token-for-itop-example",
+    });
+    expect(hostChange.status).toBe(200);
+    config = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(open(config.appTokenEnc!)).toBe("token-for-itop-example");
+    row = await prisma.user.findUniqueOrThrow({ where: { id: tam.userId } });
+    expect(row.itopTokenEnc).toBeNull();
+    expect(row.itopTokenPersonName).toBeNull();
+
+    // Now stored = https://itop.example/itop. A path-only change keeps every token.
+    await prisma.user.update({ where: { id: tam.userId }, data: { itopTokenEnc: seal("personal-token-2") } });
+    const pathOnly = await call("patch", "/admin/itop/settings", adminToken).send({ baseUrl: "https://itop.example/other" });
+    expect(pathOnly.status).toBe(200);
+    row = await prisma.user.findUniqueOrThrow({ where: { id: tam.userId } });
+    expect(open(row.itopTokenEnc!)).toBe("personal-token-2");
+    config = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(open(config.appTokenEnc!)).toBe("token-for-itop-example");
   });
 });

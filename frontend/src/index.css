@@ -309,3 +309,32 @@
     font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
   }
 }
+
+/* Reduced motion (docs/archive/plans/application-review-2026-10-22.md, F-37):
+   people who ask the OS for less motion get none — no transitions, no looping
+   or entrance animations, no smooth scrolling. docs/DESIGN.md has no motion
+   rule of its own, so this is the standard blanket form. Unlayered and
+   !important on purpose: it must beat every utility, including vendored ones. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+
+  /* Loading indicators are the exception: a frozen spinner reads as a hung
+     page. The spinner keeps turning, slowly (rotation, no flashing); the
+     skeleton pulse becomes a static tint, since the placeholder shape and the
+     "Loading…" live region already say "loading" without an opacity fade
+     (docs/archive/plans/application-review-2026-10-22.md, F-37). */
+  .animate-spin {
+    animation-duration: 1.5s !important;
+    animation-iteration-count: infinite !important;
+  }
+  .animate-pulse {
+    animation: none !important;
+  }
+}

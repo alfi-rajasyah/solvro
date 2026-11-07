@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { ApiError, apiRequest, getToken, setToken, UNAUTHENTICATED_EVENT } from "./api";
 
 // Built-in role names referenced structurally by backend (project visibility,
@@ -24,11 +25,30 @@ export interface AuthUser {
   permissions: string[];
 }
 
-// The permission vocabulary the app actually understands, for the Admin >
-// Roles tick-box editor. The backend stores permissions as a free-form
-// string array, so this is a curated catalogue (not enforced server-side) —
-// keep it in sync with the `requirePermission(...)` / `hasPermission(...)`
-// strings used across backend + frontend. "*" is full access (admin).
+/** How long the best-effort server-side sign-out may take before it is abandoned. */
+export const LOGOUT_TIMEOUT_MS = 3_000;
+
+/**
+ * Asks the server to revoke the current token (`POST /auth/logout` bumps the
+ * account's token version, which signs it out on every device). Best effort:
+ * no token, a network failure, a timeout or any error answer resolves
+ * quietly — sign-out must never depend on it. Exported for the unit test.
+ */
+export async function revokeSessionOnServer(): Promise<void> {
+  if (!getToken()) return;
+  try {
+    await apiRequest<null>("/auth/logout", { method: "POST", timeoutMs: LOGOUT_TIMEOUT_MS });
+  } catch {
+    // Ignored on purpose; the local session ends regardless.
+  }
+}
+
+// The permission vocabulary for the Admin > Roles tick-box editor. The backend
+// validates role writes against the same list (`KNOWN_PERMISSIONS` in
+// backend/src/lib/permissions.ts), so a value added here must be added there
+// too, or saving a role that carries it is refused. Each side pins its copy of
+// the 13 values in a test (auth.test.ts here, hardening.test.ts there). "*" is
+// full access (admin).
 export interface PermissionDef {
   value: string;
   label: string;
@@ -53,8 +73,8 @@ export const PERMISSION_CATALOG: PermissionDef[] = [
 /**
  * Permission check used by UI gates. Wildcard "*" grants everything; a
  * specific permission grants just that one. Custom roles created in
- * Admin > Roles can list any permission strings; the built-in roles'
- * exact grants live in backend/prisma/seed.ts.
+ * Admin > Roles can combine the permissions in PERMISSION_CATALOG; the
+ * built-in roles' exact grants live in backend/prisma/seed.ts.
  */
 export function hasPermission(
   user: AuthUser | null | undefined,
@@ -85,9 +105,20 @@ interface AuthContextValue {
    * away on a denial until this is true.
    */
   userVerified: boolean;
+  /**
+   * Set when the boot-time `/auth/me` call failed for a reason other than a
+   * rejected token (server down, timeout). The session is kept — the stored
+   * token may well be valid — and the Shell shows a banner with a retry.
+   */
+  bootError: string | null;
+  /** Re-run the boot-time account check after a `bootError`. */
+  retryBoot: () => void;
   login: (email: string, password: string) => Promise<void>;
   loginWithGoogle: (idToken: string) => Promise<void>;
+  /** Explicit sign-out: also revokes the token on the server, which ends the session on every device. */
   logout: () => void;
+  /** Ends this browser's session only — no server call, other devices stay signed in. */
+  endSessionLocally: () => void;
   /** Swap in a token the server issued mid-session (after a password change). */
   replaceToken: (token: string) => void;
 }
@@ -119,6 +150,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     token ? "authenticated" : "unauthenticated",
   );
   const [userVerified, setUserVerified] = useState(false);
+  const [bootError, setBootError] = useState<string | null>(null);
+  const [bootAttempt, setBootAttempt] = useState(0);
+  // Server-state cache. Cleared on sign-out and when a different account
+  // signs in (docs/archive/plans/application-review-2026-10-22.md, F-08): before, a user who signed in
+  // on a shared browser within React Query's 5-minute gc window saw the
+  // previous user's projects, overview and notifications served from cache
+  // until the background refetch landed — and queries with `staleTime`
+  // never refetched at all.
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     persistUser(user);
@@ -131,10 +171,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
+    setBootError(null);
     // Timed out so a request that never settles ends in the catch below
-    // (clean logout → /login) instead of leaving the permission guards on
-    // "Loading…" forever.
-    apiRequest<AuthUser>("/auth/me", { signal: AbortSignal.timeout(15_000) })
+    // instead of leaving the permission guards on "Loading…" forever.
+    apiRequest<AuthUser>("/auth/me", { timeoutMs: 15_000 })
       .then((fresh) => {
         if (cancelled) return;
         setUser(fresh);
@@ -143,21 +183,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        // Only a 401 says the stored token is bad. Any other failure — a
-        // timeout, a network error, or the request aborted because the page
-        // is navigating away — leaves it stored: a reload or a link opened
-        // right after sign-in aborts this call, and clearing the token then
-        // signed the next page out.
-        if (err instanceof ApiError && err.status === 401) setToken(null);
-        setTokenState(null);
-        setUser(null);
-        setUserVerified(false);
-        setStatus("unauthenticated");
+        // Only a 401 says the stored token is bad: end the session.
+        if (err instanceof ApiError && err.status === 401) {
+          setToken(null);
+          setTokenState(null);
+          setUser(null);
+          setUserVerified(false);
+          setStatus("unauthenticated");
+          return;
+        }
+        // Any other failure — a timeout, a network error, the API behind a
+        // restarting container — says nothing about the token
+        // (docs/archive/plans/application-review-2026-10-22.md, F-14).
+        // Before, it also flipped the status to
+        // "unauthenticated", which bounced a validly signed-in user to the
+        // login page, where signing in failed for the same reason. Keep the
+        // session and the cached user, leave `userVerified` false so the
+        // permission guards keep waiting, and surface a retry banner.
+        setBootError(
+          err instanceof Error && err.message
+            ? err.message
+            : "Could not reach the server to confirm your session.",
+        );
       });
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, bootAttempt]);
+
+  const retryBoot = useCallback(() => setBootAttempt((n) => n + 1), []);
 
   const login = useCallback(async (email: string, password: string) => {
     setStatus("loading");
@@ -167,6 +221,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: { email, password },
         auth: false,
       });
+      // A different account than the one whose data may still sit in the
+      // cache (a sign-out does clear it, but a 401-driven sign-out followed
+      // by another person's login on the same tab must not show stale rows).
+      if (user && user.id !== res.user.id) queryClient.clear();
       setToken(res.token);
       persistUser(res.user);
       setTokenState(res.token);
@@ -177,7 +235,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus("unauthenticated");
       throw err;
     }
-  }, []);
+  }, [queryClient, user]);
 
   const loginWithGoogle = useCallback(async (idToken: string) => {
     setStatus("loading");
@@ -187,6 +245,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: { idToken },
         auth: false,
       });
+      if (user && user.id !== res.user.id) queryClient.clear();
       setToken(res.token);
       persistUser(res.user);
       setTokenState(res.token);
@@ -197,40 +256,72 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus("unauthenticated");
       throw err;
     }
-  }, []);
+  }, [queryClient, user]);
 
   const replaceToken = useCallback((next: string) => {
     setToken(next);
     setTokenState(next);
   }, []);
 
-  const logout = useCallback(() => {
+  const endSession = useCallback(() => {
     setToken(null);
     setTokenState(null);
     setUser(null);
     setUserVerified(false);
+    setBootError(null);
     setStatus("unauthenticated");
+    // Everything fetched for this account leaves with it — no cached list for
+    // the next person who signs in on this browser.
+    queryClient.clear();
     // A running iTop timer is user-scoped (components/itop/useTicketTimer.ts) and must not leak into the next login on this browser.
     Object.keys(localStorage)
       .filter((k) => k.startsWith("solvro.itopTimer."))
       .forEach((k) => localStorage.removeItem(k));
-  }, []);
+  }, [queryClient]);
+
+  // User-initiated sign-out: revokes the token on the server too
+  // (docs/archive/plans/application-review-2026-10-22.md, N-01), then ends
+  // the session locally. The request is dispatched first — with the current
+  // token, which `apiRequest` reads synchronously — and not awaited, so a
+  // slow or unreachable server never delays the sign-out.
+  const logout = useCallback(() => {
+    void revokeSessionOnServer();
+    endSession();
+  }, [endSession]);
 
   // Any authenticated request answered with 401 (lib/api.ts) ends the
   // session here too — the server now revokes tokens (password change,
   // admin reset, deactivation), and a revoked session must not keep
-  // showing cached pages behind failing requests.
+  // showing cached pages behind failing requests. Local only: the token is
+  // already dead, and calling the logout endpoint would 401 again.
   useEffect(() => {
-    window.addEventListener(UNAUTHENTICATED_EVENT, logout);
-    return () => window.removeEventListener(UNAUTHENTICATED_EVENT, logout);
-  }, [logout]);
+    window.addEventListener(UNAUTHENTICATED_EVENT, endSession);
+    return () => window.removeEventListener(UNAUTHENTICATED_EVENT, endSession);
+  }, [endSession]);
 
   const value = useMemo(
-    () => ({ user, token, status, userVerified, login, loginWithGoogle, logout, replaceToken }),
-    [user, token, status, userVerified, login, loginWithGoogle, logout, replaceToken],
+    () => ({
+      user,
+      token,
+      status,
+      userVerified,
+      bootError,
+      retryBoot,
+      login,
+      loginWithGoogle,
+      logout,
+      endSessionLocally: endSession,
+      replaceToken,
+    }),
+    [user, token, status, userVerified, bootError, retryBoot, login, loginWithGoogle, logout, endSession, replaceToken],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+}
+
+/** The current token, or null — also outside an AuthProvider (isolated renders), where `useAuth` throws. */
+export function useAuthToken(): string | null {
+  return useContext(AuthContext)?.token ?? null;
 }
 
 export function useAuth(): AuthContextValue {

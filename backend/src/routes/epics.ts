@@ -3,13 +3,15 @@ import { z } from "zod";
 import type { Prisma } from "@prisma/client";
 import { TaskStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
+import { requireAnyPermission, requireAuth, requirePermission, type JwtPayload } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { ensureProjectVisible } from "../lib/visibility.js";
 import { recordActivity, shortLabel } from "../lib/activity.js";
 import { diffEpicChanges, epicSnapshotSelect } from "../lib/epicActivity.js";
 import { COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import { assertActiveUser } from "../lib/users.js";
+import { lockProject, repackToOrder } from "../lib/positionRepack.js";
 
 // Resolve the epic's owning project and 404 if the caller can't see it.
 // Mirrors ensureSectionVisible (backend/src/routes/sections.ts) — 404, never
@@ -65,7 +67,7 @@ async function insertEpicAt(
   const siblings = await tx.epic.findMany({
     where: { projectId, id: { not: epicId } },
     orderBy: [{ position: "asc" }, { id: "asc" }],
-    select: { id: true },
+    select: { id: true, position: true },
   });
 
   const clamped = Math.max(0, Math.min(requestedPosition, siblings.length));
@@ -73,9 +75,7 @@ async function insertEpicAt(
   const ordered = siblings.map((s) => s.id);
   ordered.splice(clamped, 0, epicId);
 
-  for (let i = 0; i < ordered.length; i++) {
-    await tx.epic.update({ where: { id: ordered[i] }, data: { position: i } });
-  }
+  await repackToOrder(tx, "epics", siblings, ordered);
 
   return clamped;
 }
@@ -100,7 +100,8 @@ async function getEpicProgress(epicId: number): Promise<{ done: number; total: n
 
 export const epicsRouter = Router();
 
-epicsRouter.use(requireAuth);
+// Same read gate as routes/projects.ts (docs/archive/plans/application-review-2026-10-22.md, F-03).
+epicsRouter.use(requireAuth, requireAnyPermission("project:read", "pipeline:view"));
 
 epicsRouter.get("/:id", validate("params", idParamSchema), async (req, res) => {
   const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
@@ -153,8 +154,13 @@ epicsRouter.patch(
     // never observed half-moved — mirrors sections.ts's PATCH /:id. A
     // position-only write diffs to `{}` and records nothing.
     const updated = await prisma.$transaction(async (tx) => {
-      // Lock first so overlapping identical saves serialise and record one event.
+      // Project first (serialises reorders; same order everywhere), then the
+      // epic row, so overlapping identical saves serialise and record one event.
+      await lockProject(tx, projectId);
       await tx.$queryRaw`SELECT id FROM epics WHERE id = ${id} FOR NO KEY UPDATE`;
+      if (body.ownerId != null) {
+        await assertActiveUser(tx, body.ownerId, "owner", { requireActive: false });
+      }
       const before = await tx.epic.findUniqueOrThrow({
         where: { id },
         select: epicSnapshotSelect,

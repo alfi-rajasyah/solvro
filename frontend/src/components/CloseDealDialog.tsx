@@ -9,7 +9,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
 import { StageChip } from "./StageChip";
 import { Alert, AlertDescription } from "@/components/reui/alert";
-import { ApiError } from "@/lib/api";
+import { fieldErrorsFrom, formErrorMessage } from "@/lib/formErrors";
 import {
   formatIDRCompact,
   OUTCOME_LABELS,
@@ -35,6 +35,9 @@ const OUTCOME_ICON: Record<PipelineOutcome, string> = {
   CANCELLED: "block",
 };
 
+// Request fields that have an input of their own in this dialog.
+const INLINE_ERROR_FIELDS = ["reasonCategory", "reason"];
+
 export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
   const close = useCloseOpportunity();
 
@@ -42,6 +45,8 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
   const [reasonCategory, setReasonCategory] = useState<PipelineOutcomeReason | "">("");
   const [note, setNote] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // Server validation messages by request field (docs/archive/plans/application-review-2026-10-22.md, F-34).
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Reset to the dialog's defaults on the OPEN TRANSITION only — same
   // `[open]`-only-deps convention as AssignPicModal/OpportunityFormModal's
@@ -52,9 +57,16 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
     setReasonCategory("");
     setNote("");
     setError(null);
+    setFieldErrors({});
   }, [open]);
 
   const reasons = REASONS_BY_OUTCOME[outcome];
+  const errorId = (field: string) => `close-deal-${field}-error`;
+  // aria-invalid + aria-describedby for a field the server rejected.
+  const invalidProps = (field: string) =>
+    fieldErrors[field]
+      ? { "aria-invalid": true as const, "aria-describedby": errorId(field) }
+      : {};
 
   function selectOutcome(next: PipelineOutcome) {
     setOutcome(next);
@@ -66,6 +78,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setError(null);
+    setFieldErrors({});
     if (outcome !== "WON" && reasonCategory === "") {
       setError("Pick a reason category.");
       return;
@@ -80,7 +93,8 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
       onClosed(updated);
       onClose();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not close the deal.");
+      setFieldErrors(fieldErrorsFrom(err));
+      setError(formErrorMessage(err, "Could not close the deal.", INLINE_ERROR_FIELDS));
     }
   }
 
@@ -153,39 +167,55 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
         </fieldset>
 
         {outcome !== "WON" && (
-          <label className="block">
-            <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">
-              Reason category
-              <span className="ml-1 text-error">*</span>
-            </span>
-            <select
-              value={reasonCategory}
-              onChange={(e) => setReasonCategory(e.target.value as PipelineOutcomeReason)}
-              required
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-            >
-              <option value="">Select a reason…</option>
-              {reasons.map((r) => (
-                <option key={r} value={r}>
-                  {OUTCOME_REASON_LABELS[r]}
-                </option>
-              ))}
-            </select>
-          </label>
+          <div>
+            <label className="block">
+              <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">
+                Reason category
+                <span className="ml-1 text-error">*</span>
+              </span>
+              <select
+                value={reasonCategory}
+                onChange={(e) => setReasonCategory(e.target.value as PipelineOutcomeReason)}
+                required
+                {...invalidProps("reasonCategory")}
+                className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              >
+                <option value="">Select a reason…</option>
+                {reasons.map((r) => (
+                  <option key={r} value={r}>
+                    {OUTCOME_REASON_LABELS[r]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            {fieldErrors.reasonCategory && (
+              <p id={errorId("reasonCategory")} className="mt-1 text-xs text-error">
+                {fieldErrors.reasonCategory}
+              </p>
+            )}
+          </div>
         )}
 
-        <label className="block">
-          <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">
-            Note (optional)
-          </span>
-          <textarea
-            value={note}
-            onChange={(e) => setNote(e.target.value)}
-            rows={3}
-            maxLength={500}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
-          />
-        </label>
+        <div>
+          <label className="block">
+            <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">
+              Note (optional)
+            </span>
+            <textarea
+              value={note}
+              onChange={(e) => setNote(e.target.value)}
+              rows={3}
+              maxLength={500}
+              {...invalidProps("reason")}
+              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            />
+          </label>
+          {fieldErrors.reason && (
+            <p id={errorId("reason")} className="mt-1 text-xs text-error">
+              {fieldErrors.reason}
+            </p>
+          )}
+        </div>
 
         {error && (
           <Alert variant="destructive">

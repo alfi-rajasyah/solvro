@@ -101,6 +101,7 @@ export function LabelPicker({
                 }
               }}
               placeholder="Label name"
+              aria-label="Label name"
               maxLength={50}
               className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
             />

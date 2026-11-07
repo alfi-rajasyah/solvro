@@ -9,11 +9,77 @@ import { normalizeUsername } from "../lib/username.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { getAuthConfigCached } from "../authConfig.js";
+import { createRateLimiter, rateLimitKey } from "../http/rateLimit.js";
 
+// Emails are stored lower-case (docs/archive/plans/application-review-2026-10-22.md, F-13; migration
+// `lowercase_user_emails`). Normalise on the way in so `Alice@Corp.com` and
+// `alice@corp.com` are one account on every sign-in path, as the Google
+// path already did.
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().trim().toLowerCase().email(),
   password: z.string().min(1),
 });
+
+// Brute-force guard on the two sign-in routes
+// (docs/archive/plans/application-review-2026-10-22.md, F-04). Only FAILED
+// attempts count, so an office behind one NAT address is never locked out
+// by its own successful morning sign-ins:
+//  - per client address + email: 10 failures per 15 minutes — a password
+//    guess against one account;
+//  - per client address alone: 50 failures per 15 minutes — a credential
+//    list sprayed across many accounts.
+// Google sign-in counts a failed token verification against the address.
+// Checked before the password is compared, so a blocked caller learns
+// nothing about the credentials it sends.
+export const LOGIN_FAILURE_LIMIT_PER_ACCOUNT = 10;
+export const LOGIN_FAILURE_LIMIT_PER_ADDRESS = 50;
+export const LOGIN_FAILURE_WINDOW_MS = 15 * 60_000;
+export const loginAccountLimiter = createRateLimiter({
+  limit: LOGIN_FAILURE_LIMIT_PER_ACCOUNT,
+  windowMs: LOGIN_FAILURE_WINDOW_MS,
+});
+export const loginAddressLimiter = createRateLimiter({
+  limit: LOGIN_FAILURE_LIMIT_PER_ADDRESS,
+  windowMs: LOGIN_FAILURE_WINDOW_MS,
+});
+
+const tooManyAttempts = (retryAfterSec: number) => {
+  const err = new HttpError(
+    429,
+    "rate_limited",
+    "Too many failed sign-in attempts. Try again in a few minutes.",
+  );
+  err.retryAfterSec = retryAfterSec;
+  return err;
+};
+
+function assertSignInAllowed(ip: string | undefined, email: string | null): void {
+  const addressKey = rateLimitKey(ip);
+  const byAddress = loginAddressLimiter.blockedFor(addressKey);
+  if (byAddress > 0) throw tooManyAttempts(byAddress);
+  if (email !== null) {
+    const byAccount = loginAccountLimiter.blockedFor(`${addressKey}|${email}`);
+    if (byAccount > 0) throw tooManyAttempts(byAccount);
+  }
+}
+
+/** Records one failed attempt; throws 429 once the caller crosses a limit. */
+function recordSignInFailure(ip: string | undefined, email: string | null): void {
+  const addressKey = rateLimitKey(ip);
+  const address = loginAddressLimiter.hit(addressKey);
+  const account = email !== null ? loginAccountLimiter.hit(`${addressKey}|${email}`) : null;
+  if (address.blocked) throw tooManyAttempts(address.retryAfterSec);
+  if (account?.blocked) throw tooManyAttempts(account.retryAfterSec);
+}
+
+// A bcrypt hash of a throwaway string, compared against when the email is
+// unknown so that path costs the same as a wrong password: the response time
+// no longer says whether an account exists. Started at module load so the
+// first unknown-email request does not pay for two bcrypt operations.
+const dummyHash: Promise<string> = bcrypt.hash("solvro-no-such-account", 10);
+function getDummyHash(): Promise<string> {
+  return dummyHash;
+}
 
 const googleLoginSchema = z.object({
   idToken: z.string().min(1),
@@ -23,6 +89,8 @@ export const authRouter = Router();
 
 authRouter.post("/login", validate("body", loginSchema), async (req, res) => {
   const { email, password } = req.body as z.infer<typeof loginSchema>;
+  const limiterEmail = email; // already trimmed and lower-cased by loginSchema
+  assertSignInAllowed(req.ip, limiterEmail);
 
   const user = await prisma.user.findUnique({
     where: { email },
@@ -33,6 +101,7 @@ authRouter.post("/login", validate("body", loginSchema), async (req, res) => {
   // the frontend can point them at the Google button instead of letting
   // them keep retrying credentials that don't exist.
   if (user && user.passwordHash === null) {
+    recordSignInFailure(req.ip, limiterEmail);
     throw new HttpError(
       401,
       "google_only",
@@ -40,11 +109,14 @@ authRouter.post("/login", validate("body", loginSchema), async (req, res) => {
     );
   }
 
+  // An unknown email still runs one bcrypt compare (against a fixed dummy
+  // hash) so its response time matches a wrong password.
   const ok =
     user && user.passwordHash
       ? await bcrypt.compare(password, user.passwordHash)
-      : false;
+      : (await bcrypt.compare(password, await getDummyHash()), false);
   if (!user || !ok) {
+    recordSignInFailure(req.ip, limiterEmail);
     throw new HttpError(401, "invalid_credentials", "Invalid email or password");
   }
   if (!user.active) {
@@ -100,6 +172,7 @@ authRouter.post("/google", validate("body", googleLoginSchema), async (req, res)
   }
 
   const { idToken } = req.body as z.infer<typeof googleLoginSchema>;
+  assertSignInAllowed(req.ip, null);
 
   let payload: TokenPayload | undefined;
   try {
@@ -109,6 +182,7 @@ authRouter.post("/google", validate("body", googleLoginSchema), async (req, res)
     });
     payload = ticket.getPayload();
   } catch {
+    recordSignInFailure(req.ip, null);
     throw new HttpError(401, "invalid_token", "Google ID token verification failed");
   }
   if (!payload || !payload.email) {
@@ -321,3 +395,18 @@ authRouter.post(
     res.json({ token: signToken({ sub: user.id, ver: updated.tokenVersion }) });
   },
 );
+
+// Server-side sign-out (docs/archive/plans/application-review-2026-10-22.md, N-01).
+// Bumps tokenVersion — the same revocation a password change uses — so the
+// token that signed out (and every other token of this account) stops
+// verifying at once instead of living out its JWT_EXPIRES_IN. Signing out
+// therefore ends the session on every device. Nothing about the token is
+// logged.
+authRouter.post("/logout", requireAuth, async (req, res) => {
+  await prisma.user.update({
+    where: { id: req.user!.sub },
+    data: { tokenVersion: { increment: 1 } },
+    select: { id: true },
+  });
+  res.status(204).end();
+});

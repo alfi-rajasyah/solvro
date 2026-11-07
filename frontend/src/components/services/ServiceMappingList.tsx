@@ -14,6 +14,12 @@ export interface ServiceMappingListProps {
   /** Full-replace semantics: called with the complete next assignment list. */
   onSave: (next: ServiceAssignmentInput[]) => Promise<unknown>;
   canMutate: boolean;
+  /**
+   * Whether the inline "Add service" form is shown. Creating a catalogue
+   * service is admin-only on the server (the catalogue is global), so this is
+   * separate from `canMutate`, which only governs picking existing services.
+   */
+  canCreateService: boolean;
   saving: boolean;
   /** When provided (project context): badge these services as "Subscribed" and sort them first. */
   subscribedServiceIds?: Set<number>;
@@ -25,7 +31,8 @@ export interface ServiceMappingListProps {
 /**
  * Reusable service-catalogue mapping UI: checkbox rows to assign/unassign a
  * service, a chip-input tools editor per assigned row, and an inline
- * "Add service" form so new catalogue entries don't require a trip to Admin.
+ * "Add service" form (admins only) so new catalogue entries don't require a
+ * trip to Admin.
  *
  * Shared by CustomerDetail's Services tab and ProjectDetail's Services tab.
  */
@@ -33,6 +40,7 @@ export function ServiceMappingList({
   assignments,
   onSave,
   canMutate,
+  canCreateService,
   saving,
   subscribedServiceIds,
   title,
@@ -148,7 +156,11 @@ export function ServiceMappingList({
       ) : !catalogue || catalogue.length === 0 ? (
         <EmptyState
           icon="category"
-          message="No services yet — add the first one below."
+          message={
+            canCreateService
+              ? "No services yet — add the first one below."
+              : "No services yet — ask an admin to add one."
+          }
         />
       ) : (
         <div className="space-y-1.5">
@@ -211,6 +223,7 @@ export function ServiceMappingList({
                 {assigned && assignment && (
                   <div className="mt-2 border-t border-outline-variant/60 pt-2">
                     <ToolsEditor
+                      serviceName={s.name}
                       tools={assignment.tools}
                       canMutate={canMutate}
                       saving={saving}
@@ -224,7 +237,7 @@ export function ServiceMappingList({
         </div>
       )}
 
-      {canMutate && (
+      {canMutate && canCreateService && (
         <form
           onSubmit={handleAdd}
           className="flex flex-wrap items-end gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest p-3"
@@ -268,12 +281,15 @@ export function ServiceMappingList({
   );
 }
 
-function ToolsEditor({
+export function ToolsEditor({
+  serviceName,
   tools,
   canMutate,
   saving,
   onChange,
 }: {
+  /** One editor renders per assigned service, so the service names its input. */
+  serviceName: string;
   tools: string[];
   canMutate: boolean;
   saving: boolean;
@@ -339,6 +355,7 @@ function ToolsEditor({
             onBlur={() => commit(draft)}
             disabled={saving}
             placeholder={tools.length === 0 ? "e.g. Acronis, Crowdstrike" : "Add tool…"}
+            aria-label={`Add tool for ${serviceName}`}
             className="min-w-[140px] flex-1 rounded-sm border border-outline-variant bg-surface px-2 py-0.5 text-[12px] focus:border-primary focus:outline-hidden disabled:opacity-50"
           />
         )}

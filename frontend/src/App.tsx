@@ -5,31 +5,40 @@ import { ExecutiveGuard } from "@/components/ExecutiveGuard";
 import { PermissionGuard } from "@/components/PermissionGuard";
 import { PipelineGuard } from "@/components/PipelineGuard";
 import { Shell } from "@/components/layout/Shell";
-import { Admin } from "@/pages/Admin";
-import { CustomerDetail } from "@/pages/CustomerDetail";
-import { Customers } from "@/pages/Customers";
-import { DailyReview } from "@/pages/DailyReview";
-import { Executive } from "@/pages/Executive";
-import { Help } from "@/pages/Help";
+import { lazyPage } from "@/lib/lazyPage";
 import { Login } from "@/pages/Login";
-import { OpportunityDetail } from "@/pages/OpportunityDetail";
+import { NotFound } from "@/pages/NotFound";
 import { Overview } from "@/pages/Overview";
-import { Pipeline } from "@/pages/Pipeline";
 import { ProjectDetail } from "@/pages/ProjectDetail";
 import { Projects } from "@/pages/Projects";
 import { PublicShare } from "@/pages/PublicShare";
-import { Settings } from "@/pages/Settings";
-import { Tasks } from "@/pages/Tasks";
-import { Utilization } from "@/pages/Utilization";
-import { WeeklySync } from "@/pages/WeeklySync";
-import { ProjectEpics } from "@/pages/views/ProjectEpics";
-import { ProjectGantt } from "@/pages/views/ProjectGantt";
-import { ProjectKanban } from "@/pages/views/ProjectKanban";
-import { ProjectList } from "@/pages/views/ProjectList";
-import { ProjectOverview } from "@/pages/views/ProjectOverview";
-import { ProjectRisks } from "@/pages/views/ProjectRisks";
-import { ProjectServices } from "@/pages/views/ProjectServices";
-import { ProjectTimeline } from "@/pages/views/ProjectTimeline";
+
+// Route-level code splitting: everything except the pages a session always
+// opens first (Login, Overview, Projects, ProjectDetail's frame) loads on
+// demand, so the entry chunk stays small. The Suspense boundary lives in
+// Shell.tsx, inside the page error boundary, so a failed chunk is still caught
+// (docs/archive/plans/application-review-2026-10-22.md, F-16).
+// `lazyPage` (lib/lazyPage.ts) retries a failed chunk import once.
+const Admin = lazyPage(() => import("@/pages/Admin"), "Admin");
+const CustomerDetail = lazyPage(() => import("@/pages/CustomerDetail"), "CustomerDetail");
+const Customers = lazyPage(() => import("@/pages/Customers"), "Customers");
+const DailyReview = lazyPage(() => import("@/pages/DailyReview"), "DailyReview");
+const Executive = lazyPage(() => import("@/pages/Executive"), "Executive");
+const Help = lazyPage(() => import("@/pages/Help"), "Help");
+const OpportunityDetail = lazyPage(() => import("@/pages/OpportunityDetail"), "OpportunityDetail");
+const Pipeline = lazyPage(() => import("@/pages/Pipeline"), "Pipeline");
+const Settings = lazyPage(() => import("@/pages/Settings"), "Settings");
+const Tasks = lazyPage(() => import("@/pages/Tasks"), "Tasks");
+const Utilization = lazyPage(() => import("@/pages/Utilization"), "Utilization");
+const WeeklySync = lazyPage(() => import("@/pages/WeeklySync"), "WeeklySync");
+const ProjectEpics = lazyPage(() => import("@/pages/views/ProjectEpics"), "ProjectEpics");
+const ProjectGantt = lazyPage(() => import("@/pages/views/ProjectGantt"), "ProjectGantt");
+const ProjectKanban = lazyPage(() => import("@/pages/views/ProjectKanban"), "ProjectKanban");
+const ProjectList = lazyPage(() => import("@/pages/views/ProjectList"), "ProjectList");
+const ProjectOverview = lazyPage(() => import("@/pages/views/ProjectOverview"), "ProjectOverview");
+const ProjectRisks = lazyPage(() => import("@/pages/views/ProjectRisks"), "ProjectRisks");
+const ProjectServices = lazyPage(() => import("@/pages/views/ProjectServices"), "ProjectServices");
+const ProjectTimeline = lazyPage(() => import("@/pages/views/ProjectTimeline"), "ProjectTimeline");
 
 /**
  * `/projects/:id` → its Overview tab. Carries `?task=` (and any other query or
@@ -119,9 +128,11 @@ export function App() {
             </AdminGuard>
           }
         />
+        {/* Unknown URL: a real 404 inside the shell (sidebar stays) instead of
+            a silent redirect to Overview
+            (docs/archive/plans/application-review-2026-10-22.md, F-45). */}
+        <Route path="*" element={<NotFound />} />
       </Route>
-
-      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );
 }

@@ -15,6 +15,180 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-02 — e2e runs in four parallel shards
+
+- The e2e job in `.github/workflows/ci.yml` splits each Playwright project into four shards (`--shard=N/4`), each on its own stack and database, so a run waits about 9 minutes instead of about 21. Only the first desktop shard writes the Docker layer cache; the other shards read it. The e2e timeout drops to 20 minutes per shard.
+
+### Changed — 2026-11-02 — CI uses fewer GitHub Actions minutes
+
+- `.github/workflows/ci.yml` no longer runs on pushes to `develop`: every change reaches it through a PR that already ran CI, and nothing publishes from `develop`. Draft PRs wait until they are marked ready, and changes that touch only Markdown, `docs/`, `.claude/`, `notes/` or the licence don't run CI at all. Feature PRs into `develop` run desktop e2e only; PRs into `staging` or `main` run typecheck and backend tests; pushes to `staging` and `main`, which gate image publishing, still run the full suite with desktop and mobile e2e. A `workflow_dispatch` trigger allows a full run on demand.
+
+### Added — 2026-11-02 — Staging branch and automatic staging deploys
+
+- CI (`.github/workflows/ci.yml`) now also runs on the new `staging` branch, the release-candidate branch between `develop` and `main`. A green `staging` build publishes `:staging` and `:sha-<commit>` images (`.github/workflows/docker-publish.yml`). A new `deploy-staging` job then calls the staging server's Openship deploy webhook, and Openship restarts only the services whose image changed. The webhook address and its token come from the repository secrets `OPENSHIP_STAGING_HOOK_URL` and `OPENSHIP_STAGING_HOOK_TOKEN`; without them the job skips. `main` and release tags publish exactly as before and never deploy to staging.
+
+### Changed — 2026-10-26 — iTop sync reads page by page and holds a session lock
+
+- The iTop sync now reads and writes tickets and time entries one page at a time instead of loading every page into memory first (`backend/src/lib/itop/client.ts`, `sync.ts`). In a synthetic benchmark with 20,000 tickets, peak heap dropped from about 590 MB to about 60 MB.
+- The sync's single-runner lock is now a Postgres session advisory lock held on its own dedicated connection for the whole run, instead of an open ten-minute transaction (`backend/src/lib/itop/syncLock.ts`, `createDedicatedClient` in `backend/src/prisma.ts`). A long sync can no longer lose its lock to a transaction timeout and overlap the next scheduled one; a heartbeat logs an error if the lock session is ever lost, and the lock is released when a run fails. The database connection must be direct or session-pooled — a transaction-mode pooler such as PgBouncer is not supported for this lock (`docs/CONFIGURATION.md` §2.17).
+
+### Added — 2026-10-26 — Move and resize Gantt bars from the keyboard
+
+- With a Gantt bar focused, Left/Right moves it one day (Shift: one week) and Alt+Left/Right moves its end date (Shift: one week; never before the start). The change previews on the bar and saves once after a short pause, on Enter, or when focus leaves; Escape cancels it. The new dates are announced to screen readers. Read-only users, section summary bars and milestone resizing stay locked exactly as with the mouse, and a mouse drag on a bar always wins over a keyboard change that has not been saved yet (`frontend/src/components/gantt-v2/keyboardNudge.ts`, `useGanttKeyboardNudge.ts`, `SolvroGantt.tsx`).
+
+### Added — 2026-10-26 — Database backups, scripted installs, non-root backend container
+
+- `backup.sh` (next to `setup.sh`) takes a consistent `pg_dump` of the running database into `~/solvro/backups/solvro-<timestamp>.dump` (directory mode 700, files mode 600). A failed dump leaves no partial file and exits non-zero. Dumps older than `RETENTION_DAYS` (default 14) are deleted, and only files with its own name pattern. `bash backup.sh --print-cron` prints a suggested crontab line that carries the backup settings; nothing is scheduled automatically. `docs/CONFIGURATION.md` §2.13 documents backups and a restore drill.
+- `setup.sh`: the refusal on an existing database volume now prints a self-contained `docker exec solvro-postgres pg_dump …` command (with the volume `tar` only for a stopped container, when it is consistent), and the install summary shows how to fetch and run `backup.sh`.
+- `setup.sh` no longer stops when it runs without a terminal (cron, CI, `ssh host 'bash setup.sh'`) and every required value comes from environment variables. It now checks whether `/dev/tty` can actually be opened and skips the optional port prompts when it cannot.
+- The backend production image now runs as the unprivileged `node` user instead of root (`backend/Dockerfile`).
+
+### Fixed — 2026-10-26 — Faster, race-free reordering of tasks, sections and epics
+
+- Reordering tasks, sections and epics now rewrites positions with one set-based `UPDATE` that touches only the rows that actually move, instead of one `UPDATE` per sibling (`backend/src/lib/positionRepack.ts`, `backend/src/lib/taskOrdering.ts`). Moving the last task to the front of a 300-task list dropped from about 450 ms to under 70 ms of database time locally.
+- Position-changing writes now lock the project row first: task reorder and re-parent, task create and duplicate, section reorder and duplicate, and epic reorder. Two people reordering the same project at the same time can no longer leave duplicate or missing positions. Ordinary task edits that do not change order do not take this lock.
+- Creating a task dependency now runs its cycle check and its insert in one transaction under the same project lock, so two requests that would together form a cycle can no longer both succeed.
+
+### Security — 2026-10-26 — Server-side sign-out, session warning, search terms kept out of logs
+
+- New `POST /auth/logout` (`backend/src/routes/auth.ts`). The sign-out button in the top bar now revokes the session on the server, so the old token cannot be reused for the rest of its lifetime. This ends the session on every device where the account is signed in. The request never delays sign-out. The automatic sign-out after a rejected request, and the "Sign in again" action below, end only the current browser's session.
+- A banner five minutes before the session expires says the session ends soon and offers "Sign in again" (`frontend/src/components/layout/ConnectionBanners.tsx`, `frontend/src/lib/sessionExpiry.ts`). Screen readers announce it. When the session's expiry time passes, the app ends the session in that browser and opens the sign-in page.
+- Request logs now replace the query string of `/search` and `/search/` requests, of a `Referer` that points at one, and the parsed query object with `[redacted]` (`backend/src/http/requestLogger.ts`). Customer names and ticket text typed into search no longer reach the logs.
+- The iTop sync no longer stores invented values (`backend/src/lib/itop/sync.ts`). A ticket whose last-update time cannot be read, or a time entry whose duration cannot be read, is skipped and counted in the sync's skipped total. Before, the ticket got the current time and the time entry got zero minutes. Time entries skipped for a missing duration are logged as one summary line per sync.
+
+### Changed — 2026-10-26 — Pages load on demand; accessibility follow-ups
+
+- Pages now load on demand behind a loading skeleton: Admin, Pipeline, deal detail, Executive, Customers, Daily Review, Weekly Sync, Tasks, Utilization, Settings, Help, and every project tab (Overview, List, Kanban, Gantt, Epics, Risks, Services, Timeline) are separate chunks (`frontend/src/App.tsx`, `frontend/src/lib/lazyPage.ts`). The main bundle went from about 2.1 MB to about 0.96 MB. A page chunk that fails to download is retried once automatically.
+- The offline cache size limit is back to Workbox's 2 MiB default (`frontend/vite.config.ts`). A new `npm run check:bundle-size` (`frontend/scripts/check-bundle-size.mjs`) fails when the production entry chunk exceeds 1 MB, and CI runs it after a frontend build.
+- A "Skip to main content" link is now the first focusable element of the app shell.
+- Every `<select>` now has an accessible name, and the accessible-name unit test also checks `<select>`.
+- The Close deal dialog shows server validation errors under the field they belong to (reason category and note).
+- The top-bar user button now reports whether its panel is open, closes it with Escape and returns focus to the button. Its accessible name includes the username and role.
+- With reduced motion turned on, loading spinners keep turning slowly and skeletons show a static tint, so a loading state no longer looks frozen.
+
+### Fixed — 2026-10-25 — UX fixes: task counts, form errors, accessibility
+
+- A project's task count (project cards and detail, the Admin projects table, and the API payloads, including a customer's project list) no longer includes cancelled tasks, so it matches the progress total. The delete-project confirmation now says it also removes any cancelled tasks.
+- Validation errors from the server now appear under the field they belong to in the project and task forms, with `aria-invalid` and `aria-describedby`, instead of only a generic "Invalid request". Rejected fields the form shows no input for (the task dates, the project TAM when its picker is hidden, and the like) are listed in the error alert as "Field: message".
+- Placeholder-only inputs and the subtask checkbox now have accessible names: link label and URL, task title, description, subtasks, risk text areas, label name, section name, service and tool fields (each tool input names its service), the risks search, and the Admin role-name and allowed-domain inputs. The task form's selects are labelled too. A unit test fails on any `<input>`, `<textarea>`, `<Input>` or `<Textarea>` that has no `aria-label`, no spread, and no enclosing `<label>` with text.
+- Added a `prefers-reduced-motion` rule that turns off transitions and animations app-wide for people who request reduced motion; loading spinners and skeleton pulses stop too.
+- The request-timeout message now ends "try again", the same as the offline message.
+- Removed the unused `pickContrast` helper.
+
+### Fixed — 2026-10-25 — Page titles, phone top bar, not-found page
+
+- Every page now sets its own browser-tab title ("Overview · Solvro", the project or customer name once loaded, "Not found · Solvro") instead of a bare "Solvro"; the tab gets its original title back when you leave the app (for example on sign-out). Paths match regardless of letter case, as routing does, so `/Overview` still counts as Overview.
+- The top-bar page title no longer collapses to a single letter on phones: the title takes the free width, the bar's spacing tightens, and the user-menu chevron and divider hide below 640 px. The desktop bar is unchanged.
+- An unknown URL (including a mistyped project view such as `/projects/12/board`) now shows a "Page not found" panel with the attempted path and a link to Overview, inside the app shell, instead of silently redirecting to Overview. The top bar reads "Not found" there, and sign-in and guest links behave as before.
+- Added an end-to-end spec (`e2e/tests/not-found.spec.ts`) covering the not-found page and per-page tab titles on desktop and mobile.
+
+### Fixed — 2026-10-25 — Offline banner, update notice, password copy button
+
+- A "You are offline. Changes cannot be saved until the connection returns." banner now appears at the top of the app while the browser has no connection and disappears by itself when it returns (new `useOnlineStatus` hook, `components/layout/ConnectionBanners.tsx`, rendered by `Shell`).
+- Open tabs now tell the user when a new version of Solvro has been deployed: a dismissible "A new version of Solvro is available." banner with a Reload button replaces the silent page reload after a service-worker update, so unsaved typing is no longer discarded. Tabs also check for a new version every 30 minutes, and a lazy-loaded chunk that no longer exists after a deploy shows the same banner.
+- The Pipeline import dialog no longer throws an uncaught error when the spreadsheet module fails to load (for example in a tab opened before a deploy); both "Download template" and file upload now show "Could not load the import module. Reload the page and try again."
+- The temporary password shown after an admin resets a user's password now has a "Copy temporary password" button that confirms with an inline "Copied" message.
+- Screen readers now announce the offline and "new version available" notices as they appear, through a single always-present live region, instead of relying on the banners being announced when they mount.
+
+### Fixed — 2026-10-25 — Admin reassign in the activity feed, input bounds, permission list
+
+- Project handovers through the admin reassign endpoint (`PUT /admin/projects/reassign`) now appear in the project activity feed with the old and new TAM and send the new TAM an "assigned" notification, the same as changing the TAM on a project. Reassigning to the current TAM records nothing. The TAM/SA change recording is shared between both routes (`backend/src/lib/projectSeats.ts`).
+- A deal value above `Number.MAX_SAFE_INTEGER` is now rejected with a 400 `validation_error` on opportunity create and update (and reported as an invalid row on import) instead of failing at the database with a 500.
+- Request arrays are now bounded: `labelIds` accepts at most 50 ids on task update (including its change-check snapshot) and project task create, service `assignments` at most 200 on projects and customers with at most 50 tools each, and the iTop `readClasses` setting at most the number of supported classes. A deal's activity feed returns at most the 500 newest entries.
+- Role permissions are validated against the known permission list (`backend/src/lib/permissions.ts`, the same 13 values the role editor offers); creating or editing a role with an unknown permission string such as a misspelt `project:wrte` now answers 400 `validation_error` naming the bad value instead of saving an inert grant. The role editor shows a stored permission that the app no longer offers as a ticked "no longer in the catalogue" row that can be unticked, and names a rejected value in its error, so such a role can still be saved.
+
+### Changed — 2026-10-25 — Service catalogue writes are admin-only; three new indexes
+
+- The global service catalogue can now be changed (create, rename, deactivate, delete) only by admins; `POST`, `PATCH` and `DELETE /services` require the `*` permission instead of `project:write`, because deleting a service removes it from every customer and project. Listing services and picking existing services for a project or customer stay open as before. The Service Catalogue section in Settings and the inline "Add service" form on a project's or customer's Services tab are shown to admins only, and the help text says so.
+- Database migration `20261025120000_fk_indexes` adds three indexes on foreign-key columns that had none: `activity_events.actor_id`, `share_links.created_by_id` and `project_members.added_by_id`, so deleting a user and the related lookups no longer scan those tables.
+
+### Fixed — 2026-10-25 — Clearer API errors, user-id checks, create-admin safety, iTop token errors
+
+- Unique-constraint conflicts (HTTP 409) no longer return Prisma model or internal metadata. The response now carries only the violated column names, as `details.target`, when they are known.
+- A request with a malformed JSON body now gets `400 invalid_json`, and a body over the size limit gets `413 payload_too_large`, instead of a 500 error.
+- A foreign-key violation that no route checked beforehand now returns `400 invalid_reference` instead of a 500 error.
+- Deleting a user in Admin now counts the records that block the delete and performs the delete in a single transaction. If a new reference appears in between, you get the same "still referenced" message (`400 user_in_use`) instead of a server error.
+- Creating a project (or handing a won deal off to a project) with an unknown or inactive TAM or SA, creating a task with an unknown assignee, and creating or editing an epic with an unknown owner now return a specific 400 (`tam_not_found`, `sa_not_found`, `assignee_not_found`, `owner_not_found`) instead of a 500 error. Changing a project's TAM or SA to a user that does not exist now returns 400 instead of 404.
+- `scripts/create-admin.ts` now applies the username rules used in Admin and appends `-2`, `-3`, … when the username derived from the email is already taken. It no longer silently promotes an existing non-admin account: it stops and changes nothing unless `FORCE_ADMIN=1` is set. Re-running it for an existing admin resets that admin's password, keeps its username, and signs out that admin's existing sessions, as the Admin reset does.
+- iTop routes that use the stored application token (`GET /itop/services`, `GET /itop/customers/:id/contacts`, `POST /itop/tickets`, and `POST /admin/itop/persons/match`) now answer 409 `itop_token_unreadable` when that token can no longer be decrypted (for example after `SECRETS_KEY` changes), instead of failing with a raw 500. A scheduled sync that hits the same condition now records a failed run whose message says the stored iTop token could not be decrypted and must be entered again.
+
+### Security — 2026-10-23 — Browser security headers on every page
+
+- **The web app now sends browser security headers.** `frontend/security-headers.conf` adds `Content-Security-Policy`, `X-Content-Type-Options: nosniff`, `X-Frame-Options: DENY`, `Referrer-Policy` and `Permissions-Policy` to every page and static file served by nginx; `frontend/nginx.conf` includes it in each location (nginx ignores server-level headers in a location that sets its own) and `frontend/Dockerfile` copies it into the image. The policy allows same-origin code plus Google sign-in, Google Fonts and Google profile pictures; inline scripts, `eval`, plugins and framing are blocked. Guest-link pages keep `no-referrer`, `noindex` and `no-store`. API responses are unchanged; they already carry HSTS from the backend (`docs/CONFIGURATION.md` 2.6).
+- Adds `e2e/tests/security-headers.spec.ts`: the headers on pages, the service worker, the manifest, a bundle and the guest page; a single CSP on API responses; and no CSP violation in the page while signing in and opening the main pages.
+
+### Changed — 2026-10-23 — CI e2e jobs get a 45-minute budget
+
+- `.github/workflows/ci.yml`: the `e2e` job's `timeout-minutes` rises from 30 to 45. A run that changed `backend/package-lock.json` rebuilt the backend image (7 minutes) and spent another 7 minutes installing Playwright's system packages, so the desktop job was cancelled at test 191 of 193 with no test failing. 45 minutes covers the slowest setup seen plus the 15-minute desktop suite.
+
+### Security — 2026-10-23 — Backend dependency patches and a pinned JWT algorithm
+
+- **Backend dependencies patched.** `express` 4.22.2 → 4.22.3, with in-range updates of `proxy-addr` 2.0.7 → 2.0.8 (GHSA-jqcg-44mw-7w3h, IP spoofing through an IPv4-mapped IPv6 trust subnet), `body-parser` 1.20.5 → 1.20.9, `qs` 6.15.3 → 6.16.1, `js-yaml` 4.1.1 → 4.3.2, `moment` 2.30.1 → 2.31.0 and `tsx` 4.21.0 → 4.23.15 (esbuild 0.27.7 → 0.28.2). `npm audit --omit=dev` in `backend/` now reports no vulnerabilities (was 1 critical, 1 high, 4 moderate, 1 low). Request parsing, trusted-proxy client addresses and error responses behave as before.
+- **Session tokens are HS256 only.** `backend/src/http/auth.ts` signs with `algorithm: "HS256"` and verifies with `algorithms: ["HS256"]`; a token signed with HS384 or HS512 under the same secret is refused with 401. Existing sessions keep working, since they were already HS256. Adds two cases to `backend/test/sessionRevocation.test.ts`.
+
+### Changed — 2026-10-23 — CI e2e jobs get a 30-minute budget
+
+- `.github/workflows/ci.yml`: the `e2e` job's `timeout-minutes` rises from 20 to 30. The desktop project runs about 15 minutes of tests after about 3 minutes of stack build and browser setup, and one run spent 5 minutes installing Playwright's system packages, so the job was cancelled at test 176 of 190 with every test passing. The budget now covers a slow runner.
+
+### Changed — 2026-10-23 — Test credentials no longer look like secrets
+
+- `backend/test/setupSh.test.ts` builds the throwaway `ADMIN_PASSWORD` it feeds the setup.sh shim at run time in a helper (`throwawayAdminSecret`), and `e2e/tests/auth.spec.ts` reuses the fixture admin password (`e2e/fixtures/seed.ts`) for its throwaway TAM instead of a second literal — secret scanning flagged both literals on the pull request; neither value ever reaches a real system.
+
+### Fixed — 2026-10-23 — Findings from the end-to-end QA pass (QA-01 to QA-05)
+
+- **A write attempted while offline now fails at once with a message** instead of leaving the task drawer on a disabled "Saving…" button until the network returned and then sending the change by itself. React Query mutations use `networkMode: "always"` (`frontend/src/main.tsx`), and `frontend/src/lib/api.ts` turns `fetch`'s bare `TypeError` into an `ApiError` that reads "You are offline…" or "Could not reach the server…". The draft stays in the form; a retry after reconnecting succeeds. Adds `e2e/tests/offline-write.spec.ts` and unit cases in `frontend/src/lib/api.test.ts`. (QA-01)
+- **The "Cannot reach the server" banner is no longer hidden behind the sidebar** on desktop: it carries the same left margin as the main column (`frontend/src/components/layout/Shell.tsx`). (QA-02)
+- **The sign-in limit is now exactly ten failures.** The pre-check refused a caller only once the counter went *past* the limit, so a correct password on the eleventh attempt still signed in; `blockedFor` in `backend/src/http/rateLimit.ts` now blocks when the limit is reached. The guest-link limiter's request counting is unchanged. New case in `backend/test/authRateLimit.test.ts`. (QA-03)
+- **A missing or hidden project shows its not-found message without a retry delay**: queries no longer retry a 4xx (`shouldRetryQuery` in `frontend/src/lib/api.ts`, used by the QueryClient); network and 5xx failures still retry once. (QA-04)
+- The cache-clear case in `e2e/tests/auth.spec.ts` is desktop-only, like the other specs that rely on the desktop top-bar layout; it timed out in the mobile project. (QA-05)
+
+### Fixed — 2026-10-22 — Drawer keyboard focus and silent Kanban failures
+
+- **The slide-in Drawer now traps focus like Modal does** (`frontend/src/components/Drawer.tsx`): it uses `useDialogFocus`, carries `aria-modal="true"`, moves focus inside on open, keeps Tab/Shift+Tab within the panel, and returns focus to the opener on close. Before, keyboard and screen-reader users tabbed straight through into the page behind the drawer, and focus was lost on close.
+- **A refused Kanban move now says why.** `frontend/src/components/kanban-v2/SolvroKanban.tsx` routes every board write (card drag, mobile move sheet, subtask toggle) through one `mutateAsync` call and shows an error banner above the board when the server refuses it — a stale write (409) explains that the board was refreshed; a permission or network failure shows the server's message. Before, the card snapped back with no feedback. The Gantt's bar-drag and reorder paths switch from `mutate` callbacks to `mutateAsync().catch()` for the same reason: TanStack fires mutate-level callbacks for the latest call only, so the first of two quick drags failed silently.
+
+### Fixed — 2026-10-22 — Pipeline, iTop and account-email consistency
+
+- **Two SAs claiming the same unassigned deal at once no longer overwrite each other.** `POST /opportunities/:id/assign` checked `pipeline:edit_own` against a snapshot read before the row lock; the second of two simultaneous claims saw the first claimant as PIC inside its transaction and replaced them anyway. The check now runs again on the locked row, so the second claimant gets the same 403 a late claimant always got (`backend/src/routes/opportunities.ts`). Adds a concurrent-claim test to `backend/test/opportunities.test.ts`.
+- **A failed iTop time-entry pass now marks the sync as failed.** `lib/itop/sync.ts` wrote `lastSyncOk = true` whenever the ticket pass succeeded, even when `syncTimeEntries` had returned an error — Admin › iTop showed green and Utilization served a stale snapshot with an advancing timestamp. The run is now recorded as failed with `lastSyncError` = `Time entries: <reason>`. The ticket rows and the ticket watermark (`lastSyncAt`) are kept, since that pass did complete; the time-entry pass reads a fixed 8-week window on every tick and needs no watermark hold.
+- **Stored iTop tokens are only ever sent to the stored host.** `POST /admin/itop/test` paired a body-supplied `baseUrl` with the application token from the database, sending that secret to any server an admin named. A body `baseUrl` now requires a body `appToken` in the same request (400 `token_required_for_new_host`) (`backend/src/routes/itopAdmin.ts`). The same rule applies to `PATCH /admin/itop/settings`: moving `baseUrl` to a different host needs the new server's `appToken` in that request, and the change clears every user's personal iTop token (they belong to the old server) and is logged. A path-only change on the same host keeps everything.
+- **Account emails are case-insensitive.** `users.email` was unique but case-sensitive, and only Google sign-in lower-cased: `Alice@Corp.com` could not sign in as `alice@corp.com`, and a Google sign-in for that person created a second account. `POST /admin/users`, `POST /auth/login` and `scripts/create-admin.ts` now trim and lower-case the email; migration `20261022120000_lowercase_user_emails` lower-cases existing rows and aborts with a clear message if two rows differ only by case (merge them first). Adds `backend/test/emailCase.test.ts`.
+
+### Fixed — 2026-10-22 — Frontend resilience: error boundary, cache clear on sign-out, outage at boot, request timeout
+
+- **A render error no longer blanks the whole app.** New `frontend/src/components/AppErrorBoundary.tsx` wraps the root (`main.tsx`) and the routed page inside the Shell: a thrown render error shows "Something went wrong" with Reload and Try again, and the sidebar and top bar stay usable for a page-level failure; the page boundary is keyed on the path, so navigating away clears it. Before, the root unmounted to a white page with no recovery path.
+- **Signing out clears the server-state cache** (`frontend/src/lib/auth.tsx`): `logout` calls `queryClient.clear()`, and a sign-in by a different account than the cached one clears it too. Before, the next person to sign in on the same browser within React Query's 5-minute window saw the previous user's projects, overview and notifications from cache — and queries with a `staleTime` did not refetch at all.
+- **A server outage during boot no longer signs a valid user out.** The boot-time `/auth/me` check ends the session only on a 401; any other failure (timeout, network error, API restarting) keeps the stored token and cached user, leaves the permission guards waiting, and the Shell shows "Cannot reach the server to confirm your session" with a Retry button (`bootError`/`retryBoot` on the auth context). Before, the user landed on the login page, where signing in failed for the same reason.
+- **Every API request now times out after 30 seconds** (`frontend/src/lib/api.ts`, `requestSignal`): the caller's cancellation signal is combined with a timeout signal, and a timeout surfaces as an `ApiError` with a readable message. Browsers without `AbortSignal.any`/`AbortSignal.timeout` (Safari before 17.4) get an `AbortController` fallback. Before, only `/auth/me` had a timeout; a backend that accepted connections and never answered left every page on its skeleton with no error state. Callers can override with `timeoutMs`; the pipeline import and the won-deal handoff pass `0` (no timeout) because a retry after a client-side timeout could duplicate the write.
+- Adds `frontend/src/lib/api.test.ts` for the signal combination, and an e2e case in `e2e/tests/auth.spec.ts` that signs out and signs in as another account and asserts no stale project list.
+
+### Added — 2026-10-22 — Sign-in brute-force guard
+
+- **`POST /auth/login` and `POST /auth/google` now limit failed attempts** (`backend/src/routes/auth.ts`): 10 failures per client address + email in 15 minutes, and 50 failures per client address in 15 minutes across any emails. Only failures count, so an office behind one NAT address is never locked out by its own successful sign-ins. A blocked caller gets 429 `rate_limited` with a `Retry-After` header carrying the seconds left in the window, before any password is compared — a correct password does not get through while the block holds. The client address is the one `TRUST_PROXY` resolves (`docs/CONFIGURATION.md`): a public CDN edge that is not covered by that setting puts every user in one address bucket. Google sign-in counts a failed ID-token verification against the address. Before, the routes accepted unlimited attempts.
+- **An unknown email now costs the same as a wrong password.** The login route runs one bcrypt compare against a fixed dummy hash when no account matches, so response time no longer reveals which emails exist. The `google_only` answer for a Google-provisioned account is unchanged (the Login page relies on it) but counts as a failed attempt.
+- `backend/src/http/rateLimit.ts` gains `hit(key)` and `isBlocked(key)` for callers that count outcomes rather than requests; `HttpError` gains `retryAfterSec`, which the error handler sends as `Retry-After` (`backend/src/http/errors.ts`). The guest-link limiter is unchanged in behaviour.
+- Adds `backend/test/authRateLimit.test.ts`: per-account block with the right password refused, successes not counted, pair scoping, per-address spray, Google-only accounts, unknown-email code.
+
+### Fixed — 2026-10-22 — An account with no permissions can no longer read a project through membership
+
+- **Project reads now need a permission, not just visibility.** The `/projects`, `/tasks`, `/epics`, `/overview` and `/search` routers checked only that the caller was signed in; permission checks existed on writes. A `PENDING` account (no permissions at all) that a TAM added as a member — or simply assigned a task — could list the project, read every task, every INTERNAL note and every comment, search across them, and post comments and @mentions. Reproduced before the fix: `GET /projects/:id/notes` → 200 with the note body, `POST /tasks/:id/comments` → 201. Those routers now require `project:read` or `pipeline:view`, the same any-of rule the user directory and the customer list use (`backend/src/routes/projects.ts`, `tasks.ts`, `epics.ts`, `overview.ts`, `search.ts`). The SA role keeps reaching its projects through `pipeline:view`; TAM, STAKEHOLDER and SA members are unaffected.
+- **Zero-permission accounts cannot become members or assignees.** `POST /projects/:id/members` and task assignment (`backend/src/lib/projectMembers.ts`) answer 400 `user_has_no_access` for a user whose role carries no permissions, and `GET /users` leaves such accounts out of the pickers for everyone but admins (`backend/src/routes/users.ts`). Promote the account in Admin › Users first.
+- Existing membership rows for such accounts stay in the database but grant nothing: the read gate refuses them at request time.
+- Adds a block to `backend/test/pentestRemediation.test.ts`: 403 on all eight read surfaces as a member, 403 on comment creation, 400 on member add and task assignment, directory visibility, and the TAM/STAKEHOLDER/SA controls. The audit that found this and the other 2026-10-22 items is archived as `docs/archive/plans/application-review-2026-10-22.md` (finding ids `F-xx`).
+- The Overview page no longer requests `/overview` for an account that holds neither permission; it shows "Your account is waiting for a role" instead of a load error (`frontend/src/pages/Overview.tsx`, `useOverview(enabled)` in `frontend/src/lib/queries.ts`).
+- Open product question, not changed here: `STAKEHOLDER` (`project:read`) and `SA` (`pipeline:view`) can still post task comments on projects they see, as before.
+
+### Fixed — 2026-10-22 — Role edits in Admin › Roles now survive a restart
+
+- **The database seed no longer overwrites built-in roles.** `backend/prisma/seed.ts` upserted ADMIN, SA, SALES, TAM, STAKEHOLDER and PENDING with `update: { permissions }`, and production runs the seed before every backend start (`setup.sh` compose command, `ci/docker-compose.ci.yml`). Any permission an admin added to or removed from a built-in role in Admin › Roles was silently reset at the next restart or image pull, with no audit record. The seed is now create-only: it adds a missing role with its defaults and never touches an existing row — the same rule the `AuthConfig` singleton already followed. A default that must reach existing installs ships as a Prisma data migration from now on.
+- `seed.ts` exports `runSeed()` and `ROLE_PERMISSIONS` and only self-executes when run as a script, so tests can call it. Adds `backend/test/seed.test.ts`: defaults on a fresh database, an edit (narrowed TAM, widened STAKEHOLDER) survives a re-seed, a deleted built-in is re-created, `AuthConfig` is left alone.
+- Deploy note: this is the first release whose seed does not re-apply defaults. Installs that still carry the pre-2026-10-06 `STAKEHOLDER` grant (`project:view-all`) already received the narrowing on their last restart; nothing changes for them.
+
+### Fixed — 2026-10-22 — `setup.sh` no longer deletes an existing database when `.env` is missing
+
+- **A fresh-install run now stops if the `solvro_pgdata` volume already exists.** `setup.sh` decided "fresh install" from the absence of `~/solvro/.env` alone, while the database volume is global to the Docker host — a run as a different user, after a home-directory move, or after a lost `.env` reached `docker volume rm solvro_pgdata` with no confirmation and destroyed the live database. The script now checks the volume before it writes anything, prints the backup command and the recovery options, and exits 1. `FORCE_WIPE=1 bash setup.sh` keeps the old start-over behaviour as an explicit opt-in. Documented in `docs/CONFIGURATION.md` §2.13.
+- Adds `backend/test/setupSh.test.ts`, which drives the script with `docker`/`curl` shims: no volume → wipe proceeds; volume present → refusal with nothing written or removed; volume present + `FORCE_WIPE=1` → wipe proceeds.
+
 ### Added — 2026-10-19 — Cancelled task status
 
 - **Tasks can now be marked Cancelled**, a fourth status alongside To do, In progress and Done. It appears in every task status dropdown, the task form, the Tasks page filter, the Timeline and the Kanban board, which gets a "Cancelled" column after Done; dragging a card there cancels the task. A cancelled task stays visible with a grey "Cancelled" chip carrying a block icon, and a struck-through muted title on the List, Kanban, Tasks page, Timeline and Gantt tree. Its Gantt bar — and the bar in the PDF and Excel exports — renders as a flat, faded fill with no progress hatch. A cancelled subtask's checkbox is disabled; reopen it from its status dropdown. The project WIP-limit form stays To do / In progress / Done, with no limit for Cancelled. Epics cannot be cancelled: the epic status picker offers To do / In progress / Done, and `PATCH /epics/:id` rejects `CANCELLED`.

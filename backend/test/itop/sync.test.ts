@@ -295,6 +295,35 @@ describe("syncTickets", () => {
     expect(rows.length).toBeGreaterThan(0);
   });
 
+  it("a ticket with an unparseable last_update is skipped and counted, not stored with an invented time; good rows still sync", async () => {
+    const state = seedFakeItop();
+    const badId = state.nextId++;
+    state.tickets.set(
+      badId,
+      extraTicket({ id: badId, ref: "R-BADUPDATE-1", org_id: "1", last_update: "not-a-date" }),
+    );
+
+    const { baseUrl } = await startFake(state);
+    await configureItop(baseUrl, FAKE_ITOP_TOKENS.app);
+    await createMappedCustomer(1, "Northwind Freight Sdn Bhd");
+    await createMappedCustomer(2, "PT Sinar Logistik");
+
+    const summary = await syncTickets({ full: true });
+
+    expect(summary.ran).toBe(true);
+    expect(summary.error).toBeUndefined();
+    expect(summary.skipped).toBe(1);
+    expect(await prisma.itopTicket.findUnique({ where: { ref: "R-BADUPDATE-1" } })).toBeNull();
+    expect(await prisma.itopTicket.findUnique({ where: { ref: "R-004512" } })).not.toBeNull();
+
+    // A skip alone is a non-fatal note: the run is still ok and the
+    // incremental watermark advances.
+    const config = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(config.lastSyncOk).toBe(true);
+    expect(config.lastSyncError).toBe("Skipped 1 row that could not be read (see server log)");
+    expect(config.lastSyncAt).not.toBeNull();
+  });
+
   it("a duplicate ref triggers a REAL Postgres unique-constraint error mid-loop — the rest of the sync still completes", async () => {
     const state = seedFakeItop();
     // Same `ref` as the seeded R-004512 (Incident, org 1, id 1) but a
@@ -841,6 +870,35 @@ describe("syncTimeEntries", () => {
     expect(await prisma.itopTimeEntry.count({ where: { itopUserId: 1 } })).toBeGreaterThan(0);
   });
 
+  it("skips a TimeSpent row without a parseable duration instead of storing 0 minutes; good rows still land", async () => {
+    const state = seedFakeItop();
+    const { baseUrl } = await startFake(state);
+    await configureItop(baseUrl, "app-token-readonly");
+
+    const userA = await createUserWithRole("TAM");
+    await prisma.user.update({ where: { id: userA.userId }, data: { email: "rina.s@example.co.id" } });
+    await syncUsers();
+
+    const badId = state.nextId++;
+    state.timeSpent.set(badId, {
+      id: badId,
+      user_id: "1",
+      org_id: "1",
+      start_date: "2999-01-01 00:00:00",
+      end_date: "",
+      duration: "",
+      title: "no duration",
+      ticketRef: "R-004512",
+    });
+
+    const result = await syncTimeEntries({ full: true });
+    expect(result.error).toBeUndefined();
+    expect(result.ran).toBe(true);
+    expect(await prisma.itopTimeEntry.findUnique({ where: { id: badId } })).toBeNull();
+    expect(result.skipped).toBe(1);
+    expect(await prisma.itopTimeEntry.count({ where: { itopUserId: 1 } })).toBeGreaterThan(0);
+  });
+
   it("a TimeSpent row that throws on upsert (an out-of-range duration) is counted in skipped, and a previously stored copy survives the full-sync prune", async () => {
     const state = seedFakeItop();
     const { baseUrl } = await startFake(state);
@@ -1120,5 +1178,67 @@ describe("parseItopInt", () => {
     expect(parseItopInt({})).toBeNull();
     expect(parseItopInt("")).toBeNull();
     expect(parseItopInt(Number.NaN)).toBeNull();
+  });
+});
+
+// docs/archive/plans/application-review-2026-10-22.md, F-11: a ticket pass that succeeded while the
+// time-entry pass failed was recorded as a successful run — Admin > iTop
+// showed green and Utilization served a stale snapshot indefinitely.
+describe("syncTickets — a failed time-entry pass is a failed run", () => {
+  it("records lastSyncOk=false with the time-entry error, keeps the ticket rows, and still advances the ticket watermark", async () => {
+    const state = seedFakeItop();
+    state.disabledClasses.add("TimeSpent"); // iTop refuses the class (e.g. Time Tracking extension missing)
+    const { baseUrl } = await startFake(state);
+    await configureItop(baseUrl, FAKE_ITOP_TOKENS.app);
+    await createMappedCustomer(1, "Northwind Freight Sdn Bhd");
+    await createMappedCustomer(2, "PT Sinar Logistik");
+    // The time-entry pass only queries iTop when at least one Solvro user is
+    // mapped to an iTop user. The ticket pass re-runs the email match first,
+    // so the user needs a seeded iTop person's email (Rina, itop user 1).
+    const user = await createUserWithRole("TAM");
+    await prisma.user.update({ where: { id: user.userId }, data: { email: "rina.s@example.co.id" } });
+
+    const summary = await syncTickets({ full: true });
+    expect(summary.ran).toBe(true);
+    expect(summary.upserted).toBeGreaterThan(0);
+    expect(summary.timeEntriesError).toBeTruthy();
+
+    const config = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(config.lastSyncOk).toBe(false);
+    expect(config.lastSyncError).toMatch(/^Time entries: /);
+    // The ticket pass completed, so its watermark moves: a persistent
+    // time-entry failure must not turn every later tick into a full pull.
+    expect(config.lastSyncAt).not.toBeNull();
+    expect(config.lastFullSyncAt).not.toBeNull();
+    expect(await prisma.itopTicket.count()).toBe(summary.upserted);
+  });
+});
+
+// docs/archive/plans/application-review-2026-10-22.md, F-30: a stored app token
+// that no longer decrypts (SECRETS_KEY rotated) must end the scheduled sync as
+// a failed run an admin can act on, not crash the process.
+describe("syncTickets — an unreadable stored app token", () => {
+  it("resolves as a failed run whose recorded message names the token", async () => {
+    await prisma.itopConfig.upsert({
+      where: { id: "default" },
+      create: { id: "default", baseUrl: "http://127.0.0.1:9", appTokenEnc: "v1:anVuaw==:anVuaw==:anVuaw==" },
+      update: {
+        baseUrl: "http://127.0.0.1:9",
+        appTokenEnc: "v1:anVuaw==:anVuaw==:anVuaw==",
+        lastSyncAt: null,
+        lastSyncOk: null,
+        lastSyncError: null,
+        lastFullSyncAt: null,
+      },
+    });
+    bustItopConfigCache();
+
+    const summary = await syncTickets({ full: true });
+    expect(summary.ran).toBe(true);
+    expect(summary.error).toMatch(/iTop token could not be decrypted/);
+
+    const config = await prisma.itopConfig.findUniqueOrThrow({ where: { id: "default" } });
+    expect(config.lastSyncOk).toBe(false);
+    expect(config.lastSyncError).toMatch(/iTop token could not be decrypted/);
   });
 });

@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
 import {
   DndContext,
   KeyboardSensor,
@@ -109,6 +109,7 @@ function keyFromGroupId(id: string): GroupKey {
 }
 
 export function ProjectList() {
+  const filterUid = useId();
   const { project } = useProjectContext();
   const { user } = useAuth();
   const canEdit = hasPermission(user, "task:write");
@@ -445,10 +446,11 @@ export function ProjectList() {
               <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
               <div className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 shadow-overlay">
                 <div className="mb-3">
-                  <label className="mb-1 block text-label-caps uppercase text-on-surface-variant">
+                  <label htmlFor={`${filterUid}-epic`} className="mb-1 block text-label-caps uppercase text-on-surface-variant">
                     Epic
                   </label>
                   <select
+                    id={`${filterUid}-epic`}
                     value={filterEpicId === "" ? "" : filterEpicId === null ? "none" : String(filterEpicId)}
                     onChange={(e) => {
                       const v = e.target.value;
@@ -585,6 +587,7 @@ export function ProjectList() {
               value={newSectionName}
               onChange={(e) => setNewSectionName(e.target.value)}
               placeholder="Section name"
+              aria-label="Section name"
               maxLength={100}
               className="w-64 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs focus:border-primary focus:outline-hidden"
             />
@@ -727,6 +730,7 @@ function SectionGroup({
               onChange={(e) => onRenameChange(e.target.value)}
               maxLength={100}
               placeholder={section ? section.name : "Name this section to promote it"}
+              aria-label="Section name"
               className="w-64 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-0.5 text-sm font-semibold focus:border-primary focus:outline-hidden"
             />
             <button

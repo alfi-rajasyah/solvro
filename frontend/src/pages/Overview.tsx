@@ -5,6 +5,7 @@ import {
   sortPortfolioRows,
 } from "@/components/portfolio/PortfolioCalendar";
 import { Alert, AlertDescription } from "@/components/reui/alert";
+import { EmptyState } from "@/components/EmptyState";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { dateToDay, dayFromIso } from "@/lib/dateField";
@@ -21,7 +22,12 @@ import {
 
 export function Overview() {
   const { user } = useAuth();
-  const { data, isLoading, isError, error } = useOverview();
+  // The overview API requires project:read or pipeline:view (the shared read
+  // gate). An account with neither — a freshly provisioned Google sign-in
+  // still on the PENDING role — gets an explanation, not a failed request.
+  const canReadOverview =
+    hasPermission(user, "project:read") || hasPermission(user, "pipeline:view");
+  const { data, isLoading, isError, error } = useOverview(canReadOverview);
 
   return (
     <div className="space-y-6">
@@ -29,6 +35,14 @@ export function Overview() {
         <h1 className="font-display text-2xl font-bold text-on-surface">Overview</h1>
         <p className="text-sm text-on-surface-variant">{fmtDayLong(dateToDay(new Date()))}</p>
       </div>
+
+      {!canReadOverview && (
+        <EmptyState
+          icon="hourglass_top"
+          title="Your account is waiting for a role"
+          message="An admin has to assign you a role in Admin › Users before projects or the pipeline appear here. You stay signed in; reload this page once that is done."
+        />
+      )}
 
       {isLoading && <SkeletonGrid />}
 

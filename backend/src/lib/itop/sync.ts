@@ -9,6 +9,8 @@ import { Prisma, type ItopConfig } from "@prisma/client";
 import { prisma } from "../../prisma.js";
 import { logger } from "../../logger.js";
 import { ItopError, type ItopObjectRow } from "./client.js";
+import { withSyncLock } from "./syncLock.js";
+import { SecretBoxError } from "../secretBox.js";
 import {
   bustItopConfigCache,
   getItopAppClient,
@@ -69,8 +71,6 @@ export interface TimeEntrySyncResult {
 
 const FULL_SYNC_MAX_AGE_MS = 24 * 60 * 60 * 1000;
 const USER_SYNC_MIN_INTERVAL_MS = 60 * 60 * 1000;
-const ADVISORY_LOCK_KEY = "itop_sync";
-const TX_TIMEOUT_MS = 10 * 60_000;
 const CHUNK_SIZE = 50;
 /**
  * How far back `syncTimeEntries` pulls `TimeSpent` rows — plan §3/Task 3.1.
@@ -202,6 +202,13 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 function errorMessage(err: unknown): string {
   if (err instanceof ItopError) return err.message;
+  // The stored app token no longer decrypts (e.g. SECRETS_KEY was rotated):
+  // say so in the words an admin acts on, since this lands in
+  // `ItopConfig.lastSyncError` and Admin > iTop
+  // (docs/archive/plans/application-review-2026-10-22.md, F-30).
+  if (err instanceof SecretBoxError) {
+    return "The stored iTop token could not be decrypted (SECRETS_KEY changed?) — enter it again in Admin > iTop.";
+  }
   return err instanceof Error ? err.message : String(err);
 }
 
@@ -408,6 +415,15 @@ async function upsertTicket(
     // try/catch count it in SyncSummary.skipped and move on to the next row.
     throw new Error(`iTop ticket ${row.key} (${cls}) has an unusable org_id: ${JSON.stringify(fields.org_id)}`);
   }
+  // lastUpdate is non-nullable on the model, and an invented "now" would
+  // claim a change time iTop never reported
+  // (docs/archive/plans/application-review-2026-10-22.md, F-29). Throw so the
+  // caller counts the row in `skipped` and logs it at warn with the iTop id
+  // only — no ticket text, no raw value.
+  const lastUpdate = parseItopDate(fields.last_update, timezone);
+  if (lastUpdate === null) {
+    throw new Error(`iTop ticket ${row.key} (${cls}) has an unparseable last_update`);
+  }
   const parsedAgentId = parseItopInt(fields.agent_id);
   const agentPersonId = parsedAgentId !== null && parsedAgentId > 0 ? parsedAgentId : null;
 
@@ -426,9 +442,7 @@ async function upsertTicket(
     orgId,
     customerId: orgIdToCustomerId.get(orgId) ?? null,
     startDate: parseItopDate(fields.start_date, timezone),
-    // lastUpdate is non-nullable on the model; fall back to "now" in the
-    // (unexpected) case iTop returns an unparseable value for it.
-    lastUpdate: parseItopDate(fields.last_update, timezone) ?? new Date(),
+    lastUpdate,
     // `tto`/`ttr` store the escalation DEADLINE (a point in time), read from
     // `tto_escalation_deadline`/`ttr_escalation_deadline` — confirmed
     // against a real iTop 3.2.2 install that the bare `tto`/`ttr` attributes
@@ -487,6 +501,7 @@ async function upsertTimeEntry(
   orgIdToCustomerId: Map<number, number>,
   ticketIdByRef: Map<string, number>,
   timezone: string,
+  noDurationKeys?: number[],
 ): Promise<boolean> {
   const fields = row.fields;
   // A time entry without a parseable start date can't be placed in a week;
@@ -498,6 +513,22 @@ async function upsertTimeEntry(
       { itopKey: row.key, startDate: fields.start_date ?? null },
       "iTop syncTimeEntries: skipping a TimeSpent row without a parseable start_date",
     );
+    return false;
+  }
+  // An unparseable duration would otherwise be stored as 0 minutes — hours
+  // iTop never reported (docs/archive/plans/application-review-2026-10-22.md,
+  // F-29). Skip and count it; the log carries iTop ids only. A blank
+  // duration (an entry still running) repeats on every tick, so a sync pass
+  // passes `noDurationKeys` and logs one aggregate warn instead of one per row.
+  const durationSeconds = parseItopInt(fields.duration);
+  if (durationSeconds === null) {
+    if (noDurationKeys) noDurationKeys.push(row.key);
+    else {
+      logger.warn(
+        { itopKey: row.key },
+        "iTop syncTimeEntries: skipping a TimeSpent row without a parseable duration",
+      );
+    }
     return false;
   }
   const itopUserId = parseItopInt(fields.user_id);
@@ -512,7 +543,6 @@ async function upsertTimeEntry(
   const ticketRef = fields[ITOP_TIME_SPENT_TICKET_REF_FIELD] || null;
   const ticketId = ticketRef ? (ticketIdByRef.get(ticketRef) ?? null) : null;
 
-  const durationSeconds = parseItopInt(fields.duration) ?? 0;
   const durationMinutes = Math.round(durationSeconds / (ITOP_TIME_SPENT_DURATION_IN_SECONDS ? 60 : 1));
 
   const data = {
@@ -614,6 +644,7 @@ export async function syncTimeEntries(opts: { full?: boolean } = {}): Promise<Ti
     const timezone = resolveConfiguredTimezone(config);
     const cutoff = new Date(Date.now() - TIME_ENTRY_WINDOW_MS);
     const seenIds = new Set<number>();
+    const noDurationKeys: number[] = [];
     // Tracked across the whole run (not per chunk) so one real "the ref
     // field name is wrong on this install" condition produces one warning,
     // not one per chunk.
@@ -628,51 +659,62 @@ export async function syncTimeEntries(opts: { full?: boolean } = {}): Promise<Ti
         // (which iTop stores/reports in that same zone) would otherwise
         // compare apples to oranges whenever the server isn't UTC.
         const oql = `SELECT TimeSpent WHERE user_id IN (${idsChunk.join(",")}) AND start_date >= '${formatItopDate(cutoff, timezone)}'`;
-        const result = await client.getAll<ItopTimeSpentFields>("TimeSpent", oql, ITOP_TIME_SPENT_OUTPUT_FIELDS, {
-          pageSize: 100,
-        });
+        // One page at a time: peak memory is a page, not the whole window
+        // (docs/archive/plans/application-review-2026-10-22.md, F-28).
+        for await (const pageRows of client.getPages<ItopTimeSpentFields>(
+          "TimeSpent",
+          oql,
+          ITOP_TIME_SPENT_OUTPUT_FIELDS,
+          { pageSize: 100 },
+        )) {
+          // Resolve this page's distinct ticket refs with one query instead
+          // of one `findUnique` per row (was an N+1).
+          const refs = [
+            ...new Set(
+              pageRows
+                .map((row) => row.fields[ITOP_TIME_SPENT_TICKET_REF_FIELD])
+                .filter((ref): ref is string => Boolean(ref)),
+            ),
+          ];
+          const tickets =
+            refs.length > 0
+              ? await prisma.itopTicket.findMany({ where: { ref: { in: refs } }, select: { id: true, ref: true } })
+              : [];
+          const ticketIdByRef = new Map(tickets.map((t) => [t.ref, t.id]));
 
-        // Resolve this chunk's distinct ticket refs with one query instead
-        // of one `findUnique` per row (was an N+1 inside the
-        // advisory-lock-guarded transaction).
-        const refs = [
-          ...new Set(
-            result.objects
-              .map((row) => row.fields[ITOP_TIME_SPENT_TICKET_REF_FIELD])
-              .filter((ref): ref is string => Boolean(ref)),
-          ),
-        ];
-        const tickets =
-          refs.length > 0
-            ? await prisma.itopTicket.findMany({ where: { ref: { in: refs } }, select: { id: true, ref: true } })
-            : [];
-        const ticketIdByRef = new Map(tickets.map((t) => [t.ref, t.id]));
-
-        for (const row of result.objects) {
-          seenIds.add(row.key);
-          const ref = row.fields[ITOP_TIME_SPENT_TICKET_REF_FIELD];
-          if (ref) {
-            rowsWithRef += 1;
-            if (ticketIdByRef.has(ref)) rowsWithResolvedRef += 1;
-          }
-          try {
-            // A row skipped for a bad start_date stays in seenIds on purpose: a
-            // transient bad value must not make the full-sync prune delete hours
-            // already stored from an earlier, valid response.
-            if (await upsertTimeEntry(row, itopUserIdToUserId, orgIdToCustomerId, ticketIdByRef, timezone)) {
-              upserted += 1;
-            } else {
-              skipped += 1;
+          for (const row of pageRows) {
+            seenIds.add(row.key);
+            const ref = row.fields[ITOP_TIME_SPENT_TICKET_REF_FIELD];
+            if (ref) {
+              rowsWithRef += 1;
+              if (ticketIdByRef.has(ref)) rowsWithResolvedRef += 1;
             }
-          } catch (err) {
-            skipped += 1;
-            logger.warn(
-              { err: errorMessage(err), timeEntryId: row.key },
-              "iTop syncTimeEntries: skipping a TimeSpent row that failed to upsert",
-            );
+            try {
+              // A row skipped for a bad start_date stays in seenIds on purpose: a
+              // transient bad value must not make the full-sync prune delete hours
+              // already stored from an earlier, valid response.
+              if (await upsertTimeEntry(row, itopUserIdToUserId, orgIdToCustomerId, ticketIdByRef, timezone, noDurationKeys)) {
+                upserted += 1;
+              } else {
+                skipped += 1;
+              }
+            } catch (err) {
+              skipped += 1;
+              logger.warn(
+                { err: errorMessage(err), timeEntryId: row.key },
+                "iTop syncTimeEntries: skipping a TimeSpent row that failed to upsert",
+              );
+            }
           }
         }
       }
+    }
+
+    if (noDurationKeys.length > 0) {
+      logger.warn(
+        { count: noDurationKeys.length, itopKeys: noDurationKeys.slice(0, 5) },
+        "iTop syncTimeEntries: skipped TimeSpent rows without a parseable duration",
+      );
     }
 
     if (rowsWithRef > 0 && rowsWithResolvedRef === 0) {
@@ -727,16 +769,20 @@ async function writeConfigResult(
   ok: boolean,
   message: string | null,
   setFullSyncAt: boolean,
+  // Whether the TICKET pass completed — the only thing the incremental
+  // watermark tracks. Defaults to `ok`; a run whose tickets succeeded but
+  // whose time-entry pass failed passes `true` here with `ok = false`.
+  advanceWatermark: boolean = ok,
 ): Promise<void> {
   await prisma.itopConfig.update({
     where: { id: "default" },
     data: {
-      // Only a successful run advances the incremental watermark. A failed
-      // run must leave `lastSyncAt` where it was — otherwise a ticket
+      // Only a completed ticket pass advances the incremental watermark. A
+      // failed one must leave `lastSyncAt` where it was — otherwise a ticket
       // updated in iTop during an outage falls before the *next* run's
       // `last_update > lastSyncAt - 60s` cutoff and is silently skipped
       // until the next 24h full pull.
-      ...(ok ? { lastSyncAt: startedAt } : {}),
+      ...(advanceWatermark ? { lastSyncAt: startedAt } : {}),
       lastSyncOk: ok,
       lastSyncError: message ? message.slice(0, 500) : null,
       ...(setFullSyncAt ? { lastFullSyncAt: new Date() } : {}),
@@ -760,7 +806,7 @@ function shouldRunUserSync(full: boolean): boolean {
 
 /**
  * Pulls tickets for every mapped customer's org, upserting into `ItopTicket`.
- * Serialized across processes/instances via a Postgres advisory lock — a
+ * Serialized across processes/instances via a Postgres session advisory lock — a
  * concurrent call while one is already running returns `{ ran: false, ... }`
  * immediately rather than queueing. iTop errors are caught, recorded on
  * `ItopConfig`, and returned in `SyncSummary.error` — they never throw out
@@ -781,75 +827,64 @@ export async function syncTickets(opts: { full?: boolean } = {}): Promise<SyncSu
   let timeEntriesError: string | undefined;
   let runError: string | undefined;
 
-  await prisma.$transaction(
-    async (tx) => {
-      // This interactive transaction exists SOLELY to hold
-      // `pg_try_advisory_xact_lock` — `_xact` self-releases at COMMIT/
-      // ROLLBACK, so there's no matching unlock statement to remember and no
-      // risk of leaking the lock if the process dies mid-sync. Every
-      // per-row query below (config reads, ticket/time-entry upserts, the
-      // full-sync deletes) deliberately uses the module-level `prisma`
-      // client on the normal pooled connections, NOT `tx` — a single row's
-      // Postgres error (e.g. a unique-constraint violation) must reject only
-      // that row's own statement, caught by its own try/catch, rather than
-      // poisoning this transaction and aborting the advisory lock along with
-      // every other row still to come.
-      const lockRows = await tx.$queryRaw<
-        Array<{ locked: boolean }>
-      >`SELECT pg_try_advisory_xact_lock(hashtext(${ADVISORY_LOCK_KEY})) AS locked`;
-      if (!lockRows[0]?.locked) {
-        return;
+  // The single-runner lock is a session advisory lock held on its own
+  // dedicated connection for the whole run (lib/itop/syncLock.ts); every
+  // query below uses the shared pooled client in short statements, so no
+  // transaction stays open for the duration of a sync
+  // (docs/archive/plans/application-review-2026-10-22.md, F-28). A
+  // concurrent call returns `ran: false` immediately.
+  await withSyncLock(async () => {
+    const config = await getItopConfig();
+    if (!isItopConfigured(config)) {
+      logger.debug("iTop sync skipped: iTop is not configured");
+      return;
+    }
+
+    ran = true;
+    full = shouldRunFull(full, config);
+    const timezone = resolveConfiguredTimezone(config);
+
+    try {
+      if (shouldRunUserSync(full)) {
+        const userResult = await syncUsers();
+        usersMatched = userResult.matched;
+        lastUserSyncAt = new Date();
+      } else {
+        usersMatched = (await prisma.user.count({ where: { active: true, itopPersonId: { not: null } } })) ?? 0;
       }
 
-      const config = await getItopConfig();
-      if (!isItopConfigured(config)) {
-        logger.debug("iTop sync skipped: iTop is not configured");
-        return;
-      }
+      const customers = await prisma.customer.findMany({
+        where: { itopOrgId: { not: null } },
+        select: { id: true, itopOrgId: true },
+      });
+      orgs = customers.length;
 
-      ran = true;
-      full = shouldRunFull(full, config);
-      const timezone = resolveConfiguredTimezone(config);
+      const orgIdToCustomerId = new Map(customers.map((c) => [c.itopOrgId as number, c.id]));
+      const orgIds = customers.map((c) => c.itopOrgId as number);
+      const seenIds = new Set<number>();
 
-      try {
-        if (shouldRunUserSync(full)) {
-          const userResult = await syncUsers();
-          usersMatched = userResult.matched;
-          lastUserSyncAt = new Date();
-        } else {
-          usersMatched = (await prisma.user.count({ where: { active: true, itopPersonId: { not: null } } })) ?? 0;
-        }
+      // "Without calling iTop" only applies to the ticket pull itself —
+      // orgIds.length === 0 skips straight to the full-sync cleanup below,
+      // which (via the OR) also purges a snapshot left behind by a
+      // customer that was unmapped or deleted since the last full sync.
+      if (orgIds.length > 0) {
+        const client = await getItopAppClient();
+        for (const cls of config.readClasses) {
+          let oql = `SELECT ${cls} WHERE org_id IN (${orgIds.join(",")})`;
+          if (!full && config.lastSyncAt) {
+            const cutoff = new Date(config.lastSyncAt.getTime() - 60_000);
+            // Same reasoning as syncTimeEntries's cutoff: the string
+            // comparison against iTop's own `last_update` must be
+            // expressed in the SERVER's zone, not UTC.
+            oql += ` AND last_update > '${formatItopDate(cutoff, timezone)}'`;
+          }
 
-        const customers = await prisma.customer.findMany({
-          where: { itopOrgId: { not: null } },
-          select: { id: true, itopOrgId: true },
-        });
-        orgs = customers.length;
-
-        const orgIdToCustomerId = new Map(customers.map((c) => [c.itopOrgId as number, c.id]));
-        const orgIds = customers.map((c) => c.itopOrgId as number);
-        const seenIds = new Set<number>();
-
-        // "Without calling iTop" only applies to the ticket pull itself —
-        // orgIds.length === 0 skips straight to the full-sync cleanup below,
-        // which (via the OR) also purges a snapshot left behind by a
-        // customer that was unmapped or deleted since the last full sync.
-        if (orgIds.length > 0) {
-          const client = await getItopAppClient();
-          for (const cls of config.readClasses) {
-            let oql = `SELECT ${cls} WHERE org_id IN (${orgIds.join(",")})`;
-            if (!full && config.lastSyncAt) {
-              const cutoff = new Date(config.lastSyncAt.getTime() - 60_000);
-              // Same reasoning as syncTimeEntries's cutoff: the string
-              // comparison against iTop's own `last_update` must be
-              // expressed in the SERVER's zone, not UTC.
-              oql += ` AND last_update > '${formatItopDate(cutoff, timezone)}'`;
-            }
-
-            const result = await client.getAll<ItopTicketFields>(cls, oql, ITOP_TICKET_OUTPUT_FIELDS, {
-              pageSize: 100,
-            });
-            for (const row of result.objects) {
+          // Page by page (F-28): a page's rows are upserted and dropped
+          // before the next page is fetched.
+          for await (const pageRows of client.getPages<ItopTicketFields>(cls, oql, ITOP_TICKET_OUTPUT_FIELDS, {
+            pageSize: 100,
+          })) {
+            for (const row of pageRows) {
               seenIds.add(row.key);
               try {
                 await upsertTicket(cls, row, orgIdToCustomerId, timezone);
@@ -864,72 +899,80 @@ export async function syncTickets(opts: { full?: boolean } = {}): Promise<SyncSu
             }
           }
         }
-
-        if (full) {
-          // A row is orphaned (and dropped) if its org is no longer mapped
-          // to any customer at all, OR it belongs to a still-mapped org but
-          // wasn't returned in this run — covers a deleted/unmapped
-          // customer (whose tickets would otherwise keep a stale
-          // customerId via ON DELETE SET NULL) as well as a ticket iTop no
-          // longer returns for a still-mapped org.
-          const deleted = await prisma.itopTicket.deleteMany({
-            where: {
-              OR: [{ orgId: { notIn: orgIds } }, { id: { notIn: [...seenIds] } }],
-            },
-          });
-          removed = deleted.count;
-        }
-
-        // Time entries after tickets, inside the same advisory-lock-guarded
-        // call — see syncTimeEntries's own doc comment for why this is the
-        // chosen wiring over a separate syncAll(). A time-entry-only failure
-        // (e.g. TimeSpent missing on this install) is logged but doesn't
-        // fail the ticket sync that already succeeded above.
-        const timeEntryResult = await syncTimeEntries({ full });
-        timeEntriesUpserted = timeEntryResult.upserted;
-        timeEntriesRemoved = timeEntryResult.removed;
-        timeEntriesSkipped = timeEntryResult.skipped;
-        timeEntriesError = timeEntryResult.error;
-        if (timeEntriesError) {
-          logger.warn({ err: timeEntriesError }, "iTop syncTimeEntries failed during the ticket sync tick");
-        }
-
-        const totalSkipped = ticketsSkipped + timeEntriesSkipped;
-        // The run still succeeded (lastSyncOk stays true) — a skipped row is
-        // logged individually at `warn` already — but an admin watching only
-        // ItopConfig would otherwise have no visibility into it at all.
-        // Folded into `lastSyncError` as a non-fatal note rather than a
-        // schema change (no dedicated column): NOT an error, just the only
-        // admin-visible surface this integration has for "some rows didn't
-        // make it, check the server log".
-        const nonFatalNote =
-          totalSkipped > 0
-            ? `Skipped ${totalSkipped} row${totalSkipped === 1 ? "" : "s"} that could not be read (see server log)`
-            : null;
-        await writeConfigResult(startedAt, true, nonFatalNote, full);
-        logger.info(
-          {
-            full,
-            orgs,
-            upserted,
-            removed,
-            usersMatched,
-            skipped: totalSkipped,
-            timeEntriesUpserted,
-            timeEntriesRemoved,
-            timeEntriesError,
-            ms: Date.now() - startedAt.getTime(),
-          },
-          "iTop sync completed",
-        );
-      } catch (err) {
-        runError = errorMessage(err);
-        logger.warn({ err: runError }, "iTop sync failed");
-        await writeConfigResult(startedAt, false, runError, false);
       }
-    },
-    { timeout: TX_TIMEOUT_MS },
-  );
+
+      if (full) {
+        // A row is orphaned (and dropped) if its org is no longer mapped
+        // to any customer at all, OR it belongs to a still-mapped org but
+        // wasn't returned in this run — covers a deleted/unmapped
+        // customer (whose tickets would otherwise keep a stale
+        // customerId via ON DELETE SET NULL) as well as a ticket iTop no
+        // longer returns for a still-mapped org.
+        const deleted = await prisma.itopTicket.deleteMany({
+          where: {
+            OR: [{ orgId: { notIn: orgIds } }, { id: { notIn: [...seenIds] } }],
+          },
+        });
+        removed = deleted.count;
+      }
+
+      // Time entries after tickets, inside the same advisory-lock-guarded
+      // call — see syncTimeEntries's own doc comment for why this is the
+      // chosen wiring over a separate syncAll(). A time-entry-only failure
+      // (e.g. TimeSpent missing on this install) keeps the ticket rows
+      // written above and the watermark they earned, but the run is
+      // recorded as failed so the admin sees it (below).
+      const timeEntryResult = await syncTimeEntries({ full });
+      timeEntriesUpserted = timeEntryResult.upserted;
+      timeEntriesRemoved = timeEntryResult.removed;
+      timeEntriesSkipped = timeEntryResult.skipped;
+      timeEntriesError = timeEntryResult.error;
+      if (timeEntriesError) {
+        logger.warn({ err: timeEntriesError }, "iTop syncTimeEntries failed during the ticket sync tick");
+      }
+
+      const totalSkipped = ticketsSkipped + timeEntriesSkipped;
+      // A skipped row is logged individually at `warn` already — but an
+      // admin watching only ItopConfig would otherwise have no visibility
+      // into it at all. Folded into `lastSyncError` as a non-fatal note
+      // rather than a schema change (no dedicated column).
+      const skippedNote =
+        totalSkipped > 0
+          ? `Skipped ${totalSkipped} row${totalSkipped === 1 ? "" : "s"} that could not be read (see server log)`
+          : null;
+      // A failed time-entry pass is reported as a FAILED run
+      // (docs/archive/plans/application-review-2026-10-22.md, F-11): before,
+      // `lastSyncOk` stayed true and Admin > iTop showed green while
+      // Utilization served a stale snapshot with a fresh timestamp. The
+      // ticket pass above did complete, so the incremental watermark still
+      // advances (`advanceWatermark`); the time-entry pass reads a fixed
+      // 8-week window on every tick and needs no watermark hold.
+      const ok = timeEntriesError === undefined;
+      const message = ok
+        ? skippedNote
+        : [`Time entries: ${timeEntriesError}`, skippedNote].filter(Boolean).join(" · ");
+      await writeConfigResult(startedAt, ok, message, full, true);
+      logger.info(
+        {
+          full,
+          orgs,
+          upserted,
+          removed,
+          usersMatched,
+          skipped: totalSkipped,
+          timeEntriesUpserted,
+          timeEntriesRemoved,
+          timeEntriesError,
+          ms: Date.now() - startedAt.getTime(),
+        },
+        "iTop sync completed",
+      );
+    } catch (err) {
+      runError = errorMessage(err);
+      logger.warn({ err: runError }, "iTop sync failed");
+      await writeConfigResult(startedAt, false, runError, false);
+    }
+  });
 
   return {
     ran,

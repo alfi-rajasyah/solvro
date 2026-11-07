@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { Modal } from "./Modal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import {
@@ -25,6 +25,7 @@ interface Props {
 
 export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
   const isEdit = !!risk;
+  const uid = useId();
   const create = useCreateRisk(projectId);
   const update = useUpdateRisk(projectId);
 
@@ -132,15 +133,17 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             rows={2}
             className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
             placeholder="What could go wrong?"
+            aria-label="Risk description"
           />
         </div>
 
         <div className="grid gap-3 sm:grid-cols-2">
           <div>
-            <label className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
+            <label htmlFor={`${uid}-category`} className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
               Category
             </label>
             <select
+              id={`${uid}-category`}
               value={category}
               onChange={(e) => setCategory(e.target.value as RiskCategory)}
               className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
@@ -153,10 +156,11 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             </select>
           </div>
           <div>
-            <label className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
+            <label htmlFor={`${uid}-status`} className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
               Status
             </label>
             <select
+              id={`${uid}-status`}
               value={status}
               onChange={(e) => setStatus(e.target.value as RiskStatus)}
               className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
@@ -172,10 +176,11 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
 
         <div className="grid gap-3 sm:grid-cols-3">
           <div>
-            <label className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
+            <label htmlFor={`${uid}-probability`} className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
               Probability (1–5)
             </label>
             <select
+              id={`${uid}-probability`}
               value={probability}
               onChange={(e) => setProbability(Number(e.target.value))}
               className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
@@ -188,10 +193,11 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             </select>
           </div>
           <div>
-            <label className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
+            <label htmlFor={`${uid}-impact`} className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
               Impact (1–5)
             </label>
             <select
+              id={`${uid}-impact`}
               value={impact}
               onChange={(e) => setImpact(Number(e.target.value))}
               className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
@@ -231,6 +237,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             rows={3}
             className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
             placeholder="Steps to reduce probability or impact."
+            aria-label="Mitigation plan"
           />
         </div>
 
@@ -244,6 +251,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             rows={3}
             className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
             placeholder="What to do if the risk materialises."
+            aria-label="Contingency plan"
           />
         </div>
       </div>

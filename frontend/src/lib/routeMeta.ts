@@ -22,7 +22,7 @@ export interface CrumbContext {
   opportunityTitle?: string | null;
 }
 
-export type RouteKind = "static" | "project" | "customer" | "opportunity";
+export type RouteKind = "static" | "project" | "customer" | "opportunity" | "notFound";
 
 export interface RouteMatch {
   kind: RouteKind;
@@ -52,8 +52,30 @@ const STATIC_TITLES: Record<string, string> = {
   help: "Help",
 };
 
-/** `/` redirects to `/overview`, and unknown paths redirect to `/`. */
+/** `/` redirects to `/overview`, so the bare root reads as Overview. */
 const FALLBACK_TITLE = "Overview";
+
+/**
+ * Title for a path no route claims — App.tsx renders the NotFound page there
+ * instead of redirecting (docs/archive/plans/application-review-2026-10-22.md, F-45).
+ */
+const NOT_FOUND_TITLE = "Not found";
+
+/**
+ * The `projects/:id/<view>` tabs App.tsx declares. A third segment outside this
+ * set falls through to the catch-all, so it must read as "Not found" here too
+ * rather than as a project page (`routeMeta.test.ts` checks it against App.tsx).
+ */
+const PROJECT_VIEWS: ReadonlySet<string> = new Set([
+  "overview",
+  "list",
+  "kanban",
+  "gantt",
+  "epics",
+  "timeline",
+  "risks",
+  "services",
+]);
 
 const NUMERIC = /^\d+$/;
 
@@ -62,8 +84,30 @@ function segmentsOf(pathname: string): string[] {
 }
 
 export function matchRoute(pathname: string): RouteMatch {
-  const segments = segmentsOf(pathname);
-  const [first, second] = segments;
+  // React Router matches paths case-insensitively, so `/Overview` renders the
+  // real page; compare lowercased, but keep the original casing of ids that
+  // are passed on (the opportunity id).
+  const rawSegments = segmentsOf(pathname);
+  const segments = rawSegments.map((seg) => seg.toLowerCase());
+  const [first, second, third] = segments;
+
+  const notFound: RouteMatch = {
+    kind: "notFound",
+    title: NOT_FOUND_TITLE,
+    projectId: null,
+    customerId: null,
+    opportunityId: null,
+  };
+  if (first !== undefined) {
+    if (first === "projects") {
+      // projects/:id and projects/:id/<view>; anything deeper or off-list is the catch-all.
+      if (segments.length > 3 || (third !== undefined && !PROJECT_VIEWS.has(third))) return notFound;
+    } else if (first === "customers" || first === "pipeline") {
+      if (segments.length > 2) return notFound;
+    } else if (!Object.prototype.hasOwnProperty.call(STATIC_TITLES, first) || segments.length > 1) {
+      return notFound;
+    }
+  }
 
   if (first === "projects" && second && NUMERIC.test(second)) {
     return { kind: "project", title: "Project", projectId: Number(second), customerId: null, opportunityId: null };
@@ -77,7 +121,7 @@ export function matchRoute(pathname: string): RouteMatch {
       title: "Opportunity",
       projectId: null,
       customerId: null,
-      opportunityId: second,
+      opportunityId: rawSegments[1] ?? second,
     };
   }
   return {
@@ -93,6 +137,12 @@ export function matchRoute(pathname: string): RouteMatch {
 export function routeTitle(pathname: string, ctx: CrumbContext = {}): string {
   const crumbs = buildCrumbs(pathname, ctx);
   return crumbs[crumbs.length - 1]?.label ?? FALLBACK_TITLE;
+}
+
+/** Browser-tab title for a route: "<page> · Solvro", or just "Solvro" if the page title is empty. */
+export function documentTitle(pathname: string, ctx: CrumbContext = {}): string {
+  const title = routeTitle(pathname, ctx).trim();
+  return title ? `${title} · Solvro` : "Solvro";
 }
 
 export function buildCrumbs(pathname: string, ctx: CrumbContext = {}): Crumb[] {

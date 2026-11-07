@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import {
   Link,
   NavLink,
@@ -12,6 +12,7 @@ import {
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { CopyLinkButton } from "@/components/CopyLinkButton";
 import { RightSidebar } from "@/components/layout/RightSidebar";
+import { RouteFallback } from "@/components/layout/RouteFallback";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
 import { ProjectHeaderFacts } from "@/components/ProjectHeaderFacts";
 import { ProjectMembersButton } from "@/components/ProjectMembers";
@@ -309,11 +310,15 @@ export function ProjectDetail() {
       </div>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <Outlet
-          context={
-            { project, openContext: () => setContextOpen(true) } satisfies ProjectOutletContext
-          }
-        />
+        {/* Own boundary so switching tabs keeps the project header on screen
+            while the tab's chunk loads. */}
+        <Suspense fallback={<RouteFallback />}>
+          <Outlet
+            context={
+              { project, openContext: () => setContextOpen(true) } satisfies ProjectOutletContext
+            }
+          />
+        </Suspense>
       </div>
 
       <ProjectFormModal
@@ -328,9 +333,12 @@ export function ProjectDetail() {
         onClose={() => setConfirmDeleteOpen(false)}
         onConfirm={() => void handleDelete()}
         title="Delete project"
+        // `_count.tasks` leaves cancelled tasks out (like every total), but the
+        // delete removes them too, so the text says so rather than undercount
+        // (docs/archive/plans/application-review-2026-10-22.md, F-26).
         body={`Delete project "${project.name}"? This permanently removes its ${project._count.tasks} ${
           project._count.tasks === 1 ? "task" : "tasks"
-        }, sections, labels, notes, risks and reviews, and unlinks any won deal. There is no undo.`}
+        } (plus any cancelled ones), sections, labels, notes, risks and reviews, and unlinks any won deal. There is no undo.`}
         confirmLabel="Delete"
         confirmTone="danger"
         busy={deleteProject.isPending}

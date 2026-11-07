@@ -8,9 +8,17 @@ import { pinoHttp } from "pino-http";
 //    (X-Solvro-Webhook-Secret) and cookies;
 //  - a guest-link token (GET /public/share/<token>, and the page URL
 //    /share/<token> that shows up in a Referer) — anyone reading the logs
-//    could otherwise open the link.
+//    could otherwise open the link;
+//  - a search query string (GET /search?q=...) — it carries customer names
+//    and ticket text typed by the user
+//    (docs/archive/plans/application-review-2026-10-22.md, N-04).
 
 const SHARE_TOKEN_IN_PATH = /(\/share\/)[^/?#\s"']+/gi;
+
+// `/search?...` under any prefix (`/api/search?q=`, a Referer page URL).
+const SEARCH_QUERY_IN_URL = /(\/search\/?)\?[^\s"'#]*/gi;
+// Express serves `/search/` too (non-strict routing).
+const SEARCH_PATH_WITH_QUERY = /\/search\/?\?/i;
 
 /** Header names (lower-case, as pino's serializer emits them) whose value is masked. */
 const SECRET_HEADERS = ["authorization", "x-solvro-webhook-secret", "cookie", "set-cookie"] as const;
@@ -18,6 +26,16 @@ const SECRET_HEADERS = ["authorization", "x-solvro-webhook-secret", "cookie", "s
 /** Replaces the token segment of any `/share/<token>` (page or API path). */
 export function redactShareTokens(text: string): string {
   return text.replace(SHARE_TOKEN_IN_PATH, "$1[redacted]");
+}
+
+/** Replaces the whole query string of any `/search?...` URL. */
+export function redactSearchQueries(text: string): string {
+  return text.replace(SEARCH_QUERY_IN_URL, "$1?[redacted]");
+}
+
+/** Share-token and search-query redaction for a logged URL or Referer. */
+function redactUrl(text: string): string {
+  return redactSearchQueries(redactShareTokens(text));
 }
 
 type SerializedReq = ReturnType<typeof stdSerializers.req>;
@@ -35,9 +53,13 @@ export function redactSerializedRequest(s: SerializedReq): SerializedReq {
   }
   for (const name of ["referer", "referrer"]) {
     const v = headers[name];
-    if (typeof v === "string") headers[name] = redactShareTokens(v);
+    if (typeof v === "string") headers[name] = redactUrl(v);
   }
-  return { ...s, url: redactShareTokens(String(s.url ?? "")), headers } as SerializedReq;
+  const url = String(s.url ?? "");
+  const out = { ...s, url: redactUrl(url), headers } as Omit<SerializedReq, "query"> & { query?: unknown };
+  // pino-http also emits the parsed `query` object; mask it with the URL.
+  if (out.query !== undefined && SEARCH_PATH_WITH_QUERY.test(url)) out.query = "[redacted]";
+  return out as SerializedReq;
 }
 
 export function createRequestLogger(logger: Logger) {

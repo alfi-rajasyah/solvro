@@ -1,8 +1,5 @@
-import { useEffect, useRef, useState } from "react";
-import { copyText } from "@/lib/clipboard";
+import { useCopyFeedback } from "@/lib/useCopyFeedback";
 import { cn } from "@/lib/utils";
-
-type Feedback = "copied" | "failed" | null;
 
 /**
  * Icon button that copies a link and confirms with a short "Link copied"
@@ -22,38 +19,13 @@ export function CopyLinkButton({
   getUrl?: () => string;
   className?: string;
 }) {
-  const [feedback, setFeedback] = useState<Feedback>(null);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  useEffect(
-    () => () => {
-      if (timer.current) clearTimeout(timer.current);
-    },
-    [],
-  );
-
-  async function handleClick() {
-    let next: Feedback = "copied";
-    try {
-      await copyText(getUrl());
-    } catch {
-      next = "failed";
-    }
-    if (timer.current) clearTimeout(timer.current);
-    // Clear first, then set on the next tick: a repeat click within the window
-    // changes the live region's text again, so it is re-announced.
-    setFeedback(null);
-    timer.current = setTimeout(() => {
-      setFeedback(next);
-      timer.current = setTimeout(() => setFeedback(null), 1800);
-    }, 50);
-  }
+  const { feedback, copy } = useCopyFeedback(getUrl);
 
   return (
     <div className="relative">
       <button
         type="button"
-        onClick={() => void handleClick()}
+        onClick={() => void copy()}
         aria-label={label}
         title={label}
         className={cn(

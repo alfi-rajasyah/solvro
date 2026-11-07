@@ -35,7 +35,10 @@ import {
   useUpdateAuthSettings,
 } from "@/lib/queries";
 import type { Role } from "@/lib/auth";
-import { PERMISSION_CATALOG, useAuth } from "@/lib/auth";
+import { TempPasswordNotice } from "@/components/admin/TempPasswordNotice";
+import { PermissionPicker } from "@/components/admin/PermissionPicker";
+import { roleSaveErrorMessage } from "@/components/admin/roleErrors";
+import { useAuth } from "@/lib/auth";
 import { copyText } from "@/lib/clipboard";
 import { fmtDateTime } from "@/lib/formatDate";
 import { personNameSortingFn } from "@/lib/tableSort";
@@ -236,6 +239,7 @@ function UsersTab() {
           >
             <select
               value={u.role}
+              aria-label={`Role for ${u.username}`}
               disabled={isSelf}
               onChange={(e) => handleRoleChange(u, e.target.value as Role)}
               // text-label-caps (12px/700/0.05em) replaces the carried-over
@@ -480,27 +484,11 @@ function UsersTab() {
         </div>
       )}
       {resetResult && (
-        <div className="rounded-sm border border-tertiary/40 bg-tertiary/10 px-3 py-3 text-sm text-on-surface">
-          <p className="font-display text-[12px] font-bold uppercase tracking-wider text-tertiary">
-            Temporary password generated
-          </p>
-          <p className="mt-1">
-            For <strong>{resetResult.username}</strong>:{" "}
-            <code className="rounded-sm bg-surface px-1.5 py-0.5 font-mono text-[13px]">
-              {resetResult.tempPassword}
-            </code>
-          </p>
-          <p className="mt-1 text-on-surface-variant">
-            Share this with the user via a secure channel. It will not be shown again.
-          </p>
-          <button
-            type="button"
-            onClick={() => setResetResult(null)}
-            className="mt-2 font-display text-sm text-on-surface-variant hover:text-on-surface font-semibold"
-          >
-            Dismiss
-          </button>
-        </div>
+        <TempPasswordNotice
+          username={resetResult.username}
+          tempPassword={resetResult.tempPassword}
+          onDismiss={() => setResetResult(null)}
+        />
       )}
       <form
         onSubmit={handleCreate}
@@ -692,63 +680,6 @@ function AdminKpi({
 
 // ---- Roles tab ------------------------------------------------------------
 
-// Tick-box editor over the curated PERMISSION_CATALOG. "*" (Full access)
-// supersedes the rest: when it's on, the specific permissions show as
-// implied + disabled; ticking a specific one drops the wildcard.
-function PermissionPicker({
-  value,
-  onChange,
-}: {
-  value: string[];
-  onChange: (v: string[]) => void;
-}) {
-  const all = value.includes("*");
-  function toggle(perm: string) {
-    if (perm === "*") {
-      onChange(all ? [] : ["*"]);
-      return;
-    }
-    if (all) {
-      onChange([perm]); // selecting a specific permission drops the wildcard
-      return;
-    }
-    onChange(
-      value.includes(perm)
-        ? value.filter((p) => p !== perm)
-        : [...value, perm],
-    );
-  }
-  return (
-    <ul className="divide-y divide-outline-variant/60 rounded-sm border border-outline-variant bg-surface">
-      {PERMISSION_CATALOG.map((perm) => {
-        const isWildcard = perm.value === "*";
-        const checked = isWildcard ? all : all || value.includes(perm.value);
-        const disabled = all && !isWildcard;
-        return (
-          <li key={perm.value}>
-            <label
-              title={perm.hint}
-              className={`flex items-center gap-2.5 px-3 py-1.5 text-[13px] ${
-                disabled ? "opacity-50" : "cursor-pointer hover:bg-surface-container-low"
-              }`}
-            >
-              <input
-                type="checkbox"
-                checked={checked}
-                disabled={disabled}
-                onChange={() => toggle(perm.value)}
-                className="accent-primary"
-              />
-              <span className="font-mono text-on-surface">{perm.value}</span>
-              <span className="text-on-surface-variant">— {perm.label}</span>
-            </label>
-          </li>
-        );
-      })}
-    </ul>
-  );
-}
-
 function RolesTab() {
   const { data: roles, isLoading, isError } = useAdminRoles();
   // Loading-safe fallback (T1 DataGrid migration — same rationale as
@@ -799,6 +730,7 @@ function RolesTab() {
             {isEditing ? (
               <input
                 type="text"
+                aria-label="Role name"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
                 disabled={r.builtIn}
@@ -981,7 +913,7 @@ function RolesTab() {
       setNewName("");
       setNewPerms([]);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not create role.");
+      setError(roleSaveErrorMessage(err, "Could not create role."));
     }
   }
 
@@ -1013,7 +945,7 @@ function RolesTab() {
       });
       setEditingId(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Could not save role.");
+      setError(roleSaveErrorMessage(err, "Could not save role."));
     }
   }
 
@@ -1536,6 +1468,7 @@ function SignInModal({
           >
             <input
               type="text"
+              aria-label="Allowed email domain"
               value={newDomain}
               onChange={(e) => setNewDomain(e.target.value)}
               placeholder="example.com"
@@ -1689,6 +1622,7 @@ function ProjectsTab() {
         return (
           <select
             value={p.tamId}
+            aria-label={`Reassign TAM for ${p.name}`}
             onChange={(e) => handleReassign(p, Number(e.target.value))}
             className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-[13px] text-on-surface focus:border-primary focus:outline-hidden"
           >

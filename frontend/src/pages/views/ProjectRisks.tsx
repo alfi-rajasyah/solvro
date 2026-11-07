@@ -139,6 +139,7 @@ export function ProjectRisks() {
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="Search description, mitigation, contingency…"
+          aria-label="Search risks"
           className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden sm:w-72"
         />
         <Select
@@ -367,6 +368,7 @@ function RisksDataGrid({
           return canEdit ? (
             <select
               value={risk.probability}
+              aria-label={`Probability of risk: ${risk.description}`}
               onChange={(e) => onChange(risk.id, { probability: Number(e.target.value) })}
               className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
             >
@@ -397,6 +399,7 @@ function RisksDataGrid({
           return canEdit ? (
             <select
               value={risk.impact}
+              aria-label={`Impact of risk: ${risk.description}`}
               onChange={(e) => onChange(risk.id, { impact: Number(e.target.value) })}
               className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
             >
@@ -456,6 +459,7 @@ function RisksDataGrid({
           return canEdit ? (
             <select
               value={risk.status}
+              aria-label={`Status of risk: ${risk.description}`}
               onChange={(e) => onChange(risk.id, { status: e.target.value as RiskStatus })}
               className={[
                 "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-[12px] font-bold uppercase tracking-wider",

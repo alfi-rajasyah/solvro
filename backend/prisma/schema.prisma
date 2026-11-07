@@ -328,6 +328,7 @@ model ProjectMember {
 
   @@id([projectId, userId])
   @@index([userId])
+  @@index([addedById])
   @@map("project_members")
 }
 
@@ -361,6 +362,7 @@ model ActivityEvent {
   @@index([projectId, createdAt(sort: Desc)])
   @@index([opportunityId, createdAt(sort: Desc)])
   @@index([createdAt])
+  @@index([actorId])
   @@map("activity_events")
 }
 
@@ -1016,5 +1018,6 @@ model ShareLink {
   lastUsedAt  DateTime? @map("last_used_at")
 
   @@index([projectId])
+  @@index([createdById])
   @@map("share_links")
 }

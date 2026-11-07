@@ -10,7 +10,7 @@ import {
   TaskStatus,
 } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { hasPermission, requireAuth, requirePermission } from "../http/auth.js";
+import { hasPermission, requireAnyPermission, requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import {
@@ -31,10 +31,12 @@ import {
   countSiblings,
   type SiblingKey,
 } from "../lib/taskOrdering.js";
+import { lockProject } from "../lib/positionRepack.js";
 import { assertEpicNotOnSubtask, assertValidEpic } from "../lib/epics.js";
 import { computeProjectHealth, computeSlipDays } from "../lib/projectHealth.js";
-import { COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import { COUNTED_TASKS_COUNT, COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
+import { assertActiveUser } from "../lib/users.js";
 import {
   diffProjectChanges,
   recordActivity,
@@ -44,6 +46,8 @@ import {
 } from "../lib/activity.js";
 import { epicCreatedChanges } from "../lib/epicActivity.js";
 import { notifyForEvent } from "../lib/notifications.js";
+import { diffProjectSeats, projectSeatsSelect, recordProjectUpdate } from "../lib/projectSeats.js";
+import { MAX_LABEL_IDS, MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
 
 // Kanban WIP limits — one optional positive-int cap per top-level status
 // column, or null/absent for "no limit". Visual-only on the board (amber
@@ -102,7 +106,9 @@ const projectDetailInclude = {
   tam: { select: { id: true, username: true, email: true, avatarUrl: true } },
   customer: { select: { id: true, name: true, tamId: true } },
   baselineLockedBy: { select: { id: true, username: true } },
-  _count: { select: { tasks: true } },
+  // Cancelled tasks are in no total; the delete confirmation says so
+  // (docs/archive/plans/application-review-2026-10-22.md, F-26).
+  _count: COUNTED_TASKS_COUNT,
   services: {
     orderBy: { service: { name: "asc" } },
     include: { service: true },
@@ -122,7 +128,7 @@ const createTaskSchema = z
     assignedToId: z.number().int().positive().nullable().optional(),
     parentTaskId: z.number().int().positive().nullable().optional(),
     sectionId: z.number().int().positive().nullable().optional(),
-    labelIds: z.array(z.number().int().positive()).optional(),
+    labelIds: z.array(z.number().int().positive()).max(MAX_LABEL_IDS).optional(),
     epicId: z.number().int().positive().nullable().optional(),
   })
   .refine((b) => !b.isMilestone || b.dueDate != null, {
@@ -154,7 +160,13 @@ const taskListQuerySchema = z.object({
 
 export const projectsRouter = Router();
 
-projectsRouter.use(requireAuth);
+// Read gate (docs/archive/plans/application-review-2026-10-22.md, F-03): visibility alone is not
+// enough — an account with no permissions at all (PENDING) that a TAM added
+// as a member or assignee could read every task, INTERNAL note and comment of
+// the project. `project:read` or `pipeline:view` is the same any-of rule the
+// user directory and the customer list use (pentest M2): the SA role reaches
+// its projects through the `saId` arm with `pipeline:view` only.
+projectsRouter.use(requireAuth, requireAnyPermission("project:read", "pipeline:view"));
 
 projectsRouter.get("/", validate("query", projectListQuerySchema), async (req, res) => {
   const { customerId, today } = req.query as unknown as z.infer<
@@ -166,7 +178,7 @@ projectsRouter.get("/", validate("query", projectListQuerySchema), async (req, r
     where,
     orderBy: { updatedAt: "desc" },
     include: {
-      _count: { select: { tasks: true } },
+      _count: COUNTED_TASKS_COUNT,
       sa: { select: { id: true, username: true } },
       tam: { select: { id: true, username: true } },
       customer: { select: { id: true, name: true } },
@@ -201,6 +213,10 @@ projectsRouter.post(
     // who holds the TAM and SA seats and the customer — ids and display names
     // only, never emails.
     const project = await prisma.$transaction(async (tx) => {
+      // 400 `tam_not_found` / `sa_not_found` instead of a foreign-key 500
+      // (docs/archive/plans/application-review-2026-10-22.md, F-23).
+      await assertActiveUser(tx, tamId, "tam");
+      if (body.saId != null) await assertActiveUser(tx, body.saId, "sa");
       const created = await tx.project.create({
         data: {
           name: body.name,
@@ -331,9 +347,9 @@ const assignServicesSchema = z.object({
   assignments: z.array(
     z.object({
       serviceId: z.number().int().positive(),
-      tools: z.array(z.string().trim().min(1).max(100)).default([]),
+      tools: z.array(z.string().trim().min(1).max(100)).max(MAX_SERVICE_TOOLS).default([]),
     }),
-  ),
+  ).max(MAX_SERVICE_ASSIGNMENTS),
 });
 
 projectsRouter.put(
@@ -450,40 +466,38 @@ projectsRouter.patch(
           name: true,
           status: true,
           customerId: true,
-          tam: { select: { id: true, username: true } },
-          sa: { select: { id: true, username: true } },
+          ...projectSeatsSelect,
         },
       });
+      // A changed TAM or SA must exist (400 instead of a missing-row 404 /
+      // foreign-key 500; docs/archive/plans/application-review-2026-10-22.md,
+      // F-23). An inactive account is still accepted here — activity.test.ts
+      // pins that an inactive new SA can be set and is simply not notified —
+      // unlike POST /projects, which requires an active one. Re-saving the
+      // current seat holder is not a change.
+      if (body.tamId !== undefined && body.tamId !== before.tam.id) {
+        await assertActiveUser(tx, body.tamId, "tam", { requireActive: false });
+      }
+      if (body.saId != null && body.saId !== before.sa?.id) {
+        await assertActiveUser(tx, body.saId, "sa", { requireActive: false });
+      }
       const result = await tx.project.update({ where: { id }, data });
       // Name, status, customer and the TAM / SA seats are logged (ids and
-      // usernames only); a re-save records nothing.
-      const changes: ActivityChanges = diffProjectChanges(
-        { name: before.name, status: before.status, customerId: before.customerId },
-        result,
-      );
-      for (const [key, beforeId, afterId] of [
-        ["tam", before.tam.id, result.tamId],
-        ["sa", before.sa?.id ?? null, result.saId],
-      ] as const) {
-        if (beforeId === afterId) continue;
-        const to =
-          afterId === null
-            ? null
-            : await tx.user.findUnique({ where: { id: afterId }, select: { id: true, username: true } });
-        changes[key] = { from: key === "tam" ? before.tam : before.sa, to } as Prisma.InputJsonObject;
-      }
-      const event = await recordActivity(tx, {
+      // usernames only); a re-save records nothing. The new TAM / SA get an
+      // `assigned` notification.
+      const changes: ActivityChanges = {
+        ...diffProjectChanges(
+          { name: before.name, status: before.status, customerId: before.customerId },
+          result,
+        ),
+        ...(await diffProjectSeats(tx, before, result)),
+      };
+      await recordProjectUpdate(tx, {
         projectId: id,
         actorId: req.user!.sub,
-        entityType: "project",
-        entityId: id,
-        action: "updated",
-        entityLabel: shortLabel(result.name),
+        name: result.name,
         changes,
       });
-      // The new TAM / SA (changes.tam / changes.sa `to`) get an `assigned`
-      // notification; the actor and inactive users are skipped inside.
-      await notifyForEvent(tx, event);
       return result;
     });
     res.json(updated);
@@ -550,6 +564,9 @@ projectsRouter.post(
     const status = body.status ?? "TODO";
 
     const task = await prisma.$transaction(async (tx) => {
+      // The append position below is a sibling count: serialise with any
+      // in-flight re-pack in this project so the new row can't collide.
+      await lockProject(tx, id);
       if (body.parentTaskId) {
         // assertValidParent needs a real taskId to compare against for the
         // self-parent / subtask-depth checks; a not-yet-created task can't
@@ -570,6 +587,7 @@ projectsRouter.post(
       // Assigning someone who cannot see the project adds them as a member
       // (same transaction as the task write).
       if (body.assignedToId != null) {
+        await assertActiveUser(tx, body.assignedToId, "assignee", { requireActive: false });
         const added = await ensureAssigneeIsMember(tx, id, body.assignedToId, req.user!.sub);
         if (added) {
           await recordActivity(tx, {
@@ -741,6 +759,9 @@ projectsRouter.post(
     });
     const position = (max._max.position ?? -1) + 1;
     const epic = await prisma.$transaction(async (tx) => {
+      if (body.ownerId != null) {
+        await assertActiveUser(tx, body.ownerId, "owner", { requireActive: false });
+      }
       const created = await tx.epic.create({
         data: {
           projectId: id,
@@ -1132,49 +1153,56 @@ projectsRouter.post(
       throw new HttpError(400, "self_dependency", "A task cannot depend on itself.");
     }
 
-    // Both endpoints must live on this project.
-    const tasks = await prisma.task.findMany({
-      where: { id: { in: [body.predecessorTaskId, body.successorTaskId] }, projectId: id },
-      select: { id: true },
-    });
-    if (tasks.length !== 2) {
-      throw new HttpError(400, "task_not_in_project", "Both tasks must belong to this project.");
-    }
-
-    // Reject cycles: walk forward from `successor` over existing edges; if we
-    // reach `predecessor` the new edge would close a loop.
-    const allEdges = await prisma.taskDependency.findMany({
-      where: { projectId: id },
-      select: { predecessorTaskId: true, successorTaskId: true },
-    });
-    const adj = new Map<number, number[]>();
-    for (const e of allEdges) {
-      const arr = adj.get(e.predecessorTaskId) ?? [];
-      arr.push(e.successorTaskId);
-      adj.set(e.predecessorTaskId, arr);
-    }
-    const seen = new Set<number>();
-    const stack = [body.successorTaskId];
-    while (stack.length > 0) {
-      const cur = stack.pop()!;
-      if (cur === body.predecessorTaskId) {
-        throw new HttpError(400, "cycle", "This dependency would create a cycle.");
-      }
-      if (seen.has(cur)) continue;
-      seen.add(cur);
-      for (const next of adj.get(cur) ?? []) stack.push(next);
-    }
-
+    // Cycle check and insert run under the project lock, so two requests that
+    // would together close a loop (A->B and B->A) can't both pass the check
+    // against the same snapshot (docs/archive/plans/application-review-2026-10-22.md, F-10).
     try {
-      const dep = await prisma.taskDependency.create({
-        data: {
-          projectId: id,
-          predecessorTaskId: body.predecessorTaskId,
-          successorTaskId: body.successorTaskId,
-          type: body.type ?? "HARD",
-          sourceHandle: body.sourceHandle ?? null,
-          targetHandle: body.targetHandle ?? null,
-        },
+      const dep = await prisma.$transaction(async (tx) => {
+        await lockProject(tx, id);
+
+        // Both endpoints must live on this project.
+        const tasks = await tx.task.findMany({
+          where: { id: { in: [body.predecessorTaskId, body.successorTaskId] }, projectId: id },
+          select: { id: true },
+        });
+        if (tasks.length !== 2) {
+          throw new HttpError(400, "task_not_in_project", "Both tasks must belong to this project.");
+        }
+
+        // Reject cycles: walk forward from `successor` over existing edges; if we
+        // reach `predecessor` the new edge would close a loop.
+        const allEdges = await tx.taskDependency.findMany({
+          where: { projectId: id },
+          select: { predecessorTaskId: true, successorTaskId: true },
+        });
+        const adj = new Map<number, number[]>();
+        for (const e of allEdges) {
+          const arr = adj.get(e.predecessorTaskId) ?? [];
+          arr.push(e.successorTaskId);
+          adj.set(e.predecessorTaskId, arr);
+        }
+        const seen = new Set<number>();
+        const stack = [body.successorTaskId];
+        while (stack.length > 0) {
+          const cur = stack.pop()!;
+          if (cur === body.predecessorTaskId) {
+            throw new HttpError(400, "cycle", "This dependency would create a cycle.");
+          }
+          if (seen.has(cur)) continue;
+          seen.add(cur);
+          for (const next of adj.get(cur) ?? []) stack.push(next);
+        }
+
+        return tx.taskDependency.create({
+          data: {
+            projectId: id,
+            predecessorTaskId: body.predecessorTaskId,
+            successorTaskId: body.successorTaskId,
+            type: body.type ?? "HARD",
+            sourceHandle: body.sourceHandle ?? null,
+            targetHandle: body.targetHandle ?? null,
+          },
+        });
       });
       res.status(201).json(dep);
     } catch (err) {
