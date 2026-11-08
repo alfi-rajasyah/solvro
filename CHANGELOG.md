@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-07 — Release PRs keep the staging branch and never publish images
+
+- `.github/workflows/keep-staging.yml` (new): when a pull request from `staging` merges into `main`, the workflow recreates `staging` at the merged commit. The repository deletes a merged pull request's head branch automatically, which removed `staging` after the first staging -> main release; branch protection, which would exempt it, is not available on this plan. The branch is recreated with the workflow token, so it starts no CI run or staging redeploy for a commit that was already tested and deployed.
+- `.github/workflows/docker-publish.yml`: images publish only after a green CI run for a push. The workflow also fired when CI finished on a pull request whose head branch is `staging` (every staging -> main release), which would have published `:staging` images from the pull request's run and redeployed staging.
+
 ### Fixed — 2026-11-02 — Design fixes follow-ups
 
 - `frontend/src/lib/gantt/exportPdf.ts`: Gantt PDF exports use the updated light primary green (`#25823A`).
