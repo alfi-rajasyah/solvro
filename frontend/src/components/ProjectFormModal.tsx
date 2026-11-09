@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { useAuth } from "@/lib/auth";
 import { fieldErrorsFrom, formErrorMessage } from "@/lib/formErrors";
@@ -379,7 +380,7 @@ export function ProjectFormModal({
             className="mt-0.5 h-4 w-4 shrink-0 accent-primary"
           />
           <span className="min-w-0">
-            <span className="block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+            <span className="block text-label-caps uppercase text-on-surface-variant">
               Administrative project
             </span>
             <span className="block text-xs text-on-surface-variant">
@@ -400,7 +401,7 @@ export function ProjectFormModal({
 }
 
 function inputClass(error: string | undefined, compact = false): string {
-  return `w-full rounded-lg border bg-surface-container-lowest text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30 ${
+  return `w-full rounded-lg border bg-surface-container-lowest text-sm text-on-surface ${FIELD_FOCUS} ${
     compact ? "px-2 py-1.5" : "px-3 py-2"
   } ${error ? "border-error" : "border-outline-variant"}`;
 }
@@ -422,7 +423,7 @@ function Field({
   return (
     <div>
       <label className="block">
-        <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+        <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">
           {label}
           {required && <span className="ml-1 text-error">*</span>}
         </span>

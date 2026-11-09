@@ -244,9 +244,9 @@ export function SubtaskRow({
         }}
         aria-label={cancelled ? "Cancelled" : done ? "Mark not done" : "Mark done"}
         className={[
-          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors",
+          "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
           done
-            ? "border-emerald-500 bg-emerald-500 text-white"
+            ? "border-primary bg-primary text-on-primary"
             : "border-outline-variant hover:border-primary",
           canToggle ? "cursor-pointer" : "cursor-default",
         ].join(" ")}

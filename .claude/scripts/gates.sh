@@ -253,6 +253,39 @@ if [ -n "$ITOP_BAD" ]; then
   fail guardrail-itop-no-app-token-writes "an iTop write runs on the application-token client:$ITOP_BAD (Guardrail: writes use the user's personal token only)"
 else pass guardrail-itop-no-app-token-writes; fi
 
+# ---------- design guard checks (always) ----------
+# DESIGN.md drift guards (2026-11-02, docs/archive/plans/design-drift-fixes-spec.md
+# §8). App code only: vendored shadcn/ReUI (components/ui, components/reui) and
+# tests are excluded. Each prints the first offending lines on failure.
+design_grep() { # design_grep <ERE> [extra path-exclude ERE, relative to frontend/src/]
+  # Excludes are anchored to the path prefix of grep's "path:line:content"
+  # output, so a code line that merely mentions components/ui/ is still checked.
+  local ex='^frontend/src/(components/(ui|reui)/|[^:]*\.test\.tsx?:)'
+  [ -n "${2:-}" ] && ex="$ex|^frontend/src/$2"
+  local out rc
+  out="$(grep -rnE "$1" frontend/src --include='*.ts' --include='*.tsx')"; rc=$?
+  # grep exits 2 on a bad pattern or unreadable tree: report it, never pass silently.
+  if [ "$rc" -gt 1 ]; then echo "GREP-ERROR: grep exited $rc for pattern $1"; return; fi
+  echo "$out" | grep -vE "$ex" | sed '/^$/d' || true
+}
+design_check() { # design_check <gate> <reason> <hits>
+  if [ -n "$3" ]; then fail "$1" "$2: $(echo "$3" | head -3 | cut -c1-160 | tr '\n' ' ')"
+  else pass "$1"; fi
+}
+# 1. Colours come from tokens — no raw Tailwind palette classes (DESIGN.md §1).
+design_check design-no-palette-colours "raw Tailwind palette colour class (use a token: chip-*, success, warning, primary, on-surface…)" \
+  "$(design_grep '\b(bg|text|border|ring|fill|stroke|from|to|via|outline|divide|placeholder|accent|caret|decoration|shadow)-(slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-[0-9]{2,3}\b')"
+# 2. No text under 12px — arbitrary classes and inline fontSize (DESIGN.md §2).
+#    lib/gantt/exportPdf.ts sizes PDF text in print points, not screen pixels.
+design_check design-min-text-size "text below 12px (use text-meta / text-label-caps)" \
+  "$(design_grep 'text-\[([0-9]|1[01])(\.[0-9]+)?px\]|fontSize:\s*([0-9]|1[01])(\.[0-9]+)?\b' 'lib/gantt/exportPdf\.ts:')"
+# 3. One focus treatment — no border-primary on focus (DESIGN.md §4; use FIELD_FOCUS).
+design_check design-focus-ring "border-primary focus style (use FIELD_FOCUS / FIELD_FOCUS_WITHIN from lib/utils.ts)" \
+  "$(design_grep '(focus|focus-visible|focus-within):border-primary')"
+# 4. Caps labels use the named role — no hand-rolled uppercase + tracking-wider (DESIGN.md §2).
+design_check design-caps-role "hand-rolled caps label (use text-label-caps uppercase)" \
+  "$(design_grep "uppercase[^\"'\`]*tracking-wider|tracking-wider[^\"'\`]*uppercase")"
+
 # ---------- spine check (always) ----------
 # Shared spine of the projects page + app-wide hot surfaces. Touching any of these
 # requires an instant opus review of the task (--performed-review=opus).

@@ -1,3 +1,4 @@
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "../ProjectDetail";
@@ -197,7 +198,7 @@ export function ProjectEpics() {
             placeholder="Epic title"
             maxLength={200}
             aria-label="New epic title"
-            className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+            className={`flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
           <button
             type="submit"
@@ -462,7 +463,7 @@ function TitleCell({
             }}
             maxLength={200}
             aria-label="Epic title"
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 text-sm font-semibold text-on-surface focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 text-sm font-semibold text-on-surface ${FIELD_FOCUS}`}
           />
         </form>
       ) : (

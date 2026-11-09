@@ -109,7 +109,7 @@ export function Utilization() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="font-display text-2xl font-bold text-on-surface">Utilization</h1>
+          <h1 className="font-display text-h1 text-on-surface">Utilization</h1>
           <p className="text-sm text-on-surface-variant">
             Hours per customer per day, from iTop's Time Tracking extension.
           </p>

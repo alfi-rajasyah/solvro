@@ -1,5 +1,6 @@
 import { useEffect, useId, useState } from "react";
 import { Modal } from "./Modal";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import {
   riskCategoryOptions,
@@ -131,7 +132,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             rows={2}
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             placeholder="What could go wrong?"
             aria-label="Risk description"
           />
@@ -146,7 +147,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
               id={`${uid}-category`}
               value={category}
               onChange={(e) => setCategory(e.target.value as RiskCategory)}
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               {riskCategoryOptions.map((c) => (
                 <option key={c.value} value={c.value}>
@@ -163,7 +164,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
               id={`${uid}-status`}
               value={status}
               onChange={(e) => setStatus(e.target.value as RiskStatus)}
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               {riskStatusOptions.map((s) => (
                 <option key={s.value} value={s.value}>
@@ -183,7 +184,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
               id={`${uid}-probability`}
               value={probability}
               onChange={(e) => setProbability(Number(e.target.value))}
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               {SCALE.map((n) => (
                 <option key={n} value={n}>
@@ -200,7 +201,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
               id={`${uid}-impact`}
               value={impact}
               onChange={(e) => setImpact(Number(e.target.value))}
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               {SCALE.map((n) => (
                 <option key={n} value={n}>
@@ -235,7 +236,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             value={mitigationPlan}
             onChange={(e) => setMitigationPlan(e.target.value)}
             rows={3}
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             placeholder="Steps to reduce probability or impact."
             aria-label="Mitigation plan"
           />
@@ -249,7 +250,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             value={contingencyPlan}
             onChange={(e) => setContingencyPlan(e.target.value)}
             rows={3}
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             placeholder="What to do if the risk materialises."
             aria-label="Contingency plan"
           />

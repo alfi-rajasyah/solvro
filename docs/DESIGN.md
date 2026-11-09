@@ -35,6 +35,8 @@ colors:
     on-error: '#2a0a0a'
     error-container: '#3d1212'
     on-error-container: '#fca5a5'
+    warning-solid: '#78350f'
+    on-warning: '#fde68a'
     background: '#1a1a18'
     on-background: '#f0ede8'
   light:
@@ -52,7 +54,7 @@ colors:
     inverse-on-surface: '#f0ede8'
     outline: '#9a9a97'
     outline-variant: '#d0d0cc'
-    primary: '#2d9042'
+    primary: '#25823a'
     on-primary: '#ffffff'
     primary-container: '#c8e6cf'
     on-primary-container: '#0f2b16'
@@ -67,6 +69,8 @@ colors:
     on-error: '#ffffff'
     error-container: '#ffdad6'
     on-error-container: '#93000a'
+    warning-solid: '#b45309'
+    on-warning: '#ffffff'
     background: '#f9f9f7'
     on-background: '#1a1a18'
 chips:
@@ -81,11 +85,11 @@ chips:
     violet-text: '#ddd6fe'
   light:
     emerald-bg: '#dcfce7'
-    emerald-text: '#16a34a'
+    emerald-text: '#15803d'
     amber-bg: '#fef3c7'
-    amber-text: '#d97706'
+    amber-text: '#b45309'
     rose-bg: '#fee2e2'
-    rose-text: '#dc2626'
+    rose-text: '#b91c1c'
     violet-bg: '#ede9fe'
     violet-text: '#6d28d9'
 fixed:
@@ -107,7 +111,7 @@ typography:
     3xl: { size: 31px, lineHeight: '1.3' }
     4xl: { size: 37px, lineHeight: '1.2' }
   roles:
-    h1: { fontSize: 32px, fontWeight: '600', lineHeight: '1.2' }
+    h1: { fontSize: 25px, fontWeight: '700', lineHeight: '1.2' }
     h2: { fontSize: 24px, fontWeight: '600', lineHeight: '1.2' }
     body-lg: { fontSize: 16px, fontWeight: '450', lineHeight: '1.5' }
     body-sm: { fontSize: 15px, fontWeight: '450', lineHeight: '1.5' }
@@ -161,7 +165,7 @@ Every token is a CSS custom property in `index.css` (`--token-name`, space-separ
 | `inverse-on-surface` | `#232321` | `#f0ede8` | |
 | `outline` | `#4a4a47` | `#9a9a97` | emphasis borders |
 | `outline-variant` | `#3a3a37` | `#d0d0cc` | default 1px borders — the elevation primitive |
-| `primary` | `#3aae51` | `#2d9042` | Elitery Green — the only accent color |
+| `primary` | `#3aae51` | `#25823a` | Elitery Green — the only accent color; light value darkened from `#2d9042` for WCAG AA on white |
 | `on-primary` | `#0f2b16` | `#ffffff` | |
 | `primary-container` | `#2d9042` | `#c8e6cf` | |
 | `on-primary-container` | `#e8f7eb` | `#0f2b16` | |
@@ -176,8 +180,12 @@ Every token is a CSS custom property in `index.css` (`--token-name`, space-separ
 | `on-error` | `#2a0a0a` | `#ffffff` | |
 | `error-container` | `#3d1212` | `#ffdad6` | |
 | `on-error-container` | `#fca5a5` | `#93000a` | |
+| `warning-solid` | `#78350f` | `#b45309` | solid warning surface (e.g. `ConfirmModal`'s warning button), built like `error` |
+| `on-warning` | `#fde68a` | `#ffffff` | text/icons on `warning-solid` |
 | `background` | `#1a1a18` | `#f9f9f7` | page-level, below `surface` |
 | `on-background` | `#f0ede8` | `#1a1a18` | |
+
+> **Contrast guard.** The light chip text tones, `primary`/`on-primary` and `warning-solid`/`on-warning` are held to WCAG AA (≥ 4.5:1) on their own background and on white by `frontend/src/lib/tokenContrast.test.ts`; changing a value in `index.css` that breaks a pair fails that test.
 
 > `tertiary-container` / `on-tertiary-container` are **not defined** as CSS variables in either theme and are **not wired** in the `@theme` block of `index.css` — do not use `bg-tertiary-container` etc.; the class will not resolve to a theme-aware color. (The pre-2026-07-21 DESIGN.md listed them; that was stale.)
 
@@ -187,9 +195,9 @@ Background + text pair per tone, both flip with theme:
 
 | Tone | Dark bg / text | Light bg / text |
 |---|---|---|
-| `chip-emerald` | `#064e3b` / `#a7f3d0` | `#dcfce7` / `#16a34a` |
-| `chip-amber` | `#78350f` / `#fde68a` | `#fef3c7` / `#d97706` |
-| `chip-rose` | `#7f1d1d` / `#fecaca` | `#fee2e2` / `#dc2626` |
+| `chip-emerald` | `#064e3b` / `#a7f3d0` | `#dcfce7` / `#15803d` |
+| `chip-amber` | `#78350f` / `#fde68a` | `#fef3c7` / `#b45309` |
+| `chip-rose` | `#7f1d1d` / `#fecaca` | `#fee2e2` / `#b91c1c` |
 | `chip-violet` | `#4c1d95` / `#ddd6fe` | `#ede9fe` / `#6d28d9` |
 
 > The vendored `Alert` component (`frontend/src/components/reui/alert.tsx`)
@@ -238,9 +246,9 @@ Single typeface app-wide: **Source Sans 3**, loaded 300–700 variable range, al
 
 | Class | Size | Weight | Line-height | Letter-spacing | Use |
 |---|---|---|---|---|---|
-| `text-h1` | 32px | 600 | 1.2 | — | page-level headings |
+| `text-h1` | 25px | 700 | 1.2 | — | page-title role: every page title uses it (state messages and the dark Login hero are separate) |
 | `text-h2` | 24px | 600 | 1.2 | — | section headings |
-| `text-body-lg` | 16px | 450 | 1.5 | — | prominent body copy |
+| `text-body-lg` | 16px | 450 | 1.5 | — | defined but unused; prominent body copy if ever needed |
 | `text-body-sm` | 15px | 450 | 1.5 | — | default body text — applied app-wide via `body { @apply ... font-body text-body-sm }` in `index.css` |
 | `text-data-mono` | 13px | 500 | 1.4 | -0.01em | tabular numerics in IDs and data columns |
 | `text-label-caps` | 12px | 700 | 1 | 0.05em | uppercase micro-headers, column labels — pair with `uppercase` utility, transform is not baked into the class itself |
@@ -272,6 +280,8 @@ These seven named roles are also registered as `font-size` keys in the `tailwind
 | `lg` | `0.5rem` | 8px |
 | `xl` | `0.75rem` | 12px |
 | `full` | `9999px` | pill |
+
+**Usage.** `rounded-sm` (4px, the `DEFAULT` value) is the radius for buttons, cards and inputs. `rounded-xl` is for board column wells; its other uses (task form panels, project cards, pipeline board/swimlane/quarter wells) are legacy. `rounded-lg` is legacy and converges to `rounded-sm`; don't introduce either in new work.
 
 **Large radii are forbidden.** There is no `2xl`/`3xl` radius token — don't invent one. `full` is reserved for pill-shaped status chips and avatar circles only; never use it on cards, panels, or buttons.
 
@@ -311,7 +321,7 @@ This value is **fixed** — it does not flip between themes (unlike every color 
 
 > Implementation note: `RightSidebar.tsx` is in the whitelist by design intent (it's a floating overlay layer, same as Drawer), but as of this writing it does **not** apply the `shadow-overlay` class — it relies on `border-l border-outline-variant` + `backdrop-blur-md` only. Don't flag this as a violation; flag it as a gap if you're implementing elevation work in that file.
 
-Nothing else gets a shadow. No card shadows, no hover-lift shadows, no focus-ring glows beyond the 2px primary outline. The app-wide focus treatment (reduced form, user decision 2026-08-29) is `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30` — no `focus-visible:border-primary` (adapted to `has-focus:`/`group-data-*` prefixes where the trigger is a wrapper rather than the focusable element itself, e.g. `calendar.tsx`'s dropdown root and day button). This is the one focus treatment for every form control app-wide; there is no separate "Buttons/Inputs conventions" section to consult. `frontend/src/components/gantt-v2/SolvroGantt.tsx` still carries the older, fuller form (with `focus-visible:border-primary`) and may be aligned to the reduced form opportunistically.
+Nothing else gets a shadow. No card shadows, no hover-lift shadows, no focus-ring glows beyond the 2px primary outline. The app-wide focus treatment (reduced form, user decision 2026-08-29) is `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30` — no `focus-visible:border-primary` (adapted to `has-focus:`/`group-data-*` prefixes where the trigger is a wrapper rather than the focusable element itself, e.g. `calendar.tsx`'s dropdown root and day button). This is the one focus treatment for every form control app-wide, shipped through two constants in `frontend/src/lib/utils.ts`: `FIELD_FOCUS` (on the input/select/textarea itself) and `FIELD_FOCUS_WITHIN` (`focus-within:ring-2 focus-within:ring-primary/30`, on a styled wrapper around the focusable element). The border never changes on focus anywhere; there is no separate "Buttons/Inputs conventions" section to consult.
 
 **AI Breakdown** styling (`.ai-glow`, amber inner-border + glow) was reserved for blueprint-generated task cards; the Secure Ingestion Port that would have produced them is cancelled (see CLAUDE.md's Standing decisions), so this reservation is retired — see §5.
 
@@ -321,9 +331,9 @@ Nothing else gets a shadow. No card shadows, no hover-lift shadows, no focus-rin
 
 | Rule | Detail |
 |---|---|
-| **Sidebar is fixed-dark** | `bg-sidebar` (`#232321`) in **both** themes — a literal hex (`--color-sidebar: #232321;`) in the `@theme` block of `index.css`, not a CSS-var-routed token. The rail never flips to light, even in light mode. |
+| **Sidebar is fixed-dark** | `bg-sidebar` (`#232321`) in **both** themes — a literal hex (`--color-sidebar: #232321;`) in the `@theme` block of `index.css`, not a CSS-var-routed token. The rail never flips to light, even in light mode. Its text uses `text-on-surface` / `text-on-surface-variant` resolved through a subtree `dark` pin on `Sidebar.tsx` — never slate or other palette classes. |
 | **Login always renders dark** | `Login.tsx` hard-pins the `dark` class on its root wrapper regardless of the user's theme preference. Left hero panel uses `bg-background` (`#1a1a18`), right form panel uses `bg-surface` (`#232321`) — both resolved through the forced `.dark` scope, so they land on the dark values above. |
-| **Primary is Elitery Green — never blue** | `#3aae51` dark / `#2d9042` light. This is the only accent color in the app: CTAs, active nav state, focus rings, links. Blue never appears as a primary/CTA color. |
+| **Primary is Elitery Green — never blue** | `#3aae51` dark / `#25823a` light. This is the only accent color in the app: CTAs, active nav state, focus rings, links. Blue never appears as a primary/CTA color. |
 | **`IN_PROGRESS` chip tone is misleadingly named "blue"** | `TaskStatusChip`'s `blue` tone renders `bg-primary/10 text-primary dark:bg-primary/20` — it is **green-tinted**, not literal blue. Same for `ProjectStatusChip`'s `PLANNING`/`COMPLETED` tones, which also use the `blue` tone class. Don't "fix" this by pointing it at an actual blue token — it's intentional, per `StatusChip.tsx`. |
 | **`.ai-glow` is retired, not reserved** | Amber (`#f59e0b`) inner-border + outer glow was reserved exclusively for blueprint-generated (AI Breakdown) task cards; that concept is cancelled along with the Secure Ingestion Port. `.ai-glow` does not exist anywhere in `frontend/src/` — do not introduce it for other status highlights without a new design decision. |
 | **Icons are Material Symbols Outlined** | Loaded via Google Fonts in `index.html` (`opsz,wght,FILL,GRAD@24,400,0,0`), rendered with the `.material-symbols-outlined` class (variation settings pinned in `index.css`). Design/mockup tooling that can't render icon-font ligatures (e.g. Paper canvases) must substitute inline SVGs — this does not change the in-app convention. |
@@ -369,6 +379,10 @@ Nothing else gets a shadow. No card shadows, no hover-lift shadows, no focus-rin
 `LabelChip.tsx` and `EpicChip.tsx` are not tone chips: the user-chosen colour is a 8px dot plus a `color-mix(… 14%, transparent)` background tint, and the text is always `text-on-surface` (so any stored colour stays readable in both themes). Both use the same `text-meta font-semibold leading-[18px]` rhythm as `CHIP_BASE`; `EpicChip` also truncates at `max-w-[160px]`.
 
 The generic `Chip` export takes any of `emerald` / `amber` / `rose` / `violet` / `blue` / `gray` directly for one-off use (risk scores, priority badges, etc.).
+
+### Enforcement
+
+Four design guards in `.claude/scripts/gates.sh` enforce these rules on app code (vendored `components/ui`, `components/reui` and tests are excluded): `design-no-palette-colours` (no raw Tailwind palette classes such as `bg-slate-800` or `text-amber-600` — use tokens), `design-min-text-size` (no `text-[Npx]` or inline `fontSize` below 12px), `design-focus-ring` (no `focus:`/`focus-visible:`/`focus-within:border-primary` — use `FIELD_FOCUS` / `FIELD_FOCUS_WITHIN`), and `design-caps-role` (no hand-rolled `uppercase` + `tracking-wider` — use `text-label-caps uppercase`).
 
 ---
 

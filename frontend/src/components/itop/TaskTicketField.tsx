@@ -22,11 +22,12 @@ import {
   useItopTicketByRef,
   useMyItopToken,
 } from "@/lib/queries";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { NewTicketSheet } from "./NewTicketSheet";
 import { isItopRef, itopTicketUrl, statusLabel, statusTone } from "./ticketPresentation";
 
 const INPUT_CLASS =
-  "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 font-mono text-xs text-on-surface focus:border-primary focus:outline-hidden disabled:opacity-60";
+  `w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 font-mono text-xs text-on-surface ${FIELD_FOCUS} disabled:opacity-60`;
 
 const LINK_CLASS =
   "font-display text-meta font-bold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";

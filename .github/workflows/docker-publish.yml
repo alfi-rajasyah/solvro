@@ -22,7 +22,15 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    # Only a green CI run for a *push* publishes. The branches filter above
+    # matches a run's head branch, so CI on a pull request whose head is
+    # `staging` (every staging -> main release PR) also lands here; without
+    # the event check it would publish `:staging` images from the PR run and
+    # redeploy staging. deploy-staging needs this job, so it is skipped too.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
     permissions:
       contents: read
       packages: write

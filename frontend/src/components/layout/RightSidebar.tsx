@@ -381,7 +381,7 @@ export function RightSidebar({ project, open, onClose }: RightSidebarProps) {
               </span>
               <DateField
                 variant="boxed"
-                className="w-full px-2 py-1.5 text-xs font-body focus:ring-2 focus:ring-primary/30"
+                className="w-full px-2 py-1.5 text-xs font-body"
                 value={baselineAsOf || null}
                 onChange={(d) => setBaselineAsOf(d ?? "")}
                 aria-label={

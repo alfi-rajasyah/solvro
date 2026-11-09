@@ -1,3 +1,4 @@
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
   getCoreRowModel,
@@ -81,7 +82,7 @@ export function Admin() {
   return (
     <div className="flex h-full flex-col">
       <header className="border-b border-outline-variant px-4 py-4 md:px-6">
-        <h1 className="font-display text-2xl font-bold tracking-tight text-on-surface">
+        <h1 className="font-display text-h1 text-on-surface">
           Admin
         </h1>
         <p className="mt-1 text-sm text-on-surface-variant">
@@ -249,7 +250,7 @@ function UsersTab() {
               // select renders ~4px shorter, accepted as a density win.
               // font-bold stays explicit — see data-grid-column-header.tsx's
               // comment on why the token's baked-in weight needs the guard.
-              className="rounded-sm border border-outline-variant bg-surface px-2 py-1 font-display text-label-caps uppercase text-on-surface focus:border-primary focus:outline-hidden disabled:cursor-not-allowed disabled:opacity-60"
+              className={`rounded-sm border border-outline-variant bg-surface px-2 py-1 font-display text-label-caps uppercase text-on-surface ${FIELD_FOCUS} disabled:cursor-not-allowed disabled:opacity-60`}
               title={isSelf ? "You cannot change your own role" : undefined}
             >
               {roleOptionsFor(u.role).map((r) => (
@@ -474,8 +475,8 @@ function UsersTab() {
             is unchanged (still needed so every other computation below stays
             render-safe). */}
         <AdminKpi label="Users" value={isLoading ? "—" : rows.length} hint={`${activeCount} active · ${adminCount} admins`} icon="group" tone="primary" />
-        <AdminKpi label="Pending" value={isLoading ? "—" : pendingCount} hint="Needs role assignment" icon="hourglass_top" tone="amber" />
-        <AdminKpi label="Custom roles" value={isLoading ? "—" : customRoleCount} hint={`${(roles ?? []).length} total roles`} icon="shield_person" tone="emerald" />
+        <AdminKpi label="Pending" value={isLoading ? "—" : pendingCount} hint="Needs role assignment" icon="hourglass_top" tone="warning" />
+        <AdminKpi label="Custom roles" value={isLoading ? "—" : customRoleCount} hint={`${(roles ?? []).length} total roles`} icon="shield_person" tone="success" />
         <AdminKpi label="Inactive" value={isLoading ? "—" : rows.length - activeCount} hint="Cannot sign in" icon="block" tone="neutral" />
       </div>
       {error && (
@@ -503,7 +504,7 @@ function UsersTab() {
             value={newEmail}
             onChange={(e) => setNewEmail(e.target.value)}
             placeholder="user@example.com"
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
           />
         </label>
         <label className="w-full md:flex-1 md:min-w-[120px]">
@@ -516,7 +517,7 @@ function UsersTab() {
             onChange={(e) => setNewUsername(e.target.value)}
             maxLength={50}
             placeholder="alice"
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
           />
         </label>
         <label className="w-full md:flex-1 md:min-w-[140px]">
@@ -528,7 +529,7 @@ function UsersTab() {
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
             autoComplete="new-password"
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
           />
         </label>
         <label className="w-full md:w-auto md:min-w-[120px]">
@@ -538,7 +539,7 @@ function UsersTab() {
           <select
             value={newRole}
             onChange={(e) => setNewRole(e.target.value as Role)}
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-display text-meta font-semibold text-on-surface ${FIELD_FOCUS}`}
           >
             {assignableRoles.map((r) => (
               <option key={r} value={r}>
@@ -654,15 +655,15 @@ function AdminKpi({
   value: number | string;
   hint?: string;
   icon: string;
-  tone: "primary" | "emerald" | "amber" | "neutral";
+  tone: "primary" | "success" | "warning" | "neutral";
 }) {
   const iconColor =
     tone === "primary"
       ? "text-primary"
-      : tone === "emerald"
-        ? "text-emerald-600"
-        : tone === "amber"
-          ? "text-amber-600"
+      : tone === "success"
+        ? "text-success"
+        : tone === "warning"
+          ? "text-warning"
           : "text-on-surface-variant";
   return (
     <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
@@ -735,7 +736,7 @@ function RolesTab() {
                 onChange={(e) => setEditName(e.target.value)}
                 disabled={r.builtIn}
                 maxLength={50}
-                className="w-32 rounded-sm border border-outline-variant bg-surface px-2 py-1 font-mono text-sm uppercase focus:border-primary focus:outline-hidden disabled:opacity-60"
+                className={`w-32 rounded-sm border border-outline-variant bg-surface px-2 py-1 font-mono text-sm uppercase ${FIELD_FOCUS} disabled:opacity-60`}
                 title={
                   r.builtIn
                     ? "This role is reserved and cannot be renamed"
@@ -993,7 +994,7 @@ function RolesTab() {
             onChange={(e) => setNewName(e.target.value)}
             maxLength={50}
             placeholder="e.g. MANAGER"
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm uppercase focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm uppercase ${FIELD_FOCUS}`}
           />
         </label>
         <div>
@@ -1367,7 +1368,7 @@ function SignInModal({
     >
       <div className="space-y-5">
         <details className="rounded-sm border border-outline-variant bg-surface-container text-sm">
-          <summary className="cursor-pointer px-3 py-2 font-display text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+          <summary className="cursor-pointer px-3 py-2 font-display text-label-caps uppercase text-on-surface-variant">
             How to get a Client ID
           </summary>
           <ol className="list-decimal space-y-1 border-t border-outline-variant px-6 py-3 text-on-surface-variant">
@@ -1419,7 +1420,7 @@ function SignInModal({
               placeholder="123456789-abc.apps.googleusercontent.com"
               spellCheck={false}
               autoComplete="off"
-              className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-hidden"
+              className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm ${FIELD_FOCUS}`}
             />
           </label>
           <p className="mt-1 text-xs text-on-surface-variant">
@@ -1473,7 +1474,7 @@ function SignInModal({
               onChange={(e) => setNewDomain(e.target.value)}
               placeholder="example.com"
               maxLength={253}
-              className="flex-1 rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm focus:border-primary focus:outline-hidden"
+              className={`flex-1 rounded-sm border border-outline-variant bg-surface px-2 py-1.5 font-mono text-sm ${FIELD_FOCUS}`}
             />
             <button
               type="submit"
@@ -1624,7 +1625,7 @@ function ProjectsTab() {
             value={p.tamId}
             aria-label={`Reassign TAM for ${p.name}`}
             onChange={(e) => handleReassign(p, Number(e.target.value))}
-            className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-[13px] text-on-surface focus:border-primary focus:outline-hidden"
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-[13px] text-on-surface ${FIELD_FOCUS}`}
           >
             {tamCandidates.map((u) => (
               <option key={u.id} value={u.id}>

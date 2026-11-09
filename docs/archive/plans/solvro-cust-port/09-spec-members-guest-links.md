@@ -302,7 +302,7 @@ ON CONFLICT DO NOTHING;
 | `frontend/src/lib/api.ts` | (no change in eadc065) `apiRequest(path,{auth:false})` | INTERNAL already supports `auth?: boolean` (`api.ts:28-41`) — verified | none |
 | docs | CONFIGURATION.md TRUST_PROXY row + nginx §2.6 + logging §2.10 + setup §2.13; backend/CLAUDE.md public-surface + request-logging rules; ISSUES.md 5 deferred findings | — | docs-keeper trigger (env/nginx/setup.sh/vite.config touched) |
 
-**TRUST_PROXY for this VM**: the dev VM is reached through a tunnel (memory: solvro-internal.bapi.my.id → Vite dev server). Vite's `/api` proxy (`vite.config.ts:85-93`) does not set `xfwd`, so in dev `req.ip` = the Vite container and every guest shares one bucket; a client-supplied `X-Forwarded-For` is passed through by http-proxy and, with `TRUST_PROXY=1`, would be believed (dev-only spoof, low). For a prod deploy behind cloudflared, use `TRUST_PROXY="loopback, uniquelocal"` (CUST CONFIGURATION.md guidance).
+**TRUST_PROXY for this VM**: the dev VM is reached through a tunnel to the Vite dev server. Vite's `/api` proxy (`vite.config.ts:85-93`) does not set `xfwd`, so in dev `req.ip` = the Vite container and every guest shares one bucket; a client-supplied `X-Forwarded-For` is passed through by http-proxy and, with `TRUST_PROXY=1`, would be believed (dev-only spoof, low). For a prod deploy behind cloudflared, use `TRUST_PROXY="loopback, uniquelocal"` (CUST CONFIGURATION.md guidance).
 
 ### 5.1 Security review inputs
 - **Entropy**: 32 bytes CSPRNG (`crypto.randomBytes`) → 256 bits, base64url 43 chars. Brute force infeasible.

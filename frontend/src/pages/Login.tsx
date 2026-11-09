@@ -9,6 +9,7 @@ import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
 import { useGoogleAuthConfig } from "@/lib/queries";
 import { safeRedirectPath } from "@/lib/safeRedirect";
+import { FIELD_FOCUS_WITHIN } from "@/lib/utils";
 import { BrandMark } from "@/components/BrandMark";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 
@@ -135,12 +136,7 @@ export function Login() {
         {/* Hero copy */}
         <div className="relative z-10 my-auto">
           <div
-            className="mb-3 font-semibold text-primary"
-            style={{
-              fontSize: 10,
-              textTransform: "uppercase",
-              letterSpacing: "0.1em",
-            }}
+            className="mb-3 text-label-caps uppercase text-primary"
           >
             Project Operations
           </div>
@@ -172,11 +168,7 @@ export function Login() {
               (label) => (
                 <span
                   key={label}
-                  className="rounded-full border border-primary/30 text-primary/80"
-                  style={{
-                    fontSize: 10,
-                    padding: "3px 10px",
-                  }}
+                  className="rounded-full border border-primary/30 px-2.5 py-[3px] text-label-caps uppercase text-primary/80"
                 >
                   {label}
                 </span>
@@ -187,8 +179,7 @@ export function Login() {
 
         {/* Footer version/build */}
         <div
-          className="relative z-10 text-on-surface-variant/20"
-          style={{ fontSize: 10 }}
+          className="relative z-10 text-meta text-on-surface-variant/60"
         >
           v1.4.0 · build 2305
         </div>
@@ -311,8 +302,7 @@ export function Login() {
 
           {/* Footer */}
           <p
-            className="mt-6 text-center text-on-surface-variant/60"
-            style={{ fontSize: 10 }}
+            className="mt-6 text-center text-meta text-on-surface-variant/60"
           >
             Internal use only · Elitery © 2026
           </p>
@@ -349,7 +339,7 @@ function PasswordForm({
         <span className="text-label-caps uppercase text-on-surface-variant">
           Email
         </span>
-        <div className="mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
+        <div className={`mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 ${FIELD_FOCUS_WITHIN}`}>
           <span className="material-symbols-outlined text-base text-on-surface-variant">
             mail
           </span>
@@ -369,7 +359,7 @@ function PasswordForm({
         <span className="text-label-caps uppercase text-on-surface-variant">
           Password
         </span>
-        <div className="mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 focus-within:border-primary focus-within:shadow-[0_0_0_3px_rgba(58,174,81,0.15)]">
+        <div className={`mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 ${FIELD_FOCUS_WITHIN}`}>
           <span className="material-symbols-outlined text-base text-on-surface-variant">
             lock
           </span>

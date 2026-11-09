@@ -15,6 +15,122 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-07 — Release PRs keep the staging branch and never publish images
+
+- `.github/workflows/keep-staging.yml` (new): when a pull request from `staging` merges into `main`, the workflow recreates `staging` at the merged commit. The repository deletes a merged pull request's head branch automatically, which removed `staging` after the first staging -> main release; branch protection, which would exempt it, is not available on this plan. The branch is recreated with the workflow token, so it starts no CI run or staging redeploy for a commit that was already tested and deployed.
+- `.github/workflows/docker-publish.yml`: images publish only after a green CI run for a push. The workflow also fired when CI finished on a pull request whose head branch is `staging` (every staging -> main release), which would have published `:staging` images from the pull request's run and redeployed staging.
+
+### Fixed — 2026-11-02 — Design fixes follow-ups
+
+- `frontend/src/lib/gantt/exportPdf.ts`: Gantt PDF exports use the updated light primary green (`#25823A`).
+- The contrast test also checks the success, warning and danger text colours on plain surfaces, and checks that the Settings light-theme preview (now in `frontend/src/lib/themePreview.ts`) stays in step with `index.css`.
+- Login's sign-in fields use the shared `FIELD_FOCUS_WITHIN` class; the baseline date field in the project context panel no longer adds a second focus ring of its own.
+- The design checks in `.claude/scripts/gates.sh` match their exclusions against the file path only and report a grep error instead of passing silently.
+- e2e: the dark-theme Risks check runs on desktop only (phones show risk cards, not the table), and the form-focus check now compares against the field's unfocused state.
+
+### Changed — 2026-11-02 — Design system doc matches the shipped fixes
+
+- `docs/DESIGN.md`: records the darker light-theme primary and chip text tones, the solid warning colour pair, the 25px bold page-title role, the 4px default corner radius, the single app-wide keyboard focus ring and the automated design checks that enforce these rules.
+- `docs/ISSUES.md`: a known-issue entry for inline-edit fields (task and subtask titles, the epic add-task field, a comment input) that show no keyboard focus indicator.
+
+### Fixed — 2026-11-02 — One focus treatment on date fields, Kanban filters and the Gantt toolbar
+
+- `DateField.tsx`, `DateRangeField.tsx`, `kanban-v2/SolvroKanban.tsx` and `gantt-v2/SolvroGantt.tsx`: the green border on focus is gone. The date-field triggers, Kanban filter selects and the Gantt section-name field now show the shared focus ring (the date triggers previously had no ring at all), and the Gantt toolbar buttons keep their existing ring. No form control changes its border on focus any more.
+
+### Added — 2026-11-02 — Design guard checks in the quality gates
+
+- `.claude/scripts/gates.sh` gains four standing checks over app code (vendored UI and tests excluded): no raw Tailwind palette colour classes, no text below 12px (classes or inline `fontSize`), no `border-primary` focus styles, and no hand-rolled uppercase + `tracking-wider` labels. Each names the token or role to use instead, so this drift cannot creep back unnoticed.
+
+### Fixed — 2026-11-02 — Progress chart labels at 12px
+
+- `frontend/src/pages/views/ProjectOverview.tsx`: the progress S-curve's axis ticks, tooltip label and legend were set at 11px; they now render at 12px, the app's minimum text size.
+
+### Fixed — 2026-11-02 — Visible keyboard focus in pickers and project views
+
+- The label picker, PIC assignment, epics, project list and risks fields drop the green focus border and use the shared focus ring (added where a field had none).
+
+### Fixed — 2026-11-02 — Visible keyboard focus on admin, settings and service screens
+
+- Inputs and selects on the Admin, Settings and iTop admin screens and the service catalogue and mapping lists show the shared focus ring instead of a mix of green borders and per-screen rings.
+
+### Fixed — 2026-11-02 — Visible keyboard focus in iTop sheets and links
+
+- Fields in the iTop action, new-ticket and ticket-log sheets, the task ticket field and the links section drop the green focus border and use the shared focus ring (added where a field had none).
+
+### Fixed — 2026-11-02 — Visible keyboard focus in panels and the comment box
+
+- The task panel, epic panel, deal card, comment composer and task form fields drop the green focus border and use the shared focus ring (added where a field had none).
+
+### Fixed — 2026-11-02 — Visible keyboard focus in form dialogs
+
+- New `FIELD_FOCUS` / `FIELD_FOCUS_WITHIN` classes in `frontend/src/lib/utils.ts`: the one focus treatment for form controls, a 2px primary ring on keyboard focus with no border change.
+- The opportunity, risk, customer and project dialogs use it: the green focus border is gone, and the risk dialog's fields, which had no ring at all, now show one.
+- `e2e/tests/pipeline-form.spec.ts`: a check that a focused field shows the ring and keeps its border colour.
+
+### Changed — 2026-11-02 — Caps labels on Risks, Admin, customer and services screens
+
+- Section headings and field labels on the Risks, Admin, customer account overview and Services screens use the shared `text-label-caps` role instead of hand-set uppercase sizes (12–15px). The risk status select and the Admin create-user role select use 12px semibold sentence case, matching the status chips.
+
+### Changed — 2026-11-02 — Form field labels use the caps label role
+
+- Field labels in the project and customer forms and the iTop action and new-ticket sheets use the shared `text-label-caps` role instead of hand-set uppercase classes.
+
+### Fixed — 2026-11-02 — Login labels and input focus
+
+- `frontend/src/pages/Login.tsx`: the eyebrow, feature pills, version line and footer were set at 10px; they now use the shared caps and meta roles (12px), and the version line is easier to read. The sign-in fields show the standard focus ring instead of a custom green glow.
+
+### Fixed — 2026-11-02 — Gantt toolbar text meets the 12px floor
+
+- `frontend/src/components/gantt-v2/SolvroGantt.tsx`: the toolbar's zoom pills, month label and controls use the shared `text-meta` role (12px) instead of a hand-set 11.5px, below the 12px minimum.
+
+### Changed — 2026-11-02 — Remaining page titles use the heading role
+
+- Tasks, Utilization, Executive, Daily Review, Weekly Sync, Help, Admin, Settings, Pipeline, the deal page and the customer account header use the `text-h1` page-title role. Pipeline and the deal page grow from 24px to 25px and the customer name from 20px to 25px, so every page title matches.
+
+### Changed — 2026-11-02 — One page-title size
+
+- `frontend/src/index.css`: the `text-h1` heading role is now 25px bold, the size most pages already rendered by hand. Overview, Projects and Customers use the role instead of ad-hoc classes; the guest project page title, which already used it, shrinks from 32px to 25px.
+
+### Fixed — 2026-11-02 — Settings banner and theme previews follow the theme
+
+- `frontend/src/pages/Settings.tsx`: the 'Password updated' banner uses the shared success alert, readable in both themes, instead of a light-only green box. The Light, Dark and System previews are drawn from the real theme colours instead of hard-coded navy hex values, with the sidebar strip dark in both, as in the app. Section headings and field labels use the shared caps label style.
+
+### Fixed — 2026-11-02 — Risk statuses readable in dark mode
+
+- `frontend/src/pages/views/ProjectRisks.tsx`: the Mitigated and Closed status pills and the Medium and Low risk counters use the theme's amber and emerald status colours instead of light-only Tailwind tints, which rendered as bright light-mode pills in the dark theme. The counter labels use the shared caps label style.
+- `e2e/tests/project-header.spec.ts`: a dark-theme check that a Mitigated risk's status control carries the theme colours.
+
+### Changed — 2026-11-02 — Project card avatars use theme colour pairs
+
+- `frontend/src/pages/Projects.tsx`: the SA avatar on project cards picks from four theme colour pairs (violet, amber, emerald, neutral) instead of eight hard-coded hex colours that included a sky blue; the initials take the pair's text colour so they stay readable in both themes.
+
+### Changed — 2026-11-02 — Sidebar text uses the warm theme greys
+
+- `frontend/src/components/layout/Sidebar.tsx`: nav items, hover states, the wordmark and the collapse toggle use the theme's surface text colours instead of Tailwind slate and white. Slate is blue-tinted; the rest of the app uses warm greys. The rail stays dark in both themes.
+
+### Fixed — 2026-11-02 — Task done checkbox uses the primary colour
+
+- The done checkbox in the project list, kanban cards and task panel (`views/ProjectList.tsx`, `kanban-v2/cards.tsx`, `TaskPanel.tsx`) uses the theme's primary colour instead of a hard-coded emerald, and now shows the standard keyboard focus ring.
+
+### Fixed — 2026-11-02 — Planning and on-hold bars visible on portfolio timelines
+
+- `frontend/src/components/portfolio/PortfolioCalendar.tsx`: Planning and on-hold projects are drawn in the solid amber tone instead of the pale chip background, which was nearly invisible on the light theme's white track. Affects the Overview and Executive timelines.
+
+### Fixed — 2026-11-02 — Readable warning button in confirm dialogs
+
+- `frontend/src/components/ConfirmModal.tsx`: the warning confirm button uses the new warning colour pair (it was white on amber at 2.2:1 contrast), and every dialog button uses the standard 4px corners and semibold weight.
+
+### Fixed — 2026-11-02 — Success and warning accents follow the theme
+
+- `frontend/src/pages/views/ProjectOverview.tsx`: the S-curve 'completed' legend, the schedule-slip text and the KPI accent use the theme's success colour instead of hard-coded emerald, so they read correctly in both themes and stay distinct from the green 'current' line.
+- `frontend/src/pages/Admin.tsx`: the Pending and Custom roles summary icons on the Users tab use the warning and success colours instead of fixed amber and emerald.
+
+### Changed — 2026-11-02 — Light theme meets WCAG AA contrast; warning colour pair
+
+- `frontend/src/index.css`: in the light theme the emerald, amber and rose chip text tones are darker (`#15803D`, `#B45309`, `#B91C1C`) and the primary green moves from `#2D9042` to `#25823A`, so chip text, primary buttons and green links reach at least 4.5:1. Dark-theme values are unchanged.
+- New `warning-solid` / `on-warning` colour pair for solid warning surfaces (light `#B45309` with white text, dark `#78350F` with `#FDE68A`), built like the existing error pair.
+- New `frontend/src/lib/tokenContrast.test.ts` reads the colour values from `index.css` and fails if any chip, primary, warning or error text/fill pair drops below 4.5:1 in either theme.
+
 ### Changed — 2026-11-02 — e2e runs in four parallel shards
 
 - The e2e job in `.github/workflows/ci.yml` splits each Playwright project into four shards (`--shard=N/4`), each on its own stack and database, so a run waits about 9 minutes instead of about 21. Only the first desktop shard writes the Docker layer cache; the other shards read it. The e2e timeout drops to 20 minutes per shard.
@@ -4561,11 +4677,11 @@ Reused existing primitives: `useSidebar()` for the mobile drawer toggle, the exi
 ### Changed — 2026-05-02 — Same-origin /api proxy (Cloudflare Tunnel / TLS-friendly)
 
 - **[frontend/nginx.conf](frontend/nginx.conf)** — added a `location /api/ { proxy_pass http://backend:3000/; ... }` block (placed before the SPA fallback so it matches first). Forwards `Host`, `X-Real-IP`, `X-Forwarded-For`, `X-Forwarded-Proto` headers; sets `proxy_http_version 1.1` and `client_max_body_size 1m` to match Express's `json({ limit: "1mb" })`. The trailing slash on `proxy_pass` strips the `/api` prefix so `/api/auth/login` → `http://backend:3000/auth/login` (backend routes don't have an `/api` prefix per CLAUDE.md). nginx is now the same-origin gateway: the browser only ever talks to whatever hostname serves the page.
-- **[frontend/src/lib/api.ts](frontend/src/lib/api.ts)** — `BASE_URL` is now the literal string `"/api"`. Replaces the previous `${protocol}//${hostname}:3000` runtime computation. **Why:** the runtime-URL trick worked for direct LAN access but broke under any reverse proxy (Cloudflare Tunnel, future TLS terminator, k8s ingress) because port 3000 isn't exposed at the proxy edge AND mixed HTTPS-page → HTTP-backend is browser-blocked. Relative `/api` paths inherit `window.location.origin` and `window.location.protocol` automatically — works on `https://solvro-dev.bapi.my.id`, `http://10.10.1.10`, `http://localhost`, anywhere.
+- **[frontend/src/lib/api.ts](frontend/src/lib/api.ts)** — `BASE_URL` is now the literal string `"/api"`. Replaces the previous `${protocol}//${hostname}:3000` runtime computation. **Why:** the runtime-URL trick worked for direct LAN access but broke under any reverse proxy (Cloudflare Tunnel, future TLS terminator, k8s ingress) because port 3000 isn't exposed at the proxy edge AND mixed HTTPS-page → HTTP-backend is browser-blocked. Relative `/api` paths inherit `window.location.origin` and `window.location.protocol` automatically — works on the dev server's tunnel hostname, `http://10.10.1.10`, `http://localhost`, anywhere.
 - **[frontend/vite.config.ts](frontend/vite.config.ts)** — added `server.proxy: { "/api": { target: "http://localhost:3000", changeOrigin: true, rewrite: (p) => p.replace(/^\/api/, "") } }`. Mirrors the nginx behaviour for the dev workflow (`npm run dev` on :5173 forwards `/api/*` to the host-side backend on :3000). Without this, the new `BASE_URL = "/api"` would 404 in dev because Vite has no backend behind `/api`.
 - **No backend changes.** Routers stay mounted at `/auth`, `/projects`, etc. — the proxy strips `/api` before forwarding.
 - **No setup.sh / docker-compose changes.** The compose file keeps the backend's `:3000` host port mapping (harmless leftover for LAN debugging; not used by the proxy path which goes container-to-container over the docker network).
-- **Followups deferred:** (1) tighten `CORS_ORIGIN` from `*` to `https://solvro-dev.bapi.my.id` (now redundant for production since same-origin requests skip CORS preflight, but cleaner); (2) optionally drop the `:3000` host port mapping for tighter LAN attack surface; (3) add `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` to the nginx `/api/` block if/when the app adds WebSockets or SSE.
+- **Followups deferred:** (1) tighten `CORS_ORIGIN` from `*` to the dev server's own origin (now redundant for production since same-origin requests skip CORS preflight, but cleaner); (2) optionally drop the `:3000` host port mapping for tighter LAN attack surface; (3) add `proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade";` to the nginx `/api/` block if/when the app adds WebSockets or SSE.
 
 ### Added — 2026-05-02 — Admin can create new users from the Admin → Users tab
 
