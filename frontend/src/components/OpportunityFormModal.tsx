@@ -1,6 +1,7 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { DateField } from "./DateField";
 import { Modal } from "./Modal";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -211,7 +212,7 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
             onChange={(e) => setTitle(e.target.value)}
             maxLength={200}
             autoFocus
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 
@@ -221,7 +222,7 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
             value={customerName}
             onChange={(e) => setCustomerName(e.target.value)}
             maxLength={200}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 
@@ -235,7 +236,7 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
               value={dealValue}
               onChange={(e) => setDealValue(e.target.value)}
               placeholder="0"
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-data-mono text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-data-mono text-on-surface ${FIELD_FOCUS}`}
             />
           </Field>
 
@@ -248,7 +249,7 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
               inputMode="numeric"
               value={winProbability}
               onChange={(e) => setWinProbability(e.target.value)}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             />
           </Field>
         </div>
@@ -265,7 +266,7 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
             <select
               value={stage}
               onChange={(e) => setStage(e.target.value as PipelineStage)}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+              className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               {STAGE_ORDER.map((s) => (
                 <option key={s} value={s}>
@@ -280,7 +281,7 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
           <select
             value={picId === "" ? "" : String(picId)}
             onChange={(e) => setPicId(e.target.value === "" ? "" : Number(e.target.value))}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           >
             <option value="">No PIC</option>
             {(users ?? []).map((u) => (
@@ -307,7 +308,7 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
             value={productSolution}
             onChange={(e) => setProductSolution(e.target.value)}
             maxLength={500}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 
@@ -317,7 +318,7 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
             value={leadSource}
             onChange={(e) => setLeadSource(e.target.value)}
             maxLength={200}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 
@@ -327,7 +328,7 @@ export function OpportunityFormModal({ open, onClose, opportunity, initialStage 
             onChange={(e) => setDescription(e.target.value)}
             rows={3}
             maxLength={5000}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 

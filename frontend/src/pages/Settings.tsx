@@ -1,4 +1,5 @@
-import { useState, type FormEvent } from "react";
+import { FIELD_FOCUS } from "@/lib/utils";
+import { useState, type CSSProperties, type FormEvent } from "react";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { CardGridSkeleton } from "@/components/skeletons";
 import { ServiceCatalogueManager } from "@/components/services/ServiceCatalogueManager";
@@ -12,6 +13,7 @@ import {
   useSaveMyItopToken,
 } from "@/lib/queries";
 import { useTheme, type ThemeChoice } from "@/lib/theme";
+import { LIGHT_PREVIEW_VARS } from "@/lib/themePreview";
 
 export function Settings() {
   const { user, replaceToken } = useAuth();
@@ -57,7 +59,7 @@ export function Settings() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <header>
-        <h1 className="font-display text-2xl font-bold text-on-surface">Settings</h1>
+        <h1 className="font-display text-h1 text-on-surface">Settings</h1>
         <p className="text-sm text-on-surface-variant">
           Manage your account profile and password.
         </p>
@@ -66,7 +68,7 @@ export function Settings() {
       <ThemeCard />
 
       <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-        <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
+        <h2 className="mb-3 font-display text-label-caps uppercase text-on-surface">
           Profile
         </h2>
         <dl className="grid grid-cols-1 gap-y-2 text-sm md:grid-cols-[140px_1fr]">
@@ -95,7 +97,7 @@ export function Settings() {
       {/* The catalogue is global and its writes are admin-only on the server. */}
       {hasPermission(user, "*") && (
         <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-          <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
+          <h2 className="mb-3 font-display text-label-caps uppercase text-on-surface">
             Service Catalogue
           </h2>
           <ServiceCatalogueManager />
@@ -103,14 +105,14 @@ export function Settings() {
       )}
 
       <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-        <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
+        <h2 className="mb-3 font-display text-label-caps uppercase text-on-surface">
           Change password
         </h2>
 
         {success && (
-          <div className="mb-3 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">
-            Password updated.
-          </div>
+          <Alert variant="success" className="mb-3">
+            <AlertDescription>Password updated.</AlertDescription>
+          </Alert>
         )}
         {error && (
           <Alert variant="destructive" className="mb-3">
@@ -126,7 +128,7 @@ export function Settings() {
               onChange={(e) => setCurrentPassword(e.target.value)}
               autoComplete="current-password"
               required
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
             />
           </Field>
           <Field label="New password" required>
@@ -137,7 +139,7 @@ export function Settings() {
               autoComplete="new-password"
               minLength={8}
               required
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
             />
             <p className="mt-1 text-[12px] text-on-surface-variant">
               At least 8 characters. Must differ from the current password.
@@ -151,7 +153,7 @@ export function Settings() {
               autoComplete="new-password"
               minLength={8}
               required
-              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
             />
           </Field>
           <div className="flex justify-end">
@@ -215,7 +217,7 @@ function ItopTokenSection() {
 
   return (
     <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-      <h2 className="mb-3 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
+      <h2 className="mb-3 font-display text-label-caps uppercase text-on-surface">
         iTop
       </h2>
 
@@ -253,7 +255,7 @@ function ItopTokenSection() {
             placeholder={token.set ? "•••••••• (set)" : "scope REST/JSON"}
             spellCheck={false}
             autoComplete="off"
-            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/20"
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
           />
         </Field>
         <p className="text-[12px] text-on-surface-variant">
@@ -303,6 +305,22 @@ function ItopTokenSection() {
   );
 }
 
+
+function ThemeSwatch({ scheme }: { scheme: "light" | "dark" }) {
+  return (
+    <div
+      className={`flex h-full bg-background ${scheme === "dark" ? "dark" : ""}`}
+      style={scheme === "light" ? (LIGHT_PREVIEW_VARS as CSSProperties) : undefined}
+    >
+      <div className="w-1/4 bg-sidebar" />
+      <div className="flex flex-1 flex-col gap-1 p-1.5">
+        <div className="h-1.5 w-1/2 rounded-sm bg-primary" />
+        <div className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest" />
+      </div>
+    </div>
+  );
+}
+
 function ThemeCard() {
   const { choice, resolved, setChoice } = useTheme();
   const options: { key: ThemeChoice; label: string; icon: string; hint: string }[] = [
@@ -317,7 +335,7 @@ function ThemeCard() {
   ];
   return (
     <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-      <h2 className="mb-1 font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
+      <h2 className="mb-1 font-display text-label-caps uppercase text-on-surface">
         Appearance
       </h2>
       <p className="mb-3 text-[12px] text-on-surface-variant">
@@ -339,7 +357,7 @@ function ThemeCard() {
               ].join(" ")}
             >
               <div className="flex items-center justify-between">
-                <span className="font-display text-[12px] font-bold uppercase tracking-wider text-on-surface">
+                <span className="font-display text-label-caps uppercase text-on-surface">
                   {opt.label}
                 </span>
                 {active ? (
@@ -353,16 +371,12 @@ function ThemeCard() {
                 className="h-12 rounded-sm border border-outline-variant overflow-hidden"
                 aria-hidden
               >
-                {opt.key === "light" && (
-                  <div className="h-full bg-white" style={{ borderColor: "#D1D6E2" }} />
-                )}
-                {opt.key === "dark" && (
-                  <div className="h-full" style={{ background: "#0F1623" }} />
-                )}
+                {opt.key === "light" && <ThemeSwatch scheme="light" />}
+                {opt.key === "dark" && <ThemeSwatch scheme="dark" />}
                 {opt.key === "system" && (
                   <div className="grid h-full grid-cols-2">
-                    <div className="bg-white" />
-                    <div style={{ background: "#0F1623" }} />
+                    <ThemeSwatch scheme="light" />
+                    <ThemeSwatch scheme="dark" />
                   </div>
                 )}
               </div>
@@ -386,7 +400,7 @@ function Field({
 }) {
   return (
     <label className="block">
-      <span className="mb-1 block text-[12px] font-bold uppercase tracking-wider text-on-surface-variant">
+      <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">
         {label}
         {required && <span className="ml-1 text-error">*</span>}
       </span>

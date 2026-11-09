@@ -24,7 +24,7 @@ export function Help() {
     <div className="mx-auto max-w-5xl space-y-6">
       <header className="space-y-3">
         <div>
-          <h1 className="font-display text-2xl font-bold text-on-surface">Help</h1>
+          <h1 className="font-display text-h1 text-on-surface">Help</h1>
           <p className="text-sm text-on-surface-variant">
             How to use Solvro — every page and feature available to you.
           </p>

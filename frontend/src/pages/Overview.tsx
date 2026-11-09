@@ -32,7 +32,7 @@ export function Overview() {
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h1 className="font-display text-2xl font-bold text-on-surface">Overview</h1>
+        <h1 className="font-display text-h1 text-on-surface">Overview</h1>
         <p className="text-sm text-on-surface-variant">{fmtDayLong(dateToDay(new Date()))}</p>
       </div>
 

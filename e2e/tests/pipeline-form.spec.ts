@@ -218,6 +218,33 @@ test.describe("Pipeline opportunity form — desktop", () => {
     await expect(dialog).toBeVisible();
   });
 
+  test("focused form fields show the ring and keep their border colour", async ({ page }) => {
+    await loginViaUi(page);
+    await openPipeline(page);
+
+    await page.getByRole("button", { name: "New opportunity" }).first().click();
+    const dialog = page.getByRole("dialog", { name: "New opportunity" });
+    await expect(dialog).toBeVisible();
+
+    const title = dialog.getByLabel("Title");
+    // Title is auto-focused when the dialog opens — blur it first so the
+    // "before" reading is the idle border, not an already-focused one.
+    await title.evaluate((el) => (el as HTMLElement).blur());
+    await expect(title).not.toBeFocused();
+    const shadowBefore = await title.evaluate((el) => getComputedStyle(el).boxShadow);
+    const borderBefore = await title.evaluate((el) => getComputedStyle(el).borderTopColor);
+    await title.focus();
+    await expect(title).toBeFocused();
+
+    await expect(title).toHaveClass(/focus-visible:ring-2/);
+    // The ring is a box-shadow; the border must not switch to the primary colour.
+    const shadow = await title.evaluate((el) => getComputedStyle(el).boxShadow);
+    expect(shadow).not.toBe("none");
+    expect(shadow).not.toBe(shadowBefore);
+    const borderAfter = await title.evaluate((el) => getComputedStyle(el).borderTopColor);
+    expect(borderAfter).toBe(borderBefore);
+  });
+
   test("editing a deal changes its title and clears win probability to the 50 default", async ({
     page,
     seededProject,

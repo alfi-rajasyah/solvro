@@ -56,6 +56,7 @@ import {
   useUsers,
 } from "@/lib/queries";
 import { priorityOptions, TASK_STATUS_LABEL } from "@/lib/labels";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { BoardSkeleton } from "@/components/skeletons";
 import { KANBAN_STATUSES, projectToColumns, sortTasksCanonical } from "./adapter";
 import { TaskCard } from "./cards";
@@ -525,7 +526,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                     onChange={(e) =>
                       setFilterAssigneeId(e.target.value === "" ? "" : Number(e.target.value))
                     }
-                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+                    className={`w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
                   >
                     <option value="">Everyone</option>
                     {(users ?? []).map((u) => (
@@ -543,7 +544,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                     id={`${filterUid}-priority`}
                     value={filterPriority}
                     onChange={(e) => setFilterPriority(e.target.value as Priority | "")}
-                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+                    className={`w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
                   >
                     <option value="">Any priority</option>
                     {priorityOptions.map((o) => (
@@ -564,7 +565,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                       const v = e.target.value;
                       setFilterEpicId(v === "" ? "" : v === "none" ? null : Number(v));
                     }}
-                    className="w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface focus:border-primary focus:outline-hidden"
+                    className={`w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
                   >
                     <option value="">All</option>
                     <option value="none">No epic</option>

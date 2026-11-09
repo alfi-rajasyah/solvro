@@ -5,6 +5,7 @@
 // the one exception. Reassigning a deal that already has a PIC is Edit's
 // job (OpportunityFormModal's PIC field), not this one — see canAssignDeal
 // (frontend/src/components/pipeline/boardLogic.ts) and D4.
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
@@ -115,7 +116,7 @@ export function AssignPicModal({ open, onClose, opportunity }: Props) {
             onChange={(e) => setPicId(e.target.value === "" ? "" : Number(e.target.value))}
             aria-label="PIC"
             required
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30"
+            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           >
             {(users ?? []).map((u) => (
               <option key={u.id} value={u.id}>

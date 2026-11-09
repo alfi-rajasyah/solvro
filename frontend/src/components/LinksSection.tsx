@@ -4,6 +4,7 @@ import { Alert, AlertDescription } from "@/components/reui/alert";
 import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ApiError } from "@/lib/api";
+import { FIELD_FOCUS } from "@/lib/utils";
 
 // Label + URL document links, shared by the Pipeline deal page, a project's
 // Context panel and a customer's Overview tab. The host owns the data: it
@@ -249,7 +250,7 @@ export function LinkFields({
   withPlaceholders?: boolean;
 }) {
   const className =
-    "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30";
+    `w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2.5 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant ${FIELD_FOCUS}`;
   return (
     <>
       <input

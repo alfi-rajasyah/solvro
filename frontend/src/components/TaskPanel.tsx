@@ -16,6 +16,7 @@ import { TaskTicketField } from "@/components/itop/TaskTicketField";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { Sortable, SortableItem, SortableItemHandle } from "@/components/reui/sortable";
 import { ApiError } from "@/lib/api";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { CommentBody, CommentComposer } from "@/components/CommentMentions";
 import { fmtAgo, fmtRange } from "@/lib/formatDate";
@@ -562,7 +563,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                     setEditingAssignee(false);
                   }}
                   onBlur={() => setEditingAssignee(false)}
-                  className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-hidden"
+                  className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface ${FIELD_FOCUS}`}
                 >
                   <option value="">Unassigned</option>
                   {(users ?? []).map((u) => (
@@ -700,7 +701,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                     setEditingSection(false);
                   }}
                   onBlur={() => setEditingSection(false)}
-                  className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-hidden"
+                  className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface ${FIELD_FOCUS}`}
                 >
                   <option value="">No section</option>
                   {(sections ?? []).map((s) => (
@@ -747,7 +748,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                           setEditingEpic(false);
                         }}
                         onBlur={() => setEditingEpic(false)}
-                        className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface focus:border-primary focus:outline-hidden"
+                        className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface ${FIELD_FOCUS}`}
                       >
                         <option value="">No epic</option>
                         {(epics ?? []).map((e) => (
@@ -862,9 +863,9 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                             : "Mark done"
                       }
                       className={[
-                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors",
+                        "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
                         s.status === "DONE"
-                          ? "border-emerald-500 bg-emerald-500 text-white"
+                          ? "border-primary bg-primary text-on-primary"
                           : "border-outline-variant hover:border-primary",
                         canEdit ? "cursor-pointer" : "cursor-default",
                       ].join(" ")}

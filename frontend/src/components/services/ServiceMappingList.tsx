@@ -1,3 +1,4 @@
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
 import { EmptyState } from "@/components/EmptyState";
 import { Alert, AlertDescription } from "@/components/reui/alert";
@@ -139,7 +140,7 @@ export function ServiceMappingList({
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="font-display text-[13px] font-bold uppercase tracking-wider text-on-surface">
+        <h2 className="font-display text-label-caps uppercase text-on-surface">
           {title}
         </h2>
         <p className="text-[12px] text-on-surface-variant">{description}</p>
@@ -252,7 +253,7 @@ export function ServiceMappingList({
               onChange={(e) => setNewName(e.target.value)}
               maxLength={100}
               placeholder="e.g. Penetration Testing"
-              className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
+              className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
             />
           </label>
           <label className="w-full md:flex-2 md:min-w-[240px]">
@@ -265,7 +266,7 @@ export function ServiceMappingList({
               onChange={(e) => setNewDesc(e.target.value)}
               maxLength={1000}
               placeholder="Short blurb shown in the catalogue"
-              className="w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm focus:border-primary focus:outline-hidden"
+              className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
             />
           </label>
           <button
@@ -356,7 +357,7 @@ export function ToolsEditor({
             disabled={saving}
             placeholder={tools.length === 0 ? "e.g. Acronis, Crowdstrike" : "Add tool…"}
             aria-label={`Add tool for ${serviceName}`}
-            className="min-w-[140px] flex-1 rounded-sm border border-outline-variant bg-surface px-2 py-0.5 text-[12px] focus:border-primary focus:outline-hidden disabled:opacity-50"
+            className={`min-w-[140px] flex-1 rounded-sm border border-outline-variant bg-surface px-2 py-0.5 text-[12px] ${FIELD_FOCUS} disabled:opacity-50`}
           />
         )}
         {!canMutate && tools.length === 0 && (
