@@ -13,6 +13,7 @@ import { Modal } from "@/components/Modal";
 import { Chip, ProjectStatusChip } from "@/components/StatusChip";
 import { Tabs } from "@/components/Tabs";
 import { ItopTab } from "@/components/admin/ItopTab";
+import { HandoverModal } from "@/components/admin/HandoverModal";
 import { ApiError } from "@/lib/api";
 import {
   type AdminProject,
@@ -28,6 +29,9 @@ import {
   useAdminResetPassword,
   useAdminRoles,
   useAdminSetActive,
+  useAdminFetchHandoverPreview,
+  isHandoverPreviewEmpty,
+  type HandoverPreview,
   useAdminUpdateRole,
   useAdminUpdateRolePermissions,
   useAdminUsers,
@@ -122,6 +126,8 @@ function UsersTab() {
   const deleteUser = useAdminDeleteUser();
   const updateRole = useAdminUpdateRole();
   const setActive = useAdminSetActive();
+  const fetchHandoverPreview = useAdminFetchHandoverPreview();
+  const [handover, setHandover] = useState<{ user: AdminUser; preview: HandoverPreview } | null>(null);
   const resetPassword = useAdminResetPassword();
   const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
   const [resettingUser, setResettingUser] = useState<AdminUser | null>(null);
@@ -428,9 +434,48 @@ function UsersTab() {
   async function handleToggleActive(u: AdminUser) {
     setError(null);
     try {
+      if (u.active) {
+        // Deactivating: look at what the user still holds first. Nothing held
+        // -> the plain deactivate below; otherwise the handover modal.
+        const preview = await fetchHandoverPreview(u.id);
+        if (!isHandoverPreviewEmpty(preview)) {
+          setHandover({ user: u, preview });
+          return;
+        }
+      }
       await setActive.mutateAsync({ id: u.id, active: !u.active });
     } catch (err) {
+      // Work appeared between the preview and the deactivate: open the modal.
+      const code = (err as ApiError | null)?.body as { code?: unknown } | null | undefined;
+      if (u.active && err instanceof ApiError && err.status === 409 && code?.code === "handover_required") {
+        try {
+          const preview = await fetchHandoverPreview(u.id);
+          if (!isHandoverPreviewEmpty(preview)) {
+            setHandover({ user: u, preview });
+            return;
+          }
+          // Nothing left to hand over any more: the plain deactivate now works.
+          await setActive.mutateAsync({ id: u.id, active: false });
+          return;
+        } catch (retryErr) {
+          setError(retryErr instanceof ApiError ? retryErr.message : "Failed to update status.");
+          return;
+        }
+      }
       setError(err instanceof ApiError ? err.message : "Failed to update status.");
+    }
+  }
+
+  // Resolves true once the modal has a fresh preview; false when the reload failed.
+  async function reloadHandoverPreview(): Promise<boolean> {
+    if (!handover) return false;
+    try {
+      const preview = await fetchHandoverPreview(handover.user.id);
+      if (isHandoverPreviewEmpty(preview)) setHandover(null);
+      else setHandover({ user: handover.user, preview });
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -600,6 +645,16 @@ function UsersTab() {
         </DataGridContainer>
       </DataGrid>
 
+      {handover && (
+        <HandoverModal
+          open
+          user={handover.user}
+          preview={handover.preview}
+          onClose={() => setHandover(null)}
+          onDone={() => setHandover(null)}
+          onStale={reloadHandoverPreview}
+        />
+      )}
       <ConfirmModal
         open={deletingUser !== null}
         onClose={() => setDeletingUser(null)}

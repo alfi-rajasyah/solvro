@@ -31,6 +31,7 @@ import {
   useProjectDependencies,
   useProjectEpics,
   useProjectSections,
+  useProjectStatus,
   useProjectTasks,
   useUpdateSection,
   useUpdateTask,
@@ -795,6 +796,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // recomputed once per row inside TaskDatesCell. Same pattern as
   // `pages/views/ProjectTimeline.tsx`'s own `todayDay` hoist.
   const todayDay = dateToDay(new Date());
+  const projectStatus = useProjectStatus(projectId);
 
   // Tree-pane inline editors, ported into ReUI's GanttColumn contract —
   // GanttListRow.tsx:240-270 (dates popover) and :151-194 (section color
@@ -839,6 +841,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
               canEdit={canEdit}
               onSave={handleUpdateDates}
               todayDay={todayDay}
+              projectStatus={projectStatus}
             />
           );
         },
@@ -865,7 +868,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
         },
       },
     ];
-  }, [sections, taskById, canEdit, handleUpdateDates, handleSetSectionColor, todayDay]);
+  }, [sections, taskById, canEdit, handleUpdateDates, handleSetSectionColor, todayDay, projectStatus]);
 
   // Plan B Task 7 — register Excel/PDF export handlers in the shared context
   // (`GanttExportProvider`, mounted by ProjectDetail.tsx around the whole

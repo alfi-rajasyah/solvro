@@ -33,6 +33,7 @@ import { hasPermission, useAuth } from "@/lib/auth";
 import { commitDraft, dayFromIso } from "@/lib/dateField";
 import { useDragActivityGuard } from "@/lib/dragActivity";
 import { fmtDay, fmtDue } from "@/lib/formatDate";
+import { showsPlainDue } from "@/lib/taskOverdue";
 import { TASK_STATUS_LABEL } from "@/lib/labels";
 import { ASSIGN_ADDS_MEMBER_NOTICE } from "@/lib/projectMembers";
 import { useAssigneeMembership } from "@/lib/useAssigneeMembership";
@@ -47,6 +48,7 @@ import {
   useDuplicateSection,
   useProjectEpics,
   useProjectSections,
+  useProjectStatus,
   useProjectTasks,
   useUpdateSection,
   useUpdateTask,
@@ -858,6 +860,7 @@ function TaskRow({
   onSetDates: (t: Task, start: string | null, due: string | null) => void;
 }) {
   const { task, subtasks } = node;
+  const plainDue = showsPlainDue(task.status, useProjectStatus(task.projectId));
   const epic = task.epicId !== null ? epicMap.get(task.epicId) : undefined;
   const [expanded, setExpanded] = useState(subtasks.length > 0);
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
@@ -932,7 +935,7 @@ function TaskRow({
             canEdit={canEdit}
             startISO={task.startDate}
             dueISO={task.dueDate}
-            done={task.status === "DONE" || task.status === "CANCELLED"}
+            done={plainDue}
             onSave={(s, d) => onSetDates(task, s, d)}
           />
         </span>
@@ -1002,7 +1005,7 @@ function TaskRow({
         <div className="flex items-center justify-between gap-2 pl-0">
           <span className="flex items-center gap-1.5">
             <AssigneeAvatar user={task.assignedTo} size="xs" />
-            <span className="text-meta text-on-surface-variant">{fmt(task.dueDate, task.status === "DONE" || task.status === "CANCELLED")}</span>
+            <span className="text-meta text-on-surface-variant">{fmt(task.dueDate, plainDue)}</span>
           </span>
           <span
             className={[
@@ -1208,7 +1211,7 @@ function DueDateEditor({
   canEdit: boolean;
   startISO: string | null;
   dueISO: string | null;
-  /** Finished tasks show the plain date, never "Nd late". */
+  /** Finished tasks and on-hold projects show the plain date, never "Nd late". */
   done: boolean;
   onSave: (start: string | null, due: string | null) => void;
 }) {

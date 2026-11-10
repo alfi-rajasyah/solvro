@@ -10,6 +10,8 @@ interface ConfirmModalProps {
   title: string;
   body: ReactNode;
   confirmLabel: string;
+  /** Label of the dismiss button; defaults to "Cancel". */
+  cancelLabel?: string;
   confirmTone?: Tone;
   busy?: boolean;
 }
@@ -21,6 +23,7 @@ export function ConfirmModal({
   title,
   body,
   confirmLabel,
+  cancelLabel = "Cancel",
   confirmTone = "primary",
   busy = false,
 }: ConfirmModalProps) {
@@ -44,7 +47,7 @@ export function ConfirmModal({
             disabled={busy}
             className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
-            Cancel
+            {cancelLabel}
           </button>
           <button
             type="button"

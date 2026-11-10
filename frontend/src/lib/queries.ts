@@ -196,6 +196,8 @@ export interface ProjectSummary {
   excludeFromPortfolio: boolean;
   baselineLockedAt: string | null;
   baselineLockedById: number | null;
+  /** When the project last moved into ON_HOLD (ISO instant); null whenever it is not on hold. */
+  onHoldSince: string | null;
   createdAt: string;
   updatedAt: string;
   sa: { id: number; username: string } | null;
@@ -258,7 +260,8 @@ export type ActivityAction =
   | "closed"
   | "reopened"
   | "assigned"
-  | "handed_off";
+  | "handed_off"
+  | "all_tasks_closed";
 
 /**
  * One row of a project's activity log (GET /projects/:id/activity). `changes`
@@ -448,6 +451,8 @@ export interface WorkCounts {
   overdue: number;
   dueThisWeek: number;
   openRisks: number;
+  /** Overdue open tasks left out of `overdue` because their project is on hold. */
+  onHoldExcluded: number;
 }
 
 // GET /notes/recent — the Overview page's "Recent notes" feed
@@ -533,6 +538,8 @@ export interface TasksFilter {
   /** Inclusive due-date day range, "yyyy-MM-dd" (the server rejects from > to). */
   dueFrom?: string;
   dueTo?: string;
+  /** true = leave out tasks of ON_HOLD projects (the "due this week" list). */
+  excludeOnHold?: boolean;
   /** "due" = soonest first, undated last; default is board order. */
   sort?: "position" | "due";
 }
@@ -732,6 +739,11 @@ export const queryKeys = {
   users: ["users"] as const,
   projects: (filter?: ProjectsFilter) => ["projects", filter ?? {}] as const,
   project: (id: number) => ["projects", id] as const,
+  // GET /projects/:id for a local day (`health` is bucketed against it).
+  projectDetail: (id: number, today: string) => ["projects", id, today] as const,
+  // Nested under the project key, so every project invalidation refreshes it.
+  projectLifecyclePreview: (id: number, today: string) =>
+    ["projects", id, "lifecycle-preview", today] as const,
   projectTasks: (id: number) => ["projects", id, "tasks"] as const,
   projectLabels: (id: number) => ["projects", id, "labels"] as const,
   projectSections: (id: number) => ["projects", id, "sections"] as const,
@@ -1043,15 +1055,22 @@ export function useCustomer(id: number | null) {
   });
 }
 
+function projectDetailOptions(id: number, today: string) {
+  return {
+    queryKey: queryKeys.projectDetail(id, today),
+    queryFn: ({ signal }: { signal?: AbortSignal }) =>
+      apiRequest<ProjectDetail>(`/projects/${id}?today=${today}`, { signal }),
+  };
+}
+
 export function useProject(id: number | null) {
   // `health.overdueCount` depends on the caller's local day — see useProjects.
   const today = dateToDay(new Date())!;
   const live = useLiveRefresh();
   return useQuery({
     ...live,
-    queryKey: id ? [...queryKeys.project(id), today] : ["projects", "noop"],
-    queryFn: ({ signal }) =>
-      apiRequest<ProjectDetail>(`/projects/${id}?today=${today}`, { signal }),
+    queryKey: id ? projectDetailOptions(id, today).queryKey : ["projects", "noop"],
+    queryFn: projectDetailOptions(id ?? 0, today).queryFn,
     enabled: id !== null,
   });
 }
@@ -1202,7 +1221,9 @@ export type NotificationReason =
   | "commented"
   | "mentioned"
   | "deal_closed"
-  | "handed_off";
+  | "handed_off"
+  | "all_tasks_closed"
+  | "tasks_handed_over";
 
 export interface AppNotification {
   id: number;
@@ -1445,6 +1466,7 @@ function tasksQueryOptions(filter: TasksFilter) {
   if (filter.topLevel) params.set("topLevel", "true");
   if (filter.dueFrom) params.set("dueFrom", filter.dueFrom);
   if (filter.dueTo) params.set("dueTo", filter.dueTo);
+  if (filter.excludeOnHold) params.set("excludeOnHold", "true");
   if (filter.sort) params.set("sort", filter.sort);
   const qs = params.toString();
   return {
@@ -1538,6 +1560,50 @@ export interface UpdateProjectInput {
   customerId?: number;
   wipLimits?: WipLimits | null;
   excludeFromPortfolio?: boolean;
+  /**
+   * Adds this many calendar days (1..3650) to every open task and open epic.
+   * Valid only on a request that moves the project ON_HOLD -> ACTIVE/PLANNING
+   * (server: 400 `shift_requires_reactivation` otherwise).
+   */
+  shiftOpenDatesByDays?: number;
+}
+
+// GET /projects/:id/lifecycle-preview — what a status change would touch.
+// `holdDays` is the server's UTC-based figure and can be one day high ahead
+// of UTC; the reactivation dialog derives its own from `onHoldSince`.
+export interface ProjectLifecyclePreview {
+  openTasks: number;
+  doneTasks: number;
+  cancelledTasks: number;
+  onHoldSince: string | null;
+  holdDays: number | null;
+  pastDueOpenTasks: number;
+}
+
+export function projectLifecyclePreviewOptions(id: number) {
+  const today = dateToDay(new Date())!;
+  return {
+    queryKey: queryKeys.projectLifecyclePreview(id, today),
+    queryFn: ({ signal }: { signal?: AbortSignal }) =>
+      apiRequest<ProjectLifecyclePreview>(`/projects/${id}/lifecycle-preview?today=${today}`, {
+        signal,
+      }),
+  };
+}
+
+/**
+ * The project's status read from the shared project cache, without fetching:
+ * for per-row/per-card surfaces (Kanban cards) that only need to know whether
+ * the project is on hold. `undefined` until the project query has loaded.
+ */
+export function useProjectStatus(id: number): ProjectStatus | undefined {
+  const today = dateToDay(new Date())!;
+  const { data } = useQuery({
+    ...projectDetailOptions(id, today),
+    enabled: false,
+    select: (p) => p.status,
+  });
+  return data;
 }
 
 export function useUpdateProject(id: number) {
@@ -1551,6 +1617,11 @@ export function useUpdateProject(id: number) {
       invalidateProjectActivity(qc, id);
       qc.invalidateQueries({ queryKey: queryKeys.overview });
       qc.invalidateQueries({ queryKey: queryKeys.customers });
+      // A cancel cascade or a date shift rewrites task status and dates (and
+      // epic dates), and hold changes which tasks count as overdue.
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["epics"] });
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
       // excludeFromPortfolio changes reshape the executive roll-up too.
       qc.invalidateQueries({ queryKey: queryKeys.executiveReport() });
     },
@@ -3999,6 +4070,7 @@ export const adminQueryKeys = {
   users: ["admin", "users"] as const,
   projects: ["admin", "projects"] as const,
   roles: ["admin", "roles"] as const,
+  handoverPreview: (id: number) => ["admin", "handover-preview", id] as const,
   authSettings: ["admin", "settings", "auth"] as const,
   itopSettings: ["admin", "itop", "settings"] as const,
   itopOrganizations: ["admin", "itop", "organizations"] as const,
@@ -4121,6 +4193,76 @@ export function useAdminSetActive() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: adminQueryKeys.users });
       qc.invalidateQueries({ queryKey: queryKeys.users });
+    },
+  });
+}
+
+// Offboarding handover (docs/archive/plans/feedback-round-lifecycle-spec.md, F5).
+export interface HandoverPreview {
+  projects: {
+    id: number;
+    name: string;
+    status: ProjectStatus;
+    customerName: string | null;
+    isTam: boolean;
+    isSa: boolean;
+    openTasks: number;
+    openEpics: number;
+  }[];
+  customers: { id: number; name: string }[];
+  openDeals: number;
+}
+
+export interface OffboardBody {
+  projects: {
+    projectId: number;
+    assignTasksTo: number | null;
+    newTamId?: number;
+    newSaId?: number | null;
+    note?: string;
+  }[];
+  customers: { customerId: number; newOwnerId: number | null }[];
+  dealsPicId?: number | null;
+}
+
+export function isHandoverPreviewEmpty(p: HandoverPreview): boolean {
+  return p.projects.length === 0 && p.customers.length === 0 && p.openDeals === 0;
+}
+
+/** Imperative fetch (always fresh) of what a user still holds — used on click. */
+export function useAdminFetchHandoverPreview() {
+  const qc = useQueryClient();
+  return (id: number) =>
+    qc.fetchQuery({
+      queryKey: adminQueryKeys.handoverPreview(id),
+      queryFn: ({ signal }) =>
+        apiRequest<HandoverPreview>(`/admin/users/${id}/handover-preview`, { signal }),
+      staleTime: 0,
+    });
+}
+
+export function useAdminOffboardUser() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, body }: { id: number; body: OffboardBody }) =>
+      apiRequest<{ id: number; username: string; email: string; active: false }>(
+        `/admin/users/${id}/offboard`,
+        { method: "POST", body },
+      ),
+    onSuccess: (_data, { id }) => {
+      qc.invalidateQueries({ queryKey: adminQueryKeys.users });
+      qc.invalidateQueries({ queryKey: adminQueryKeys.projects });
+      qc.removeQueries({ queryKey: adminQueryKeys.handoverPreview(id) });
+      qc.invalidateQueries({ queryKey: queryKeys.users });
+      // Tasks, seats, epics, customer owners and deal PICs all moved.
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: queryKeys.overview });
+      qc.invalidateQueries({ queryKey: queryKeys.recentNotesRoot });
+      qc.invalidateQueries({ queryKey: ["epics"] });
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      qc.invalidateQueries({ queryKey: queryKeys.customers });
+      qc.invalidateQueries({ queryKey: pipelineKeys.root });
     },
   });
 }

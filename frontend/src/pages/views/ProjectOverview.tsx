@@ -20,6 +20,7 @@ import { scoreClass, scoreLevel } from "@/components/RiskFormModal";
 import { ProjectActivity } from "@/components/ProjectActivity";
 import { Chip } from "@/components/StatusChip";
 import { dateToDay, dayFromIso } from "@/lib/dateField";
+import { isTaskShownOverdue } from "@/lib/taskOverdue";
 import { fmtDay } from "@/lib/formatDate";
 import { TASK_STATUS_LABEL } from "@/lib/labels";
 import { type Task, useProjectNotes, useProjectRisks, useProjectTasks } from "@/lib/queries";
@@ -33,7 +34,7 @@ export function ProjectOverview() {
   const canLockBaseline = hasPermission(user, "project:write");
   const { data: tasks, isLoading, isError, error } = useProjectTasks(project.id);
 
-  const stats = useMemo(() => computeStats(tasks ?? []), [tasks]);
+  const stats = useMemo(() => computeStats(tasks ?? [], project.status === "ON_HOLD"), [tasks, project.status]);
   const sCurve = useMemo(() => buildSCurve((tasks ?? []).filter((t) => t.status !== "CANCELLED")), [tasks]);
   const taskIds = useMemo(() => new Set((tasks ?? []).map((t) => t.id)), [tasks]);
 
@@ -168,7 +169,7 @@ export function ProjectOverview() {
 
       {/* Detail panels — the TAM's morning glance */}
       <div className="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
-        <NeedsAttention tasks={tasks ?? []} projectId={project.id} />
+        <NeedsAttention tasks={tasks ?? []} projectId={project.id} onHold={project.status === "ON_HOLD"} />
         <div className="grid grid-cols-1 gap-4">
           <StatusBreakdown tasks={tasks ?? []} />
           <TopRisks projectId={project.id} />
@@ -186,12 +187,26 @@ const PANEL_CLASS =
 const PANEL_HEADING =
   "text-label-caps uppercase text-on-surface-variant";
 
-function NeedsAttention({ tasks, projectId }: { tasks: Task[]; projectId: number }) {
+function NeedsAttention({
+  tasks,
+  projectId,
+  onHold,
+}: {
+  tasks: Task[];
+  projectId: number;
+  onHold: boolean;
+}) {
   const today = dateToDay(startOfToday())!;
   const rows = tasks
     .filter((t) => t.status !== "DONE" && t.status !== "CANCELLED" && t.dueDate)
     .map((t) => ({ task: t, delta: dayDelta(dayFromIso(t.dueDate!)!, today) }))
-    .filter((r) => r.delta <= 7)
+    // An on-hold project has no overdue tasks: keep only what is still ahead.
+    .filter(
+      (r) =>
+        r.delta <= 7 &&
+        (r.delta >= 0 ||
+          isTaskShownOverdue(r.task.status, r.task.dueDate, today, onHold ? "ON_HOLD" : undefined)),
+    )
     .sort((a, b) => a.delta - b.delta);
   const shown = rows.slice(0, 6);
 
@@ -597,7 +612,7 @@ interface Stats {
   overdue: number;
 }
 
-function computeStats(allTasks: Task[]): Stats {
+function computeStats(allTasks: Task[], onHold: boolean): Stats {
   // Cancelled tasks are removed from every total.
   const tasks = allTasks.filter((t) => t.status !== "CANCELLED");
   const total = tasks.length;
@@ -608,8 +623,10 @@ function computeStats(allTasks: Task[]): Stats {
   const today = startOfToday();
   // Compare calendar days, not instants —
   // lexicographic "yyyy-MM-dd" comparison is calendar-correct (dateField.ts).
-  const overdue = tasks.filter(
-    (t) => t.status !== "DONE" && t.dueDate && dayFromIso(t.dueDate)! < dateToDay(today)!,
+  const todayDay = dateToDay(today);
+  const projectStatus = onHold ? "ON_HOLD" : undefined;
+  const overdue = tasks.filter((t) =>
+    isTaskShownOverdue(t.status, t.dueDate, todayDay, projectStatus),
   ).length;
   return { total, topLevel, subtasks, done, pct, overdue };
 }

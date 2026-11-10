@@ -4,7 +4,7 @@
 // notification is project-scoped (a task, a comment, a project role) or
 // deal-scoped (a Pipeline opportunity); the deal phrases name the deal, the
 // project phrases the task.
-import { type ActivityPart, describeActivity, eventTaskId } from "@/lib/activityText";
+import { type ActivityPart, allTasksClosedParts, describeActivity, eventTaskId } from "@/lib/activityText";
 import { OUTCOME_LABELS } from "@/lib/pipelineFormat";
 import type { AppNotification } from "@/lib/queries";
 
@@ -124,6 +124,31 @@ function describeProjectRoleNotification(
   ]);
 }
 
+/**
+ * `all_tasks_closed` reads "All tasks in <project> are closed — mark the
+ * project Completed?" with no actor (the closer may be the recipient), and
+ * `tasks_handed_over` reads "rina handed you 3 tasks and 1 epic in <project>"
+ * (docs/archive/plans/feedback-round-lifecycle-spec.md, F3 and F5). Null when
+ * the payload is too thin, so the caller falls back to the activity sentence.
+ */
+function describeLifecycleNotification(n: AppNotification, actor: string): NotificationSentence | null {
+  const project = str(n.projectName) ?? str(n.event.entityLabel);
+  const reason = n.reason;
+  if (reason === "all_tasks_closed") {
+    const parts = allTasksClosedParts(project);
+    return { parts, text: parts.map((p) => p.text).join("") };
+  }
+  if (reason === "tasks_handed_over") {
+    const h = record(record(n.event.changes)?.handover);
+    const count = (v: unknown, noun: string): string | null =>
+      typeof v === "number" && Number.isInteger(v) && v > 0 ? `${v} ${noun}${v === 1 ? "" : "s"}` : null;
+    const what = [count(h?.tasks, "task"), count(h?.epics, "epic")].filter(Boolean).join(" and ");
+    if (!project || !what) return null;
+    return build(actor, [` handed you ${what} in `, { entity: project }]);
+  }
+  return null;
+}
+
 /** A project event whose notification is about a role, not a task. */
 function isProjectRoleEvent(n: AppNotification): boolean {
   return n.event?.entityType === "project" && n.reason === "assigned";
@@ -143,6 +168,9 @@ export function describeNotification(
   canViewPipeline = true,
 ): NotificationSentence {
   const actor = n.event.actor?.username || "Someone";
+
+  const lifecycle = describeLifecycleNotification(n, actor);
+  if (lifecycle) return lifecycle;
 
   if (isProjectRoleEvent(n)) {
     const sentence = describeProjectRoleNotification(n, actor, viewerId, canViewPipeline);

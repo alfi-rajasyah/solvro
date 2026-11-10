@@ -10,10 +10,11 @@ import { Timeline, TimelineIndicator, TimelineItem, TimelineSeparator } from "@/
 import { TaskStatusChip } from "@/components/StatusChip";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { hasPermission, useAuth } from "@/lib/auth";
-import { dateToDay, dayFromIso } from "@/lib/dateField";
+import { dateToDay } from "@/lib/dateField";
+import { isTaskShownOverdue } from "@/lib/taskOverdue";
 import { fmtRange } from "@/lib/formatDate";
 import { TASK_STATUS_LABEL } from "@/lib/labels";
-import { type Priority, type Task, type TaskStatus, useProjectTasks, useUpdateTask } from "@/lib/queries";
+import { type Priority, type Task, type TaskStatus, type ProjectStatus, useProjectTasks, useUpdateTask } from "@/lib/queries";
 
 const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
 const PRIORITY_ORDER: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
@@ -115,6 +116,7 @@ export function ProjectTimeline() {
               subtasks={subtasksOf.get(task.id) ?? []}
               canEdit={canEdit}
               todayDay={todayDay}
+              projectStatus={project.status}
               onChangeStatus={(status) => updateTask.mutate({ id: task.id, patch: { status } })}
               onEdit={() => setEditTask(task)}
             />
@@ -141,6 +143,7 @@ function TaskTimelineItem({
   subtasks,
   canEdit,
   todayDay,
+  projectStatus,
   onChangeStatus,
   onEdit,
 }: {
@@ -149,13 +152,14 @@ function TaskTimelineItem({
   subtasks: Task[];
   canEdit: boolean;
   todayDay: string | null;
+  projectStatus: ProjectStatus;
   onChangeStatus: (status: TaskStatus) => void;
   onEdit: () => void;
 }) {
   // Compare calendar days, not instants —
   // lexicographic "yyyy-MM-dd" comparison is calendar-correct (dateField.ts).
   // `todayDay` is hoisted by the caller (once per render, not once per item).
-  const overdue = task.dueDate && task.status !== "DONE" && task.status !== "CANCELLED" && dayFromIso(task.dueDate)! < todayDay!;
+  const overdue = isTaskShownOverdue(task.status, task.dueDate, todayDay, projectStatus);
 
   return (
     <TimelineItem

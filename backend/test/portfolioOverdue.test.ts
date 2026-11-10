@@ -130,6 +130,17 @@ describe("computePortfolioRows — UTC-calendar-day isOverdue/daysOverdue bounda
         expect(rows[0].daysOverdue).toBe(1);
       });
 
+      it("an ON_HOLD project is never overdue, whatever its dates (feedback-round F7)", async () => {
+        const projectId = await createProjectWithDueTask(
+          new Date("2026-07-01T00:00:00.000Z"),
+          "TODO",
+          "ON_HOLD",
+        );
+        const rows = await computePortfolioRows({ id: projectId });
+        expect(rows[0].isOverdue).toBe(false);
+        expect(rows[0].daysOverdue).toBe(0);
+      });
+
       it("a COMPLETED project's overdue-dated task never sets isOverdue", async () => {
         const projectId = await createProjectWithDueTask(
           new Date("2026-08-01T00:00:00.000Z"),

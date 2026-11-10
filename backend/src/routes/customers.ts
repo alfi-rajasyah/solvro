@@ -27,7 +27,11 @@ import {
   ensureCustomerVisible,
   projectVisibilityFilter,
 } from "../lib/visibility.js";
-import { COUNTED_TASKS_COUNT, OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import {
+  COUNTED_TASKS_COUNT,
+  OPEN_TASK_STATUS_FILTER,
+  TASK_PROJECT_NOT_ON_HOLD,
+} from "../lib/taskStatus.js";
 import { MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
 import { assertActiveUser } from "../lib/users.js";
 
@@ -230,9 +234,11 @@ customersRouter.get("/", customerReadGate, validate("query", customersListQueryS
       : prisma.task.groupBy({
           by: ["projectId"],
           where: {
-            projectId: { in: projectIds },
-            status: OPEN_TASK_STATUS_FILTER,
-            dueDate: { lt: boundary },
+            AND: [
+              { projectId: { in: projectIds } },
+              TASK_PROJECT_NOT_ON_HOLD,
+              { status: OPEN_TASK_STATUS_FILTER, dueDate: { lt: boundary } },
+            ],
           },
           _count: { _all: true },
         }),

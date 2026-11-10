@@ -3,9 +3,10 @@ import { InlineDateRangeEditor } from "@/components/InlineDateRangeEditor";
 import { TaskStatusChip } from "@/components/StatusChip";
 import { dayFromIso, dayToDate } from "@/lib/dateField";
 import { isTaskOverdue } from "@/lib/formatDate";
+import { isTaskShownOverdue } from "@/lib/taskOverdue";
 import { fmtDateRangeDDMM } from "@/lib/gantt/geometry";
 import { SECTION_COLOR_PRESETS } from "@/lib/gantt/palette";
-import type { Task, TaskStatus } from "@/lib/queries";
+import type { ProjectStatus, Task, TaskStatus } from "@/lib/queries";
 import { cn } from "@/lib/utils";
 
 // The predicate lives in `lib/formatDate.ts` (so Kanban cards need not pull in
@@ -33,6 +34,8 @@ interface TaskDatesCellProps {
   canEdit: boolean;
   onSave: (taskId: number, startISO: string | null, dueISO: string | null) => void;
   todayDay: string | null;
+  /** On-hold projects never show the overdue treatment. */
+  projectStatus?: ProjectStatus;
 }
 
 /**
@@ -43,9 +46,9 @@ interface TaskDatesCellProps {
  * column was removed 2026-08-03 as redundant with this range. `todayDay`
  * is hoisted by the caller (once per render, not per row).
  */
-export function TaskDatesCell({ task, canEdit, onSave, todayDay }: TaskDatesCellProps) {
+export function TaskDatesCell({ task, canEdit, onSave, todayDay, projectStatus }: TaskDatesCellProps) {
   const [editing, setEditing] = useState(false);
-  const overdue = isTaskOverdue(task.status, task.dueDate, todayDay);
+  const overdue = isTaskShownOverdue(task.status, task.dueDate, todayDay, projectStatus);
   return (
     <div className="relative flex w-full min-w-0 items-center justify-end">
       <button
