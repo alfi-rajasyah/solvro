@@ -1,4 +1,4 @@
-import type { Prisma, TaskStatus } from "@prisma/client";
+import type { Prisma, ProjectStatus, TaskStatus } from "@prisma/client";
 
 // A closed task is finished one way or the other: completed (DONE) or called
 // off (CANCELLED). "Open / still to do / overdue" filters exclude every closed
@@ -12,14 +12,20 @@ export const isClosedTaskStatus = (status: TaskStatus | string): boolean =>
 export const OPEN_TASK_STATUS_FILTER = { notIn: CLOSED_TASK_STATUSES } as const;
 
 /**
- * On-hold read rule (docs/archive/plans/feedback-round-lifecycle-spec.md, F7):
- * a task in an ON_HOLD project is never overdue and never "due this week".
- * Prisma task `where` fragment — AND-compose it with the rest of the filter
- * (`AND: [...]`); never object-spread it over a where that may already carry a
- * `project` key (the visibility filter and the customer filter do).
+ * Project statuses whose tasks are never overdue and never "due this week":
+ * ON_HOLD (docs/archive/plans/feedback-round-lifecycle-spec.md, F7) and
+ * CANCELLED (the project was called off, so its open tasks are not late).
  */
-export const TASK_PROJECT_NOT_ON_HOLD: Prisma.TaskWhereInput = {
-  project: { status: { not: "ON_HOLD" } },
+export const NO_OVERDUE_PROJECT_STATUSES: ProjectStatus[] = ["ON_HOLD", "CANCELLED"];
+
+/**
+ * Prisma task `where` fragment for the rule above — AND-compose it with the
+ * rest of the filter (`AND: [...]`); never object-spread it over a where that
+ * may already carry a `project` key (the visibility filter and the customer
+ * filter do).
+ */
+export const TASK_PROJECT_CAN_BE_OVERDUE: Prisma.TaskWhereInput = {
+  project: { status: { notIn: NO_OVERDUE_PROJECT_STATUSES } },
 };
 
 /** Prisma `status` filter matching every task that counts toward progress totals. */

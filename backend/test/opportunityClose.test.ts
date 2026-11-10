@@ -227,6 +227,46 @@ describe("POST /opportunities/:id/close — Cancelled", () => {
   });
 });
 
+describe("POST /opportunities/:id/close — Archived", () => {
+  it("200s with no reason, logs 'Archived', leaves stage untouched, and reopens", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "ASSESSMENT" });
+    const id = created.body.id as string;
+
+    const res = await closeOpportunity(sa.token, id, { outcome: "ARCHIVED" });
+    expect(res.status).toBe(200);
+    expect(res.body.outcome).toBe("ARCHIVED");
+    expect(res.body.outcomeReasonCategory).toBeNull();
+    expect(res.body.closedAt).not.toBeNull();
+    expect(res.body.wonAt).toBeNull();
+    expect(res.body.stage).toBe("ASSESSMENT");
+    expect(res.body.idle).toEqual({ level: "none", days: 0, basis: null });
+
+    const activities = await activitiesFor(id);
+    expect(activities[activities.length - 1].note).toBe("Archived");
+
+    const reopened = await reopenOpportunity(sa.token, id);
+    expect(reopened.status).toBe(200);
+    expect(reopened.body.outcome).toBeNull();
+  });
+
+  it("appends an optional note, and 400s (reason_not_allowed) a reason category", async () => {
+    const sa = await createSaLikeUser();
+    const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
+    const id = created.body.id as string;
+
+    const withCategory = await closeOpportunity(sa.token, id, { outcome: "ARCHIVED", reasonCategory: "OTHER" });
+    expect(withCategory.status).toBe(400);
+    expect(withCategory.body.code).toBe("reason_not_allowed");
+
+    const res = await closeOpportunity(sa.token, id, { outcome: "ARCHIVED", reason: "Duplicate of the Q3 deal" });
+    expect(res.status).toBe(200);
+    expect(res.body.outcomeReason).toBe("Duplicate of the Q3 deal");
+    const activities = await activitiesFor(id);
+    expect(activities[activities.length - 1].note).toBe("Archived: Duplicate of the Q3 deal");
+  });
+});
+
 describe("POST /opportunities/:id/close — already closed / ownership", () => {
   it("409s (already_closed) closing a deal twice", async () => {
     const sa = await createSaLikeUser();
@@ -255,7 +295,7 @@ describe("POST /opportunities/:id/close — already closed / ownership", () => {
     const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "RFP" });
     const id = created.body.id as string;
 
-    const res = await closeOpportunity(sa.token, id, { outcome: "ARCHIVED" });
+    const res = await closeOpportunity(sa.token, id, { outcome: "ABANDONED" });
     expect(res.status).toBe(400);
   });
 

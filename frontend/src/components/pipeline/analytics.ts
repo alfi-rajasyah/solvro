@@ -12,6 +12,7 @@
 import type { Tone } from "@/components/StatusChip";
 import { MONTH_ABBR } from "@/lib/formatDate";
 import {
+  isDecidedOutcome,
   STAGE_LABELS,
   STAGE_ORDER,
   type PipelineOutcome,
@@ -107,8 +108,7 @@ export interface PicLeaderboardRow {
   activeValue: number;
   wonCount: number;
   wonValue: number;
-  /** Closed, not Won — Lost or Cancelled (`outcome !== null && outcome !==
-   * "WON"`). Renamed from the pre-redesign "dropped" (there's no DROP stage
+  /** Closed as Lost or Cancelled (Archived deals are not counted). Renamed from the pre-redesign "dropped" (there's no DROP stage
    * anymore); feeds the analytics table's "Lost / Cancelled" column. */
   lostOrCancelledCount: number;
   /**
@@ -144,7 +144,7 @@ export function computePicLeaderboard(deals: LeaderboardDeal[]): PicLeaderboardR
   for (const [picId, { picName, deals: picDeals }] of byPic) {
     const active = picDeals.filter(isActiveDeal);
     const won = picDeals.filter((d) => d.outcome === "WON");
-    const lostOrCancelled = picDeals.filter((d) => d.outcome !== null && d.outcome !== "WON");
+    const lostOrCancelled = picDeals.filter((d) => d.outcome === "LOST" || d.outcome === "CANCELLED");
     const closedTotal = won.length + lostOrCancelled.length;
 
     rows.push({
@@ -178,7 +178,7 @@ export interface MonthlyTrendPoint {
   won: number;
 }
 
-type TrendDeal = Pick<Opportunity, "createdAt" | "wonAt">;
+type TrendDeal = Pick<Opportunity, "createdAt" | "wonAt" | "outcome">;
 
 /**
  * Deals created vs. won per calendar month, for the trailing `months`
@@ -209,6 +209,8 @@ export function computeMonthlyTrend(
   );
 
   for (const deal of deals) {
+    // An archived deal was never a real opportunity: it is not "created".
+    if (deal.outcome === "ARCHIVED") continue;
     const createdBucket = buckets.get(monthKeyFromIso(deal.createdAt));
     if (createdBucket) createdBucket.created++;
     if (deal.wonAt !== null) {
@@ -445,11 +447,11 @@ type WinRateDeal = Pick<Opportunity, "outcome" | "closedAt">;
  * pipeline). Same string-slice year extraction as `computeCloseReasons`
  * above (`closedAt.slice(0, 4)`, not `new Date(iso).getUTCFullYear()` — see
  * that function's doc comment). 0 when nothing closed that year (avoids a
- * 0/0 NaN).
+ * 0/0 NaN). Archived deals are not decisions and are left out.
  */
 export function computeWinRatePct(deals: WinRateDeal[], year: number): number {
   const closedThisYear = deals.filter(
-    (d) => d.outcome !== null && d.closedAt !== null && Number(d.closedAt.slice(0, 4)) === year,
+    (d) => isDecidedOutcome(d.outcome) && d.closedAt !== null && Number(d.closedAt.slice(0, 4)) === year,
   );
   if (closedThisYear.length === 0) return 0;
   const won = closedThisYear.filter((d) => d.outcome === "WON").length;

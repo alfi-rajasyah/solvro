@@ -1,5 +1,5 @@
 // Close deal dialog (docs/archive/plans/opportunity-flow-redesign.md §4.3, D5) — the
-// single Close action for Won/Lost/Cancelled. The stage is never reset;
+// single Close action for Won/Lost/Cancelled/Archived. The stage is never reset;
 // POST /opportunities/:id/close locks it in place (backend §3.5). Radio
 // cards + select + textarea conventions copied from AssignPicModal.tsx /
 // OpportunityFormModal.tsx (label-caps span, input/select/textarea classes,
@@ -27,12 +27,13 @@ interface Props {
   onClosed: (updated: Opportunity) => void;
 }
 
-const OUTCOMES: PipelineOutcome[] = ["WON", "LOST", "CANCELLED"];
+const OUTCOMES: PipelineOutcome[] = ["WON", "LOST", "CANCELLED", "ARCHIVED"];
 
 const OUTCOME_ICON: Record<PipelineOutcome, string> = {
   WON: "check_circle",
   LOST: "cancel",
   CANCELLED: "block",
+  ARCHIVED: "archive",
 };
 
 // Request fields that have an input of their own in this dialog.
@@ -61,6 +62,8 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
   }, [open]);
 
   const reasons = REASONS_BY_OUTCOME[outcome];
+  // Won and Archived take no reason category.
+  const needsCategory = reasons.length > 0;
   const errorId = (field: string) => `close-deal-${field}-error`;
   // aria-invalid + aria-describedby for a field the server rejected.
   const invalidProps = (field: string) =>
@@ -79,7 +82,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
     event.preventDefault();
     setError(null);
     setFieldErrors({});
-    if (outcome !== "WON" && reasonCategory === "") {
+    if (needsCategory && reasonCategory === "") {
       setError("Pick a reason category.");
       return;
     }
@@ -87,7 +90,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
       const updated = await close.mutateAsync({
         id: deal.id,
         outcome,
-        reasonCategory: outcome === "WON" ? undefined : reasonCategory || undefined,
+        reasonCategory: needsCategory ? reasonCategory || undefined : undefined,
         reason: note.trim() || undefined,
       });
       onClosed(updated);
@@ -121,7 +124,9 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
             className={`rounded-lg px-4 py-1.5 text-xs font-bold disabled:opacity-60 ${
               outcome === "WON"
                 ? "bg-primary text-on-primary hover:bg-primary/90"
-                : "bg-error text-on-error hover:bg-error/90"
+                : outcome === "ARCHIVED"
+                  ? "bg-surface-container-high text-on-surface hover:bg-surface-container-highest"
+                  : "bg-error text-on-error hover:bg-error/90"
             }`}
           >
             {close.isPending ? "Closing…" : `Close as ${OUTCOME_LABELS[outcome]}`}
@@ -139,7 +144,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
           <legend className="mb-1 block text-label-caps uppercase text-on-surface-variant">
             Outcome
           </legend>
-          <div className="grid grid-cols-3 gap-2">
+          <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
             {OUTCOMES.map((o) => (
               <label
                 key={o}
@@ -166,7 +171,14 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
           </div>
         </fieldset>
 
-        {outcome !== "WON" && (
+        {outcome === "ARCHIVED" && (
+          <p className="text-xs text-on-surface-variant">
+            For a duplicate, a test entry or a deal that was never real. Archived deals stay out
+            of win rate and the pipeline numbers. Reopen brings one back.
+          </p>
+        )}
+
+        {needsCategory && (
           <div>
             <label className="block">
               <span className="mb-1 block text-label-caps uppercase text-on-surface-variant">

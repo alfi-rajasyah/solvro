@@ -105,7 +105,8 @@ const moveOpportunitySchema = z.object({
 });
 
 // `.strict()`: outcome + the optional reason pair is the entire writable
-// surface (§3.5) — WON never carries a reason, LOST/CANCELLED each restrict
+// surface (§3.5) — WON never carries a reason, ARCHIVED takes an optional
+// free-text note but no category, LOST/CANCELLED each restrict
 // to their own REASONS_BY_OUTCOME subset (checked in the handler, since Zod
 // can't express "valid values depend on another field" cleanly here).
 const closeOpportunitySchema = z
@@ -930,9 +931,11 @@ opportunitiesRouter.post(
 
 // --- POST /:id/close ---------------------------------------------------------
 //
-// One Close deal action for Won/Lost/Cancelled (D5) — the stage the deal
-// reached is never reset; only the outcome group changes. WON never carries
-// a reason (400 reason_not_allowed if one is sent); LOST/CANCELLED each
+// One Close deal action for Won/Lost/Cancelled/Archived (D5) — the stage the
+// deal reached is never reset; only the outcome group changes. WON never
+// carries a reason (400 reason_not_allowed if one is sent); ARCHIVED takes
+// an optional free-text note but never a category (400 reason_not_allowed);
+// LOST/CANCELLED each
 // require a category from their own REASONS_BY_OUTCOME subset (400
 // reason_required / reason_category_invalid) plus an optional free-text
 // note, appended to the activity text only when actually given. Already
@@ -960,6 +963,12 @@ opportunitiesRouter.post(
         throw new HttpError(400, "reason_not_allowed", "A deal closed as Won doesn't take a reason");
       }
       note = "Closed as Won";
+    } else if (body.outcome === PipelineOutcome.ARCHIVED) {
+      if (body.reasonCategory !== undefined) {
+        throw new HttpError(400, "reason_not_allowed", "An archived deal doesn't take a reason category");
+      }
+      note = "Archived";
+      if (body.reason) note += `: ${body.reason}`;
     } else {
       const outcomeLabel = body.outcome === PipelineOutcome.LOST ? "Lost" : "Cancelled";
       if (body.reasonCategory === undefined) {

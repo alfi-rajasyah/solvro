@@ -34,7 +34,7 @@ interface TaskDatesCellProps {
   canEdit: boolean;
   onSave: (taskId: number, startISO: string | null, dueISO: string | null) => void;
   todayDay: string | null;
-  /** On-hold projects never show the overdue treatment. */
+  /** On-hold and cancelled projects never show the overdue treatment. */
   projectStatus?: ProjectStatus;
 }
 

@@ -538,7 +538,7 @@ export interface TasksFilter {
   /** Inclusive due-date day range, "yyyy-MM-dd" (the server rejects from > to). */
   dueFrom?: string;
   dueTo?: string;
-  /** true = leave out tasks of ON_HOLD projects (the "due this week" list). */
+  /** true = leave out tasks of ON_HOLD and CANCELLED projects (the "due this week" list). */
   excludeOnHold?: boolean;
   /** "due" = soonest first, undated last; default is board order. */
   sort?: "position" | "due";
@@ -5117,6 +5117,11 @@ export function useAddOpportunityActivity(opportunityId: string) {
       }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: pipelineKeys.activities(opportunityId) });
+      // A note restarts the deal's SLA clocks server-side (lastActivityAt,
+      // and waitingInputSince on Waiting Sales input), so the detail header
+      // and the board's idle badges refetch too.
+      qc.invalidateQueries({ queryKey: pipelineKeys.detail(opportunityId) });
+      qc.invalidateQueries({ queryKey: pipelineKeys.list });
       void invalidateOpportunityFeeds(qc, opportunityId);
     },
   });
