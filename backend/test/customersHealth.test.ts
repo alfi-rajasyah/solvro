@@ -88,6 +88,25 @@ describe("GET /customers health", () => {
     expect(row.health.openRiskCount).toBe(2);
   });
 
+  it("on-hold projects contribute 0 overdue to the customer roll-up (feedback-round F7)", async () => {
+    const tam = await createUserWithRole("TAM");
+    const customer = await prisma.customer.create({
+      data: { name: uniq("Hold"), description: "d", tamId: tam.userId },
+    });
+    const active = await prisma.project.create({
+      data: { name: uniq("Act"), tamId: tam.userId, customerId: customer.id, status: "ACTIVE" },
+    });
+    const held = await prisma.project.create({
+      data: { name: uniq("Held"), tamId: tam.userId, customerId: customer.id, status: "ON_HOLD" },
+    });
+    await addTask(active.id, { dueDate: "2026-09-20" });
+    await addTask(held.id, { dueDate: "2026-09-10" });
+    await addTask(held.id, { dueDate: "2026-09-11" });
+
+    const row = (await list(tam.token, "?today=2026-09-30")).find((c) => c.id === customer.id)!;
+    expect(row.health.overdueCount).toBe(1);
+  });
+
   it("uses the supplied today for the overdue boundary", async () => {
     const tam = await createUserWithRole("TAM");
     const customer = await prisma.customer.create({

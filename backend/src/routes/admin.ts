@@ -12,6 +12,13 @@ import { normalizeUsername, USERNAME_MAX } from "../lib/username.js";
 import { permissionsSchema } from "../lib/permissions.js";
 import { diffProjectSeats, projectSeatsSelect, recordProjectUpdate } from "../lib/projectSeats.js";
 import { COUNTED_TASKS_COUNT } from "../lib/taskStatus.js";
+import {
+  computeHandoverPreview,
+  isHandoverEmpty,
+  logCustomerOwnerChanges,
+  offboardUser,
+  withDeadlockRetry,
+} from "../lib/offboarding.js";
 
 export const adminRouter = Router();
 
@@ -219,12 +226,95 @@ adminRouter.patch(
     if (req.user!.sub === id && active === false) {
       throw new HttpError(400, "self_deactivate", "Admins cannot deactivate themselves");
     }
-    const updated = await prisma.user.update({
-      where: { id },
-      data: { active },
-      select: { id: true, username: true, email: true, active: true },
+    // A user who still holds work cannot be deactivated through this route —
+    // the handover (POST /users/:id/offboard) is the only way, so it cannot be
+    // bypassed through the API (docs/archive/plans/feedback-round-lifecycle-spec.md, F5).
+    const updated = await prisma.$transaction(async (tx) => {
+      if (active === false) {
+        // Serialise with writes that give this user new work (see offboardUser).
+        await tx.$queryRaw`SELECT id FROM users WHERE id = ${id} FOR UPDATE`;
+        const preview = await computeHandoverPreview(tx, id);
+        if (!isHandoverEmpty(preview)) {
+          throw new HttpError(
+            409,
+            "handover_required",
+            "This user still holds work. Hand it over before deactivating.",
+            {
+              projects: preview.projects.length,
+              customers: preview.customers.length,
+              openDeals: preview.openDeals,
+            },
+          );
+        }
+      }
+      return tx.user.update({
+        where: { id },
+        data: { active },
+        select: { id: true, username: true, email: true, active: true },
+      });
     });
     res.json(updated);
+  },
+);
+
+adminRouter.get(
+  "/users/:id/handover-preview",
+  validate("params", idParamSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const target = await prisma.user.findUnique({ where: { id }, select: { id: true } });
+    if (!target) throw new HttpError(404, "user_not_found", "User not found");
+    res.json(await computeHandoverPreview(prisma, id));
+  },
+);
+
+const userIdField = z.number().int().positive();
+const offboardSchema = z
+  .object({
+    projects: z
+      .array(
+        z.object({
+          projectId: userIdField,
+          assignTasksTo: userIdField.nullable(),
+          newTamId: userIdField.optional(),
+          newSaId: userIdField.nullable().optional(),
+          note: z.string().max(2000).optional(),
+        }),
+      )
+      .max(500),
+    customers: z
+      .array(z.object({ customerId: userIdField, newOwnerId: userIdField.nullable() }))
+      .max(500),
+    dealsPicId: userIdField.nullable().optional(),
+  })
+  .superRefine((v, ctx) => {
+    if (new Set(v.projects.map((p) => p.projectId)).size !== v.projects.length) {
+      ctx.addIssue({ code: "custom", path: ["projects"], message: "Each project may appear once" });
+    }
+    if (new Set(v.customers.map((c) => c.customerId)).size !== v.customers.length) {
+      ctx.addIssue({ code: "custom", path: ["customers"], message: "Each customer may appear once" });
+    }
+  });
+
+adminRouter.post(
+  "/users/:id/offboard",
+  validate("params", idParamSchema),
+  validate("body", offboardSchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const body = req.body as z.infer<typeof offboardSchema>;
+    const actorId = req.user!.sub;
+
+    if (actorId === id) {
+      throw new HttpError(400, "self_deactivate", "Admins cannot deactivate themselves");
+    }
+    const { user, customerOwnerChanges } = await withDeadlockRetry(() =>
+      prisma.$transaction((tx) => offboardUser(tx, { leaverId: id, actorId, body }), {
+        timeout: 30_000,
+      }),
+    );
+    logCustomerOwnerChanges(actorId, customerOwnerChanges);
+    res.json(user);
   },
 );
 

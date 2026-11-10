@@ -5,7 +5,7 @@
 // weekend, 2026 has no Indonesian public holiday in September), so each
 // case's expected day count is exact and independent of workingDays.test.ts.
 import { describe, expect, it } from "vitest";
-import { PipelineOutcome, PipelineStage, PipelineSubStatus } from "@prisma/client";
+import { PipelineOutcome, PipelineStage, PipelineStatusTag, PipelineSubStatus } from "@prisma/client";
 import { computeIdle, PIPELINE_SLA } from "../src/lib/pipelineSla.js";
 
 const NOW = new Date("2026-09-25T00:00:00.000Z"); // Friday
@@ -33,6 +33,7 @@ interface DealInput {
   stage: PipelineStage;
   outcome: PipelineOutcome | null;
   subStatus: PipelineSubStatus | null;
+  statusTag: PipelineStatusTag | null;
   waitingInputSince: Date | null;
   lastActivityAt: Date;
 }
@@ -42,6 +43,7 @@ function baseDeal(stage: PipelineStage): DealInput {
     stage,
     outcome: null,
     subStatus: PipelineSubStatus.PROGRESS,
+    statusTag: null,
     waitingInputSince: null,
     lastActivityAt: NOW, // "just now" — activity basis, 0 days, none
   };
@@ -53,6 +55,7 @@ describe("computeIdle — closed deal", () => {
       stage: PipelineStage.WAITING_RESPONSE,
       outcome: PipelineOutcome.WON,
       subStatus: null,
+      statusTag: null,
       waitingInputSince: since(15),
       lastActivityAt: since(15),
     };
@@ -166,4 +169,40 @@ describe("computeIdle — activity basis (subStatus PROGRESS or null)", () => {
     };
     expect(computeIdle(critical, NOW)).toEqual({ level: "critical", days: 15, basis: "activity" });
   });
+});
+
+describe("computeIdle — Hold suppresses idle (feedback-round F4)", () => {
+  const stale = (statusTag: PipelineStatusTag | null): DealInput => ({
+    ...baseDeal(PipelineStage.WAITING_RESPONSE),
+    statusTag,
+    lastActivityAt: since(15), // past the 7 and 14 day thresholds
+  });
+
+  it("a HOLD deal past every threshold reports none/0/null", () => {
+    expect(computeIdle(stale(PipelineStatusTag.HOLD), NOW)).toEqual({
+      level: "none",
+      days: 0,
+      basis: null,
+    });
+  });
+
+  it("a HOLD deal waiting on Sales input does not idle either", () => {
+    const deal: DealInput = {
+      ...baseDeal(PipelineStage.POC),
+      statusTag: PipelineStatusTag.HOLD,
+      subStatus: PipelineSubStatus.WAITING_SALES_INPUT,
+      waitingInputSince: since(15),
+    };
+    expect(computeIdle(deal, NOW).level).toBe("none");
+  });
+
+  it("the same deal with no tag or DELAYED keeps its level", () => {
+    expect(computeIdle(stale(null), NOW)).toMatchObject({ level: "critical", basis: "activity" });
+    expect(computeIdle(stale(PipelineStatusTag.DELAYED), NOW)).toMatchObject({
+      level: "critical",
+      basis: "activity",
+    });
+  });
+
+  // The release stamping itself is pinned at route level in pipelineHoldRelease.test.ts.
 });

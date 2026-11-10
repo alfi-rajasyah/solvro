@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { Modal } from "./Modal";
+import { useProjectStatusChange } from "@/components/project/ProjectStatusChangeDialogs";
 import { FIELD_FOCUS } from "@/lib/utils";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { useAuth } from "@/lib/auth";
@@ -90,6 +91,11 @@ export function ProjectFormModal({
 
   const create = useCreateProject();
   const update = useUpdateProject(project?.id ?? 0);
+  // Cancel confirm / reactivation dialog for any status change (spec F1, F7).
+  const statusChange = useProjectStatusChange({
+    id: project?.id ?? 0,
+    onHoldSince: project?.onHoldSince ?? null,
+  });
 
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -132,6 +138,13 @@ export function ProjectFormModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, project?.id]);
 
+  // Closing the form (also the detail page keeps it mounted with open=false)
+  // abandons a status-change confirm that is loading or on screen.
+  const cancelStatusChange = statusChange.cancel;
+  useEffect(() => {
+    if (!open) cancelStatusChange();
+  }, [open, cancelStatusChange]);
+
   // SA / TAM dropdowns list all users — role names no longer gate who's
   // eligible to be assigned (admin's choice). Anti-self-clutter not done
   // here because useUsers() doesn't expose `active`.
@@ -158,6 +171,8 @@ export function ProjectFormModal({
 
     try {
       if (isEdit && project) {
+        const decision = await statusChange.confirm(project.status, status);
+        if (!decision.proceed) return;
         await update.mutateAsync({
           name: name.trim(),
           description: description.trim() || null,
@@ -173,8 +188,12 @@ export function ProjectFormModal({
           status,
           wipLimits: formToWipLimits(wipLimits),
           excludeFromPortfolio,
+          ...(decision.shiftOpenDatesByDays
+            ? { shiftOpenDatesByDays: decision.shiftOpenDatesByDays }
+            : {}),
         });
         onSaved?.(project.id);
+        statusChange.afterSave(decision);
       } else {
         const created = await create.mutateAsync({
           name: name.trim(),
@@ -199,7 +218,7 @@ export function ProjectFormModal({
     }
   }
 
-  const submitting = create.isPending || update.isPending;
+  const submitting = create.isPending || update.isPending || statusChange.busy;
 
   const errorId = (field: string) => `project-form-${field}-error`;
   // aria-invalid + aria-describedby for a field the server rejected.
@@ -211,7 +230,7 @@ export function ProjectFormModal({
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      onClose={statusChange.busy ? () => {} : onClose}
       title={isEdit ? "Edit project" : "New project"}
       footer={
         <>
@@ -396,6 +415,7 @@ export function ProjectFormModal({
           </Alert>
         )}
       </form>
+      {statusChange.dialogs}
     </Modal>
   );
 }

@@ -253,3 +253,56 @@ describe("/tasks?overdue=true&status= — intersection, not overwrite", () => {
     expect(ids).not.toContain(doneId);
   });
 });
+
+describe("/tasks?overdue=true — on-hold projects (feedback-round F7)", () => {
+  it("excludes overdue tasks of an ON_HOLD project, and composes with the customer filter", async () => {
+    const yesterday = new Date("2026-08-01T00:00:00.000Z");
+    const id = await createTask({ dueDate: yesterday });
+    expect(await listOverdueTaskIds("&today=2026-08-02")).toContain(id);
+
+    const customer = await prisma.customer.create({ data: { name: `C ${Date.now()}`, description: "d" } });
+    await prisma.project.update({ where: { id: projectId }, data: { customerId: customer.id } });
+    expect(await listOverdueTaskIds(`&today=2026-08-02&customerId=${customer.id}`)).toContain(id);
+
+    await prisma.project.update({ where: { id: projectId }, data: { status: "ON_HOLD" } });
+    expect(await listOverdueTaskIds("&today=2026-08-02")).not.toContain(id);
+    expect(await listOverdueTaskIds(`&today=2026-08-02&customerId=${customer.id}`)).not.toContain(id);
+
+    await prisma.project.update({ where: { id: projectId }, data: { status: "ACTIVE" } });
+    expect(await listOverdueTaskIds("&today=2026-08-02")).toContain(id);
+  });
+});
+
+describe("/tasks?excludeOnHold= — due-range list matches the Overview tile (feedback-round F7)", () => {
+  const range = "open=true&topLevel=true&dueFrom=2026-09-29&dueTo=2026-10-04";
+
+  async function listIds(qs: string): Promise<number[]> {
+    const res = await request(app).get(`/tasks?${qs}`).set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    return (res.body as Array<{ id: number }>).map((t) => t.id);
+  }
+
+  it("drops an on-hold project's task only when excludeOnHold=true, and the count equals the Overview tile", async () => {
+    const id = await createTask({ dueDate: new Date("2026-09-30T00:00:00.000Z") });
+    expect(await listIds(range)).toContain(id);
+    expect(await listIds(`${range}&excludeOnHold=true`)).toContain(id);
+
+    await prisma.project.update({ where: { id: projectId }, data: { status: "ON_HOLD" } });
+    expect(await listIds(range)).toContain(id); // a bare range keeps its generic meaning
+    expect(await listIds(`${range}&excludeOnHold=false`)).toContain(id);
+    const filtered = await listIds(`${range}&excludeOnHold=true`);
+    expect(filtered).not.toContain(id);
+
+    const overview = await request(app)
+      .get("/overview?today=2026-09-29")
+      .set("Authorization", `Bearer ${token}`);
+    expect(overview.body.workCounts.dueThisWeek).toBe(filtered.length);
+  });
+
+  it("rejects a non-boolean value", async () => {
+    const res = await request(app)
+      .get("/tasks?excludeOnHold=yes")
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
+});

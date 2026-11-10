@@ -27,7 +27,8 @@ import { duplicateTaskTree } from "../lib/duplicate.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
 import { diffTaskChanges, recordActivity } from "../lib/activity.js";
 import { filterActiveUsersWhoCanSeeProject, notifyForEvent } from "../lib/notifications.js";
-import { OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import { OPEN_TASK_STATUS_FILTER, TASK_PROJECT_NOT_ON_HOLD } from "../lib/taskStatus.js";
+import { recordAllTasksClosedIfDone } from "../lib/allTasksClosed.js";
 import { MAX_LABEL_IDS } from "../lib/limits.js";
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
@@ -122,6 +123,13 @@ const tasksListQuerySchema = z
       .transform((v) => v === "true")
       .optional(),
     topLevel: z
+      .union([z.literal("true"), z.literal("false")])
+      .transform((v) => v === "true")
+      .optional(),
+    // excludeOnHold=true leaves out tasks of ON_HOLD projects (the Overview
+    // "due this week" tile's list); false/absent is a no-op. `overdue=true`
+    // applies the on-hold rule on its own, regardless of this flag.
+    excludeOnHold: z
       .union([z.literal("true"), z.literal("false")])
       .transform((v) => v === "true")
       .optional(),
@@ -225,6 +233,7 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
     customerId,
     overdue,
     open,
+    excludeOnHold,
     topLevel,
     dueFrom,
     dueTo,
@@ -248,6 +257,7 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
   if (topLevel) where.parentTaskId = null;
   if (status) and.push({ status });
   if (open) and.push({ status: OPEN_TASK_STATUS_FILTER });
+  if (excludeOnHold) and.push(TASK_PROJECT_NOT_ON_HOLD);
   if (overdue) {
     // Overdue = due before the CALLER's calendar day (param `today`),
     // falling back to the server's UTC day; DONE and CANCELLED always excluded. See
@@ -258,7 +268,13 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
     // silently overwritten — status=TODO&overdue=true returns overdue
     // TODOs; status=DONE or CANCELLED with overdue=true is a contradiction and returns
     // nothing, by construction.
-    and.push({ dueDate: { lt: overdueBoundary(today) } }, { status: OPEN_TASK_STATUS_FILTER });
+    // On-hold projects never carry overdue tasks (spec F7); AND-composed
+    // because the visibility/customer filters already own `where.project`.
+    and.push(
+      { dueDate: { lt: overdueBoundary(today) } },
+      { status: OPEN_TASK_STATUS_FILTER },
+      TASK_PROJECT_NOT_ON_HOLD,
+    );
   }
   if (dueFrom) and.push({ dueDate: { gte: utcMidnightOfDayString(dueFrom) } });
   if (dueTo) {
@@ -354,13 +370,17 @@ tasksRouter.patch(
 
     const updated = await prisma.$transaction(async (tx) => {
       // Lock order: project first, then the task row. Only a write that can
-      // re-pack siblings (an explicit position or a re-parent) takes the
-      // project lock, and it takes it BEFORE the task row lock; every other
+      // re-pack siblings (an explicit position or a re-parent) or that closes a
+      // task takes the project lock, and it takes it BEFORE the task row lock; every other
       // path (section duplicate, task duplicate, epic reorder) also goes
       // project -> row. A plain save takes only the row lock and never waits
       // for the project lock afterwards, so no wait cycle can form
       // (docs/archive/plans/application-review-2026-10-22.md, F-10).
-      if (body.position !== undefined || body.parentTaskId !== undefined) {
+      // A write that closes a task also takes it first: the "all tasks are
+      // closed" check must see every other close committed, so two users
+      // closing the last two tasks produce exactly one event.
+      const closesTask = body.status === "DONE" || body.status === "CANCELLED";
+      if (body.position !== undefined || body.parentTaskId !== undefined || closesTask) {
         const { projectId: lockedProjectId } = await tx.task.findUniqueOrThrow({
           where: { id },
           select: { projectId: true },
@@ -412,6 +432,12 @@ tasksRouter.patch(
         // Notifies a newly assigned user (the row lock above means two
         // overlapping identical assigns see one change, so one notification).
         await notifyForEvent(tx, event);
+        await recordAllTasksClosedIfDone(tx, {
+          projectId: beforeTask.projectId,
+          actorId: req.user!.sub,
+          statusBefore: beforeTask.status,
+          statusAfter: after.status,
+        });
         return after;
       };
       const { cur, nextStatus, nextParentTaskId, oldKey, newKey, touchesOrdering } = state;

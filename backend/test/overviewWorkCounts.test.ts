@@ -31,7 +31,12 @@ async function task(
 async function workCounts(qs = `?today=${TODAY}`) {
   const res = await request(app).get(`/overview${qs}`).set("Authorization", `Bearer ${token}`);
   expect(res.status).toBe(200);
-  return res.body.workCounts as { overdue: number; dueThisWeek: number; openRisks: number };
+  return res.body.workCounts as {
+    overdue: number;
+    dueThisWeek: number;
+    onHoldExcluded: number;
+    openRisks: number;
+  };
 }
 
 beforeAll(async () => {
@@ -50,7 +55,12 @@ beforeEach(async () => {
 
 describe("GET /overview workCounts", () => {
   it("is all zeros for a caller with nothing in scope", async () => {
-    expect(await workCounts()).toEqual({ overdue: 0, dueThisWeek: 0, openRisks: 0 });
+    expect(await workCounts()).toEqual({
+      overdue: 0,
+      dueThisWeek: 0,
+      onHoldExcluded: 0,
+      openRisks: 0,
+    });
   });
 
   it("overdue counts open tasks due before today, excluding DONE, today and undated", async () => {
@@ -168,5 +178,51 @@ describe("GET /overview workCounts", () => {
       .get("/overview?today=nope")
       .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(400);
+  });
+});
+
+describe("GET /overview workCounts — on-hold projects (feedback-round F7)", () => {
+  async function onHoldProject() {
+    return prisma.project.create({
+      data: { name: `Hold ${Date.now()}-${Math.random()}`, tamId: userId, status: "ON_HOLD" },
+    });
+  }
+
+  it("leaves on-hold tasks out of overdue and dueThisWeek and reports them in onHoldExcluded", async () => {
+    const hold = await onHoldProject();
+    await task("TODO", d("2026-09-20T00:00:00.000Z"), hold.id); // overdue by date
+    await task("IN_PROGRESS", d("2026-09-01T00:00:00.000Z"), hold.id); // overdue by date
+    await task("TODO", d("2026-09-30T00:00:00.000Z"), hold.id); // due this week, not overdue
+    await task("DONE", d("2026-09-01T00:00:00.000Z"), hold.id); // closed: never counted
+    await task("TODO", d("2026-09-20T00:00:00.000Z")); // active project: still counts
+    expect(await workCounts()).toMatchObject({ overdue: 1, dueThisWeek: 0, onHoldExcluded: 2 });
+  });
+
+  it("onHoldExcluded counts top-level tasks only and stays inside the caller's visibility", async () => {
+    const hold = await onHoldProject();
+    const parent = await task("TODO", null, hold.id);
+    await prisma.task.create({
+      data: {
+        projectId: hold.id,
+        title: "Sub",
+        status: "TODO",
+        dueDate: d("2026-09-01T00:00:00.000Z"),
+        parentTaskId: parent.id,
+      },
+    });
+    const other = await createUserWithRole("TAM");
+    const foreign = await prisma.project.create({
+      data: { name: `Foreign hold ${Date.now()}`, tamId: other.userId, status: "ON_HOLD" },
+    });
+    await task("TODO", d("2026-09-01T00:00:00.000Z"), foreign.id);
+    expect((await workCounts()).onHoldExcluded).toBe(0);
+  });
+
+  it("moving the project back to ACTIVE brings its tasks back into overdue", async () => {
+    const hold = await onHoldProject();
+    await task("TODO", d("2026-09-20T00:00:00.000Z"), hold.id);
+    expect(await workCounts()).toMatchObject({ overdue: 0, onHoldExcluded: 1 });
+    await prisma.project.update({ where: { id: hold.id }, data: { status: "ACTIVE" } });
+    expect(await workCounts()).toMatchObject({ overdue: 1, onHoldExcluded: 0 });
   });
 });
