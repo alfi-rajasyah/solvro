@@ -191,3 +191,35 @@ describe("project role notifications", () => {
     expect(notificationHref(roleNotif({ tam: 3 }))).toBe("/projects/7");
   });
 });
+
+describe("describeNotification - lifecycle", () => {
+  const pe = (changes: unknown, action = "updated") =>
+    ({ entityType: "project", entityId: 7, action, entityLabel: "Acme rollout", changes }) as Partial<ActivityEvent>;
+
+  it("all tasks closed has no actor and links to the project", () => {
+    const n = notif({ reason: "all_tasks_closed" as AppNotification["reason"] }, pe({ done: 3, cancelled: 0 }, "all_tasks_closed"));
+    const s = describeNotification(n);
+    expect(s.text).toBe("All tasks in Acme rollout are closed — mark the project Completed?");
+    expect(s.parts.some((p) => p.kind === "actor")).toBe(false);
+    expect(notificationHref(n)).toBe("/projects/7");
+  });
+
+  it("tasks handed over, singular and plural", () => {
+    const r = "tasks_handed_over" as AppNotification["reason"];
+    expect(describeNotification(notif({ reason: r }, pe({ handover: { from: "ana", to: "me", tasks: 3, epics: 1 } }))).text).toBe(
+      "rina.wijaya handed you 3 tasks and 1 epic in Acme rollout",
+    );
+    expect(describeNotification(notif({ reason: r }, pe({ handover: { from: "ana", to: "me", tasks: 1 } }))).text).toBe(
+      "rina.wijaya handed you 1 task in Acme rollout",
+    );
+  });
+
+  it("thin handover payload falls back to the activity sentence", () => {
+    const r = "tasks_handed_over" as AppNotification["reason"];
+    for (const c of [null, {}, { handover: { from: "ana" } }]) {
+      const t = describeNotification(notif({ reason: r }, pe(c))).text;
+      expect(t).toBe("rina.wijaya updated the project");
+      expect(t).not.toContain("undefined");
+    }
+  });
+});

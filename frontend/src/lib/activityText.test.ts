@@ -552,3 +552,56 @@ describe("describeActivity - guest links", () => {
     expect(s.taskId).toBeNull();
   });
 });
+
+describe("describeActivity - project lifecycle", () => {
+  const proj = (action: string, changes: unknown, label: string | null = "Acme rollout") =>
+    ev({ entityType: "project", action: action as ActivityEvent["action"], entityLabel: label, changes: changes as ActivityEvent["changes"] });
+
+  it("all tasks closed", () => {
+    const e = proj("all_tasks_closed", { done: 4, cancelled: 1 });
+    expect(text(e)).toBe("maya.putri closed the last open task: all tasks in Acme rollout are closed — mark the project Completed?");
+    expect(describeActivity(e).parts.filter((p) => p.kind === "entity").map((p) => p.text)).toEqual(["Acme rollout"]);
+    expect(text(proj("all_tasks_closed", null, null))).toContain("all tasks in the project are closed");
+  });
+
+  it("cancel cascade, singular and plural", () => {
+    expect(text(proj("updated", { status: { from: "ACTIVE", to: "CANCELLED" }, cancelledTasks: 5 }))).toMatch(/; cancelled 5 open tasks$/);
+    expect(text(proj("updated", { status: { from: "ACTIVE", to: "CANCELLED" }, cancelledTasks: 1 }))).toMatch(/; cancelled 1 open task$/);
+  });
+
+  it("reactivation shift", () => {
+    expect(text(proj("updated", { status: { from: "ON_HOLD", to: "ACTIVE" }, shiftedDays: 7, shiftedTasks: 3 }))).toMatch(
+      /; shifted 3 open tasks by 7 days$/,
+    );
+    expect(text(proj("updated", { status: { from: "ON_HOLD", to: "ACTIVE" }, shiftedDays: 1, shiftedTasks: 1 }))).toMatch(
+      /; shifted 1 open task by 1 day$/,
+    );
+    expect(text(proj("updated", { shiftedDays: 2 }))).toBe("maya.putri shifted open tasks by 2 days");
+  });
+
+  it("handover", () => {
+    expect(text(proj("updated", { handover: { from: "ana", to: "bob", tasks: 3, epics: 1 } }))).toBe(
+      "maya.putri handed over ana's 3 tasks and 1 epic to bob",
+    );
+    expect(text(proj("updated", { handover: { from: "ana", to: null, tasks: 1 } }))).toBe(
+      "maya.putri handed over ana's 1 task to nobody (left unassigned)",
+    );
+    expect(text(proj("updated", { tam: { from: 1, to: 2 }, handover: { from: "ana", to: "bob", tasks: 2 } }))).toMatch(
+      /; handed over ana's 2 tasks to bob$/,
+    );
+  });
+
+  it("malformed lifecycle values degrade without throwing or printing undefined", () => {
+    for (const c of [
+      { cancelledTasks: "x" },
+      { shiftedDays: null, shiftedTasks: 2 },
+      { handover: "oops" },
+      { handover: { from: "ana" } },
+      { handover: {} },
+    ]) {
+      const t = text(proj("updated", c));
+      expect(t).toBe("maya.putri updated the project");
+      expect(t).not.toContain("undefined");
+    }
+  });
+});

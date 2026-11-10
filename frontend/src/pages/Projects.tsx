@@ -12,9 +12,12 @@ import {
 import { useNewParam } from "@/hooks/useNewParam";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { fmtRange } from "@/lib/formatDate";
+import { PROJECT_STATUS_LABEL, projectStatusOptions } from "@/lib/labels";
+import { parseStatusParam, serialiseStatusParam } from "@/lib/projectStatusFilter";
 import { type ProjectSummary, useCustomers, useProjects } from "@/lib/queries";
 
 const CUSTOMER_FILTER_FIELD = "customerId";
+const STATUS_FILTER_FIELD = "status";
 
 export function Projects() {
   const { user } = useAuth();
@@ -23,8 +26,20 @@ export function Projects() {
   const customerFilter = customerIdParam ? Number(customerIdParam) : undefined;
 
   const { data: customers } = useCustomers();
-  const { data: projects, isLoading, isError, error } = useProjects(
+  const { data: allProjects, isLoading, isError, error } = useProjects(
     customerFilter ? { customerId: customerFilter } : {},
+  );
+  // Status filter is client-side over the list already fetched (ANDs with the
+  // server-side customer filter). The raw param is memoised on its string so
+  // the derived array is referentially stable.
+  const statusParam = searchParams.get(STATUS_FILTER_FIELD);
+  const statusFilter = useMemo(() => parseStatusParam(statusParam), [statusParam]);
+  const projects = useMemo(
+    () =>
+      allProjects && statusFilter.length > 0
+        ? allProjects.filter((p) => statusFilter.includes(p.status))
+        : allProjects,
+    [allProjects, statusFilter],
   );
   const [createOpen, setCreateOpen] = useState(false);
 
@@ -48,46 +63,81 @@ export function Projects() {
 
   const activeCustomer = customers?.find((c) => c.id === customerFilter);
 
-  // Single-field Filters config: "Customer" mapped onto the existing
-  // ?customerId= URL contract. Only the affirmative "is" operator is
-  // offered — the URL contract only ever expresses "filtered to this one
-  // customer" or "no filter", so "is not"/"empty"/"not empty" (the other
-  // defaults the vendored select-type field would otherwise expose) have no
-  // corresponding URL state and are dropped to avoid a chip that can be set
-  // into a meaningless combination.
-  const customerFields: FilterFieldConfig<number>[] = useMemo(
+  function setStatusFilter(statuses: readonly string[]) {
+    const next = new URLSearchParams(searchParams);
+    const value = serialiseStatusParam(statuses);
+    if (value === null) next.delete(STATUS_FILTER_FIELD);
+    else next.set(STATUS_FILTER_FIELD, value);
+    setSearchParams(next, { replace: true });
+  }
+
+  function clearFilters() {
+    const next = new URLSearchParams(searchParams);
+    next.delete("customerId");
+    next.delete(STATUS_FILTER_FIELD);
+    setSearchParams(next, { replace: true });
+  }
+
+  // Two-field Filters config. Customer maps onto the ?customerId= contract and
+  // Status onto ?status=. Each offers only the affirmative operator ("is" /
+  // "is any of") — the URL can only express "filtered to these" or "no
+  // filter", so the negating/empty operators the vendored fields default to
+  // have no URL state and are dropped. Values are strings (customer ids are
+  // stringified) so both fields share one Filter value type.
+  const filterFields: FilterFieldConfig<string>[] = useMemo(
     () => [
       {
         key: CUSTOMER_FILTER_FIELD,
         label: "Customer",
         type: "select",
         operators: [{ value: "is", label: "is" }],
-        options: (customers ?? []).map((c) => ({ value: c.id, label: c.name })),
+        options: (customers ?? []).map((c) => ({ value: String(c.id), label: c.name })),
+      },
+      {
+        key: STATUS_FILTER_FIELD,
+        label: "Status",
+        type: "multiselect",
+        operators: [{ value: "is_any_of", label: "is any of" }],
+        options: projectStatusOptions.map((o) => ({ value: o.value, label: o.label })),
       },
     ],
     [customers],
   );
 
-  // Filters state is derived FROM the URL param (not an independent
-  // useState) so the param stays the single source of truth.
-  const activeFilters: Filter<number>[] = useMemo(
-    () =>
-      customerFilter === undefined
-        ? []
-        : [createFilter<number>(CUSTOMER_FILTER_FIELD, "is", [customerFilter])],
-    [customerFilter],
-  );
+  // Filters state is derived FROM the URL params (not an independent
+  // useState) so the URL stays the single source of truth.
+  const activeFilters: Filter<string>[] = useMemo(() => {
+    const out: Filter<string>[] = [];
+    if (customerFilter !== undefined) {
+      out.push(createFilter<string>(CUSTOMER_FILTER_FIELD, "is", [String(customerFilter)]));
+    }
+    if (statusFilter.length > 0) {
+      out.push(createFilter<string>(STATUS_FILTER_FIELD, "is_any_of", [...statusFilter]));
+    }
+    return out;
+  }, [customerFilter, statusFilter]);
 
   // Every chip interaction (add, change value, remove) funnels back through
-  // the existing setCustomerFilter — same set/remove + { replace: true }
-  // behavior as the plain <select> this replaces. Deliberately a plain
-  // function (like setCustomerFilter above): it closes over the current
-  // searchParams and must stay fresh each render.
-  function handleCustomerFiltersChange(next: Filter<number>[]) {
-    const entry = next.find((f) => f.field === CUSTOMER_FILTER_FIELD);
-    const value = entry?.values[0];
-    setCustomerFilter(value ?? "");
+  // the URL setters — same set/remove + { replace: true } behaviour as before.
+  // Deliberately plain functions: they close over the current searchParams
+  // and must stay fresh each render.
+  function handleFiltersChange(next: Filter<string>[]) {
+    const customer = next.find((f) => f.field === CUSTOMER_FILTER_FIELD)?.values[0];
+    const status = next.find((f) => f.field === STATUS_FILTER_FIELD)?.values ?? [];
+    const customerNow = customer === undefined ? "" : Number(customer);
+    if (customerNow !== (customerFilter ?? "")) setCustomerFilter(customerNow);
+    else setStatusFilter(status);
   }
+
+  const filtersActive = activeFilters.length > 0;
+  const emptyFilterName = [
+    activeCustomer ? `customer ${activeCustomer.name}` : null,
+    statusFilter.length > 0
+      ? `status ${statusFilter.map((s) => PROJECT_STATUS_LABEL[s]).join(" or ")}`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" and ");
 
   return (
     <div>
@@ -116,8 +166,8 @@ export function Projects() {
       <div className="mb-4 flex flex-wrap items-center gap-2">
         <Filters
           filters={activeFilters}
-          fields={customerFields}
-          onChange={handleCustomerFiltersChange}
+          fields={filterFields}
+          onChange={handleFiltersChange}
           size="sm"
           allowMultiple={false}
         />
@@ -136,7 +186,11 @@ export function Projects() {
         </Alert>
       )}
 
-      {projects && projects.length === 0 && (
+      {projects && projects.length === 0 && filtersActive && (
+        <FilteredEmptyState filterName={emptyFilterName} onClear={clearFilters} />
+      )}
+
+      {projects && projects.length === 0 && !filtersActive && (
         <EmptyState onCreate={canCreate ? () => setCreateOpen(true) : undefined} />
       )}
 
@@ -289,6 +343,24 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
           Create your first project
         </button>
       )}
+    </div>
+  );
+}
+
+function FilteredEmptyState({ filterName, onClear }: { filterName: string; onClear: () => void }) {
+  return (
+    <div className="rounded-xl border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center">
+      <span className="material-symbols-outlined mb-2 text-4xl text-on-surface-variant">
+        filter_alt_off
+      </span>
+      <p className="mb-4 text-sm text-on-surface-variant">No projects match {filterName}.</p>
+      <button
+        type="button"
+        onClick={onClear}
+        className="inline-flex items-center gap-2 rounded-lg border border-outline-variant px-4 py-2 font-display text-xs font-bold text-on-surface hover:border-primary hover:text-primary"
+      >
+        Clear filters
+      </button>
     </div>
   );
 }
