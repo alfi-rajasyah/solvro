@@ -271,6 +271,12 @@ describe("/tasks?overdue=true — on-hold projects (feedback-round F7)", () => {
     await prisma.project.update({ where: { id: projectId }, data: { status: "ACTIVE" } });
     expect(await listOverdueTaskIds("&today=2026-08-02")).toContain(id);
   });
+
+  it("excludes overdue tasks of a CANCELLED project", async () => {
+    const id = await createTask({ dueDate: new Date("2026-08-01T00:00:00.000Z") });
+    await prisma.project.update({ where: { id: projectId }, data: { status: "CANCELLED" } });
+    expect(await listOverdueTaskIds("&today=2026-08-02")).not.toContain(id);
+  });
 });
 
 describe("/tasks?excludeOnHold= — due-range list matches the Overview tile (feedback-round F7)", () => {

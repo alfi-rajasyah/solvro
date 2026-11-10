@@ -30,7 +30,7 @@ import {
 import {
   COUNTED_TASKS_COUNT,
   OPEN_TASK_STATUS_FILTER,
-  TASK_PROJECT_NOT_ON_HOLD,
+  TASK_PROJECT_CAN_BE_OVERDUE,
 } from "../lib/taskStatus.js";
 import { MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
 import { assertActiveUser } from "../lib/users.js";
@@ -236,7 +236,7 @@ customersRouter.get("/", customerReadGate, validate("query", customersListQueryS
           where: {
             AND: [
               { projectId: { in: projectIds } },
-              TASK_PROJECT_NOT_ON_HOLD,
+              TASK_PROJECT_CAN_BE_OVERDUE,
               { status: OPEN_TASK_STATUS_FILTER, dueDate: { lt: boundary } },
             ],
           },

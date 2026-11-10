@@ -15,6 +15,32 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-11-10 — Archive a deal that was never really decided
+
+- `backend/prisma/schema.prisma`, `backend/prisma/migrations/20261110130000_pipeline_outcome_archived/` (new): `PipelineOutcome` gains `ARCHIVED`, for parking a dead deal — a duplicate, a test entry, imported junk — without picking Won, Lost or Cancelled.
+- `backend/src/routes/opportunities.ts`, `backend/test/opportunityClose.test.ts`: `POST /opportunities/:id/close` accepts `outcome: "ARCHIVED"` with an optional note and no reason category (a category is rejected with `reason_not_allowed`); the activity log reads "Archived" (plus the note when given). "Reopen" brings an archived deal back like any closed deal.
+- `frontend/src/components/CloseDealDialog.tsx`, `frontend/src/components/PipelineFlagChips.tsx`, `frontend/src/lib/pipelineFormat.ts`: "Close deal" offers Archived as a fourth outcome (no reason category, a short explanation under the choices), and archived deals carry a grey "Archived" chip.
+- `frontend/src/pages/views/PipelineClosed.tsx`: the Closed board adds a read-only Archived column; its deals feed none of the tiles.
+- `frontend/src/components/pipeline/analytics.ts`, `frontend/src/components/pipeline/analytics.test.ts`: archived deals are left out of win rate (Closed board and Pipeline analytics), PIC performance's lost/cancelled count and win rate, and the Created vs. won trend. They were already out of every open-deal number (pipeline value, active deals, funnel, idle alerts).
+- `frontend/src/lib/helpContent.ts`, `e2e/tests/pipeline-board.spec.ts`: Help explains when to archive, and a browser test archives a deal from its page and finds it in the Archived column.
+
+### Fixed — 2026-11-10 — A note on a deal restarts its SLA clock
+
+- `backend/src/routes/opportunityItems.ts`, `backend/test/opportunityItems.test.ts`: adding a note to a deal in "Waiting Sales input" now also restarts the waiting clock (`waitingInputSince`), not only the last-activity time. Before, a deal kept showing its old waiting age (e.g. "31 wd") right after someone commented on it. Every SLA clock now restarts on a new note, whatever the deal's sub-status.
+- `frontend/src/lib/queries.ts`: adding a note now refetches the deal and the Pipeline board, so the deal header, "Last activity" and the idle badges update straight away instead of after a reload.
+- `frontend/src/lib/helpContent.ts`: the Pipeline "Idle alerts" help says a note restarts the clock.
+
+### Fixed — 2026-11-10 — Cancelled projects no longer show overdue tasks
+
+- `backend/src/lib/taskStatus.ts`, `backend/src/lib/projectHealth.ts`, `backend/src/routes/overview.ts`, `backend/src/routes/tasks.ts`, `backend/src/routes/customers.ts`: the rule that keeps an on-hold project's tasks out of every overdue and "due this week" count and list now covers cancelled projects too (`NO_OVERDUE_PROJECT_STATUSES`; the task filter is renamed `TASK_PROJECT_CAN_BE_OVERDUE`). A cancelled project's header health, Overdue card and the Overview, Customers and Tasks counts no longer report its open tasks as overdue. The Overview tile's "<n> in on-hold projects not counted" hint still counts on-hold tasks only.
+- `frontend/src/lib/taskOverdue.ts`: the client-side overdue painting (List, Kanban, Gantt, Timeline, Tasks, the project Overview card) applies the same rule.
+- Tests: `backend/test/tasksOverdue.test.ts`, `backend/test/projectHealth.test.ts`, `backend/test/overviewWorkCounts.test.ts`, `frontend/src/lib/taskOverdue.test.ts`.
+
+### Changed — 2026-11-10 — "Needs attention" keeps an on-hold or cancelled project's tasks
+
+- `frontend/src/pages/views/ProjectOverview.tsx`: the project Overview's "Needs attention" panel no longer drops past-due tasks when the project is on hold. It lists them, each marked with the project's status in place of the due chip: an amber "On hold" chip, or a grey "Cancelled" chip for a cancelled project. Nothing is stored on the task; the chips go back to due dates when the project resumes.
+- `frontend/src/lib/helpContent.ts`: the Overview and on-hold help mention cancelled projects and the "On hold" marker.
+
 ### Changed — 2026-11-10 — A handover also notifies people who receive only epics
 
 - `backend/src/lib/offboarding.ts`, `backend/src/lib/notifications.ts`, `backend/test/offboarding.test.ts`: when a leaving user's work is handed over, a colleague who receives only epics in a project is now told too, with the same "tasks handed over" notification (one per person per project). Before, only people who received open tasks were told. A new customer owner is still not notified.

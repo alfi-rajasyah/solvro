@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
+import { PipelineSubStatus } from "@prisma/client";
 import { prisma } from "../prisma.js";
 import { requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
@@ -96,7 +97,10 @@ opportunityItemsRouter.get(
 // Bumps the opportunity's lastActivityAt in the same transaction
 // (opportunity-flow-redesign §3.7) — a manual note is exactly the kind of
 // activity the "activity" basis of computeIdle (lib/pipelineSla.ts) exists
-// to track, same as the link writes below.
+// to track, same as the link writes below. A note also restarts the
+// "waiting" basis: on a deal in Waiting Sales input it re-stamps
+// `waitingInputSince`, so every SLA clock restarts on a new comment whatever
+// the deal's state (Hold deals never idle either way).
 opportunityItemsRouter.post(
   "/:opportunityId/activities",
   requirePermission("pipeline:view"),
@@ -118,9 +122,14 @@ opportunityItemsRouter.post(
         data: { opportunityId, userId: req.user!.sub, note, mentionedUserIds },
         include: { user: { select: PIC_SELECT } },
       });
+      const now = new Date();
       await tx.opportunity.update({
         where: { id: opportunityId },
-        data: { lastActivityAt: new Date() },
+        data: { lastActivityAt: now },
+      });
+      await tx.opportunity.updateMany({
+        where: { id: opportunityId, subStatus: PipelineSubStatus.WAITING_SALES_INPUT },
+        data: { waitingInputSince: now },
       });
       // Never the note text or the mention ids: the event carries the note's
       // id (the row itself is the timeline entry).

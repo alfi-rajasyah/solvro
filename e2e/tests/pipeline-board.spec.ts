@@ -116,7 +116,7 @@ interface ApiDeal {
   dealValue: number;
   stageOrder: number;
   wonAt: string | null;
-  outcome: "WON" | "LOST" | "CANCELLED" | null;
+  outcome: "WON" | "LOST" | "CANCELLED" | "ARCHIVED" | null;
 }
 
 async function json<T>(res: Response): Promise<T> {
@@ -499,6 +499,47 @@ test.describe("pipeline board", () => {
     await page.goto("/pipeline", { waitUntil: "networkidle" });
     await page.waitForTimeout(800);
     await expect(column(page, "ASSESSMENT").getByText(closeTarget.title, { exact: true })).toBeVisible();
+  });
+
+  // ---------------------------------------------------------------------
+  // 3a'. Archive from the detail page — desktop only, same as 3a. Its own
+  //      deal, so it never races the shared fixtures above.
+  // ---------------------------------------------------------------------
+  test("Close deal as Archived takes no reason and lands in the Archived column", async ({ page }) => {
+    test.skip(
+      test.info().project.name !== "desktop",
+      "the Close dialog flow runs on the desktop project only — see file header for the mobile rationale",
+    );
+    const stamp = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    const deal = await createDeal(token, {
+      title: `e2e-pipeline-archive-${stamp}`,
+      customerName: `e2e-pipeline-archive-${stamp}-customer`,
+      stage: "ASSESSMENT",
+      dealValue: 1_000_000,
+    });
+    try {
+      await loginViaUi(page);
+      await page.goto(`/pipeline/${deal.id}`, { waitUntil: "networkidle" });
+      await page.getByRole("button", { name: /Close deal/ }).first().click();
+      const closeDialog = page.getByRole("dialog", { name: "Close deal", exact: true });
+      await expect(closeDialog).toBeVisible();
+
+      await closeDialog.locator("fieldset label").filter({ hasText: "Archived" }).click();
+      await expect(closeDialog.getByRole("radio", { name: "Archived", exact: true })).toBeChecked();
+      await expect(closeDialog.getByLabel("Reason category")).toHaveCount(0);
+      await closeDialog.getByLabel("Note (optional)").fill("Duplicate entry.");
+      await closeDialog.getByRole("button", { name: "Close as Archived", exact: true }).click();
+      await expect(closeDialog).toBeHidden({ timeout: 10_000 });
+      await expect(page.getByText("Archived: Duplicate entry.")).toBeVisible();
+      expect((await getDeal(token, deal.id)).outcome).toBe("ARCHIVED");
+
+      await page.goto("/pipeline?deals=closed", { waitUntil: "networkidle" });
+      const card = closedCard(page, deal.title);
+      await expect(card).toBeVisible();
+      await expect(card).toContainText("Archived");
+    } finally {
+      await deleteDeal(token, deal.id);
+    }
   });
 
   // ---------------------------------------------------------------------

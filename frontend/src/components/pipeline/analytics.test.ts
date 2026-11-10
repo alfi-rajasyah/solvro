@@ -85,6 +85,29 @@ describe("computeStageFunnel", () => {
   });
 });
 
+describe("Archived deals in the leaderboard and the monthly trend", () => {
+  it("are neither lost/cancelled nor part of the PIC's win rate", () => {
+    const [row] = computePicLeaderboard([
+      opp({ picId: PIC_A.id, pic: PIC_A, outcome: "WON", dealValue: 10 }),
+      opp({ picId: PIC_A.id, pic: PIC_A, outcome: "ARCHIVED", dealValue: 99 }),
+    ]);
+    expect(row).toMatchObject({ wonCount: 1, lostOrCancelledCount: 0, winRatePct: 100 });
+  });
+
+  it("are not counted as created", () => {
+    const now = new Date("2026-08-15T00:00:00.000Z");
+    const trend = computeMonthlyTrend(
+      [
+        opp({ createdAt: "2026-08-02T00:00:00.000Z" }),
+        opp({ createdAt: "2026-08-03T00:00:00.000Z", outcome: "ARCHIVED", closedAt: "2026-08-04T00:00:00.000Z" }),
+      ],
+      now,
+      1,
+    );
+    expect(trend).toEqual([expect.objectContaining({ month: "2026-08", created: 1 })]);
+  });
+});
+
 describe("computePicLeaderboard", () => {
   it("computes active/won counts+values per PIC and drops unassigned deals", () => {
     const rows = computePicLeaderboard([
@@ -358,6 +381,20 @@ describe("computeWinRatePct", () => {
       2026,
     );
     expect(rate).toBe(67); // 2 / 3 = 66.67% -> rounds to 67
+  });
+
+  it("leaves Archived deals out of both numerator and denominator", () => {
+    const rate = computeWinRatePct(
+      [
+        opp({ outcome: "WON", closedAt: "2026-01-01T00:00:00.000Z" }),
+        opp({ outcome: "LOST", closedAt: "2026-02-01T00:00:00.000Z" }),
+        opp({ outcome: "ARCHIVED", closedAt: "2026-03-01T00:00:00.000Z" }),
+        opp({ outcome: "ARCHIVED", closedAt: "2026-04-01T00:00:00.000Z" }),
+      ],
+      2026,
+    );
+    expect(rate).toBe(50);
+    expect(computeWinRatePct([opp({ outcome: "ARCHIVED", closedAt: "2026-03-01T00:00:00.000Z" })], 2026)).toBe(0);
   });
 
   it("is 0 when nothing closed in that year (avoids a 0/0 NaN)", () => {

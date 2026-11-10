@@ -198,6 +198,16 @@ describe("GET /overview workCounts — on-hold projects (feedback-round F7)", ()
     expect(await workCounts()).toMatchObject({ overdue: 1, dueThisWeek: 0, onHoldExcluded: 2 });
   });
 
+  it("leaves a cancelled project's tasks out of overdue, dueThisWeek and onHoldExcluded", async () => {
+    const cancelled = await prisma.project.create({
+      data: { name: `Cancelled ${Date.now()}-${Math.random()}`, tamId: userId, status: "CANCELLED" },
+    });
+    await task("TODO", d("2026-09-20T00:00:00.000Z"), cancelled.id); // overdue by date
+    await task("TODO", d("2026-09-30T00:00:00.000Z"), cancelled.id); // due this week
+    await task("TODO", d("2026-09-20T00:00:00.000Z")); // active project: still counts
+    expect(await workCounts()).toMatchObject({ overdue: 1, dueThisWeek: 0, onHoldExcluded: 0 });
+  });
+
   it("onHoldExcluded counts top-level tasks only and stays inside the caller's visibility", async () => {
     const hold = await onHoldProject();
     const parent = await task("TODO", null, hold.id);
