@@ -358,6 +358,65 @@ function genericSentence(event: ActivityEvent): Parts {
   return [txt(`${action} ${label ? `the ${kind} ` : `a ${kind}`}`), ...(label ? [ent(label)] : [])];
 }
 
+/** "1 task" / "3 tasks". */
+function countOf(n: number, noun: string): string {
+  return `${n} ${noun}${n === 1 ? "" : "s"}`;
+}
+
+/** A positive integer count, or null for anything else (missing, zero, a string). */
+function positiveInt(v: unknown): number | null {
+  return typeof v === "number" && Number.isInteger(v) && v > 0 ? v : null;
+}
+
+/**
+ * "All tasks in <project> are closed — mark the project Completed?"
+ * (docs/archive/plans/feedback-round-lifecycle-spec.md, F3). Shared with the
+ * notification list, which shows it without the actor.
+ */
+export function allTasksClosedParts(project: string | null): Parts {
+  return project
+    ? [txt("All tasks in "), ent(project), txt(" are closed — mark the project Completed?")]
+    : [txt("All tasks in the project are closed — mark the project Completed?")];
+}
+
+/** "handed over alice's 3 tasks and 1 epic to bob" / "... left them unassigned"; null when nothing usable. */
+function handoverClause(v: unknown): string | null {
+  if (!isRecord(v)) return null;
+  const from = typeof v.from === "string" && v.from ? v.from : null;
+  const tasks = positiveInt(v.tasks);
+  const epics = positiveInt(v.epics);
+  if (!from || (tasks === null && epics === null)) return null;
+  const what = [tasks !== null ? countOf(tasks, "task") : null, epics !== null ? countOf(epics, "epic") : null]
+    .filter(Boolean)
+    .join(" and ");
+  const to = typeof v.to === "string" && v.to ? v.to : null;
+  return `handed over ${from}'s ${what} ${to ? `to ${to}` : "to nobody (left unassigned)"}`;
+}
+
+/**
+ * A project `updated` event. Lifecycle keys (`cancelledTasks`, `shiftedDays` /
+ * `shiftedTasks`, `handover`) become trailing clauses; whatever other fields
+ * the event carries keep their usual sentence. Malformed values are ignored.
+ */
+function projectUpdatedSentence(event: ActivityEvent, changes: Changes | null): Parts {
+  const { cancelledTasks, shiftedDays, shiftedTasks, handover, ...rest } = changes ?? {};
+  const clauses: string[] = [];
+  const cancelled = positiveInt(cancelledTasks);
+  if (cancelled !== null) clauses.push(`cancelled ${countOf(cancelled, "open task")}`);
+  const days = positiveInt(shiftedDays);
+  const shifted = positiveInt(shiftedTasks);
+  if (days !== null) {
+    clauses.push(
+      `shifted ${shifted !== null ? countOf(shifted, "open task") : "open tasks"} by ${countOf(days, "day")}`,
+    );
+  }
+  const hand = handoverClause(handover);
+  if (hand) clauses.push(hand);
+  if (Object.keys(rest).length === 0 && clauses.length > 0) return [txt(clauses.join(", "))];
+  const base = updateSentence({ ...event, entityLabel: null }, rest, "the project", "project");
+  return clauses.length > 0 ? [...base, txt(`; ${clauses.join(", ")}`)] : base;
+}
+
 /** The deal an event is about: its title, linked to the deal page when the id is known. */
 function dealEntity(event: ActivityEvent, label: string | null): Parts {
   if (!label) return [txt("a deal")];
@@ -576,7 +635,13 @@ function buildBody(event: ActivityEvent, canViewPipeline: boolean): Parts {
         return from ? [...project, txt(" from deal "), ent(from.name, `/pipeline/${from.id}`)] : project;
       }
       if (event.action === "updated") {
-        return updateSentence({ ...event, entityLabel: null }, changes ?? {}, "the project", "project");
+        return projectUpdatedSentence(event, changes);
+      }
+      // Feed rows always lead with the actor, so the question follows a clause.
+      if (event.action === "all_tasks_closed") {
+        return label
+          ? [txt("closed the last open task: all tasks in "), ent(label), txt(" are closed — mark the project Completed?")]
+          : [txt("closed the last open task: all tasks in the project are closed — mark the project Completed?")];
       }
       if (event.action === "deleted") return [txt("deleted the project")];
       break;

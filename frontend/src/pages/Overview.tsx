@@ -66,7 +66,7 @@ export function Overview() {
 
 function OverviewBody({ data }: { data: OverviewResponse }) {
   const { user } = useAuth();
-  const { overdue, dueThisWeek, openRisks } = data.workCounts;
+  const { overdue, dueThisWeek, openRisks, onHoldExcluded } = data.workCounts;
   // Per-project task-overdue and open-risk counts come from GET /projects
   // (server-computed `health`); the overview portfolio rows don't carry them.
   const { data: projects } = useProjects();
@@ -82,7 +82,13 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
         <Kpi
           label="Overdue"
           value={overdue}
-          hint={overdue === 1 ? "open task past due" : "open tasks past due"}
+          hint={
+            onHoldExcluded > 0
+              ? `${onHoldExcluded} in on-hold projects not counted`
+              : overdue === 1
+                ? "open task past due"
+                : "open tasks past due"
+          }
           icon="event_busy"
           tone={overdue > 0 ? "error" : "neutral"}
           to="/tasks?view=overdue"

@@ -15,6 +15,71 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-10 — A handover also notifies people who receive only epics
+
+- `backend/src/lib/offboarding.ts`, `backend/src/lib/notifications.ts`, `backend/test/offboarding.test.ts`: when a leaving user's work is handed over, a colleague who receives only epics in a project is now told too, with the same "tasks handed over" notification (one per person per project). Before, only people who received open tasks were told. A new customer owner is still not notified.
+- `frontend/src/lib/helpContent.ts`, `frontend/src/lib/notificationText.test.ts`, `frontend/src/lib/activityText.test.ts`: the offboarding guide in Help describes who is notified, and tests pin the wording when only epics were handed over ("handed you 1 epic in <project>").
+
+### Changed — 2026-11-10 — The Help page is now "How to use Solvro"
+
+- `frontend/src/lib/helpContent.ts`, `frontend/src/pages/Help.tsx`, `frontend/src/lib/helpContent.test.ts`, `e2e/tests/help.spec.ts`: the Help page now opens with task-oriented guides — start your day, run a project, keep tasks moving, handle a risk, prepare the Weekly Sync, work a deal, track hours and tickets, and an admin-only guide to offboarding a teammate — above the existing per-page reference. Each guide is a short list of numbered steps with links to the pages involved and to the related reference topics. The content now covers cancelling a project, putting one on hold and reactivating it, the Projects status filter, the "all tasks are closed" notification, Pipeline deals on Hold never raising idle alerts, and the offboarding handover, quoting the labels the screens actually use. Search covers guides and reference alike, guides are hidden from people who lack the matching permission, and existing `/help#…` links still land on the same topics.
+
+### Added — 2026-11-10 — End-to-end tests for the project lifecycle, status filter, handover and "all tasks closed"
+
+- `e2e/tests/project-lifecycle.spec.ts`, `e2e/tests/projects-status-filter.spec.ts`, `e2e/tests/offboarding.spec.ts` (all new), `e2e/tests/notifications.spec.ts`, `e2e/fixtures/lifecycle.ts` (new): browser tests for cancelling a project and its open tasks, putting a project on hold and reactivating it with an optional date shift, the Projects page Status filter, the handover dialog in Admin › Users, and the "all tasks are closed" notification. Each spec creates its own users, customers and projects through API helpers, so it does not depend on data from any other spec.
+
+### Added — 2026-11-10 — Handover dialog when deactivating a user
+
+- `frontend/src/pages/Admin.tsx`, `frontend/src/components/admin/HandoverModal.tsx` (new), `frontend/src/lib/handover.ts` (new), `frontend/src/lib/queries.ts`: in Admin › Users, deactivating a user who still holds work now opens a "Hand over <user>'s work" dialog instead of deactivating immediately. For each project it asks who takes the open tasks and epics, the new TAM where the user is TAM (required), the new SA where they are SA, and an optional internal handover note, with an "Apply to all" shortcut for the assignee. It also asks who owns each of their customers and who becomes PIC of their open Pipeline deals. "Hand over and deactivate" does all of it in one step and stays disabled until every required TAM is chosen; server rejections appear next to the row that caused them, and the list reloads when the user's work changed while the dialog was open. Only active users who already have a role can be chosen. Users with nothing to hand over are deactivated as before.
+
+### Changed — 2026-11-10 — Activity and notification wording for project lifecycle events
+
+- `frontend/src/lib/activityText.ts`, `frontend/src/lib/notificationText.ts`, `frontend/src/lib/queries.ts`: the notification list now reads "All tasks in <project> are closed — mark the project Completed?" when the last open task closes and "<name> handed you N tasks in <project>" after a handover. Project history lines now say how many open tasks were cancelled when a project was cancelled, how many were shifted and by how many days on reactivation, and whose work was handed over to whom. Events with missing details fall back to the generic sentence.
+
+### Added — 2026-11-10 — "All tasks are closed" event
+
+- `backend/src/routes/tasks.ts`, `backend/src/lib/allTasksClosed.ts` (new), `backend/src/lib/activity.ts`, `backend/src/lib/notifications.ts`: when the last open task of an Active project is closed (Done or Cancelled), the project records an "all tasks closed" activity event and notifies the project's TAM and members — including the person who closed the task — so they can mark the project Completed. It does not fire for Planning, On hold, Completed or Cancelled projects, for a project with no tasks, when the last open task is deleted, or when a project is cancelled. Closing the last two tasks at the same moment produces a single event: a write that closes a task now takes the project lock before the task row.
+
+### Added — 2026-11-10 — Status filter on the Projects page
+
+- `frontend/src/pages/Projects.tsx`, `frontend/src/lib/projectStatusFilter.ts` (new): a Status filter beside Customer. Pick one or more project statuses to narrow the list; the selection is kept in the page address (`?status=ACTIVE,ON_HOLD`), so it survives reload and back/forward, and it combines with the Customer filter. When no project matches, the page says which filter is applied and offers "Clear filters".
+
+### Changed — 2026-11-10 — Confirmations when cancelling or reactivating a project
+
+- `frontend/src/components/ProjectFormModal.tsx`, `frontend/src/components/project/ProjectStatusChangeDialogs.tsx` (new), `frontend/src/lib/projectStatusChange.ts` (new), `frontend/src/components/ConfirmModal.tsx` (optional `cancelLabel`): cancelling a project with open tasks asks first, because those tasks are marked Cancelled with it. Moving an on-hold project back to Active or Planning, when open tasks are now past due, offers to shift their dates by the number of days the project was on hold (editable) or to update the timeline yourself in the Gantt (the List on phones).
+- `frontend/src/pages/Overview.tsx`: the Overdue tile says how many overdue tasks are left out because their project is on hold.
+- `frontend/src/lib/taskOverdue.ts` (new), `frontend/src/pages/Tasks.tsx`, `frontend/src/components/kanban-v2/cards.tsx`, `frontend/src/components/gantt-v2/TreeCells.tsx`, `frontend/src/components/gantt-v2/SolvroGantt.tsx`, `frontend/src/pages/views/ProjectTimeline.tsx`, `frontend/src/pages/views/ProjectOverview.tsx`, `frontend/src/pages/views/ProjectList.tsx`: tasks of an on-hold project are no longer shown as overdue or labelled "late" on the Tasks page, Kanban cards, the Gantt, the project List, the Timeline tab or the project Overview tab, and the "Due this week" list now matches its Overview tile.
+- `frontend/src/lib/queries.ts`: types and hooks for the above; saving a project now also refreshes the task lists.
+
+### Added — 2026-11-10 — Handing over a leaving user's work (API)
+
+- `backend/src/routes/admin.ts`, `backend/src/lib/offboarding.ts` (new): admin-only `GET /admin/users/:id/handover-preview` lists what a user still holds, and `POST /admin/users/:id/offboard` moves their open tasks and epics, TAM and SA seats, customer ownership and open Pipeline deals to chosen colleagues in a single transaction, optionally leaves an internal project note, and then deactivates the account. Every receiver must be an active user, and a deal receiver must have Pipeline access. A failure rolls everything back and leaves the user active.
+- `backend/src/lib/notifications.ts`: people who receive open tasks are told with a new "tasks handed over" notification, one per person per project. Someone who receives only epics, or only a customer, gets no notification.
+
+### Changed — 2026-11-10 — Deactivating a user who still holds work is refused
+
+- `PATCH /admin/users/:id/deactivate` answers 409 `handover_required` when the user still holds open tasks or epics, a TAM or SA seat, a customer or an open Pipeline deal; use the handover instead. Reactivation, and deactivating a user with nothing to hand over, are unchanged.
+
+### Added — 2026-11-10 — Cancelling and reactivating projects
+
+- `backend/src/routes/projects.ts`, `backend/src/lib/projectLifecycle.ts` (new): setting a project to Cancelled also cancels its open tasks, subtasks included, in the same save. Completed tasks and epics are left alone, the project activity records how many tasks were cancelled, and reactivating the project does not reopen them.
+- Moving an on-hold project back to Active or Planning can shift the dates of its open tasks and open epics by a number of days (`shiftOpenDatesByDays` on `PATCH /projects/:id`). Baselines and closed work are untouched, and the activity records the shift. Sending it on any other status change answers 400 `shift_requires_reactivation`.
+- `GET /projects/:id/lifecycle-preview` reports a project's open, completed and cancelled task counts, how long it has been on hold and how many open tasks are past due.
+- Projects record when they were put on hold (`projects.on_hold_since`, returned as `onHoldSince`). A database migration adds the column and sets it, for projects already on hold, to their last-updated time.
+
+### Changed — 2026-11-10 — Baseline lock order
+
+- `POST /projects/:id/baseline` takes the project lock before it writes task rows, the same order as every other project write, so locking a baseline while the project is being cancelled or reactivated cannot deadlock.
+
+### Added — 2026-11-10 — On-hold projects stay out of overdue counts
+
+- `backend/src/lib/taskStatus.ts`, `lib/portfolio.ts`, `lib/projectHealth.ts`, `routes/overview.ts`, `routes/customers.ts`, `routes/tasks.ts`: tasks in on-hold projects no longer count as overdue or due this week on Overview, in the Tasks list overdue filter, in project and customer health, or in the portfolio. Overview also reports how many overdue tasks that rule leaves out (`workCounts.onHoldExcluded`).
+- `GET /tasks` accepts `excludeOnHold=true` to leave out tasks of on-hold projects, so the "due this week" list can match the Overview tile.
+
+### Fixed — 2026-11-10 — A Pipeline deal on Hold no longer shows an idle alert
+
+- `backend/src/lib/pipelineSla.ts`: a deal tagged Hold reports no idle level. Releasing the hold restarts the idle clock.
+
 ### Fixed — 2026-11-07 — Release PRs keep the staging branch and never publish images
 
 - `.github/workflows/keep-staging.yml` (new): when a pull request from `staging` merges into `main`, the workflow recreates `staging` at the merged commit. The repository deletes a merged pull request's head branch automatically, which removed `staging` after the first staging -> main release; branch protection, which would exempt it, is not available on this plan. The branch is recreated with the workflow token, so it starts no CI run or staging redeploy for a commit that was already tested and deployed.

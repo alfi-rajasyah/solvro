@@ -1,4 +1,4 @@
-import { PipelineSubStatus } from "@prisma/client";
+import { PipelineStatusTag, PipelineSubStatus } from "@prisma/client";
 import type { Opportunity, PipelineStage } from "@prisma/client";
 import { workingDaysBetween } from "./workingDays.js";
 
@@ -29,17 +29,23 @@ export interface IdleState {
   basis: IdleBasis;
 }
 
-type IdleInputDeal = Pick<Opportunity, "stage" | "outcome" | "subStatus" | "waitingInputSince" | "lastActivityAt">;
+type IdleInputDeal = Pick<
+  Opportunity,
+  "stage" | "outcome" | "subStatus" | "statusTag" | "waitingInputSince" | "lastActivityAt"
+>;
 
 /**
- * Closed deal -> `none`/0/null. Waiting Sales input -> "waiting" basis off
+ * Closed deal -> `none`/0/null. A deal on Hold never idles
+ * (docs/archive/plans/feedback-round-lifecycle-spec.md, F4) — releasing the
+ * hold stamps `lastActivityAt`, so the clock restarts from the release. DELAYED
+ * deals still go idle. Waiting Sales input -> "waiting" basis off
  * `waitingInputSince` (warning past `waitingDays`, critical past 2x). Every
  * other open deal -> "activity" basis off `lastActivityAt` (warning past
  * `idleWarningDays`, critical only where `idleCriticalDays` is set — today
  * only Waiting Response, past 14).
  */
 export function computeIdle(deal: IdleInputDeal, now: Date): IdleState {
-  if (deal.outcome !== null) {
+  if (deal.outcome !== null || deal.statusTag === PipelineStatusTag.HOLD) {
     return { level: "none", days: 0, basis: null };
   }
 

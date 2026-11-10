@@ -208,6 +208,15 @@ describe("computeProjectHealth — overdue boundary", () => {
     });
   }
 
+  it("an on-hold project counts 0 overdue until it is reactivated (feedback-round F7)", async () => {
+    const id = await createProject(userId);
+    await createTask(id, { dueDate: new Date("2026-08-01T00:00:00.000Z") });
+    await prisma.project.update({ where: { id }, data: { status: "ON_HOLD" } });
+    expect((await healthOf(id, "?today=2026-08-05")).overdueCount).toBe(0);
+    await prisma.project.update({ where: { id }, data: { status: "ACTIVE" } });
+    expect((await healthOf(id, "?today=2026-08-05")).overdueCount).toBe(1);
+  });
+
   it("`today` moves the boundary to the caller's local day", async () => {
     const id = await createProject(userId);
     await createTask(id, { dueDate: new Date("2026-08-02T00:00:00.000Z") });

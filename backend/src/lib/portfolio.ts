@@ -88,7 +88,9 @@ export async function computePortfolioRows(
       endMs !== null &&
       endMs < startOfToday.getTime() &&
       project.status !== ProjectStatus.COMPLETED &&
-      project.status !== ProjectStatus.CANCELLED;
+      project.status !== ProjectStatus.CANCELLED &&
+      // On hold is never overdue (docs/archive/plans/feedback-round-lifecycle-spec.md, F7).
+      project.status !== ProjectStatus.ON_HOLD;
 
     // Floor endMs to its own UTC calendar day first: a non-midnight stored
     // instant (e.g. a task due at ...T17:00:00.000Z yesterday) must still

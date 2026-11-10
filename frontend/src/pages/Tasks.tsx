@@ -15,7 +15,8 @@ import { Tabs } from "@/components/Tabs";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { TaskStatusChip } from "@/components/StatusChip";
 import { useAuth } from "@/lib/auth";
-import { dateToDay, dayFromIso } from "@/lib/dateField";
+import { dateToDay } from "@/lib/dateField";
+import { isTaskShownOverdue, showsPlainDue } from "@/lib/taskOverdue";
 import { fmtDay, fmtDue } from "@/lib/formatDate";
 import { parseWeekKey, weekKeyOf } from "@/lib/isoWeek";
 import { priorityOptions, taskStatusOptions } from "@/lib/labels";
@@ -36,6 +37,7 @@ import {
   type TaskWithProject,
   type TasksFilter,
   useCustomers,
+  useProjects,
   useTasksWithTotal,
   useUsers,
 } from "@/lib/queries";
@@ -85,7 +87,8 @@ function viewFilter(view: ViewKey, todayDay: string, userId: number | undefined)
     case "week": {
       // ISO week Sunday (Mon..Sun weeks), as a "yyyy-MM-dd" calendar day.
       const sunday = parseWeekKey(weekKeyOf(todayDay))?.days[6];
-      return { open: true, dueFrom: todayDay, dueTo: sunday, sort: "due" };
+      // Same list as the Overview tile: on-hold projects' tasks are left out.
+      return { open: true, dueFrom: todayDay, dueTo: sunday, excludeOnHold: true, sort: "due" };
     }
     case "all":
       return { sort: "due" };
@@ -108,6 +111,13 @@ export function Tasks() {
 
   const { data: users } = useUsers();
   const { data: customers } = useCustomers();
+  // The task list does not carry project status; the (cached) project list
+  // does. A task of an on-hold project is never painted overdue.
+  const { data: projectList, isLoading: projectsLoading } = useProjects();
+  const projectStatusById = useMemo(
+    () => new Map((projectList ?? []).map((p) => [p.id, p.status] as const)),
+    [projectList],
+  );
 
   const filterFields = useMemo<FilterFieldConfig<string>[]>(
     () => [
@@ -286,8 +296,10 @@ export function Tasks() {
           // Compare calendar days, not instants — lexicographic "yyyy-MM-dd"
           // comparison is calendar-correct (dateField.ts). `todayDay` is
           // hoisted above (once per render, not once per cell).
-          const isOverdue =
-            task.dueDate && task.status !== "DONE" && task.status !== "CANCELLED" && dayFromIso(task.dueDate)! < todayDay!;
+          // Until the project list loads we cannot rule out an on-hold project,
+          // so nothing is painted overdue (no flash of red that then clears).
+          const projectStatus = projectsLoading ? "ON_HOLD" : projectStatusById.get(task.projectId);
+          const isOverdue = isTaskShownOverdue(task.status, task.dueDate, todayDay, projectStatus);
           return (
             <span
               className={
@@ -296,7 +308,7 @@ export function Tasks() {
                   : "text-[12px] text-on-surface-variant"
               }
             >
-              {fmt(task.dueDate, task.status === "DONE" || task.status === "CANCELLED")}
+              {fmt(task.dueDate, showsPlainDue(task.status, projectStatus))}
             </span>
           );
         },
@@ -310,7 +322,7 @@ export function Tasks() {
         meta: { skeleton: <Skeleton className="h-4 w-16 rounded-full" /> },
       },
     ],
-    [todayDay],
+    [todayDay, projectStatusById, projectsLoading],
   );
 
   const table = useReactTable({

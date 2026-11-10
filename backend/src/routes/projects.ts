@@ -47,6 +47,14 @@ import {
 import { epicCreatedChanges } from "../lib/epicActivity.js";
 import { notifyForEvent } from "../lib/notifications.js";
 import { diffProjectSeats, projectSeatsSelect, recordProjectUpdate } from "../lib/projectSeats.js";
+import {
+  assertShiftAllowed,
+  cancelOpenTasks,
+  entersCancelled,
+  getLifecyclePreview,
+  onHoldSinceFor,
+  shiftOpenDates,
+} from "../lib/projectLifecycle.js";
 import { MAX_LABEL_IDS, MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
 
 // Kanban WIP limits — one optional positive-int cap per top-level status
@@ -80,6 +88,8 @@ const updateProjectSchema = z.object({
   customerId: z.number().int().positive().optional(),
   wipLimits: wipLimitsSchema.optional(),
   excludeFromPortfolio: z.boolean().optional(),
+  // Reactivation only (ON_HOLD -> ACTIVE/PLANNING): docs/archive/plans/feedback-round-lifecycle-spec.md F7.
+  shiftOpenDatesByDays: z.number().int().min(1).max(3650).optional(),
 });
 
 // Caller's local calendar day ("yyyy-MM-dd") — the overdue boundary for the
@@ -93,6 +103,8 @@ const projectListQuerySchema = z.object({
   customerId: z.coerce.number().int().positive().optional(),
   today: healthTodaySchema,
 });
+
+const lifecyclePreviewQuerySchema = z.object({ today: healthTodaySchema });
 
 const projectDetailQuerySchema = z.object({ today: healthTodaySchema });
 
@@ -225,6 +237,7 @@ projectsRouter.post(
           tamId,
           customerId: body.customerId,
           status: body.status ?? "PLANNING",
+          onHoldSince: body.status === "ON_HOLD" ? new Date() : null,
           wipLimits: body.wipLimits ?? undefined,
           excludeFromPortfolio: body.excludeFromPortfolio ?? false,
         },
@@ -252,6 +265,19 @@ projectsRouter.post(
       return created;
     });
     res.status(201).json(project);
+  },
+);
+
+projectsRouter.get(
+  "/:id/lifecycle-preview",
+  requirePermission("project:read"),
+  validate("params", idParamSchema),
+  validate("query", lifecyclePreviewQuerySchema),
+  async (req, res) => {
+    const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const { today } = req.query as unknown as z.infer<typeof lifecyclePreviewQuerySchema>;
+    await ensureProjectVisible(req.user!, id);
+    res.json(await getLifecyclePreview(prisma, id, today));
   },
 );
 
@@ -307,6 +333,8 @@ projectsRouter.post(
     const lockedAt = asOfDate ?? new Date();
 
     const updated = await prisma.$transaction(async (tx) => {
+      // Lock order: project first, then task rows (matches PATCH /projects/:id).
+      await lockProject(tx, id);
       if (clear) {
         await tx.$executeRaw`
           UPDATE tasks
@@ -481,7 +509,22 @@ projectsRouter.patch(
       if (body.saId != null && body.saId !== before.sa?.id) {
         await assertActiveUser(tx, body.saId, "sa", { requireActive: false });
       }
+      // Lifecycle side effects ride the same transaction as the status write
+      // (docs/archive/plans/feedback-round-lifecycle-spec.md F1, F7).
+      if (body.shiftOpenDatesByDays !== undefined) assertShiftAllowed(before.status, body.status);
+      const holdStamp = onHoldSinceFor(before.status, body.status);
+      if (holdStamp !== undefined) data.onHoldSince = holdStamp;
       const result = await tx.project.update({ where: { id }, data });
+      const lifecycle: ActivityChanges = {};
+      if (entersCancelled(before.status, body.status)) {
+        const cancelledTasks = await cancelOpenTasks(tx, id);
+        if (cancelledTasks > 0) lifecycle.cancelledTasks = cancelledTasks;
+      }
+      if (body.shiftOpenDatesByDays !== undefined) {
+        const { shiftedTasks } = await shiftOpenDates(tx, id, body.shiftOpenDatesByDays);
+        lifecycle.shiftedDays = body.shiftOpenDatesByDays;
+        lifecycle.shiftedTasks = shiftedTasks;
+      }
       // Name, status, customer and the TAM / SA seats are logged (ids and
       // usernames only); a re-save records nothing. The new TAM / SA get an
       // `assigned` notification.
@@ -491,6 +534,7 @@ projectsRouter.patch(
           result,
         ),
         ...(await diffProjectSeats(tx, before, result)),
+        ...lifecycle,
       };
       await recordProjectUpdate(tx, {
         projectId: id,

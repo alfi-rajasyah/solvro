@@ -165,6 +165,54 @@ test.describe("Notifications", () => {
     await expect(page.getByTestId("notification-item").first()).toContainText("made you TAM of Notify Project");
   });
 
+  // Closing the last open task of an Active project nudges the TAM (the actor
+  // included) to mark it Completed; closing a task that is not the last does not.
+  test("closing the last open task of an Active project notifies the TAM and links to the project", async (
+    { page },
+    testInfo,
+  ) => {
+    test.setTimeout(90_000);
+    const base = apiBase(testInfo);
+    const { b, projectId } = await setup(base);
+    const mk = (title: string) =>
+      fetch(`${base}/api/projects/${projectId}/tasks`, {
+        method: "POST",
+        headers: headers(b.token),
+        body: JSON.stringify({ title, status: "TODO" }),
+      }).then((r) => json<{ id: number }>(r));
+    const close = (id: number) =>
+      fetch(`${base}/api/tasks/${id}`, {
+        method: "PATCH",
+        headers: headers(b.token),
+        body: JSON.stringify({ status: "DONE" }),
+      }).then((r) => json(r));
+    const closedNudges = async () => {
+      const res = await json<{ notifications: { reason: string }[] }>(
+        await fetch(`${base}/api/notifications`, { headers: headers(b.token) }),
+      );
+      return res.notifications.filter((n) => n.reason === "all_tasks_closed").length;
+    };
+
+    const first = await mk("Nudge one");
+    const second = await mk("Nudge two");
+    await close(first.id);
+    expect(await closedNudges()).toBe(0);
+    await close(second.id);
+    expect(await closedNudges()).toBe(1);
+
+    await loginViaUi(page, b.email, PASSWORD);
+    await page.goto("/projects", { waitUntil: "networkidle" });
+    const bell = page.getByTestId("notifications-button");
+    await bell.click();
+    const nudge = page
+      .getByTestId("notification-item")
+      .filter({ hasText: "are closed — mark the project Completed?" });
+    await expect(nudge).toHaveCount(1);
+    await expect(nudge).toContainText("All tasks in Notify Project");
+    await nudge.click();
+    await expect(page).toHaveURL(new RegExp(`/projects/${projectId}(/|$|\\?)`));
+  });
+
   // Pipeline scope: a deal's PIC change notifies the new PIC, the bell row
   // names the deal (not a project), and clicking it opens the deal page.
   test("assigning a deal's PIC notifies them and the row opens the deal", async ({ page }, testInfo) => {

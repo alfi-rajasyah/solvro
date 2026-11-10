@@ -283,6 +283,8 @@ model Project {
   // projects but are excluded from portfolio roll-ups (Executive dashboard,
   // Overview, overdue monitoring) via computePortfolioRows.
   excludeFromPortfolio Boolean          @default(false) @map("exclude_from_portfolio")
+  // Stamped when status moves into ON_HOLD, cleared when it leaves.
+  onHoldSince          DateTime?        @map("on_hold_since")
   baselineLockedAt     DateTime?        @map("baseline_locked_at")
   baselineLockedById   Int?             @map("baseline_locked_by_id")
   baselineLockedBy     User?            @relation("ProjectBaselineLockedBy", fields: [baselineLockedById], references: [id])

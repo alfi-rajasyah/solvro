@@ -23,9 +23,10 @@ import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { KanbanItemHandle } from "@/components/reui/kanban";
 import { dateToDay } from "@/lib/dateField";
-import { fmtDay, fmtDue, isTaskOverdue } from "@/lib/formatDate";
+import { fmtDay, fmtDue } from "@/lib/formatDate";
+import { isTaskShownOverdue, showsPlainDue } from "@/lib/taskOverdue";
 import { countTasks } from "@/lib/taskCounts";
-import { type Epic, type Task } from "@/lib/queries";
+import { type Epic, type Task, useProjectStatus } from "@/lib/queries";
 
 export function TaskCard({
   task,
@@ -63,8 +64,10 @@ export function TaskCard({
   // and never late. Overdue is the same predicate the Gantt tree uses.
   const done = task.status === "DONE";
   const cancelled = task.status === "CANCELLED";
-  const overdue = isTaskOverdue(task.status, task.dueDate, dateToDay(new Date()));
-  const dueLabel = task.dueDate ? (done || cancelled ? fmtDay(task.dueDate) : fmtDue(task.dueDate)) : "";
+  // A task of an on-hold project is never painted overdue.
+  const projectStatus = useProjectStatus(task.projectId);
+  const overdue = isTaskShownOverdue(task.status, task.dueDate, dateToDay(new Date()), projectStatus);
+  const dueLabel = task.dueDate ? (done || cancelled || showsPlainDue(task.status, projectStatus) ? fmtDay(task.dueDate) : fmtDue(task.dueDate)) : "";
   const epic = task.epicId !== null ? epicMap?.get(task.epicId) : undefined;
 
   function handleClick(e: React.MouseEvent) {
