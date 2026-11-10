@@ -342,7 +342,7 @@ export async function offboardUser(
       entityLabel: shortLabel(before.name),
       changes,
     });
-    await notifyForEvent(tx, event, { tasksHandedOverTo: tasks > 0 ? receiverId : null });
+    await notifyForEvent(tx, event, { tasksHandedOverTo: tasks + epics > 0 ? receiverId : null });
   }
 
   // ---- Customers ---------------------------------------------------------

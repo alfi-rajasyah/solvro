@@ -39,7 +39,10 @@ Last updated 2026-11-10. `[x]` = done, `[~]` = in progress, `[ ]` = not started.
 | [x] | Commits, rebase check against `origin/develop` | Five commits (API, Help page, frontend, end-to-end tests, docs) — grouped by area because several files are shared between tasks. The branch base was level with `origin/develop` |
 | [x] | Push and one PR into `develop`, assigned | PR #214. Final gate run: all pass; new and changed end-to-end specs: 54 runs pass without retries |
 | [x] | Throwaway stack and `solvro_e2e` database removed | Also removed the per-task test databases |
-| [ ] | CI green on PR #214 | First run of `pwa.spec.ts` and `security-headers.spec.ts` against this branch |
+| [x] | CI green on PR #214 | Typecheck, backend tests and all four desktop e2e shards passed on the first push, including `pwa.spec.ts` and `security-headers.spec.ts`. CI runs desktop only; mobile rests on local runs |
+| [x] | Follow-up: a handover also notifies people who receive only epics | Added after review feedback; gates pass, offboarding and help specs pass (24 runs) |
+| [ ] | Decision: notify a new customer owner | Needs a customer scope on notifications (a migration); waiting for a decision — see `docs/ISSUES.md` |
+| [ ] | Decision: export guardrail path fix | Edit prepared on branch `chore/export-guardrail-path`, not committed; waiting for a go-ahead on a separate PR or folding it into #214 |
 
 ### Notes
 

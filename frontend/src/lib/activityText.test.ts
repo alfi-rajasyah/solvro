@@ -591,6 +591,15 @@ describe("describeActivity - project lifecycle", () => {
     );
   });
 
+  it("handover with epics only omits the zero task count", () => {
+    expect(text(proj("updated", { handover: { from: "ana", to: "bob", tasks: 0, epics: 1 } }))).toBe(
+      "maya.putri handed over ana's 1 epic to bob",
+    );
+    expect(text(proj("updated", { handover: { from: "ana", to: "bob", tasks: 0, epics: 2 } }))).toBe(
+      "maya.putri handed over ana's 2 epics to bob",
+    );
+  });
+
   it("malformed lifecycle values degrade without throwing or printing undefined", () => {
     for (const c of [
       { cancelledTasks: "x" },

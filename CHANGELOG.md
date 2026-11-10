@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-10 — A handover also notifies people who receive only epics
+
+- `backend/src/lib/offboarding.ts`, `backend/src/lib/notifications.ts`, `backend/test/offboarding.test.ts`: when a leaving user's work is handed over, a colleague who receives only epics in a project is now told too, with the same "tasks handed over" notification (one per person per project). Before, only people who received open tasks were told. A new customer owner is still not notified.
+- `frontend/src/lib/helpContent.ts`, `frontend/src/lib/notificationText.test.ts`, `frontend/src/lib/activityText.test.ts`: the offboarding guide in Help describes who is notified, and tests pin the wording when only epics were handed over ("handed you 1 epic in <project>").
+
 ### Changed — 2026-11-10 — The Help page is now "How to use Solvro"
 
 - `frontend/src/lib/helpContent.ts`, `frontend/src/pages/Help.tsx`, `frontend/src/lib/helpContent.test.ts`, `e2e/tests/help.spec.ts`: the Help page now opens with task-oriented guides — start your day, run a project, keep tasks moving, handle a risk, prepare the Weekly Sync, work a deal, track hours and tickets, and an admin-only guide to offboarding a teammate — above the existing per-page reference. Each guide is a short list of numbered steps with links to the pages involved and to the related reference topics. The content now covers cancelling a project, putting one on hold and reactivating it, the Projects status filter, the "all tasks are closed" notification, Pipeline deals on Hold never raising idle alerts, and the offboarding handover, quoting the labels the screens actually use. Search covers guides and reference alike, guides are hidden from people who lack the matching permission, and existing `/help#…` links still land on the same topics.

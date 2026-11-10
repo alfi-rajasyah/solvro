@@ -214,6 +214,19 @@ describe("describeNotification - lifecycle", () => {
     );
   });
 
+  it("epics-only handover omits the zero task count", () => {
+    const r = "tasks_handed_over" as AppNotification["reason"];
+    expect(describeNotification(notif({ reason: r }, pe({ handover: { from: "ana", to: "me", tasks: 0, epics: 1 } }))).text).toBe(
+      "rina.wijaya handed you 1 epic in Acme rollout",
+    );
+    expect(describeNotification(notif({ reason: r }, pe({ handover: { from: "ana", to: "me", tasks: 0, epics: 3 } }))).text).toBe(
+      "rina.wijaya handed you 3 epics in Acme rollout",
+    );
+    expect(describeNotification(notif({ reason: r }, pe({ handover: { from: "ana", to: "me", tasks: 0 } }))).text).toBe(
+      "rina.wijaya updated the project",
+    );
+  });
+
   it("thin handover payload falls back to the activity sentence", () => {
     const r = "tasks_handed_over" as AppNotification["reason"];
     for (const c of [null, {}, { handover: { from: "ana" } }]) {

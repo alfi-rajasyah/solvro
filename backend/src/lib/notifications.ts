@@ -41,7 +41,7 @@ export interface NotifyOptions {
   picId?: number | null;
   /**
    * Project `updated` events only: the user an offboarding handover moved the
-   * leaver's tasks to. One `tasks_handed_over` notification per event, so one
+   * leaver's tasks and/or epics to. One `tasks_handed_over` notification per event, so one
    * per receiver per project; a seat notification (`assigned`) wins for the
    * same user (docs/archive/plans/feedback-round-lifecycle-spec.md, F5).
    */

@@ -616,3 +616,54 @@ describe("POST /admin/users/:id/offboard — receiver rules and late failures", 
     expect(await prisma.projectMember.count({ where: { projectId: sa.id } })).toBe(0);
   });
 });
+
+describe("handover notifications — epics", () => {
+  const handover = (userId: number, projectId: number) =>
+    prisma.notification.findMany({
+      where: { userId, activityEvent: { projectId } },
+      include: { activityEvent: true },
+    });
+
+  it("a receiver of epics only is notified, with tasks: 0 in the payload", async () => {
+    const w = await world();
+    const project = await prisma.project.create({
+      data: { name: uniq("E"), tamId: w.newTam.userId, status: "ACTIVE" },
+    });
+    await prisma.epic.create({
+      data: { projectId: project.id, title: "E", ownerId: w.leaver.userId, status: "TODO" },
+    });
+    const res = await offboard(w, {
+      projects: [{ projectId: project.id, assignTasksTo: w.receiver.userId }],
+      customers: [],
+    });
+    expect(res.status).toBe(200);
+    const rows = await handover(w.receiver.userId, project.id);
+    expect(rows.map((r) => r.reason)).toEqual(["tasks_handed_over"]);
+    expect(rows[0]!.activityEvent.changes).toMatchObject({
+      handover: { from: expect.any(String), to: expect.any(String), tasks: 0, epics: 1 },
+    });
+  });
+
+  it("a receiver of tasks and epics gets exactly one notification", async () => {
+    const w = await world();
+    const { project } = await tamProject(w);
+    await offboard(w, {
+      projects: [{ projectId: project.id, assignTasksTo: w.receiver.userId, newTamId: w.newTam.userId }],
+      customers: [],
+    });
+    const rows = await handover(w.receiver.userId, project.id);
+    expect(rows.map((r) => r.reason)).toEqual(["tasks_handed_over"]);
+  });
+
+  it("unassigned epics notify nobody", async () => {
+    const w = await world();
+    const project = await prisma.project.create({
+      data: { name: uniq("E"), tamId: w.newTam.userId, status: "ACTIVE" },
+    });
+    await prisma.epic.create({
+      data: { projectId: project.id, title: "E", ownerId: w.leaver.userId, status: "TODO" },
+    });
+    await offboard(w, { projects: [{ projectId: project.id, assignTasksTo: null }], customers: [] });
+    expect(await prisma.notification.count({ where: { activityEvent: { projectId: project.id } } })).toBe(0);
+  });
+});

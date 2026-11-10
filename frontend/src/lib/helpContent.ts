@@ -939,7 +939,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
         title: "Confirm",
         points: [
           "\"Hand over and deactivate\" stays disabled until every required TAM is chosen. Task statuses do not change.",
-          "Notifications go out only for some of what moves: a person who receives open tasks is told \"<admin> handed you N tasks in <project>\", someone made the new TAM or SA of a project is told about their new role, and the new PIC of a deal is told the deal was assigned to them. Someone who receives only epics, and a new customer owner, get no notification, and neither does the admin doing the handover.",
+          "Notifications go out only for some of what moves: a person who receives open tasks or epics is told \"<admin> handed you N tasks and M epics in <project>\" (for example \"<admin> handed you 1 epic in <project>\"), someone made the new TAM or SA of a project is told about their new role (that notice replaces the handover one for the same project), and the new PIC of a deal is told the deal was assigned to them. A new customer owner gets no notification, and neither does the admin doing the handover.",
           "If anything fails, nothing is changed and the user stays active.",
         ],
       },
