@@ -38,7 +38,9 @@ export type ActivityAction =
   | "closed"
   | "reopened"
   | "assigned"
-  | "handed_off";
+  | "handed_off"
+  // Project event: the last open task closed (docs/archive/plans/feedback-round-lifecycle-spec.md, F3).
+  | "all_tasks_closed";
 
 /** JSON object stored in `ActivityEvent.changes`. */
 export type ActivityChanges = Record<string, Prisma.InputJsonValue>;

@@ -16,7 +16,9 @@ export type NotificationReason =
   | "commented"
   | "mentioned"
   | "deal_closed"
-  | "handed_off";
+  | "handed_off"
+  | "tasks_handed_over"
+  | "all_tasks_closed";
 
 export interface NotifyOptions {
   /**
@@ -37,6 +39,24 @@ export interface NotifyOptions {
    * handoff (`handed_off`) done by someone else.
    */
   picId?: number | null;
+  /**
+   * Project `updated` events only: the user an offboarding handover moved the
+   * leaver's tasks to. One `tasks_handed_over` notification per event, so one
+   * per receiver per project; a seat notification (`assigned`) wins for the
+   * same user (docs/archive/plans/feedback-round-lifecycle-spec.md, F5).
+   */
+  tasksHandedOverTo?: number | null;
+  /**
+   * `all_tasks_closed` project events only: the project's TAM and members.
+   * Each gets an `all_tasks_closed` notification.
+   */
+  allTasksClosedTo?: readonly number[];
+  /**
+   * Explicit opt-in: the actor is not skipped. Default off; only the
+   * `all_tasks_closed` event sets it (the person who closed the last task is
+   * told too). Applies to every reason added for that event.
+   */
+  includeActor?: boolean;
 }
 
 type IdLike = { id?: unknown } | null | undefined;
@@ -188,7 +208,7 @@ export async function notifyForEvent(
   if (!event) return 0;
   const reasons = new Map<number, NotificationReason>();
   const add = (userId: number | null | undefined, reason: NotificationReason) => {
-    if (userId == null || userId === event.actorId || reasons.has(userId)) return;
+    if (userId == null || (userId === event.actorId && !opts.includeActor) || reasons.has(userId)) return;
     reasons.set(userId, reason);
   };
 
@@ -209,6 +229,12 @@ export async function notifyForEvent(
     }
     if (event.entityType === "project" && (event.action === "created" || event.action === "updated")) {
       for (const userId of projectPeopleFromChanges(event)) add(userId, "assigned");
+    }
+    if (event.entityType === "project" && event.action === "updated") {
+      add(opts.tasksHandedOverTo, "tasks_handed_over");
+    }
+    if (event.entityType === "project" && event.action === "all_tasks_closed") {
+      for (const userId of opts.allTasksClosedTo ?? []) add(userId, "all_tasks_closed");
     }
     if (event.entityType === "comment" && event.action === "created") {
       add(opts.taskAssigneeId, "commented");

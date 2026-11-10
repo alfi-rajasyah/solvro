@@ -1,6 +1,10 @@
 import { prisma } from "../prisma.js";
 import { overdueBoundary } from "./dateBoundary.js";
-import { COUNTED_TASK_STATUS_FILTER, OPEN_TASK_STATUS_FILTER } from "./taskStatus.js";
+import {
+  COUNTED_TASK_STATUS_FILTER,
+  OPEN_TASK_STATUS_FILTER,
+  TASK_PROJECT_NOT_ON_HOLD,
+} from "./taskStatus.js";
 
 // Per-project health numbers shared by GET /projects, GET /projects/:id and
 // the nested projects[] of GET /customers/:id. Four queries in one
@@ -55,7 +59,13 @@ export async function computeProjectHealth(
     }),
     prisma.task.groupBy({
       by: ["projectId"],
-      where: { ...inScope, status: OPEN_TASK_STATUS_FILTER, dueDate: { lt: boundary } },
+      where: {
+        AND: [
+          inScope,
+          TASK_PROJECT_NOT_ON_HOLD,
+          { status: OPEN_TASK_STATUS_FILTER, dueDate: { lt: boundary } },
+        ],
+      },
       _count: { _all: true },
     }),
     prisma.risk.groupBy({

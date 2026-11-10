@@ -13,7 +13,7 @@ import {
 } from "../lib/dateBoundary.js";
 import { parseWeekKey, weekKeyOf } from "../lib/isoWeek.js";
 import { resolveDailyReviewScope } from "../lib/dailyReviewScope.js";
-import { OPEN_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
+import { OPEN_TASK_STATUS_FILTER, TASK_PROJECT_NOT_ON_HOLD } from "../lib/taskStatus.js";
 
 export const overviewRouter = Router();
 
@@ -60,6 +60,7 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
 
   // The Overview tiles link to lists, so each count uses the scope of the
   // list it opens: overdue/due-this-week open GET /tasks (top-level tasks,
+  // `overdue=true` / `excludeOnHold=true` for the on-hold rule,
   // every project the caller can see, administrative containers included —
   // same visibility path as routes/tasks.ts's buildVisibilityWhere); open
   // risks opens Daily Review (ACTIVE projects in its customer scope).
@@ -68,7 +69,16 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
     Object.keys(projectWhere).length === 0 ? {} : { project: projectWhere };
   const { projects: reviewProjects } = await resolveDailyReviewScope(user);
 
-  const [projectCount, projectsByStatus, taskGroups, portfolio, overdue, dueThisWeek, openRisks] =
+  const [
+    projectCount,
+    projectsByStatus,
+    taskGroups,
+    portfolio,
+    overdue,
+    dueThisWeek,
+    onHoldExcluded,
+    openRisks,
+  ] =
     await Promise.all([
       prisma.project.count({ where: scope }),
       prisma.project.groupBy({
@@ -84,18 +94,43 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
       computePortfolioRows(scope, today),
       prisma.task.count({
         where: {
-          ...taskListScope,
-          parentTaskId: null,
-          status: OPEN_TASK_STATUS_FILTER,
-          dueDate: { lt: todayBoundary },
+          AND: [
+            taskListScope,
+            TASK_PROJECT_NOT_ON_HOLD,
+            {
+              parentTaskId: null,
+              status: OPEN_TASK_STATUS_FILTER,
+              dueDate: { lt: todayBoundary },
+            },
+          ],
         },
       }),
       prisma.task.count({
         where: {
-          ...taskListScope,
-          parentTaskId: null,
-          status: OPEN_TASK_STATUS_FILTER,
-          dueDate: { gte: todayBoundary, lt: weekEnd },
+          AND: [
+            taskListScope,
+            TASK_PROJECT_NOT_ON_HOLD,
+            {
+              parentTaskId: null,
+              status: OPEN_TASK_STATUS_FILTER,
+              dueDate: { gte: todayBoundary, lt: weekEnd },
+            },
+          ],
+        },
+      }),
+      // Overdue-by-date open top-level tasks the on-hold rule leaves out of
+      // `overdue` (same visibility scope) — feeds the Overview tile hint.
+      prisma.task.count({
+        where: {
+          AND: [
+            taskListScope,
+            { project: { status: "ON_HOLD" } },
+            {
+              parentTaskId: null,
+              status: OPEN_TASK_STATUS_FILTER,
+              dueDate: { lt: todayBoundary },
+            },
+          ],
         },
       }),
       prisma.risk.count({
@@ -119,7 +154,7 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
     projectStatusCounts,
     taskCounts,
     portfolio,
-    workCounts: { overdue, dueThisWeek, openRisks },
+    workCounts: { overdue, dueThisWeek, onHoldExcluded, openRisks },
   });
 });
 
