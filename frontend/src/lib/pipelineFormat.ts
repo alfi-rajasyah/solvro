@@ -84,7 +84,7 @@ export const STAGE_ALPHA: Record<PipelineStage, number> = {
 
 export type PipelineSubStatus = "PROGRESS" | "WAITING_SALES_INPUT";
 export type PipelineStatusTag = "HOLD" | "DELAYED";
-export type PipelineOutcome = "WON" | "LOST" | "CANCELLED";
+export type PipelineOutcome = "WON" | "LOST" | "CANCELLED" | "ARCHIVED";
 export type PipelineOutcomeReason =
   | "PRICE"
   | "COMPETITOR"
@@ -128,6 +128,7 @@ export const OUTCOME_LABELS: Record<PipelineOutcome, string> = {
   WON: "Won",
   LOST: "Lost",
   CANCELLED: "Cancelled",
+  ARCHIVED: "Archived",
 };
 
 export const OUTCOME_REASON_LABELS: Record<PipelineOutcomeReason, string> = {
@@ -144,16 +145,26 @@ export const OUTCOME_REASON_LABELS: Record<PipelineOutcomeReason, string> = {
  * The reason categories `POST /:id/close` accepts per outcome (backend
  * §3.5) — mirrored here so `CloseDealDialog.tsx`'s "Reason category" select
  * offers exactly the set the server will accept, and the backend stays the
- * one place that actually enforces it. `WON` is empty: a Won close takes no
- * category (the backend 400s `reason_not_allowed` if one is sent).
+ * one place that actually enforces it. `WON` and `ARCHIVED` are empty: neither
+ * takes a category (the backend 400s `reason_not_allowed` if one is sent).
  */
 export const REASONS_BY_OUTCOME: Record<PipelineOutcome, PipelineOutcomeReason[]> = {
   WON: [],
   LOST: ["PRICE", "COMPETITOR", "TECHNICAL", "OTHER"],
   CANCELLED: ["BUDGET_WITHDRAWN", "PROJECT_CANCELLED", "LOST_CONTACT", "OTHER"],
+  ARCHIVED: [],
 };
 
-/** True once a deal has been closed (Won, Lost or Cancelled) — D5: the stage
+/**
+ * True for an outcome that counts as a decision — Won, Lost or Cancelled.
+ * ARCHIVED parks a dead deal (a duplicate, a test entry, imported junk) and
+ * stays out of win rate and every other pipeline KPI.
+ */
+export function isDecidedOutcome(outcome: PipelineOutcome | null): boolean {
+  return outcome !== null && outcome !== "ARCHIVED";
+}
+
+/** True once a deal has been closed (Won, Lost, Cancelled or Archived) — D5: the stage
  * is locked at that point, never reset. Structural over `outcome` alone so
  * both `Opportunity` (queries.ts) and `PipelineBoardDeal` (adapter.ts)
  * satisfy it without a cast. */

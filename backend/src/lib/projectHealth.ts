@@ -3,7 +3,7 @@ import { overdueBoundary } from "./dateBoundary.js";
 import {
   COUNTED_TASK_STATUS_FILTER,
   OPEN_TASK_STATUS_FILTER,
-  TASK_PROJECT_NOT_ON_HOLD,
+  TASK_PROJECT_CAN_BE_OVERDUE,
 } from "./taskStatus.js";
 
 // Per-project health numbers shared by GET /projects, GET /projects/:id and
@@ -62,7 +62,7 @@ export async function computeProjectHealth(
       where: {
         AND: [
           inScope,
-          TASK_PROJECT_NOT_ON_HOLD,
+          TASK_PROJECT_CAN_BE_OVERDUE,
           { status: OPEN_TASK_STATUS_FILTER, dueDate: { lt: boundary } },
         ],
       },

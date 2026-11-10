@@ -362,7 +362,7 @@ Nothing else gets a shadow. No card shadows, no hover-lift shadows, no focus-rin
 | | DELIVER_PROPOSAL | amber | `bg-chip-amber-bg text-chip-amber-text` |
 | | WAITING_RESPONSE | violet | `bg-chip-violet-bg text-chip-violet-text` |
 
-`StageChip`'s 6 stages are the Pipeline's own funnel (`frontend/src/components/StageChip.tsx`) — Won/Lost/Cancelled and Hold are no longer stages; a closed or held deal keeps whichever of the 6 it stalled in, shown alongside one of the bespoke flag chips below (`frontend/src/components/PipelineFlagChips.tsx`, all built on `Chip`/`CHIP_BASE`, never `reui/badge` per the CLAUDE.md guardrail):
+`StageChip`'s 6 stages are the Pipeline's own funnel (`frontend/src/components/StageChip.tsx`) — Won/Lost/Cancelled/Archived and Hold are no longer stages; a closed or held deal keeps whichever of the 6 it stalled in, shown alongside one of the bespoke flag chips below (`frontend/src/components/PipelineFlagChips.tsx`, all built on `Chip`/`CHIP_BASE`, never `reui/badge` per the CLAUDE.md guardrail):
 
 | Chip | Status | Tone | Renders as |
 |---|---|---|---|
@@ -375,6 +375,7 @@ Nothing else gets a shadow. No card shadows, no hover-lift shadows, no focus-rin
 | `OutcomeChip` | WON | emerald + `check_circle` glyph | `bg-chip-emerald-bg text-chip-emerald-text` |
 | | LOST | rose + `cancel` glyph | `bg-chip-rose-bg text-chip-rose-text` |
 | | CANCELLED | gray + `block` glyph | `bg-surface-container-high text-on-surface-variant` |
+| | ARCHIVED | gray + `archive` glyph | `bg-surface-container-high text-on-surface-variant` |
 
 `LabelChip.tsx` and `EpicChip.tsx` are not tone chips: the user-chosen colour is a 8px dot plus a `color-mix(… 14%, transparent)` background tint, and the text is always `text-on-surface` (so any stored colour stays readable in both themes). Both use the same `text-meta font-semibold leading-[18px]` rhythm as `CHIP_BASE`; `EpicChip` also truncates at `max-w-[160px]`.
 

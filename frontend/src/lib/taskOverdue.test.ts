@@ -6,14 +6,15 @@ const PAST = "2026-08-01T00:00:00.000Z";
 
 describe("isTaskShownOverdue", () => {
   it("is overdue for an open past-due task in a live project", () => {
-    for (const s of ["PLANNING", "ACTIVE", "COMPLETED", "CANCELLED", undefined] as const) {
+    for (const s of ["PLANNING", "ACTIVE", "COMPLETED", undefined] as const) {
       expect(isTaskShownOverdue("TODO", PAST, TODAY, s)).toBe(true);
     }
   });
 
-  it("is never overdue while the project is on hold", () => {
+  it("is never overdue while the project is on hold or cancelled", () => {
     expect(isTaskShownOverdue("TODO", PAST, TODAY, "ON_HOLD")).toBe(false);
     expect(isTaskShownOverdue("IN_PROGRESS", PAST, TODAY, "ON_HOLD")).toBe(false);
+    expect(isTaskShownOverdue("TODO", PAST, TODAY, "CANCELLED")).toBe(false);
   });
 
   it("keeps the plain rules for closed, undated and today-due tasks", () => {
@@ -29,6 +30,7 @@ describe("showsPlainDue", () => {
     expect(showsPlainDue("DONE", "ACTIVE")).toBe(true);
     expect(showsPlainDue("CANCELLED", undefined)).toBe(true);
     expect(showsPlainDue("TODO", "ON_HOLD")).toBe(true);
+    expect(showsPlainDue("TODO", "CANCELLED")).toBe(true);
   });
   it("keeps relative wording for open tasks elsewhere", () => {
     expect(showsPlainDue("TODO", "ACTIVE")).toBe(false);

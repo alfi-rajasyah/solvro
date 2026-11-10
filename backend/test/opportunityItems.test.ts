@@ -99,6 +99,39 @@ describe("activities", () => {
     });
   });
 
+  it("a note restarts both SLA clocks: lastActivityAt always, waitingInputSince on Waiting Sales input", async () => {
+    const viewer = await createViewer();
+    const old = new Date("2026-09-28T12:00:00.000Z");
+    const waiting = await prisma.opportunity.create({
+      data: {
+        title: `Waiting ${Date.now()}-${Math.random()}`,
+        customerName: "Acme Corp",
+        subStatus: "WAITING_SALES_INPUT",
+        waitingInputSince: old,
+        lastActivityAt: old,
+      },
+    });
+    const working = await prisma.opportunity.create({
+      data: { title: `Working ${Date.now()}-${Math.random()}`, customerName: "Acme Corp", lastActivityAt: old },
+    });
+
+    const before = Date.now();
+    for (const deal of [waiting, working]) {
+      const res = await request(app)
+        .post(`/opportunities/${deal.id}/activities`)
+        .set("Authorization", `Bearer ${viewer.token}`)
+        .send({ note: "Following up" });
+      expect(res.status).toBe(201);
+    }
+
+    const w = await prisma.opportunity.findUniqueOrThrow({ where: { id: waiting.id } });
+    expect(w.lastActivityAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(w.waitingInputSince!.getTime()).toBeGreaterThanOrEqual(before);
+    const o = await prisma.opportunity.findUniqueOrThrow({ where: { id: working.id } });
+    expect(o.lastActivityAt.getTime()).toBeGreaterThanOrEqual(before);
+    expect(o.waitingInputSince).toBeNull();
+  });
+
   it("rejects an empty note with a 400", async () => {
     const viewer = await createViewer();
     const opportunity = await createOpportunity();

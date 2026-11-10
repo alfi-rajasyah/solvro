@@ -27,7 +27,7 @@ import { duplicateTaskTree } from "../lib/duplicate.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
 import { diffTaskChanges, recordActivity } from "../lib/activity.js";
 import { filterActiveUsersWhoCanSeeProject, notifyForEvent } from "../lib/notifications.js";
-import { OPEN_TASK_STATUS_FILTER, TASK_PROJECT_NOT_ON_HOLD } from "../lib/taskStatus.js";
+import { OPEN_TASK_STATUS_FILTER, TASK_PROJECT_CAN_BE_OVERDUE } from "../lib/taskStatus.js";
 import { recordAllTasksClosedIfDone } from "../lib/allTasksClosed.js";
 import { MAX_LABEL_IDS } from "../lib/limits.js";
 
@@ -126,9 +126,9 @@ const tasksListQuerySchema = z
       .union([z.literal("true"), z.literal("false")])
       .transform((v) => v === "true")
       .optional(),
-    // excludeOnHold=true leaves out tasks of ON_HOLD projects (the Overview
-    // "due this week" tile's list); false/absent is a no-op. `overdue=true`
-    // applies the on-hold rule on its own, regardless of this flag.
+    // excludeOnHold=true leaves out tasks of ON_HOLD and CANCELLED projects
+    // (the Overview "due this week" tile's list); false/absent is a no-op. `overdue=true`
+    // applies the same rule on its own, regardless of this flag.
     excludeOnHold: z
       .union([z.literal("true"), z.literal("false")])
       .transform((v) => v === "true")
@@ -257,7 +257,7 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
   if (topLevel) where.parentTaskId = null;
   if (status) and.push({ status });
   if (open) and.push({ status: OPEN_TASK_STATUS_FILTER });
-  if (excludeOnHold) and.push(TASK_PROJECT_NOT_ON_HOLD);
+  if (excludeOnHold) and.push(TASK_PROJECT_CAN_BE_OVERDUE);
   if (overdue) {
     // Overdue = due before the CALLER's calendar day (param `today`),
     // falling back to the server's UTC day; DONE and CANCELLED always excluded. See
@@ -268,12 +268,12 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
     // silently overwritten — status=TODO&overdue=true returns overdue
     // TODOs; status=DONE or CANCELLED with overdue=true is a contradiction and returns
     // nothing, by construction.
-    // On-hold projects never carry overdue tasks (spec F7); AND-composed
+    // On-hold and cancelled projects never carry overdue tasks; AND-composed
     // because the visibility/customer filters already own `where.project`.
     and.push(
       { dueDate: { lt: overdueBoundary(today) } },
       { status: OPEN_TASK_STATUS_FILTER },
-      TASK_PROJECT_NOT_ON_HOLD,
+      TASK_PROJECT_CAN_BE_OVERDUE,
     );
   }
   if (dueFrom) and.push({ dueDate: { gte: utcMidnightOfDayString(dueFrom) } });

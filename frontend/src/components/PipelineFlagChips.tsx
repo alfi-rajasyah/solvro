@@ -141,11 +141,13 @@ const OUTCOME_TONE: Record<PipelineOutcome, Tone> = {
   WON: "emerald",
   LOST: "rose",
   CANCELLED: "gray",
+  ARCHIVED: "gray",
 };
 const OUTCOME_ICON: Record<PipelineOutcome, string> = {
   WON: "check_circle",
   LOST: "cancel",
   CANCELLED: "block",
+  ARCHIVED: "archive",
 };
 
 /** A closed deal's outcome (+ reason category, when one was given) — e.g.

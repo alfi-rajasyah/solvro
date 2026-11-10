@@ -133,7 +133,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
           "\"Recent notes\": project and operations notes from the last 7 days. Add notes on the Daily Review page.",
           "If you have Pipeline access, a \"Pipeline\" panel shows Pipeline Value, Active Deals, Won This Month, and On Hold, plus a bar of deals per stage. \"View pipeline →\" opens the board.",
           "Projects marked \"Administrative project\" are left out of the counters, the timeline, and the attention list.",
-          "Tasks in projects whose Status is On hold never count as Overdue or Due this week. When some are left out, the Overdue tile says \"<n> in on-hold projects not counted\". They count again when the project is reactivated.",
+          "Tasks in projects whose Status is On hold or Cancelled never count as Overdue or Due this week. When on-hold tasks are left out, the Overdue tile says \"<n> in on-hold projects not counted\". They count again when the project is reactivated.",
         ],
       },
     ],
@@ -176,7 +176,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       {
         title: "Put a project on hold and bring it back",
         points: [
-          "Set Status to On hold in \"Edit project\". Its tasks stop counting as overdue or due this week, on Overview and in task views, for as long as it stays on hold.",
+          "Set Status to On hold in \"Edit project\". Its tasks stop counting as overdue or due this week, on Overview and in task views, for as long as it stays on hold. The project's \"Needs attention\" panel still lists them, each marked \"On hold\" in place of its due date.",
           "When you move an on-hold project back to Active or Planning and some open tasks are now past due, the dialog \"Update the timeline?\" says how long the project was on hold. Set \"Days to shift open dates\" (it starts at the days on hold) and choose \"Shift open dates by N days\" to move the start and due dates of every open task and open epic. Completed and cancelled tasks and the baseline are left alone.",
           "Choose \"I'll update the timeline myself\" to save the status and open the Gantt (the List on a phone) to adjust dates by hand. \"Cancel\" leaves the project on hold.",
         ],
@@ -463,10 +463,10 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         title: "Stages and status",
         points: [
           "Six stages, left to right: Assessment, Technical Clarification, PoC, RFP, Delivered Proposal, and Waiting Response.",
-          "Won, Lost, Cancelled, and Hold are not stages. A deal that is closed or on hold keeps the stage it stalled in.",
+          "Won, Lost, Cancelled, Archived, and Hold are not stages. A deal that is closed or on hold keeps the stage it stalled in.",
           "Sub-status is \"In progress\" or \"Waiting Sales input\". Switch it with \"Waiting for Sales input\" and \"Input received\" (not offered in Waiting Response).",
           "A deal can carry one tag at a time: \"Hold\" or \"Delayed\". Use \"Hold\" / \"Release hold\" and \"Mark delayed\" / \"Clear delayed\".",
-          "The outcome is \"Won\", \"Lost\", or \"Cancelled\" and is set only by \"Close deal\" — see \"Opportunities\".",
+          "The outcome is \"Won\", \"Lost\", \"Cancelled\", or \"Archived\" and is set only by \"Close deal\" — see \"Opportunities\".",
           "A \"Client\" chip marks a deal in Waiting Response, where the next move is the client's; in every other stage it is the SA's.",
         ],
       },
@@ -475,7 +475,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         points: [
           "Switch between Kanban, List, Swimlane, and Quarter. \"Active · N\" and \"Closed · N\" choose which deals the Kanban and List show.",
           "Kanban (Active): one column per stage; drag a card to move it, or click a card to open it. Its \"More actions\" menu has \"Open deal\" and the sub-status and tag toggles. The board scrolls sideways on every screen size.",
-          "Kanban (Closed): read-only Won, Lost, and Cancelled columns, with tiles for Win rate and the Won, Lost, and Cancelled value.",
+          "Kanban (Closed): read-only Won, Lost, Cancelled, and Archived columns, with tiles for Win rate and the Won, Lost, and Cancelled value.",
           "List: a table with Opportunity (title and customer), Stage, Outcome, Tag, Sub-status, Idle, Deal value, PIC, and dates; sort by a column header and click a row to open the deal. In Closed, it adds a \"Closed\" column.",
           "Swimlane: one row per PIC, plus an \"Unassigned\" row, with a column per stage. Quarter: Q1 to Q4 by request date, plus \"Other\". Both are read-only and always show active deals.",
           "The tiles above every view show Total Pipeline, Deadline ≤ 7d, Won this month, Active PICs, and Idle alerts. Click a stage in the funnel strip to scroll the Active Kanban to that column.",
@@ -524,7 +524,8 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       {
         title: "Close and reopen",
         points: [
-          "\"Close deal\" asks for the Outcome: Won, Lost, or Cancelled. Lost needs a \"Reason category\" (Price, Competitor, Technical, or Other); Cancelled needs one too (Budget withdrawn, Project cancelled, Lost contact, or Other). Won takes none. A \"Note (optional)\" is saved in the activity log.",
+          "\"Close deal\" asks for the Outcome: Won, Lost, Cancelled, or Archived. Lost needs a \"Reason category\" (Price, Competitor, Technical, or Other); Cancelled needs one too (Budget withdrawn, Project cancelled, Lost contact, or Other). Won and Archived take none. A \"Note (optional)\" is saved in the activity log.",
+          "Use Archived for a deal that was never really decided: a duplicate, a test entry, or imported junk. Archived deals stay out of win rate, the Created vs. won trend, PIC performance, and every pipeline value. \"Reopen\" brings one back.",
           "Confirm with \"Close as Won\", \"Close as Lost\", or \"Close as Cancelled\". The deal stays in its current stage, and any Hold or Delayed tag is cleared.",
           "\"Reopen\" brings a closed deal back to the board. It is not offered once a project has been created from the deal.",
         ],
@@ -549,6 +550,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         points: [
           "Solvro flags a deal that goes quiet. Days count Monday to Friday, without Indonesian public holidays.",
           "A deal tagged \"Hold\" never raises an idle alert. \"Release hold\" restarts its clock from the release. A deal tagged \"Delayed\" still goes idle.",
+          "Adding a note restarts the deal's clock, whatever its sub-status: in \"Waiting Sales input\" the waiting time counts again from the note.",
           "\"Waiting Sales input\" warns after more than 2 working days (3 in PoC and Delivered Proposal) and turns critical after twice that. Otherwise a deal warns after more than 5 working days without activity (7 in PoC and Delivered Proposal).",
           "In Waiting Response a deal warns after 7 working days and turns critical after 14.",
           "The deal page shows \"SLA for this stage\" under its last activity, the List has an Idle column, and the \"Idle alerts\" tile counts the flagged deals.",
@@ -676,7 +678,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
         points: [
           "Read the tiles: Overdue, Due this week, and Open risks. Overdue and Due this week open the Tasks list for that view; Open risks opens the Daily Review.",
           "\"Projects needing attention\" lists the projects with overdue tasks or open risks first.",
-          "Tasks in on-hold projects are not counted as overdue; the Overdue tile says how many it left out.",
+          "Tasks in on-hold and cancelled projects are not counted as overdue; the Overdue tile says how many on-hold tasks it left out.",
         ],
       },
       {
@@ -863,7 +865,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
       {
         title: "Close it",
         points: [
-          "\"Close deal\" asks for the Outcome: Won, Lost, or Cancelled. Lost and Cancelled need a reason category.",
+          "\"Close deal\" asks for the Outcome: Won, Lost, Cancelled, or Archived. Lost and Cancelled need a reason category. Archive a duplicate or test deal: it stays out of win rate and the pipeline numbers.",
           "Closing clears any Hold or Delayed tag.",
         ],
       },
