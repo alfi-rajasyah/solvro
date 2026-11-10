@@ -1,12 +1,12 @@
 # Feedback round — lifecycle, hold, offboarding, help: plan
 
-**Status:** in progress — see [Progress](#progress) (last updated 2026-11-10)
+**Status:** PR #214 open, waiting for CI and review — see [Progress](#progress) (last updated 2026-11-10)
 **Spec:** `docs/plans/feedback-round-lifecycle-spec.md` — requirements, contracts, copy, decisions. This file is only the task breakdown.
 **Branch / PR:** `feat/feedback-round-lifecycle` → one PR into `develop`. Tasks = commits.
 
 ## Progress
 
-Last updated 2026-11-10. `[x]` = done, `[~]` = in progress, `[ ]` = not started. Nothing is committed yet; all work sits in the working tree of `feat/feedback-round-lifecycle`.
+Last updated 2026-11-10. `[x]` = done, `[~]` = in progress, `[ ]` = not started. Everything is committed and pushed on `feat/feedback-round-lifecycle`.
 
 ### Tasks
 
@@ -34,11 +34,12 @@ Last updated 2026-11-10. `[x]` = done, `[~]` = in progress, `[ ]` = not started.
 | [x] | Gates, wave 4 (smoke pointed at the throwaway stack) | All gates pass, smoke included |
 | [x] | Help page screenshots (desktop and 375px) | Taken in the phase review; no overflow at 375px, light and dark render correctly |
 | [x] | Phase review on the combined diff | No blockers. Three should-fix items, all in the Help page (topic list taller than the screen on desktop; two sentences that overstate who is notified), plus small nits. The Gantt and list drag tests that passed only on retry were judged unrelated: the Gantt changes are display-only |
-| [~] | Fixes from the phase review | Help page (5 items) done; handover cache refresh done; changelog sentence done; end-to-end spec tidy-ups in progress |
+| [x] | Fixes from the phase review | All done: Help page (5 items), handover cache refresh, end-to-end spec tidy-ups, one changelog sentence |
 | [x] | Deferred findings filed in `docs/ISSUES.md` | 14 findings filed under "Project lifecycle and handover — deferred findings (2026-11-10)". Changelog checked, no edits needed |
-| [ ] | Commits (one per task), rebase check against `origin/develop` | |
-| [ ] | Push and one PR into `develop`, assigned | |
-| [ ] | Throwaway stack and `solvro_e2e` database removed | |
+| [x] | Commits, rebase check against `origin/develop` | Five commits (API, Help page, frontend, end-to-end tests, docs) — grouped by area because several files are shared between tasks. The branch base was level with `origin/develop` |
+| [x] | Push and one PR into `develop`, assigned | PR #214. Final gate run: all pass; new and changed end-to-end specs: 54 runs pass without retries |
+| [x] | Throwaway stack and `solvro_e2e` database removed | Also removed the per-task test databases |
+| [ ] | CI green on PR #214 | First run of `pwa.spec.ts` and `security-headers.spec.ts` against this branch |
 
 ### Notes
 
