@@ -53,12 +53,13 @@ export interface PipelineClosedProps {
   deals: Opportunity[];
 }
 
-const COLUMN_OUTCOMES: PipelineOutcome[] = ["WON", "LOST", "CANCELLED"];
+const COLUMN_OUTCOMES: PipelineOutcome[] = ["WON", "LOST", "CANCELLED", "ARCHIVED"];
 
 const COLUMN_TONE: Record<PipelineOutcome, Tone> = {
   WON: "emerald",
   LOST: "rose",
   CANCELLED: "gray",
+  ARCHIVED: "gray",
 };
 
 function byClosedAtDesc(a: Opportunity, b: Opportunity): number {
@@ -115,6 +116,12 @@ export function PipelineClosed({ deals }: PipelineClosedProps) {
     () => deals.filter((d) => d.outcome === "CANCELLED").sort(byClosedAtDesc),
     [deals],
   );
+  // Archived deals get a column of their own but no tile: they are left out
+  // of win rate and every value total.
+  const archivedDeals = useMemo(
+    () => deals.filter((d) => d.outcome === "ARCHIVED").sort(byClosedAtDesc),
+    [deals],
+  );
 
   const wonValue = useMemo(
     () =>
@@ -136,6 +143,7 @@ export function PipelineClosed({ deals }: PipelineClosedProps) {
     WON: wonDeals,
     LOST: lostDeals,
     CANCELLED: cancelledDeals,
+    ARCHIVED: archivedDeals,
   };
 
   if (deals.length === 0) {
@@ -175,7 +183,7 @@ export function PipelineClosed({ deals }: PipelineClosedProps) {
         />
       </div>
 
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         {COLUMN_OUTCOMES.map((outcome) => {
           const columnDeals = columns[outcome];
           return (
@@ -322,7 +330,7 @@ function EmptyClosedState() {
       <span className="material-symbols-outlined text-3xl text-on-surface-variant">inventory_2</span>
       <p className="text-sm font-semibold text-on-surface">No closed deals yet</p>
       <p className="max-w-xs text-xs text-on-surface-variant">
-        Deals you close as Won, Lost or Cancelled will appear here, grouped by outcome.
+        Deals you close as Won, Lost, Cancelled or Archived will appear here, grouped by outcome.
       </p>
     </div>
   );

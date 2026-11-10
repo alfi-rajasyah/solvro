@@ -13,7 +13,7 @@ import {
 } from "../lib/dateBoundary.js";
 import { parseWeekKey, weekKeyOf } from "../lib/isoWeek.js";
 import { resolveDailyReviewScope } from "../lib/dailyReviewScope.js";
-import { OPEN_TASK_STATUS_FILTER, TASK_PROJECT_NOT_ON_HOLD } from "../lib/taskStatus.js";
+import { OPEN_TASK_STATUS_FILTER, TASK_PROJECT_CAN_BE_OVERDUE } from "../lib/taskStatus.js";
 
 export const overviewRouter = Router();
 
@@ -60,7 +60,7 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
 
   // The Overview tiles link to lists, so each count uses the scope of the
   // list it opens: overdue/due-this-week open GET /tasks (top-level tasks,
-  // `overdue=true` / `excludeOnHold=true` for the on-hold rule,
+  // `overdue=true` / `excludeOnHold=true` for the on-hold/cancelled rule,
   // every project the caller can see, administrative containers included —
   // same visibility path as routes/tasks.ts's buildVisibilityWhere); open
   // risks opens Daily Review (ACTIVE projects in its customer scope).
@@ -96,7 +96,7 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
         where: {
           AND: [
             taskListScope,
-            TASK_PROJECT_NOT_ON_HOLD,
+            TASK_PROJECT_CAN_BE_OVERDUE,
             {
               parentTaskId: null,
               status: OPEN_TASK_STATUS_FILTER,
@@ -109,7 +109,7 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
         where: {
           AND: [
             taskListScope,
-            TASK_PROJECT_NOT_ON_HOLD,
+            TASK_PROJECT_CAN_BE_OVERDUE,
             {
               parentTaskId: null,
               status: OPEN_TASK_STATUS_FILTER,
@@ -118,8 +118,9 @@ overviewRouter.get("/", validate("query", overviewQuerySchema), async (req, res)
           ],
         },
       }),
-      // Overdue-by-date open top-level tasks the on-hold rule leaves out of
-      // `overdue` (same visibility scope) — feeds the Overview tile hint.
+      // Overdue-by-date open top-level tasks of ON_HOLD projects, which the
+      // rule leaves out of `overdue` (same visibility scope) — feeds the
+      // Overview tile hint. CANCELLED projects are left out without a hint.
       prisma.task.count({
         where: {
           AND: [

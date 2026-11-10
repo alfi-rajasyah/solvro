@@ -217,6 +217,13 @@ describe("computeProjectHealth — overdue boundary", () => {
     expect((await healthOf(id, "?today=2026-08-05")).overdueCount).toBe(1);
   });
 
+  it("a cancelled project counts 0 overdue", async () => {
+    const id = await createProject(userId);
+    await createTask(id, { dueDate: new Date("2026-08-01T00:00:00.000Z") });
+    await prisma.project.update({ where: { id }, data: { status: "CANCELLED" } });
+    expect((await healthOf(id, "?today=2026-08-05")).overdueCount).toBe(0);
+  });
+
   it("`today` moves the boundary to the caller's local day", async () => {
     const id = await createProject(userId);
     await createTask(id, { dueDate: new Date("2026-08-02T00:00:00.000Z") });

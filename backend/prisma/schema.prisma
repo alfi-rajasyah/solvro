@@ -119,10 +119,14 @@ enum PipelineStatusTag {
 // Terminal result of a deal. Set once by POST /opportunities/:id/close,
 // cleared by POST /opportunities/:id/reopen. The stage a deal reached is
 // never reset on close (D5) — see Opportunity.stage / closedAt below.
+// ARCHIVED parks a dead deal that was never really decided (a duplicate, a
+// test entry, imported junk): it takes no reason category and stays out of
+// win rate and every other pipeline KPI.
 enum PipelineOutcome {
   WON       @map("won")
   LOST      @map("lost")
   CANCELLED @map("cancelled")
+  ARCHIVED  @map("archived")
 }
 
 // Close reason category. routes/opportunities.ts's REASONS_BY_OUTCOME

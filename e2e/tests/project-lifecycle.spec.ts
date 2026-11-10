@@ -182,6 +182,14 @@ test.describe("Project lifecycle", () => {
 
     await page.goto("/tasks?view=overdue", { waitUntil: "networkidle" });
     await expect(page.getByRole("row").filter({ hasText: late.title })).toHaveCount(0);
+
+    // The project's Needs attention panel keeps the task, marked "On hold".
+    await page.goto(`/projects/${p.id}/overview`, { waitUntil: "networkidle" });
+    const attention = page.locator("section").filter({ hasText: "Needs attention" });
+    const heldItem = attention.getByRole("link", { name: new RegExp(late.title) });
+    await expect(heldItem).toBeVisible();
+    await expect(heldItem).toContainText("On hold");
+    await expect(heldItem).not.toContainText(/\dd overdue/);
   });
 
   test("reactivating with past-due tasks offers a shift: validation, Cancel, and shifting N days", async ({

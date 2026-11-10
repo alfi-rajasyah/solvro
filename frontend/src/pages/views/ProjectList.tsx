@@ -1211,7 +1211,7 @@ function DueDateEditor({
   canEdit: boolean;
   startISO: string | null;
   dueISO: string | null;
-  /** Finished tasks and on-hold projects show the plain date, never "Nd late". */
+  /** Finished tasks and on-hold or cancelled projects show the plain date, never "Nd late". */
   done: boolean;
   onSave: (start: string | null, due: string | null) => void;
 }) {
