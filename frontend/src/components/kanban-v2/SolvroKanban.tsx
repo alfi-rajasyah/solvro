@@ -56,7 +56,7 @@ import {
   useUsers,
 } from "@/lib/queries";
 import { priorityOptions, TASK_STATUS_LABEL } from "@/lib/labels";
-import { FIELD_FOCUS } from "@/lib/utils";
+import { FIELD_FOCUS, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_BOX } from "@/lib/utils";
 import { BoardSkeleton } from "@/components/skeletons";
 import { KANBAN_STATUSES, projectToColumns, sortTasksCanonical } from "./adapter";
 import { TaskCard } from "./cards";
@@ -119,7 +119,7 @@ function ColumnMenu({ onAdd }: { onAdd: () => void }) {
       <button
         type="button"
         onClick={() => setMenuOpen((v) => !v)}
-        className="material-symbols-outlined cursor-pointer text-base text-on-surface-variant hover:text-on-surface"
+        className="tap-target material-symbols-outlined cursor-pointer text-base text-on-surface-variant hover:text-on-surface"
         aria-label="Column options"
       >
         more_horiz
@@ -127,7 +127,7 @@ function ColumnMenu({ onAdd }: { onAdd: () => void }) {
       {menuOpen && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-          <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+          <div className="absolute right-0 z-20 mt-1 w-40 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
             <button
               type="button"
               onClick={() => {
@@ -136,7 +136,7 @@ function ColumnMenu({ onAdd }: { onAdd: () => void }) {
               }}
               className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-on-surface hover:bg-surface-container"
             >
-              <span className="material-symbols-outlined text-sm">add</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-sm">add</span>
               Add task here
             </button>
           </div>
@@ -417,7 +417,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
       (err: unknown) => {
         setActionError(
           err instanceof ApiError && err.status === 409
-            ? "Someone else changed this task first. The board has been refreshed — try the move again."
+            ? "Someone else changed this task first. The board has been refreshed. Try the move again."
             : err instanceof ApiError
               ? err.message
               : "Could not update the task.",
@@ -496,13 +496,13 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
             type="button"
             onClick={() => setFilterOpen((v) => !v)}
             className={[
-              "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-display text-xs font-semibold transition-colors",
+              `${TOOLBAR_BOX} border font-semibold transition-colors`,
               filterActive
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container",
             ].join(" ")}
           >
-            <span className="material-symbols-outlined text-base">filter_alt</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">filter_alt</span>
             Filter
             {filterActive && (
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-meta leading-none font-bold text-on-primary">
@@ -515,7 +515,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
           {filterOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
-              <div className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 shadow-overlay">
+              <div className="absolute right-0 z-20 mt-2 w-64 rounded-sm border border-outline-variant bg-surface-container-lowest p-3 shadow-overlay">
                 <div className="mb-3">
                   <label htmlFor={`${filterUid}-assignee`} className="mb-1 block text-label-caps uppercase text-on-surface-variant">
                     Assignee
@@ -526,7 +526,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                     onChange={(e) =>
                       setFilterAssigneeId(e.target.value === "" ? "" : Number(e.target.value))
                     }
-                    className={`w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
+                    className={`w-full rounded-sm border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
                   >
                     <option value="">Everyone</option>
                     {(users ?? []).map((u) => (
@@ -544,7 +544,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                     id={`${filterUid}-priority`}
                     value={filterPriority}
                     onChange={(e) => setFilterPriority(e.target.value as Priority | "")}
-                    className={`w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
+                    className={`w-full rounded-sm border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
                   >
                     <option value="">Any priority</option>
                     {priorityOptions.map((o) => (
@@ -565,7 +565,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                       const v = e.target.value;
                       setFilterEpicId(v === "" ? "" : v === "none" ? null : Number(v));
                     }}
-                    className={`w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
+                    className={`w-full rounded-sm border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
                   >
                     <option value="">All</option>
                     <option value="none">No epic</option>
@@ -597,9 +597,9 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
           <button
             type="button"
             onClick={() => setCreateStatus("TODO")}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary/90"
+            className={TOOLBAR_BUTTON_PRIMARY}
           >
-            <span className="material-symbols-outlined text-base">add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
             Add task
           </button>
         )}
@@ -615,7 +615,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
           onClick={() => scrollToColumn(activeColIdx - 1)}
           disabled={activeColIdx === 0}
           aria-label="Previous column"
-          className="material-symbols-outlined text-on-surface-variant disabled:opacity-30"
+          className="tap-target material-symbols-outlined text-on-surface-variant disabled:opacity-30"
         >
           chevron_left
         </button>
@@ -628,7 +628,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
           onClick={() => scrollToColumn(activeColIdx + 1)}
           disabled={activeColIdx === KANBAN_STATUSES.length - 1}
           aria-label="Next column"
-          className="material-symbols-outlined text-on-surface-variant disabled:opacity-30"
+          className="tap-target material-symbols-outlined text-on-surface-variant disabled:opacity-30"
         >
           chevron_right
         </button>
@@ -708,7 +708,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                   >
                     {/* Column header — stays pinned; the card list below scrolls on its own (md:+) */}
                     <div className="flex items-center gap-2 px-1 pb-1">
-                      <h3 className="text-sm font-bold text-on-surface">{TASK_STATUS_LABEL[status]}</h3>
+                      <h2 className="text-sm font-bold text-on-surface">{TASK_STATUS_LABEL[status]}</h2>
                       <span
                         className={[
                           "rounded-full px-2 py-0.5 text-meta font-medium",
@@ -763,7 +763,7 @@ export function SolvroKanban({ project }: SolvroKanbanProps) {
                       ))}
 
                       {columnTasks.length === 0 && (
-                        <div className="rounded-lg border border-dashed border-outline-variant px-3 py-8 text-center text-[12px] text-on-surface-variant">
+                        <div className="rounded-sm border border-dashed border-outline-variant px-3 py-8 text-center text-meta text-on-surface-variant">
                           Drop tasks here
                         </div>
                       )}

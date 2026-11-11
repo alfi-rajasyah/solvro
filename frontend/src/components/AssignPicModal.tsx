@@ -86,7 +86,7 @@ export function AssignPicModal({ open, onClose, opportunity }: Props) {
             type="button"
             onClick={onClose}
             disabled={assign.isPending}
-            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -94,7 +94,7 @@ export function AssignPicModal({ open, onClose, opportunity }: Props) {
             type="submit"
             form="assign-pic-form"
             disabled={assign.isPending || picId === ""}
-            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {assign.isPending ? "Assigning…" : "Assign"}
           </button>
@@ -116,7 +116,7 @@ export function AssignPicModal({ open, onClose, opportunity }: Props) {
             onChange={(e) => setPicId(e.target.value === "" ? "" : Number(e.target.value))}
             aria-label="PIC"
             required
-            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           >
             {(users ?? []).map((u) => (
               <option key={u.id} value={u.id}>
@@ -126,7 +126,7 @@ export function AssignPicModal({ open, onClose, opportunity }: Props) {
           </select>
         </label>
 
-        <p className="text-[13px] text-on-surface-variant">
+        <p className="text-xs text-on-surface-variant">
           Only the PIC and pipeline managers can edit, move, link or delete this deal. Other SAs
           can read it and add notes.
         </p>

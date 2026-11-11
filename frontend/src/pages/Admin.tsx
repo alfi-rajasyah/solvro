@@ -1,3 +1,4 @@
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { FIELD_FOCUS } from "@/lib/utils";
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import {
@@ -183,10 +184,7 @@ function UsersTab() {
       sortingFn: personNameSortingFn,
       cell: ({ row }) => (
         <span
-          className={[
-            "font-medium text-on-surface",
-            row.original.active ? "" : "opacity-60",
-          ].join(" ")}
+          className="font-medium text-on-surface"
         >
           {row.original.username}
         </span>
@@ -201,12 +199,9 @@ function UsersTab() {
       sortingFn: personNameSortingFn,
       cell: ({ row }) => (
         <span
-          className={[
-            // text-xs (13px, this theme's own --text-xs override — see
-            // index.css) replaces the carried-over text-[13px] magic number.
-            "text-xs text-on-surface-variant",
-            row.original.active ? "" : "opacity-60",
-          ].join(" ")}
+          // text-xs (13px, this theme's own --text-xs override — see
+          // index.css) replaces the carried-over text-[13px] magic number.
+          className="text-xs text-on-surface-variant"
         >
           {row.original.email}
         </span>
@@ -219,9 +214,7 @@ function UsersTab() {
       header: ({ column }) => <DataGridColumnHeader column={column} title="Provider" />,
       enableSorting: false,
       cell: ({ row }) => (
-        <span className={row.original.active ? undefined : "opacity-60"}>
-          <ProviderChip provider={row.original.provider} />
-        </span>
+        <ProviderChip provider={row.original.provider} />
       ),
       meta: { skeleton: <Skeleton className="h-4 w-16 rounded-full" /> },
     },
@@ -239,11 +232,7 @@ function UsersTab() {
         const u = row.original;
         const isSelf = currentUser?.id === u.id;
         return (
-          <div
-            className={["flex items-center gap-2", u.active ? "" : "opacity-60"].join(
-              " ",
-            )}
-          >
+          <div className="flex items-center gap-2">
             <select
               value={u.role}
               aria-label={`Role for ${u.username}`}
@@ -293,7 +282,7 @@ function UsersTab() {
         <DataGridColumnHeader column={column} title="Projects (TAM/SA)" />
       ),
       cell: ({ row }) => (
-        <span className={row.original.active ? undefined : "opacity-60"}>
+        <span>
           {row.original.projectsAsTAM} / {row.original.projectsAsSA}
         </span>
       ),
@@ -315,10 +304,10 @@ function UsersTab() {
             "rounded-full px-2 py-0.5 font-display text-label-caps uppercase",
             row.original.active
               ? "bg-chip-emerald-bg text-chip-emerald-text"
-              : "bg-surface-container-high text-on-surface-variant opacity-60",
+              : "bg-surface-container-high text-on-surface-variant",
           ].join(" ")}
         >
-          {row.original.active ? "Active" : "Disabled"}
+          {row.original.active ? "Active" : "Inactive"}
         </span>
       ),
       meta: { skeleton: <Skeleton className="h-4 w-16 rounded-full" /> },
@@ -331,12 +320,7 @@ function UsersTab() {
         const u = row.original;
         const isSelf = currentUser?.id === u.id;
         return (
-          <div
-            className={[
-              "flex items-center justify-end gap-1",
-              u.active ? "" : "opacity-60",
-            ].join(" ")}
-          >
+          <div className="flex items-center justify-end gap-1">
             <button
               type="button"
               onClick={() => handleToggleActive(u)}
@@ -519,10 +503,10 @@ function UsersTab() {
             unambiguously "not loaded yet"; the `rows` fallback wiring itself
             is unchanged (still needed so every other computation below stays
             render-safe). */}
-        <AdminKpi label="Users" value={isLoading ? "—" : rows.length} hint={`${activeCount} active · ${adminCount} admins`} icon="group" tone="primary" />
-        <AdminKpi label="Pending" value={isLoading ? "—" : pendingCount} hint="Needs role assignment" icon="hourglass_top" tone="warning" />
-        <AdminKpi label="Custom roles" value={isLoading ? "—" : customRoleCount} hint={`${(roles ?? []).length} total roles`} icon="shield_person" tone="success" />
-        <AdminKpi label="Inactive" value={isLoading ? "—" : rows.length - activeCount} hint="Cannot sign in" icon="block" tone="neutral" />
+        <AdminKpi label="Users" value={isLoading ? EMPTY_VALUE : rows.length} hint={`${activeCount} active · ${adminCount} admins`} icon="group" tone="primary" />
+        <AdminKpi label="Pending" value={isLoading ? EMPTY_VALUE : pendingCount} hint="Needs role assignment" icon="hourglass_top" tone="warning" />
+        <AdminKpi label="Custom roles" value={isLoading ? EMPTY_VALUE : customRoleCount} hint={`${(roles ?? []).length} total roles`} icon="shield_person" tone="success" />
+        <AdminKpi label="Inactive" value={isLoading ? EMPTY_VALUE : rows.length - activeCount} hint="Cannot sign in" icon="block" tone="neutral" />
       </div>
       {error && (
         <div className="rounded-sm border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
@@ -683,14 +667,14 @@ function ProviderChip({ provider }: { provider: "google" | "password" }) {
   if (provider === "google") {
     return (
       <span className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-2 py-0.5 font-display text-meta font-semibold text-primary dark:bg-primary/20">
-        <span className="material-symbols-outlined text-[12px]">mail</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-[12px]">mail</span>
         Google
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 rounded-full bg-surface-container-high px-2 py-0.5 font-display text-meta font-semibold text-on-surface-variant">
-      <span className="material-symbols-outlined text-[12px]">key</span>
+      <span aria-hidden="true" className="material-symbols-outlined text-[12px]">key</span>
       Password
     </span>
   );
@@ -704,7 +688,7 @@ function AdminKpi({
   tone,
 }: {
   label: string;
-  // "—" while the tab's underlying query is still loading (ledger fix,
+  // EMPTY_VALUE while the tab's underlying query is still loading (ledger fix,
   // Admin.tsx:439-444) — every call site passes the computed number once
   // loaded, an em-dash literal until then.
   value: number | string;
@@ -724,7 +708,7 @@ function AdminKpi({
     <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
         <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
-        <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
+        <span aria-hidden="true" className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
         <span className="text-3xl font-bold tabular-nums text-on-surface">{value}</span>
@@ -836,7 +820,7 @@ function RolesTab() {
         return isEditing ? (
           <PermissionPicker value={editPerms} onChange={setEditPerms} />
         ) : r.permissions.length === 0 ? (
-          <span className="text-on-surface-variant/60">—</span>
+          <span className="text-on-surface-variant/60">{EMPTY_VALUE}</span>
         ) : (
           <div className="flex flex-wrap gap-1">
             {r.permissions.map((p) => (
@@ -867,7 +851,7 @@ function RolesTab() {
       meta: {
         headerClassName: "text-right",
         cellClassName:
-          "align-top text-right font-mono text-[13px] text-on-surface-variant",
+          "align-top text-right font-mono text-xs text-on-surface-variant",
         skeleton: <Skeleton className="ml-auto h-3.5 w-6" />,
       },
     },
@@ -1022,7 +1006,7 @@ function RolesTab() {
         <code className="font-mono text-on-surface">*</code> grants admin
         access.{" "}
         <code className="font-mono text-on-surface">project:view-all</code>{" "}
-        reveals every project — without it, users only see projects where
+        reveals every project. Without it, users only see projects where
         they're the assigned SA or TAM. The last full-access admin can't be
         removed.{" "}
         <code className="font-mono text-on-surface">PENDING</code> is reserved
@@ -1168,7 +1152,7 @@ function SignInTab() {
                   : "bg-surface-container-high text-on-surface-variant",
               ].join(" ")}
             >
-              <span className="material-symbols-outlined text-[20px]">
+              <span aria-hidden="true" className="material-symbols-outlined text-[20px]">
                 {connected ? "verified_user" : "lock_open"}
               </span>
             </div>
@@ -1221,7 +1205,7 @@ function SignInTab() {
                 {data.googleAllowedDomains.map((d) => (
                   <span
                     key={d}
-                    className="rounded-full bg-primary/10 px-2.5 py-0.5 font-mono text-[12px] text-primary dark:bg-primary/20"
+                    className="rounded-full bg-primary/10 px-2.5 py-0.5 font-mono text-meta text-primary dark:bg-primary/20"
                   >
                     {d}
                   </span>
@@ -1276,14 +1260,15 @@ function ClientIdField({ id }: { id: string }) {
           type="button"
           onClick={() => void copyText(id)}
           title="Copy to clipboard"
+          aria-label="Copy to clipboard"
           className="text-on-surface-variant hover:text-on-surface"
         >
-          <span className="material-symbols-outlined text-[14px]">
+          <span aria-hidden="true" className="material-symbols-outlined text-[14px]">
             content_copy
           </span>
         </button>
       </div>
-      <div className="break-all rounded-sm bg-surface px-2 py-1.5 font-mono text-[12px] text-on-surface">
+      <div className="break-all rounded-sm bg-surface px-2 py-1.5 font-mono text-meta text-on-surface">
         {revealed ? id : maskClientId(id)}
       </div>
     </div>
@@ -1435,7 +1420,7 @@ function SignInModal({
               Add your app origins under{" "}
               <strong>Authorized JavaScript origins</strong> (e.g.{" "}
               <span className="font-mono">http://localhost:5173</span> for dev,
-              plus your production URL — no trailing slash, no path).
+              plus your production URL (no trailing slash, no path).
             </li>
             <li>
               Copy the Client ID (ends in{" "}
@@ -1481,7 +1466,7 @@ function SignInModal({
           <p className="mt-1 text-xs text-on-surface-variant">
             The Client ID is a public identifier (it ships in any Google
             sign-in button). The Client <em>Secret</em> stays in Google Cloud
-            and is never used by Solvro — we verify ID tokens server-side
+            and is never used by Solvro. We verify ID tokens server-side
             against this audience.
           </p>
         </div>
@@ -1499,7 +1484,7 @@ function SignInModal({
             {domains.map((d) => (
               <span
                 key={d}
-                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 font-mono text-[12px] text-primary dark:bg-primary/20"
+                className="inline-flex items-center gap-1 rounded-full bg-primary/10 px-3 py-1 font-mono text-meta text-primary dark:bg-primary/20"
               >
                 {d}
                 <button
@@ -1508,7 +1493,7 @@ function SignInModal({
                   aria-label={`Remove ${d}`}
                   className="rounded-full p-0.5 text-primary/70 hover:bg-primary/20 hover:text-primary"
                 >
-                  <span className="material-symbols-outlined text-[14px]">
+                  <span aria-hidden="true" className="material-symbols-outlined text-[14px]">
                     close
                   </span>
                 </button>
@@ -1617,7 +1602,7 @@ function ProjectsTab() {
       sortingFn: "alphanumeric",
       cell: ({ row }) => (
         <span className="text-on-surface-variant">
-          {row.original.customer?.name ?? "—"}
+          {row.original.customer?.name ?? EMPTY_VALUE}
         </span>
       ),
       meta: { skeleton: <Skeleton className="h-3.5 w-28" /> },
@@ -1633,7 +1618,7 @@ function ProjectsTab() {
       sortingFn: personNameSortingFn,
       cell: ({ row }) => (
         <span className="text-on-surface-variant">
-          {row.original.sa?.username ?? "—"}
+          {row.original.sa?.username ?? EMPTY_VALUE}
         </span>
       ),
       meta: { skeleton: <Skeleton className="h-3.5 w-20" /> },
@@ -1655,7 +1640,7 @@ function ProjectsTab() {
       accessorFn: (row) => row._count.tasks,
       header: ({ column }) => <DataGridColumnHeader column={column} title="Tasks" />,
       cell: ({ row }) => (
-        <span className="font-mono text-[13px] text-on-surface-variant">
+        <span className="font-mono text-xs text-on-surface-variant">
           {row.original._count.tasks}
         </span>
       ),
@@ -1680,7 +1665,7 @@ function ProjectsTab() {
             value={p.tamId}
             aria-label={`Reassign TAM for ${p.name}`}
             onChange={(e) => handleReassign(p, Number(e.target.value))}
-            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-[13px] text-on-surface ${FIELD_FOCUS}`}
+            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-xs text-on-surface ${FIELD_FOCUS}`}
           >
             {tamCandidates.map((u) => (
               <option key={u.id} value={u.id}>
@@ -1827,7 +1812,7 @@ function PipelineTab() {
       sortingFn: personNameSortingFn,
       cell: ({ row }) => {
         const user = row.original.user;
-        if (!user) return <span className="text-on-surface-variant/60">—</span>;
+        if (!user) return <span className="text-on-surface-variant/60">{EMPTY_VALUE}</span>;
         return (
           <span className="flex min-w-0 items-center gap-1.5">
             <AssigneeAvatar user={user} size="xs" />
@@ -1927,7 +1912,7 @@ function PipelineTab() {
       enableSorting: false,
       cell: ({ row }) => {
         const msg = row.original.errorMessage;
-        if (!msg) return <span className="text-on-surface-variant/60">—</span>;
+        if (!msg) return <span className="text-on-surface-variant/60">{EMPTY_VALUE}</span>;
         // Truncated in the grid; full text on hover via `title` per the
         // dispatch brief.
         return (
@@ -1961,7 +1946,7 @@ function PipelineTab() {
     <div className="space-y-4">
       <p className="text-sm text-on-surface-variant">
         Every Excel/CSV import run against the Pipeline board, newest first.
-        Read-only — imports themselves happen from the board's Import button.
+        Read-only: imports themselves happen from the board's Import button.
       </p>
       <DataGrid
         table={table}

@@ -135,7 +135,7 @@ export function OpportunityCard({
               aria-label="Drag to reorder"
               className="mt-0.5 inline-flex shrink-0 touch-none items-center text-on-surface-variant/60"
             >
-              <span className="material-symbols-outlined text-[16px]">drag_indicator</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[16px]">drag_indicator</span>
             </KanbanItemHandle>
           )}
           {/* Title as a real `<Link>` — keyboard/screen-reader route to the
@@ -193,7 +193,7 @@ export function OpportunityCard({
               overdue ? "font-semibold text-chip-rose-text" : "",
             ].join(" ")}
           >
-            <span className="material-symbols-outlined text-[14px]">event</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[14px]">event</span>
             {formatPipelineDate(deal.deadline)}
           </span>
         )}
@@ -244,9 +244,9 @@ function OpportunityCardMenu({
           <button
             type="button"
             aria-label="More actions"
-            className="inline-flex h-6 w-6 items-center justify-center rounded-sm text-on-surface-variant outline-hidden hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="tap-target inline-flex h-6 w-6 items-center justify-center rounded-sm text-on-surface-variant outline-hidden hover:bg-surface-container-high hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/30"
           >
-            <span className="material-symbols-outlined text-[18px]">more_vert</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[18px]">more_vert</span>
           </button>
         }
       />

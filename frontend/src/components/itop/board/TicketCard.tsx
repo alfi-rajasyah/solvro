@@ -61,10 +61,10 @@ export function TicketCard({
             aria-label="Drag ticket"
             className="inline-flex shrink-0 touch-none items-center text-on-surface-variant/60"
           >
-            <span className="material-symbols-outlined text-[16px]">drag_indicator</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[16px]">drag_indicator</span>
           </KanbanItemHandle>
         )}
-        <span className="font-mono text-[12px] font-semibold text-on-surface">{ticket.ref}</span>
+        <span className="font-mono text-meta font-semibold text-on-surface">{ticket.ref}</span>
         <span className="flex-1" />
         {escalated && <Chip tone="rose">Escalated</Chip>}
         {folded && (
@@ -74,7 +74,7 @@ export function TicketCard({
         )}
       </div>
 
-      <p className="line-clamp-2 text-[13px] font-bold leading-snug text-on-surface">{ticket.title}</p>
+      <p className="line-clamp-2 text-xs font-bold leading-snug text-on-surface">{ticket.title}</p>
 
       <div className="mt-1.5 flex items-center justify-between gap-2 text-meta text-on-surface-variant">
         <span className="truncate">

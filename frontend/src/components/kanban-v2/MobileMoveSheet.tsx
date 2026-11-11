@@ -23,9 +23,9 @@ export function MobileMoveSheet({
 }) {
   return (
     <div className="fixed inset-0 z-100 flex items-end md:hidden" onMouseDown={onClose}>
-      <div className="absolute inset-0 bg-inverse-surface/40 backdrop-blur-sm" />
+      <div className="absolute inset-0 bg-inverse-surface/40" />
       <div
-        className="relative w-full rounded-t-xl border-t border-outline-variant bg-surface-container p-4"
+        className="relative w-full rounded-t-sm border-t border-outline-variant bg-surface-container p-4"
         onMouseDown={(e) => e.stopPropagation()}
       >
         <p className="mb-1 truncate text-sm font-bold text-on-surface">{task.title}</p>
@@ -41,17 +41,17 @@ export function MobileMoveSheet({
                   type="button"
                   onClick={() => onMove(col.value)}
                   className={[
-                    "flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-sm",
+                    "flex w-full items-center gap-2 rounded-sm px-3 py-2 text-left text-sm",
                     checked ? "text-primary" : "text-on-surface",
                   ].join(" ")}
                 >
                   <span
                     className={[
                       "flex h-4 w-4 shrink-0 items-center justify-center rounded-full border",
-                      checked ? "border-primary bg-primary text-white" : "border-outline-variant",
+                      checked ? "border-primary bg-primary text-on-primary" : "border-outline-variant",
                     ].join(" ")}
                   >
-                    {checked && <span className="material-symbols-outlined text-meta leading-none">check</span>}
+                    {checked && <span aria-hidden="true" className="material-symbols-outlined text-meta leading-none">check</span>}
                   </span>
                   {col.label}
                 </button>

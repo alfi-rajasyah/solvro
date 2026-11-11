@@ -164,10 +164,10 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
+            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
             aria-label="Close"
           >
-            <span className="material-symbols-outlined text-base">close</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
           </button>
         </div>
         <Alert variant="destructive" className="mt-4">
@@ -190,10 +190,10 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
+            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
             aria-label="Close"
           >
-            <span className="material-symbols-outlined text-base">close</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
           </button>
         </div>
       </aside>
@@ -219,10 +219,10 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
         <button
           type="button"
           onClick={onClose}
-          className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
+          className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
           aria-label="Close"
         >
-          <span className="material-symbols-outlined text-base">close</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
         </button>
       </div>
 
@@ -327,7 +327,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
           ) : (
             <ul className="space-y-1">
               {epic.tasks.map((t) => (
-                <li key={t.id} className="flex items-center gap-2 rounded-sm px-1 py-1 text-[13px]">
+                <li key={t.id} className="flex items-center gap-2 rounded-sm px-1 py-1 text-xs">
                   <button
                     type="button"
                     onClick={() => openTask(t.id)}
@@ -346,7 +346,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
           )}
           {canAddStory && (
             <form onSubmit={(e) => void handleAddStory(e)} className="mt-1.5 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-[13px] text-primary">add</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[13px] text-primary">add</span>
               <input
                 type="text"
                 value={newStory}
@@ -354,7 +354,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
                 placeholder="Add story…"
                 maxLength={200}
                 aria-label="Add story"
-                className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden"
+                className={`flex-1 border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden ${FIELD_FOCUS}`}
               />
             </form>
           )}

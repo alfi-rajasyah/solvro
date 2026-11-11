@@ -17,7 +17,7 @@ import {
   splitComment,
   type MentionUser,
 } from "@/lib/mentions";
-import { FIELD_FOCUS } from "@/lib/utils";
+import { FIELD_FOCUS, FIELD_FOCUS_WITHIN } from "@/lib/utils";
 
 /**
  * Comment text with the stored mentions shown as name chips
@@ -183,7 +183,7 @@ export function CommentComposer({
         className={
           isNote
             ? "relative space-y-2 border-t border-outline-variant pt-3"
-            : "relative flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2"
+            : `relative flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 ${FIELD_FOCUS_WITHIN}`
         }
       >
         {isNote ? (
@@ -224,7 +224,7 @@ export function CommentComposer({
             aria-label="Send comment"
             className="flex shrink-0 items-center text-primary disabled:opacity-40"
           >
-            <span className="material-symbols-outlined text-[17px]">send</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[17px]">send</span>
           </button>
         )}
 

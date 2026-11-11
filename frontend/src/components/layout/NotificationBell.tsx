@@ -35,7 +35,7 @@ export function NotificationBell() {
         aria-label={label}
         title="Notifications"
         data-testid="notifications-button"
-        className={`relative flex h-8 w-8 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface ${FOCUS_RING}`}
+        className={`tap-target relative flex h-8 w-8 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface ${FOCUS_RING}`}
       >
         <span className="material-symbols-outlined text-[20px]" aria-hidden="true">
           notifications
@@ -144,7 +144,7 @@ function NotificationList({
                   type="button"
                   onClick={() => void fetchNextPage()}
                   disabled={isFetchingNextPage}
-                  className={`rounded-lg border border-outline-variant px-3 py-1.5 text-xs font-semibold text-on-surface hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
+                  className={`rounded-sm border border-outline-variant px-3 py-1.5 text-xs font-semibold text-on-surface hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
                 >
                   {isFetchingNextPage ? "Loading…" : "Load more"}
                 </button>

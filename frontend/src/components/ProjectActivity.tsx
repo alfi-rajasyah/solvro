@@ -62,9 +62,9 @@ export function ProjectActivity({
       className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4"
     >
       <header className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h3 id="project-activity-heading" className="text-label-caps uppercase text-on-surface-variant">
+        <h2 id="project-activity-heading" className="text-label-caps uppercase text-on-surface-variant">
           Recent activity
-        </h3>
+        </h2>
         <Select
           items={options}
           value={person}
@@ -177,7 +177,7 @@ export function ActivityFeedBody({
                 type="button"
                 onClick={() => void fetchNextPage()}
                 disabled={isFetchingNextPage}
-                className={`inline-flex items-center gap-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
+                className={`inline-flex items-center gap-1.5 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60 ${FOCUS_RING}`}
               >
                 {isFetchingNextPage ? "Loading…" : "Load more"}
               </button>

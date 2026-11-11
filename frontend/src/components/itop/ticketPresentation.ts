@@ -6,6 +6,7 @@
 // docs/archive/plans/itop-integration-spec.md's Tickets tab mockup for the
 // exact copy this is reproducing ("TTR breached", "Paused", "TTR 3 h left",
 // "2 d" / "5 h" / "40 min").
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import type { ItopTicketRow } from "@/lib/queries";
 
 // Matches StatusChip.tsx's private `Tone` union structurally (that type
@@ -65,13 +66,13 @@ function unit(n: number, label: string): string {
 /** "2 d" / "5 h" / "40 min" — largest whole unit only, per the mockup's Age
  * column. Never negative: a `startDate` briefly in the future (e.g. clock
  * skew right after a sync) reads as "0 min" rather than a negative age.
- * Renders "—" for a missing or unparseable `startDate` (the field is
+ * Renders "–" for a missing or unparseable `startDate` (the field is
  * nullable — see `ItopTicketRow.startDate`) rather than "NaN d" or a
  * garbage `new Date(null)` epoch-1970 age. */
 export function ageLabel(startDate: string | null, now: Date = new Date()): string {
-  if (!startDate) return "—";
+  if (!startDate) return EMPTY_VALUE;
   const then = new Date(startDate).getTime();
-  if (Number.isNaN(then)) return "—";
+  if (Number.isNaN(then)) return EMPTY_VALUE;
   const minutes = Math.max(0, Math.floor((now.getTime() - then) / 60_000));
   if (minutes < 60) return unit(minutes, "min");
   const hours = Math.floor(minutes / 60);
@@ -95,7 +96,7 @@ type SlaTicket = Pick<ItopTicketRow, "status" | "slaTtoPassed" | "slaTtrPassed" 
  * SLA column copy, in priority order: an already-breached TTR wins over a
  * breached TTO; `pending` pauses both clocks in iTop, so it reads as
  * "Paused" rather than a stale countdown; otherwise the time left until
- * `ttr` if it's still in the future; "—" once nothing is left to say (no
+ * `ttr` if it's still in the future; "–" once nothing is left to say (no
  * `ttr` snapshot, or `ttr` has already elapsed but the SLA-passed flags
  * haven't caught up with the next sync yet).
  */
@@ -103,9 +104,9 @@ export function slaLabel(ticket: SlaTicket, now: Date = new Date()): string {
   if (ticket.slaTtrPassed) return "TTR breached";
   if (ticket.slaTtoPassed) return "TTO breached";
   if (ticket.status === "pending") return "Paused";
-  if (!ticket.ttr) return "—";
+  if (!ticket.ttr) return EMPTY_VALUE;
   const diffMs = new Date(ticket.ttr).getTime() - now.getTime();
-  if (diffMs <= 0) return "—";
+  if (diffMs <= 0) return EMPTY_VALUE;
   return `TTR ${durationLeft(diffMs)} left`;
 }
 
@@ -128,7 +129,7 @@ export function priorityLabel(code: string): string {
 
 type UrlTicket = Pick<ItopTicketRow, "id" | "class">;
 
-/** Builds the "Open in iTop ↗" deep link. Trailing slash(es) on `baseUrl`
+/** Builds the "Open in iTop" deep link. Trailing slash(es) on `baseUrl`
  * are stripped so the URL never doubles up
  * (`https://itop.test//pages/...`). */
 export function itopTicketUrl(baseUrl: string, ticket: UrlTicket): string {

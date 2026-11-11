@@ -10,6 +10,7 @@ import { TicketPanel } from "@/components/itop/TicketPanel";
 import { TicketsTab, type TicketsTabView } from "@/components/itop/TicketsTab";
 import { ServiceMappingList } from "@/components/services/ServiceMappingList";
 import { Tabs } from "@/components/Tabs";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { canOwnCustomer, saveErrorMessage } from "@/lib/ownerAccess";
@@ -206,7 +207,7 @@ export function CustomerDetail() {
 
   const totals = sumProjectHealth(customer.projects);
   const itopOrgName =
-    ticketsAvailable && itopTicketsGate.data?.mapped ? (itopTicketsGate.data.orgName ?? "—") : null;
+    ticketsAvailable && itopTicketsGate.data?.mapped ? (itopTicketsGate.data.orgName ?? EMPTY_VALUE) : null;
 
   return (
     <div className="space-y-6">
@@ -305,8 +306,10 @@ function ServicesTab({
       canCreateService={canCreateService}
       saving={update.isPending}
       title="Service Catalogue Mapping"
+      assignedLabel="Subscribed"
+      unassignedLabel="Not subscribed"
       description={
-        'Select the services this customer subscribes to and list the tools used for each — e.g. "Backup & Restore" → Acronis, Veeam.'
+        'Tick the services this customer subscribes to and list the tools used for each, e.g. "Backup & Restore" → Acronis, Veeam.'
       }
     />
   );

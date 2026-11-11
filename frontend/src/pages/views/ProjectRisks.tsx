@@ -1,4 +1,4 @@
-import { FIELD_FOCUS } from "@/lib/utils";
+import { FIELD_FOCUS, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_STAT } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import {
   getCoreRowModel,
@@ -14,11 +14,9 @@ import { DataGrid, DataGridContainer } from "@/components/reui/data-grid/data-gr
 import { DataGridColumnHeader } from "@/components/reui/data-grid/data-grid-column-header";
 import { DataGridScrollArea } from "@/components/reui/data-grid/data-grid-scroll-area";
 import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
-import {
-  RiskFormModal,
-  scoreClass,
-  scoreLevel,
-} from "@/components/RiskFormModal";
+import { RiskFormModal } from "@/components/RiskFormModal";
+import { RiskScoreChip } from "@/components/RiskScoreChip";
+import { Chip, type Tone } from "@/components/StatusChip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { RISK_CATEGORY_LABEL, RISK_STATUS_LABEL } from "@/lib/labels";
@@ -31,10 +29,20 @@ import {
   useUpdateRisk,
 } from "@/lib/queries";
 
-const STATUS_TONE: Record<RiskStatus, string> = {
-  OPEN: "bg-error-container text-on-error-container",
-  MITIGATED: "bg-chip-amber-bg text-chip-amber-text",
-  CLOSED: "bg-chip-emerald-bg text-chip-emerald-text",
+// Open reads as needing attention, Mitigated as in hand, Closed as done.
+const STATUS_TONE: Record<RiskStatus, Tone> = {
+  OPEN: "rose",
+  MITIGATED: "amber",
+  CLOSED: "emerald",
+};
+// The editable status is a native select, which cannot be a pill: it carries
+// the same tone as its text colour on the standard input surface. These are
+// the tokens that read as a colour on a plain surface in both themes (the
+// chip text tones are tuned for a chip fill and turn near-white in dark).
+const STATUS_TEXT: Record<RiskStatus, string> = {
+  OPEN: "text-error",
+  MITIGATED: "text-chip-amber-text",
+  CLOSED: "text-primary",
 };
 
 // Workflow order for the DataGrid's Status column (accessorFn below) —
@@ -126,9 +134,9 @@ export function ProjectRisks() {
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-2 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
+            className={TOOLBAR_BUTTON_PRIMARY}
           >
-            <span className="material-symbols-outlined text-base">add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
             Add risk
           </button>
         )}
@@ -314,7 +322,7 @@ function RisksDataGrid({
                 {risk.description}
               </button>
               {(risk.mitigationPlan || risk.contingencyPlan) && (
-                <div className="mt-1 space-y-0.5 text-[12px] text-on-surface-variant">
+                <div className="mt-1 space-y-0.5 text-meta text-on-surface-variant">
                   {risk.mitigationPlan && (
                     <p className="line-clamp-2">
                       <span className="font-display text-label-caps uppercase">
@@ -431,21 +439,9 @@ function RisksDataGrid({
         // "projects" count column).
         cell: ({ row }) => {
           const risk = row.original;
-          const score = risk.probability * risk.impact;
           return (
             <div className="flex justify-end">
-              <div
-                className={[
-                  "flex items-center justify-center gap-1 rounded-sm border px-2 py-1 text-xs font-bold tabular-nums",
-                  scoreClass(score),
-                ].join(" ")}
-                title={`${risk.probability} × ${risk.impact} = ${score}`}
-              >
-                {score}
-                <span className="font-display text-label-caps uppercase">
-                  {scoreLevel(score)}
-                </span>
-              </div>
+              <RiskScoreChip probability={risk.probability} impact={risk.impact} />
             </div>
           );
         },
@@ -462,10 +458,7 @@ function RisksDataGrid({
               value={risk.status}
               aria-label={`Status of risk: ${risk.description}`}
               onChange={(e) => onChange(risk.id, { status: e.target.value as RiskStatus })}
-              className={[
-                "w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-meta font-semibold",
-                STATUS_TONE[risk.status],
-              ].join(" ")}
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-meta font-semibold ${STATUS_TEXT[risk.status]} ${FIELD_FOCUS}`}
             >
               {(Object.keys(RISK_STATUS_LABEL) as RiskStatus[]).map((s) => (
                 <option key={s} value={s}>
@@ -474,14 +467,7 @@ function RisksDataGrid({
               ))}
             </select>
           ) : (
-            <span
-              className={[
-                "inline-block rounded-sm px-2 py-0.5 font-display text-label-caps uppercase",
-                STATUS_TONE[risk.status],
-              ].join(" ")}
-            >
-              {RISK_STATUS_LABEL[risk.status]}
-            </span>
+            <Chip tone={STATUS_TONE[risk.status]}>{RISK_STATUS_LABEL[risk.status]}</Chip>
           );
         },
         meta: { skeleton: <Skeleton className="h-6 w-24 rounded-sm" /> },
@@ -499,18 +485,18 @@ function RisksDataGrid({
               <button
                 type="button"
                 onClick={() => onEdit(risk)}
-                className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
+                className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
                 aria-label="Edit risk"
               >
-                <span className="material-symbols-outlined text-base">edit</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base">edit</span>
               </button>
               <button
                 type="button"
                 onClick={() => onDelete(risk)}
-                className="rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-error"
+                className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-error"
                 aria-label="Delete risk"
               >
-                <span className="material-symbols-outlined text-base">delete</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base">delete</span>
               </button>
             </div>
           );
@@ -579,7 +565,6 @@ function RiskCard({
   onEdit: () => void;
   onDelete: () => void;
 }) {
-  const score = risk.probability * risk.impact;
   return (
     <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-3">
       <div className="flex items-start justify-between gap-2">
@@ -592,48 +577,34 @@ function RiskCard({
         >
           {risk.description}
         </button>
-        <div
-          className={[
-            "shrink-0 rounded-sm border px-2 py-1 text-xs font-bold tabular-nums",
-            scoreClass(score),
-          ].join(" ")}
-        >
-          {score}
-        </div>
+        <RiskScoreChip probability={risk.probability} impact={risk.impact} />
       </div>
-      <div className="mt-2 flex flex-wrap items-center gap-2 text-[12px]">
+      <div className="mt-2 flex flex-wrap items-center gap-2 text-meta">
         <span className="text-on-surface-variant">
           {RISK_CATEGORY_LABEL[risk.category]}
         </span>
         <span className="text-on-surface-variant">
           P{risk.probability} · I{risk.impact}
         </span>
-        <span
-          className={[
-            "rounded-sm px-2 py-0.5 font-display text-label-caps uppercase",
-            STATUS_TONE[risk.status],
-          ].join(" ")}
-        >
-          {RISK_STATUS_LABEL[risk.status]}
-        </span>
+        <Chip tone={STATUS_TONE[risk.status]}>{RISK_STATUS_LABEL[risk.status]}</Chip>
       </div>
       {canEdit && (
         <div className="mt-2 flex justify-end gap-1">
           <button
             type="button"
             onClick={onEdit}
-            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
+            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
             aria-label="Edit risk"
           >
-            <span className="material-symbols-outlined text-base">edit</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">edit</span>
           </button>
           <button
             type="button"
             onClick={onDelete}
-            className="rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-error"
+            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-error"
             aria-label="Delete risk"
           >
-            <span className="material-symbols-outlined text-base">delete</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">delete</span>
           </button>
         </div>
       )}
@@ -653,7 +624,7 @@ function Select({
   options: { value: string; label: string }[];
 }) {
   return (
-    <label className="flex items-center gap-2 text-[12px] text-on-surface-variant">
+    <label className="flex items-center gap-2 text-meta text-on-surface-variant">
       <span className="font-display text-label-caps uppercase">
         {label}
       </span>
@@ -681,22 +652,23 @@ function Stat({
   value: number;
   tone?: "high" | "medium" | "low";
 }) {
-  const toneClass =
-    tone === "high"
-      ? "border-error/40 bg-error-container text-on-error-container"
-      : tone === "medium"
-        ? "border-chip-amber-bg bg-chip-amber-bg text-chip-amber-text"
-        : tone === "low"
-          ? "border-chip-emerald-bg bg-chip-emerald-bg text-chip-emerald-text"
-          : "border-outline-variant bg-surface-container-lowest text-on-surface-variant";
+  // Same box as the toolbar buttons beside it (TOOLBAR_STAT), so the row
+  // sits on one line with "Add risk". The colour is on the number only, and
+  // only when there is something to count: "Add risk" stays the one solid
+  // element in the row.
+  const numberTone =
+    value === 0
+      ? ""
+      : tone === "high"
+        ? "text-error"
+        : tone === "medium"
+          ? "text-chip-amber-text"
+          : tone === "low"
+            ? "text-primary"
+            : "text-on-surface";
   return (
-    <div
-      className={[
-        "rounded-sm border px-3 py-1.5 font-display text-label-caps uppercase",
-        toneClass,
-      ].join(" ")}
-    >
-      <span className="mr-2 font-mono text-sm tabular-nums">{value}</span>
+    <div className={TOOLBAR_STAT}>
+      <span className={`text-sm font-bold tabular-nums ${numberTone}`}>{value}</span>
       {label}
     </div>
   );

@@ -227,10 +227,10 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
+            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
             aria-label="Close"
           >
-            <span className="material-symbols-outlined text-base">close</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
           </button>
         </div>
       </aside>
@@ -409,13 +409,13 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
             >
               {TASK_STATUS_LABEL[task.status]}
               {canEdit && (
-                <span className="material-symbols-outlined text-[13px]">expand_more</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[13px]">expand_more</span>
               )}
             </button>
             {statusMenuOpen && canEdit && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setStatusMenuOpen(false)} />
-                <div className="absolute left-0 z-20 mt-1 w-36 rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+                <div className="absolute left-0 z-20 mt-1 w-36 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
                   {STATUSES.map((s) => (
                     <button
                       key={s}
@@ -446,7 +446,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
             <button
               type="button"
               onClick={() => setMenuOpen((v) => !v)}
-              className="material-symbols-outlined rounded-sm p-1 text-base text-on-surface-variant hover:bg-surface-container-high"
+              className="tap-target material-symbols-outlined rounded-sm p-1 text-base text-on-surface-variant hover:bg-surface-container-high"
               aria-label="Task options"
             >
               more_horiz
@@ -454,7 +454,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
             {menuOpen && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 z-20 mt-1 w-40 rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+                <div className="absolute right-0 z-20 mt-1 w-40 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
                   <button
                     type="button"
                     disabled={!canEdit || duplicateTask.isPending}
@@ -478,7 +478,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                     }}
                     className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-xs text-error hover:bg-error-container disabled:cursor-default disabled:opacity-50"
                   >
-                    <span className="material-symbols-outlined text-sm">delete</span>
+                    <span aria-hidden="true" className="material-symbols-outlined text-sm">delete</span>
                     Delete task
                   </button>
                 </div>
@@ -488,10 +488,10 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
+            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
             aria-label="Close"
           >
-            <span className="material-symbols-outlined text-base">close</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
           </button>
         </div>
 
@@ -524,7 +524,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                 onBlur={handleTitleSubmit}
                 maxLength={200}
                 aria-label="Task title"
-                className="w-full border-none bg-transparent text-lg font-bold text-on-surface outline-hidden focus:outline-hidden"
+                className={`w-full border-none bg-transparent text-lg font-bold text-on-surface outline-hidden focus:outline-hidden ${FIELD_FOCUS}`}
               />
             </form>
           ) : (
@@ -640,7 +640,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
               className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
               title={canEdit ? "Click to cycle priority" : undefined}
             >
-              <span
+              <span aria-hidden="true"
                 className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}
               >
                 flag
@@ -658,7 +658,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
               className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
               title={canEdit ? "Toggle between task bar and milestone diamond" : undefined}
             >
-              <span
+              <span aria-hidden="true"
                 className={`material-symbols-outlined text-[15px] ${task.isMilestone ? "text-primary" : "text-on-surface-variant"}`}
               >
                 {task.isMilestone ? "diamond" : "check_box_outline_blank"}
@@ -679,7 +679,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
               title={canEdit ? CRITICAL_PATH_HELPER_TEXT : undefined}
               aria-label={`${CRITICAL_PATH_LABEL}: ${task.isCriticalPath ? "Yes" : "No"}`}
             >
-              <span
+              <span aria-hidden="true"
                 className={`material-symbols-outlined text-[15px] ${task.isCriticalPath ? "text-chip-violet-text" : "text-on-surface-variant"}`}
               >
                 {task.isCriticalPath ? CRITICAL_PATH_GLYPH : "check_box_outline_blank"}
@@ -847,14 +847,14 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                     // `disabled && "opacity-50"` (sortable.tsx) — a regression
                     // vs. the old markup, which only dimmed the arrows.
                     render={
-                      <div className="group/subtask flex items-center gap-2 rounded-sm px-1 py-1 text-[13px]" />
+                      <div className="group/subtask flex items-center gap-2 rounded-sm px-1 py-1 text-xs" />
                     }
                   >
                     <button
                       type="button"
                       disabled={!canEdit || s.status === "CANCELLED"}
                       onClick={() => toggleSubtask(s)}
-                      title={s.status === "CANCELLED" ? "Cancelled — change its status to reopen" : undefined}
+                      title={s.status === "CANCELLED" ? "Cancelled. Change its status to reopen" : undefined}
                       aria-label={
                         s.status === "CANCELLED"
                           ? "Cancelled"
@@ -871,7 +871,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                       ].join(" ")}
                     >
                       {s.status === "DONE" && (
-                        <span className="material-symbols-outlined text-meta leading-none">
+                        <span aria-hidden="true" className="material-symbols-outlined text-meta leading-none">
                           check
                         </span>
                       )}
@@ -894,7 +894,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                           }}
                           maxLength={200}
                           aria-label="Subtask title"
-                          className="w-full border-none bg-transparent text-[13px] text-on-surface outline-hidden focus:outline-hidden"
+                          className={`w-full border-none bg-transparent text-xs text-on-surface outline-hidden focus:outline-hidden ${FIELD_FOCUS}`}
                         />
                       </form>
                     ) : (
@@ -923,7 +923,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                         type="button"
                         onClick={() => startSubtaskRename(s)}
                         aria-label={`Rename ${s.title}`}
-                        className="material-symbols-outlined -m-1 shrink-0 rounded-sm p-1 text-sm text-on-surface-variant/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 md:opacity-0 md:group-hover/subtask:opacity-100 md:focus-visible:opacity-100"
+                        className="tap-target material-symbols-outlined -m-1 shrink-0 rounded-sm p-1 text-sm text-on-surface-variant/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 md:opacity-0 md:group-hover/subtask:opacity-100 md:focus-visible:opacity-100"
                       >
                         edit
                       </button>
@@ -934,7 +934,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                         disabled={duplicateTask.isPending && duplicateTask.variables === s.id}
                         onClick={() => void handleSubtaskDuplicate(s)}
                         aria-label={`Duplicate ${s.title}`}
-                        className="material-symbols-outlined -m-1 shrink-0 rounded-sm p-1 text-sm text-on-surface-variant/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 md:opacity-0 md:group-hover/subtask:opacity-100 md:focus-visible:opacity-100 disabled:cursor-default disabled:opacity-50"
+                        className="tap-target material-symbols-outlined -m-1 shrink-0 rounded-sm p-1 text-sm text-on-surface-variant/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 md:opacity-0 md:group-hover/subtask:opacity-100 md:focus-visible:opacity-100 disabled:cursor-default disabled:opacity-50"
                       >
                         content_copy
                       </button>
@@ -963,7 +963,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
               </Sortable>
               {canEdit && (
                 <form onSubmit={handleAddSubtask} className="mt-1.5 flex items-center gap-1.5">
-                  <span className="material-symbols-outlined text-[13px] text-primary">add</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-[13px] text-primary">add</span>
                   <input
                     type="text"
                     value={newSubtask}
@@ -971,7 +971,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                     placeholder="Add subtask"
                     aria-label="Add subtask"
                     maxLength={200}
-                    className="flex-1 border-none bg-transparent text-[13px] text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden"
+                    className={`flex-1 border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden ${FIELD_FOCUS}`}
                   />
                 </form>
               )}
@@ -1071,9 +1071,9 @@ function PanelComments({ taskId, projectId }: { taskId: number; projectId: numbe
 
   return (
     <div className="space-y-3">
-      <h3 className="font-display text-label-caps uppercase text-on-surface-variant">
+      <h2 className="font-display text-label-caps uppercase text-on-surface-variant">
         Comments {comments && comments.length > 0 && `· ${comments.length}`}
-      </h3>
+      </h2>
 
       {isLoading && (
         <div className="h-12 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
@@ -1095,7 +1095,7 @@ function PanelComments({ taskId, projectId }: { taskId: number; projectId: numbe
             <li key={c.id} className="flex gap-2.5">
               <AssigneeAvatar user={c.author} size="xs" />
               <div className="min-w-0 flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2">
-                <div className="mb-0.5 flex items-center justify-between gap-2 text-[12px]">
+                <div className="mb-0.5 flex items-center justify-between gap-2 text-meta">
                   <span className="min-w-0 truncate font-medium text-on-surface">{c.author.username}</span>
                   <span className="shrink-0 text-on-surface-variant">{fmtAgo(c.createdAt)}</span>
                 </div>

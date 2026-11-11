@@ -42,7 +42,7 @@ export function CopyLinkButton({
         className={
           feedback
             ? [
-                "absolute right-0 top-full z-50 mt-1 whitespace-nowrap rounded-lg border px-2.5 py-1 text-meta",
+                "absolute right-0 top-full z-50 mt-1 whitespace-nowrap rounded-sm border px-2.5 py-1 text-meta",
                 feedback === "failed"
                   ? "border-error bg-error-container text-on-error-container"
                   : "border-outline-variant bg-surface-container-lowest text-on-surface",

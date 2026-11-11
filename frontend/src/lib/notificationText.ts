@@ -125,7 +125,7 @@ function describeProjectRoleNotification(
 }
 
 /**
- * `all_tasks_closed` reads "All tasks in <project> are closed — mark the
+ * `all_tasks_closed` reads "All tasks in <project> are closed. Mark the
  * project Completed?" with no actor (the closer may be the recipient), and
  * `tasks_handed_over` reads "rina handed you 3 tasks and 1 epic in <project>"
  * (docs/archive/plans/feedback-round-lifecycle-spec.md, F3 and F5). Null when

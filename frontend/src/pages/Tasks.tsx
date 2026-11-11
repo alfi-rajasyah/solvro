@@ -14,6 +14,8 @@ import { Alert, AlertDescription } from "@/components/reui/alert";
 import { Tabs } from "@/components/Tabs";
 import { TaskFormModal } from "@/components/TaskFormModal";
 import { TaskStatusChip } from "@/components/StatusChip";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { dateToDay } from "@/lib/dateField";
 import { isTaskShownOverdue, showsPlainDue } from "@/lib/taskOverdue";
@@ -218,15 +220,24 @@ export function Tasks() {
         header: ({ column }) => <DataGridColumnHeader column={column} title="Title" />,
         enableSorting: false,
         cell: ({ row }) => (
-          <span
-            className={
+          // A real button so the keyboard can open the same edit the row
+          // click opens.
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditTask(row.original);
+            }}
+            className={[
+              "rounded-sm text-left font-medium hover:text-primary",
+              FIELD_FOCUS,
               row.original.status === "CANCELLED"
-                ? "font-medium text-on-surface-variant line-through"
-                : "font-medium text-on-surface"
-            }
+                ? "text-on-surface-variant line-through"
+                : "text-on-surface",
+            ].join(" ")}
           >
             {row.original.title}
-          </span>
+          </button>
         ),
         meta: { skeleton: <Skeleton className="h-3.5 w-32" /> },
       },
@@ -304,8 +315,8 @@ export function Tasks() {
             <span
               className={
                 isOverdue
-                  ? "text-[12px] font-bold text-error"
-                  : "text-[12px] text-on-surface-variant"
+                  ? "text-meta font-bold text-error"
+                  : "text-meta text-on-surface-variant"
               }
             >
               {fmt(task.dueDate, showsPlainDue(task.status, projectStatus))}
@@ -460,7 +471,7 @@ export function Tasks() {
 
 // Done and cancelled tasks show the plain date — "Nd late" would misreport a finished task.
 function fmt(iso: string | null, done: boolean) {
-  return (done ? fmtDay(iso) : fmtDue(iso)) || "—";
+  return (done ? fmtDay(iso) : fmtDue(iso)) || EMPTY_VALUE;
 }
 
 function startOfToday() {

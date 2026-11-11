@@ -36,9 +36,9 @@ const BASE_DEAL = {
   productSolution: "Data Platform",
 };
 
-// PRD §2.10's exact format: "From pipeline deal: {title} — {product_solution}
-// — Rp {value}" (finding N8).
-const NOTE = `From pipeline deal: ${BASE_DEAL.title} — ${BASE_DEAL.productSolution} — ${formatIDR(BASE_DEAL.dealValue)}`;
+// PRD §2.10's format, with a middle dot where the PRD wrote an em dash:
+// "From pipeline deal: {title} · {product_solution} · Rp {value}" (finding N8).
+const NOTE = `From pipeline deal: ${BASE_DEAL.title} · ${BASE_DEAL.productSolution} · ${formatIDR(BASE_DEAL.dealValue)}`;
 
 describe("computeHandoffDefaults", () => {
   it("prefills name verbatim and description as just the provenance note when the deal has none", () => {

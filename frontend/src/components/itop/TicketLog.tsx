@@ -2,6 +2,7 @@
 // (Task 5.4, docs/archive/plans/itop-integration.md). Entries render in the
 // order the backend returns them ("newest last" per the API contract, same
 // reading order as a chat thread) — this component never reorders them.
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { useId, useState, type FormEvent } from "react";
 import { fmtDateTime } from "@/lib/formatDate";
 import type { ItopTicketLogEntry } from "@/lib/queries";
@@ -103,7 +104,7 @@ export function TicketLog({
         className="mt-3 space-y-2.5"
       >
         {entries.length === 0 && (
-          <li className="text-[13px] text-on-surface-variant">
+          <li className="text-xs text-on-surface-variant">
             No {activeTab} log entries yet.
           </li>
         )}
@@ -112,9 +113,9 @@ export function TicketLog({
             key={i}
             className="rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2"
           >
-            <div className="mb-0.5 flex items-center justify-between gap-2 text-[12px] text-on-surface-variant">
+            <div className="mb-0.5 flex items-center justify-between gap-2 text-meta text-on-surface-variant">
               <span className="min-w-0 truncate font-medium text-on-surface">
-                {entry.author ?? "—"}
+                {entry.author ?? EMPTY_VALUE}
               </span>
               <span className="shrink-0">
                 {fmtDateTime(entry.date)}
@@ -172,7 +173,7 @@ export function TicketLog({
               {adding ? "Adding…" : "Add entry"}
             </button>
           </div>
-          {error && <p className="text-[12px] text-error">{error}</p>}
+          {error && <p className="text-meta text-error">{error}</p>}
         </form>
       )}
     </div>

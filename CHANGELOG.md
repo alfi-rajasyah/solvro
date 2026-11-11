@@ -15,6 +15,51 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-11-10 — A quality filter for interface and copy work
+
+- `docs/reference/antislop.md` (new): the antislop rule set (v3.2.27, MIT, unmodified upstream file), kept in the repository so everyone working on the interface reads the same rules. It is a filter applied after `docs/DESIGN.md`, not a second design system.
+- `CLAUDE.md`, `frontend/CLAUDE.md`, `.claude/agents/` (the implementation and review instructions): interface and user-facing copy changes are now checked against that filter while they are written, with `docs/DESIGN.md` taking precedence wherever the two disagree, and a phase that changes the frontend ends with the filter's delivery checklist run against the live app.
+- `docs/DESIGN.md`: records the design's intensity setting (calm, uniform, minimal motion) that the filter reads, as an owner decision rather than a value derived from code.
+- `docs/plans/antislop-audit-001-2026-11-10.md` (new): the first audit of the existing interface against the filter, 23 numbered findings, the owner's decisions on them, and the fix plan. The fixes are the entries below.
+- `.claude/scripts/gates.sh`: three new design guards. `design-on-primary` fails on white text over the solid green fill, `design-no-em-dash` on an em dash in text a user reads (comments are exempt), and `design-icon-hidden` on an icon element that is neither hidden from assistive technology nor a labelled control, and on one that is hidden while also being a control.
+
+### Changed — 2026-11-10 — Readable green, an accurate sign-in page, and copy without em dashes
+
+- `frontend/src/index.css`, `frontend/src/lib/themePreview.ts`, `frontend/src/lib/gantt/exportPdf.ts`, `frontend/src/lib/tokenContrast.test.ts`: the light-theme green changes from `#25823a` to `#1f7533`. The old value met AA contrast on white only and dropped to 3.8:1 on tinted cards and hovered rows; the new one holds 4.5:1 on every surface it is used on, and the contrast test now pins it against each of them. The dark-theme green is unchanged.
+- `frontend/src/pages/Login.tsx`: the sign-in page keeps its design; its copy now matches the product. The body line reads "Elitery's workspace for project delivery and the sales pipeline." instead of promising reports to customers, the third label reads "Sales pipeline" instead of "Customer reports", and a hardcoded version number that matched no build is gone. The page has a `main` landmark and a heading at every width, and the Google button always renders in English.
+- Interface copy across `frontend/src` (pages, components, `lib/helpContent.ts`, `lib/activityText.ts` and the other message sources): em dashes are rewritten as commas, colons, full stops or parentheses. The "no value" mark in tables and fact rows is now one en dash from a single constant, `frontend/src/lib/emptyValue.ts` (new).
+- `frontend/src/pages/Admin.tsx`: inactive users are no longer dimmed (the dimming took their text below AA contrast). They show a gray "Inactive" chip, which replaces "Disabled".
+- `frontend/src/pages/Overview.tsx`: rows under "Projects needing attention" lose the coloured left stripe, which repeated what the chips say, and wrap onto two lines on phones so the project name stays readable.
+- `frontend/src/components/pipeline/SolvroPipelineKanban.tsx`: the PoC column title is set in the body text colour; the amber stays on the column's top edge.
+- `frontend/src/components/daily-review/`: the note boxes have visible labels ("Note", "Operations note", "Title").
+- Links such as "View all", "View pipeline", "Open in iTop" and the Help guide links lose their decorative arrows. An arrow stays only where it states a move from one named thing to another.
+- `Modal`, `CommandPalette`, `MobileMoveSheet`, `Sidebar` and `RightSidebar`: the backdrop blur is removed, so overlays rely on the scrim tint alone; the project context panel is opaque.
+- Corners that were rounder than the standard are squared to it (`rounded-sm`), except board column wells. Most pixel-literal text sizes (12, 13, 15 and 17px) now use the named type roles; sizes on icons and sizes with no matching role are unchanged.
+- `e2e/tests/` and the unit tests beside the changed sources: assertions follow the new wording and heading levels.
+
+### Changed — 2026-11-11 — Settings in tabs, a Services table, and one toolbar style
+
+- `frontend/src/pages/Settings.tsx`: Settings is split into tabs (Account, Appearance, Integrations, Service catalogue), with the open tab kept in the address (`?tab=`). Each setting is a row with its name and a one-line explanation on the left and its controls on the right, instead of a narrow stack of boxed cards. A tab you cannot use is not shown. The theme picker is three compact options announced as a radio group. `frontend/src/components/itop/TicketPanel.tsx`, `itop/board/TicketBoard.tsx`: the "save your token in Settings" links open the Integrations tab directly.
+- `frontend/src/components/services/ServiceMappingList.tsx`, `frontend/src/pages/views/ProjectServices.tsx`, `frontend/src/pages/CustomerDetail.tsx`: the Services tab on a project and on a customer is one table instead of a box per service, with real checkboxes, the ticked services grouped first, and the tools on the same row. The wording now says whose list is whose: a customer has "Subscribed" and "Not subscribed"; a project has "In this project" and "Not in this project", a "Customer subscription" column, and "Add customer's services" (was "Add all subscribed"). The admin form for a new catalogue service opens from an "Add service" button instead of sitting open at the bottom.
+- `frontend/src/components/services/ServiceCatalogueManager.tsx`: the catalogue in Settings uses the same toolbar, add form and vocabulary.
+- `frontend/src/lib/utils.ts` (`TOOLBAR_BUTTON_PRIMARY`, `TOOLBAR_BUTTON_OUTLINE`, `TOOLBAR_STAT`, `TOOLBAR_BOX`, new) and the pages that use them: every page's main "Add" button (Add task, Add epic, Add risk, New project, New customer, New opportunity, New ticket), the outlined buttons beside it and the Filter toggles share one style and one height, 32px, the height of the Gantt toolbar. They had been copied page by page and had drifted in text size, weight, height and hover colour; several hovered to white text on pale green in the light theme.
+- `frontend/src/pages/views/ProjectRisks.tsx`, `frontend/src/components/RiskScoreChip.tsx` (new), `pages/views/ProjectOverview.tsx`, `components/daily-review/ProjectCard.tsx`: on the Risks tab the High / Medium / Low / Open counters are outlined cards in the toolbar style with the colour on the number only (none at zero), so "Add risk" is the one solid element in the row. A risk's score is a standard chip ("16 · High") on every screen that lists risks, and the status dropdown shows its status colour as text.
+- `frontend/src/lib/helpContent.ts`: Help follows the new Settings and Services wording.
+
+### Fixed — 2026-11-11 — Chips no longer wrap inside table cells
+
+- `frontend/src/components/StatusChip.tsx`: a chip is always one line. In narrow columns of the Pipeline list, chips such as "Idle · 27 wd" and "Technical Clarification" wrapped into three-line blobs; the column now grows to fit the chip.
+
+### Fixed — 2026-11-10 — Keyboard, screen-reader and touch gaps
+
+- `frontend/src/index.css`: buttons and other controls show a pointer cursor, and disabled ones a not-allowed cursor, through one base rule (Tailwind v4 no longer does this by default).
+- `frontend/src/index.css` (`tap-target`, new) and the top bar, sidebar, tabs, week arrows, close buttons, board menus and icon-only row buttons: small controls get a hit area of at least 44px on touch input. Their size on screen and desktop density are unchanged.
+- Icons across the app are hidden from screen readers, which used to read the icon's name before each label ("dashboard Overview"). Icon-only controls that had no name now have one.
+- `TopBar`, `AssigneeAvatar`, `MobileMoveSheet`: initials and checks on the green fill use the matching text token; white on the dark-theme green was 2.86:1.
+- `TaskPanel`, `EpicPanel`, `TaskFormModal`, `CommentMentions`: inputs that hid their outline now show the app's focus ring.
+- `frontend/src/pages/Tasks.tsx`, `frontend/src/components/pipeline/PipelineAnalyticsSection.tsx`: the task title and the PIC name are real buttons, so what a row click did is reachable from the keyboard.
+- Headings: every page has a first-level heading (the project pages and Not found had none) and card, column and section titles are second-level, so no page skips a level.
+
 ### Added — 2026-11-10 — Archive a deal that was never really decided
 
 - `backend/prisma/schema.prisma`, `backend/prisma/migrations/20261110130000_pipeline_outcome_archived/` (new): `PipelineOutcome` gains `ARCHIVED`, for parking a dead deal — a duplicate, a test entry, imported junk — without picking Won, Lost or Cancelled.

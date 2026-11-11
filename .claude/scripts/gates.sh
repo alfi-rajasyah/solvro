@@ -286,6 +286,32 @@ design_check design-focus-ring "border-primary focus style (use FIELD_FOCUS / FI
 design_check design-caps-role "hand-rolled caps label (use text-label-caps uppercase)" \
   "$(design_grep "uppercase[^\"'\`]*tracking-wider|tracking-wider[^\"'\`]*uppercase")"
 
+# antislop guards (2026-11-10, docs/archive/plans/antislop-audit-001-2026-11-10.md,
+# items 2, 5 and 8). Same scope as the design guards: app code, no vendored
+# ui/reui, no tests.
+# 5. Text on a solid primary fill uses its token pair — white on dark-theme
+#    green is 2.86:1.
+design_check design-on-primary "text-white on bg-primary (use text-on-primary)" \
+  "$(design_grep "bg-primary([^/-]|\$)[^\"'\`]*text-white|text-white[^\"'\`]*bg-primary([^/-]|\$)")"
+# 6 and 7 read whole files (a tag or a comment can span lines), so they use
+# perl rather than the line grep above.
+design_perl() { # design_perl <perl -ne body run once per file, file in $_>
+  find frontend/src -type f \( -name '*.ts' -o -name '*.tsx' \) \
+    ! -path 'frontend/src/components/ui/*' ! -path 'frontend/src/components/reui/*' \
+    ! -name '*.test.ts' ! -name '*.test.tsx' -print0 \
+    | xargs -0 perl -CSD -Mutf8 -0777 -ne "$1" 2>&1
+}
+# 6. No em dash in text a user reads. Comments are blanked first, so prose in
+#    comments is free; the "no value" mark is EMPTY_VALUE (lib/emptyValue.ts).
+design_check design-no-em-dash "em dash in user-facing text (rewrite the sentence; an empty value is EMPTY_VALUE)" \
+  "$(design_perl 's{/\*.*?\*/}{ (my $c = $&) =~ s/[^\n]//g; $c }gse; s{(^|[^:"\x27`])//[^\n]*}{$1}gm; my $n = 0; for my $l (split /\n/) { $n++; print "$ARGV:$n: $l\n" if $l =~ /\x{2014}/ }')"
+# 7. Icon ligatures are text: a material-symbols element is hidden from
+#    assistive tech, or is itself a labelled control. Never both: aria-hidden
+#    on an element that is a control (or carries the only name) hides it from
+#    the people who need the name. The tag matcher steps over the ">" of "=>".
+design_check design-icon-hidden "material-symbols-outlined element without aria-hidden (aria-label when it is the control), or aria-hidden on a control" \
+  "$(design_perl 'while (/<(?:span|button|i)\b((?:[^>]|(?<==)>)*?material-symbols-outlined(?:[^>]|(?<==)>)*?)>/gs) { my $a = $1; my $n = (substr($_, 0, $-[0]) =~ tr/\n//) + 1; if ($a !~ /aria-hidden|aria-label/) { print "$ARGV:$n: icon element is neither hidden nor labelled\n" } elsif ($a =~ /aria-hidden/ && $a =~ /aria-label|\brole=|tabIndex|\{\.\.\.attributes\}|onClick/) { print "$ARGV:$n: aria-hidden on a control or a named icon\n" } }')"
+
 # ---------- spine check (always) ----------
 # Shared spine of the projects page + app-wide hot surfaces. Touching any of these
 # requires an instant opus review of the task (--performed-review=opus).

@@ -285,8 +285,8 @@ function SwimlaneCard({ deal }: { deal: SwimlaneDeal }) {
 
 function EmptySwimlaneState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-outline-variant px-6 py-14 text-center">
-      <span className="material-symbols-outlined text-3xl text-on-surface-variant">view_agenda</span>
+    <div className="flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-outline-variant px-6 py-14 text-center">
+      <span aria-hidden="true" className="material-symbols-outlined text-3xl text-on-surface-variant">view_agenda</span>
       <p className="text-sm font-semibold text-on-surface">No opportunities yet</p>
       <p className="max-w-xs text-xs text-on-surface-variant">
         Opportunities you create will appear here, grouped by PIC and stage.

@@ -189,7 +189,7 @@ export function PipelineClosed({ deals }: PipelineClosedProps) {
           return (
             <div key={outcome} className="flex flex-col">
               <div className="flex items-center gap-2 rounded-t-xl border border-b-0 border-outline-variant bg-surface-container px-3 py-2">
-                <h3 className="text-sm font-bold text-on-surface">{OUTCOME_LABELS[outcome]}</h3>
+                <h2 className="text-sm font-bold text-on-surface">{OUTCOME_LABELS[outcome]}</h2>
                 <Chip tone={COLUMN_TONE[outcome]}>{columnDeals.length}</Chip>
               </div>
               <div className="max-h-[calc(100vh-360px)] flex-1 space-y-2 overflow-y-auto rounded-b-xl border border-outline-variant bg-surface-container-lowest p-2">
@@ -269,7 +269,7 @@ function ClosedDealCard({
               to={`/projects/${deal.projectId}`}
               className="inline-flex items-center gap-1 text-meta font-semibold text-primary hover:underline"
             >
-              <span className="material-symbols-outlined text-[14px]">arrow_forward</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[14px]">arrow_forward</span>
               View project
             </Link>
           ) : (
@@ -279,7 +279,7 @@ function ClosedDealCard({
                 onClick={onRequestHandoff}
                 className="inline-flex items-center gap-1 text-meta font-semibold text-primary hover:underline"
               >
-                <span className="material-symbols-outlined text-[14px]">add_circle</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[14px]">add_circle</span>
                 Create project
               </button>
             )
@@ -314,7 +314,7 @@ function SummaryTile({ label, value, hint, icon, tone }: SummaryTileProps) {
     <div className="rounded-sm border border-outline-variant bg-surface-container p-4">
       <div className="flex items-center justify-between gap-2">
         <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
-        <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
+        <span aria-hidden="true" className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
         <span className="truncate text-2xl font-bold tabular-nums text-on-surface">{value}</span>
@@ -326,8 +326,8 @@ function SummaryTile({ label, value, hint, icon, tone }: SummaryTileProps) {
 
 function EmptyClosedState() {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-outline-variant px-6 py-14 text-center">
-      <span className="material-symbols-outlined text-3xl text-on-surface-variant">inventory_2</span>
+    <div className="flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-outline-variant px-6 py-14 text-center">
+      <span aria-hidden="true" className="material-symbols-outlined text-3xl text-on-surface-variant">inventory_2</span>
       <p className="text-sm font-semibold text-on-surface">No closed deals yet</p>
       <p className="max-w-xs text-xs text-on-surface-variant">
         Deals you close as Won, Lost, Cancelled or Archived will appear here, grouped by outcome.

@@ -65,5 +65,5 @@ export function formErrorMessage(
   for (const [field, message] of Object.entries(fieldErrorsFrom(err))) {
     if (!rendered.has(field)) items.push(`${fieldLabel(field)}: ${message}`);
   }
-  return items.length > 0 ? `${base} — ${items.join("; ")}` : base;
+  return items.length > 0 ? `${base} (${items.join("; ")})` : base;
 }

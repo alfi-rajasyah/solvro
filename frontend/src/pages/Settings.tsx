@@ -1,5 +1,8 @@
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { FIELD_FOCUS } from "@/lib/utils";
 import { useState, type CSSProperties, type FormEvent } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Tabs } from "@/components/Tabs";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { CardGridSkeleton } from "@/components/skeletons";
 import { ServiceCatalogueManager } from "@/components/services/ServiceCatalogueManager";
@@ -54,120 +57,193 @@ export function Settings() {
     }
   }
 
+  const [searchParams, setSearchParams] = useSearchParams();
+  // A personal token is only usable for ticket writes, which need task:write
+  // (the PUT/DELETE routes 403 otherwise), and only when an iTop connection
+  // is configured at all.
+  const canUseItop = hasPermission(user, "task:write");
+  const itopToken = useMyItopToken();
+  const showIntegrations = canUseItop && (itopToken.isLoading || !!itopToken.data?.configured);
+  const isAdmin = hasPermission(user, "*");
+
   if (!user) return null;
 
+  // One section group per tab. The tab lives in the URL (`?tab=`), so a link
+  // can land on it (the ticket screens point at `?tab=integrations`) and a
+  // reload stays put. A tab the viewer cannot use is not offered: Integrations
+  // needs task:write and a configured iTop connection, the catalogue needs
+  // admin rights.
+  const tabs: { key: SettingsTab; label: string }[] = [
+    { key: "account", label: "Account" },
+    { key: "appearance", label: "Appearance" },
+    ...(showIntegrations ? [{ key: "integrations" as const, label: "Integrations" }] : []),
+    ...(isAdmin ? [{ key: "catalogue" as const, label: "Service catalogue" }] : []),
+  ];
+  const requested = searchParams.get("tab");
+  const active: SettingsTab = tabs.some((t) => t.key === requested) ? (requested as SettingsTab) : "account";
+
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <header>
+    <div className="mx-auto max-w-5xl">
+      <header className="pb-4">
         <h1 className="font-display text-h1 text-on-surface">Settings</h1>
         <p className="text-sm text-on-surface-variant">
-          Manage your account profile and password.
+          Your account, appearance and integrations.
         </p>
       </header>
 
-      <ThemeCard />
+      <Tabs
+        items={tabs}
+        active={active}
+        onChange={(key) => setSearchParams(key === "account" ? {} : { tab: key }, { replace: true })}
+      />
 
-      <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-        <h2 className="mb-3 font-display text-label-caps uppercase text-on-surface">
-          Profile
-        </h2>
-        <dl className="grid grid-cols-1 gap-y-2 text-sm md:grid-cols-[140px_1fr]">
-          <dt className="text-on-surface-variant">Username</dt>
-          <dd className="text-on-surface">{user.username}</dd>
+      {active === "account" && (
+        <>
+          <SettingsRow
+            id="settings-profile"
+            title="Profile"
+            description="Username, email, and role can only be changed by an Admin."
+            flush
+          >
+            <dl className="grid grid-cols-[96px_minmax(0,1fr)] gap-x-4 gap-y-2 text-sm">
+              <dt className="text-on-surface-variant">Username</dt>
+              <dd className="truncate text-on-surface">{user.username}</dd>
 
-          <dt className="text-on-surface-variant">Email</dt>
-          <dd className="text-on-surface">{user.email}</dd>
+              <dt className="text-on-surface-variant">Email</dt>
+              <dd className="truncate text-on-surface">{user.email}</dd>
 
-          <dt className="text-on-surface-variant">Role</dt>
-          <dd>
-            <span className="rounded-full bg-surface-container-low px-2 py-0.5 font-display text-label-caps uppercase text-on-surface-variant">
-              {user.role}
-            </span>
-          </dd>
-        </dl>
-        <p className="mt-3 text-[12px] text-on-surface-variant">
-          Username, email, and role can only be changed by an Admin.
-        </p>
-      </section>
+              <dt className="text-on-surface-variant">Role</dt>
+              <dd>
+                <span className="rounded-full bg-surface-container-high px-2 py-0.5 font-display text-label-caps uppercase text-on-surface-variant">
+                  {user.role}
+                </span>
+              </dd>
+            </dl>
+          </SettingsRow>
 
-      {/* A personal token is only usable for ticket writes, which need task:write
-          (the PUT/DELETE routes 403 otherwise) — so the section is hidden without it. */}
-      {hasPermission(user, "task:write") && <ItopTokenSection />}
+          <SettingsRow
+            id="settings-password"
+            title="Change password"
+            description="At least 8 characters, different from the current one. Changing it signs out your other sessions."
+          >
+            {success && (
+              <Alert variant="success" className="mb-3">
+                <AlertDescription>Password updated.</AlertDescription>
+              </Alert>
+            )}
+            {error && (
+              <Alert variant="destructive" className="mb-3">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
 
-      {/* The catalogue is global and its writes are admin-only on the server. */}
-      {hasPermission(user, "*") && (
-        <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-          <h2 className="mb-3 font-display text-label-caps uppercase text-on-surface">
-            Service Catalogue
-          </h2>
-          <ServiceCatalogueManager />
-        </section>
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <Field label="Current password" required>
+                <input
+                  type="password"
+                  value={currentPassword}
+                  onChange={(e) => setCurrentPassword(e.target.value)}
+                  autoComplete="current-password"
+                  required
+                  className={INPUT_CLASS}
+                />
+              </Field>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <Field label="New password" required>
+                  <input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                    className={INPUT_CLASS}
+                  />
+                </Field>
+                <Field label="Confirm new password" required>
+                  <input
+                    type="password"
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    autoComplete="new-password"
+                    minLength={8}
+                    required
+                    className={INPUT_CLASS}
+                  />
+                </Field>
+              </div>
+              <div className="flex justify-end">
+                <button type="submit" disabled={change.isPending} className={PRIMARY_BUTTON_CLASS}>
+                  {change.isPending ? "Saving…" : "Update password"}
+                </button>
+              </div>
+            </form>
+          </SettingsRow>
+        </>
       )}
 
-      <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-        <h2 className="mb-3 font-display text-label-caps uppercase text-on-surface">
-          Change password
-        </h2>
+      {active === "appearance" && <ThemeRow />}
 
-        {success && (
-          <Alert variant="success" className="mb-3">
-            <AlertDescription>Password updated.</AlertDescription>
-          </Alert>
-        )}
-        {error && (
-          <Alert variant="destructive" className="mb-3">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+      {active === "integrations" && <ItopTokenSection />}
 
-        <form onSubmit={handleSubmit} className="space-y-3">
-          <Field label="Current password" required>
-            <input
-              type="password"
-              value={currentPassword}
-              onChange={(e) => setCurrentPassword(e.target.value)}
-              autoComplete="current-password"
-              required
-              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
-            />
-          </Field>
-          <Field label="New password" required>
-            <input
-              type="password"
-              value={newPassword}
-              onChange={(e) => setNewPassword(e.target.value)}
-              autoComplete="new-password"
-              minLength={8}
-              required
-              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
-            />
-            <p className="mt-1 text-[12px] text-on-surface-variant">
-              At least 8 characters. Must differ from the current password.
-            </p>
-          </Field>
-          <Field label="Confirm new password" required>
-            <input
-              type="password"
-              value={confirmPassword}
-              onChange={(e) => setConfirmPassword(e.target.value)}
-              autoComplete="new-password"
-              minLength={8}
-              required
-              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
-            />
-          </Field>
-          <div className="flex justify-end">
-            <button
-              type="submit"
-              disabled={change.isPending}
-              className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-60"
-            >
-              {change.isPending ? "Saving…" : "Update password"}
-            </button>
-          </div>
-        </form>
-      </section>
+      {/* The catalogue is global and its writes are admin-only on the server. */}
+      {active === "catalogue" && (
+        <SettingsRow
+          id="settings-catalogue"
+          title="Service Catalogue"
+          description="Workspace-wide. Admins only."
+          wide
+          flush
+        >
+          <ServiceCatalogueManager />
+        </SettingsRow>
+      )}
     </div>
+  );
+}
+
+type SettingsTab = "account" | "appearance" | "integrations" | "catalogue";
+
+const INPUT_CLASS = `w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`;
+const PRIMARY_BUTTON_CLASS =
+  "rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-60";
+
+// One settings section: its name and a one-line explanation on the left, its
+// controls on the right, a hairline above. Rows instead of boxed cards, so
+// the page reads as one list and uses the width (hierarchy from 1px borders,
+// docs/DESIGN.md §4). Below `md:` the two columns stack. `wide` lets the
+// controls take the whole right column (the catalogue table); `flush` drops
+// the top hairline for the first row under the tab strip, which already draws one.
+function SettingsRow({
+  id,
+  title,
+  description,
+  wide,
+  flush,
+  children,
+}: {
+  id: string;
+  title: string;
+  description?: React.ReactNode;
+  wide?: boolean;
+  flush?: boolean;
+  children: React.ReactNode;
+}) {
+  return (
+    <section
+      aria-labelledby={id}
+      className={`grid grid-cols-1 gap-x-10 gap-y-3 py-6 md:grid-cols-[220px_minmax(0,1fr)] ${
+        flush ? "" : "border-t border-outline-variant"
+      }`}
+    >
+      <div>
+        <h2 id={id} className="font-display text-label-caps uppercase leading-5 text-on-surface">
+          {title}
+        </h2>
+        {description && <p className="mt-1 text-meta text-on-surface-variant">{description}</p>}
+      </div>
+      <div className={wide ? "min-w-0" : "min-w-0 max-w-xl"}>{children}</div>
+    </section>
   );
 }
 
@@ -187,7 +263,11 @@ function ItopTokenSection() {
   const [confirmingRemove, setConfirmingRemove] = useState(false);
 
   if (isLoading) {
-    return <CardGridSkeleton count={1} gridClassName="grid-cols-1" />;
+    return (
+      <SettingsRow id="settings-itop" title="iTop" flush>
+        <CardGridSkeleton count={1} gridClassName="grid-cols-1" />
+      </SettingsRow>
+    );
   }
   if (!token || !token.configured) return null;
 
@@ -216,24 +296,25 @@ function ItopTokenSection() {
   }
 
   return (
-    <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-      <h2 className="mb-3 font-display text-label-caps uppercase text-on-surface">
-        iTop
-      </h2>
-
+    <SettingsRow
+      id="settings-itop"
+      title="iTop"
+      flush
+      description="Your personal token lets you act on tickets under your own name. Without one, tickets are read-only for you; the application token never writes."
+    >
       {token.unreadable ? (
         <Alert variant="destructive" className="mb-3">
           <AlertDescription>
-            Your stored token can no longer be read — enter it again.
+            Your stored token can no longer be read. Enter it again.
           </AlertDescription>
         </Alert>
       ) : (
         token.set && (
           <p className="mb-3 flex items-center gap-1 text-sm text-on-surface">
-            <span className="material-symbols-outlined text-[16px] text-chip-emerald-text">
+            <span aria-hidden="true" className="material-symbols-outlined text-[16px] text-chip-emerald-text">
               check_circle
             </span>
-            Valid · {token.personName ?? "—"}
+            Valid · {token.personName ?? EMPTY_VALUE}
             {token.checkedAt && ` · checked ${fmtAgo(token.checkedAt)}`}
             {token.expiresAt && ` · expires ${fmtDateTime(token.expiresAt)}`}
           </p>
@@ -255,30 +336,29 @@ function ItopTokenSection() {
             placeholder={token.set ? "•••••••• (set)" : "scope REST/JSON"}
             spellCheck={false}
             autoComplete="off"
-            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`}
+            className={INPUT_CLASS}
           />
         </Field>
-        <p className="text-[12px] text-on-surface-variant">
-          Create it in iTop under My Account › Personal tokens. Without a token, tickets are
-          read-only for you; the application token never writes.
+        <p className="text-meta text-on-surface-variant">
+          Create it in iTop under My Account › Personal tokens.
         </p>
         <div className="flex items-center justify-end gap-2">
           {token.set &&
             (confirmingRemove ? (
-              <span className="flex items-center gap-2 text-[12px] text-on-surface-variant">
+              <span className="flex items-center gap-2 text-meta text-on-surface-variant">
                 Remove your token?
                 <button
                   type="button"
                   onClick={() => void handleRemove()}
                   disabled={remove.isPending}
-                  className="font-display text-[12px] font-bold text-error underline disabled:opacity-50"
+                  className="font-display text-meta font-bold text-error underline disabled:opacity-50"
                 >
                   {remove.isPending ? "Removing…" : "Confirm"}
                 </button>
                 <button
                   type="button"
                   onClick={() => setConfirmingRemove(false)}
-                  className="font-display text-[12px] font-bold text-on-surface-variant underline"
+                  className="font-display text-meta font-bold text-on-surface-variant underline"
                 >
                   Cancel
                 </button>
@@ -295,97 +375,96 @@ function ItopTokenSection() {
           <button
             type="submit"
             disabled={save.isPending || !draft.trim()}
-            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-60"
+            className={PRIMARY_BUTTON_CLASS}
           >
             {save.isPending ? "Saving…" : "Save"}
           </button>
         </div>
       </form>
-    </section>
+    </SettingsRow>
   );
 }
 
 
 function ThemeSwatch({ scheme }: { scheme: "light" | "dark" }) {
   return (
-    <div
+    <span
       className={`flex h-full bg-background ${scheme === "dark" ? "dark" : ""}`}
       style={scheme === "light" ? (LIGHT_PREVIEW_VARS as CSSProperties) : undefined}
     >
-      <div className="w-1/4 bg-sidebar" />
-      <div className="flex flex-1 flex-col gap-1 p-1.5">
-        <div className="h-1.5 w-1/2 rounded-sm bg-primary" />
-        <div className="flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest" />
-      </div>
-    </div>
+      <span className="block w-1/4 bg-sidebar" />
+      <span className="flex flex-1 flex-col gap-1 p-1">
+        <span className="block h-1 w-1/2 rounded-sm bg-primary" />
+        <span className="block flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest" />
+      </span>
+    </span>
   );
 }
 
-function ThemeCard() {
+function ThemeRow() {
   const { choice, resolved, setChoice } = useTheme();
-  const options: { key: ThemeChoice; label: string; icon: string; hint: string }[] = [
-    { key: "light", label: "Light", icon: "light_mode", hint: "Always light" },
-    { key: "dark", label: "Dark", icon: "dark_mode", hint: "Always dark" },
-    {
-      key: "system",
-      label: "System",
-      icon: "computer",
-      hint: "Follow OS preference",
-    },
+  const options: { key: ThemeChoice; label: string; hint: string }[] = [
+    { key: "light", label: "Light", hint: "Always light" },
+    { key: "dark", label: "Dark", hint: "Always dark" },
+    { key: "system", label: "System", hint: "Follows your device" },
   ];
   return (
-    <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-      <h2 className="mb-1 font-display text-label-caps uppercase text-on-surface">
-        Appearance
-      </h2>
-      <p className="mb-3 text-[12px] text-on-surface-variant">
-        Currently rendering in <strong className="text-on-surface">{resolved}</strong> mode.
-      </p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <SettingsRow
+      id="settings-appearance"
+      title="Appearance"
+      flush
+      description={
+        <>
+          Currently rendering in <strong className="text-on-surface">{resolved}</strong> mode.
+        </>
+      }
+    >
+      <div role="radiogroup" aria-labelledby="settings-appearance" className="grid grid-cols-1 gap-2 sm:grid-cols-3">
         {options.map((opt) => {
           const active = choice === opt.key;
           return (
             <button
               key={opt.key}
               type="button"
+              role="radio"
+              aria-checked={active}
               onClick={() => setChoice(opt.key)}
               className={[
-                "flex flex-col gap-2 rounded-sm border p-3 text-left transition-colors",
+                "flex items-center gap-3 rounded-sm border p-2 text-left transition-colors",
+                FIELD_FOCUS,
                 active
                   ? "border-primary bg-primary/5"
                   : "border-outline-variant bg-surface-container-lowest hover:border-primary/40",
               ].join(" ")}
             >
-              <div className="flex items-center justify-between">
-                <span className="font-display text-label-caps uppercase text-on-surface">
-                  {opt.label}
-                </span>
-                {active ? (
-                  <span className="material-symbols-outlined text-base text-primary">check_circle</span>
-                ) : (
-                  <span className={`material-symbols-outlined text-base text-on-surface-variant`}>{opt.icon}</span>
-                )}
-              </div>
               {/* Theme preview tile */}
-              <div
-                className="h-12 rounded-sm border border-outline-variant overflow-hidden"
-                aria-hidden
+              <span
+                className="block h-9 w-14 shrink-0 overflow-hidden rounded-sm border border-outline-variant"
+                aria-hidden="true"
               >
                 {opt.key === "light" && <ThemeSwatch scheme="light" />}
                 {opt.key === "dark" && <ThemeSwatch scheme="dark" />}
                 {opt.key === "system" && (
-                  <div className="grid h-full grid-cols-2">
+                  <span className="grid h-full grid-cols-2">
                     <ThemeSwatch scheme="light" />
                     <ThemeSwatch scheme="dark" />
-                  </div>
+                  </span>
                 )}
-              </div>
-              <p className="text-xs text-on-surface-variant">{opt.hint}</p>
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-sm font-semibold text-on-surface">{opt.label}</span>
+                <span className="block truncate text-meta text-on-surface-variant">{opt.hint}</span>
+              </span>
+              {active && (
+                <span aria-hidden="true" className="material-symbols-outlined text-base text-primary">
+                  check_circle
+                </span>
+              )}
             </button>
           );
         })}
       </div>
-    </section>
+    </SettingsRow>
   );
 }
 

@@ -187,7 +187,7 @@ function TaskTimelineItem({
             ))}
           </div>
           <span
-            className={`text-[12px] ${overdue ? "font-bold text-error" : "text-on-surface-variant"}`}
+            className={`text-meta ${overdue ? "font-bold text-error" : "text-on-surface-variant"}`}
           >
             {fmtRange(task.startDate, task.dueDate)}
             {overdue && " · OVERDUE"}
@@ -210,7 +210,7 @@ function TaskTimelineItem({
           // `whitespace-pre-wrap` preserves operator-entered line breaks;
           // `wrap-break-word` is Tailwind v4's renamed `break-words` (see
           // TaskPanel.tsx's identical comment-body treatment).
-          <p className="mt-1 whitespace-pre-wrap wrap-break-word text-[12px] text-on-surface-variant">
+          <p className="mt-1 whitespace-pre-wrap wrap-break-word text-meta text-on-surface-variant">
             {task.description}
           </p>
         )}
@@ -219,7 +219,7 @@ function TaskTimelineItem({
             {subtasks.map((s) => (
               <li
                 key={s.id}
-                className={`text-[12px] ${s.status === "DONE" || s.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
+                className={`text-meta ${s.status === "DONE" || s.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"}`}
               >
                 {s.status === "DONE" ? "✓" : "·"} {s.title}
               </li>
