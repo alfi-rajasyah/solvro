@@ -304,7 +304,7 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
         {justWonDeal && (
           <Alert variant="success">
             <AlertDescription>
-              "{justWonDeal.title}" won — create the delivery project?
+              "{justWonDeal.title}" won. Create the delivery project?
             </AlertDescription>
             <AlertAction>
               <button
@@ -361,19 +361,14 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
                           "flex min-h-32 flex-col gap-2.5 rounded-xl bg-surface-container p-2",
                           // PoC is the flow spec's hand-off risk point (§3): the
                           // column carries the amber attention tone on its top
-                          // edge and label (docs/archive/plans/opportunity-flow-redesign.md D12).
+                          // edge (the title stays in the ink colour for contrast) (docs/archive/plans/opportunity-flow-redesign.md D12).
                           stage === "POC" ? "border-t-2 border-chip-amber-text" : "",
                         ].join(" ")}
                       >
                         <div className="flex items-center gap-2 px-1 pb-1">
-                          <h3
-                            className={[
-                              "text-sm font-bold",
-                              stage === "POC" ? "text-chip-amber-text" : "text-on-surface",
-                            ].join(" ")}
-                          >
+                          <h2 className="text-sm font-bold text-on-surface">
                             {STAGE_LABELS[stage]}
-                          </h3>
+                          </h2>
                           <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-meta text-on-surface-variant">
                             {stageDeals.length}
                           </span>
@@ -467,8 +462,8 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
 
 function EmptyBoardState({ onCreate }: { onCreate?: () => void }) {
   return (
-    <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-dashed border-outline-variant px-6 py-14 text-center">
-      <span className="material-symbols-outlined text-3xl text-on-surface-variant">monetization_on</span>
+    <div className="flex flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-outline-variant px-6 py-14 text-center">
+      <span aria-hidden="true" className="material-symbols-outlined text-3xl text-on-surface-variant">monetization_on</span>
       <p className="text-sm font-semibold text-on-surface">No opportunities yet</p>
       <p className="max-w-xs text-xs text-on-surface-variant">
         Opportunities you create will appear here, grouped by stage.
@@ -477,9 +472,9 @@ function EmptyBoardState({ onCreate }: { onCreate?: () => void }) {
         <button
           type="button"
           onClick={onCreate}
-          className="mt-2 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
+          className="mt-2 inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
         >
-          <span className="material-symbols-outlined text-base">add</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
           New opportunity
         </button>
       )}

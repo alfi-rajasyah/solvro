@@ -93,7 +93,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         title: "Notifications",
         points: [
           "The bell labelled \"Notifications\" in the top bar lists what happened on your projects and deals: assignments, comments, mentions, role changes, and handovers. Click one to open the project or deal it is about.",
-          "\"All tasks in <project> are closed — mark the project Completed?\" reaches the project's TAM and every project member, including the person who closed the last task if they are the TAM or a member. It appears once an Active project has no open task left. Solvro never completes the project for you: open the project, choose \"Edit project\", and set Status to Completed.",
+          "\"All tasks in <project> are closed. Mark the project Completed?\" reaches the project's TAM and every project member, including the person who closed the last task if they are the TAM or a member. It appears once an Active project has no open task left. Solvro never completes the project for you: open the project, choose \"Edit project\", and set Status to Completed.",
         ],
       },
       {
@@ -128,10 +128,10 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         title: "What it shows",
         points: [
           "Three tiles: Overdue and Due this week open the matching Tasks view; Open risks opens the Daily Review.",
-          "\"Projects needing attention\": up to 6 projects, overdue ones first, with overdue-task and open-risk counts. \"View all →\" opens the Projects page.",
+          "\"Projects needing attention\": up to 6 projects, overdue ones first, with overdue-task and open-risk counts. \"View all\" opens the Projects page.",
           "\"Portfolio timeline\": a year calendar of your projects. Use the arrows to change the year.",
           "\"Recent notes\": project and operations notes from the last 7 days. Add notes on the Daily Review page.",
-          "If you have Pipeline access, a \"Pipeline\" panel shows Pipeline Value, Active Deals, Won This Month, and On Hold, plus a bar of deals per stage. \"View pipeline →\" opens the board.",
+          "If you have Pipeline access, a \"Pipeline\" panel shows Pipeline Value, Active Deals, Won This Month, and On Hold, plus a bar of deals per stage. \"View pipeline\" opens the board.",
           "Projects marked \"Administrative project\" are left out of the counters, the timeline, and the attention list.",
           "Tasks in projects whose Status is On hold or Cancelled never count as Overdue or Due this week. When on-hold tasks are left out, the Overdue tile says \"<n> in on-hold projects not counted\". They count again when the project is reactivated.",
         ],
@@ -149,12 +149,12 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       {
         title: "Create or edit a project",
         points: [
-          "Click \"New project\" on the Projects page. Name and Customer are required — create the customer first on the Customers page.",
+          "Click \"New project\" on the Projects page. Name and Customer are required. Create the customer first on the Customers page.",
           "Optionally pick a Solution Architect and a Technical Account Manager, and set the Status. The Technical Account Manager is the project's TAM and owner; a Solution Architect sees the project but is not an owner.",
           "Set a WIP limit per Kanban column if you want the board to warn when a column is too full. Leave a field empty for no limit.",
           "Tick \"Administrative project\" for internal work that should stay out of the Overview, Executive, and overdue roll-ups.",
           "Inside a project, use \"Edit project\" or \"Delete project\" at the top. Delete removes all of the project's tasks, sections, labels, notes, risks, and reviews, and cannot be undone.",
-          "Filter the Projects page by customer with the \"Customer is …\" chip, or from a customer card's \"View projects →\".",
+          "Filter the Projects page by customer with the \"Customer is …\" chip, or from a customer card's \"View projects\".",
         ],
       },
       {
@@ -185,9 +185,9 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         title: "Project tabs",
         points: [
           "Overview: counters, the Progress S-Curve, tasks that need attention, status breakdown, top risks, and recent notes.",
-          "List, Kanban, Gantt, and Timeline: four views of the same tasks — see \"Project views\".",
+          "List, Kanban, Gantt, and Timeline: four views of the same tasks. See \"Project views\".",
           "Epics: group top-level tasks into larger deliverables and track done/total progress. Open one to edit its status, owner, dates, description, and stories.",
-          "Risks: the risk register. Services: the services and tools in scope.",
+          "Risks: the risk register. Services: the services this project delivers and their tools.",
         ],
       },
       {
@@ -276,7 +276,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
           "Add subtasks at the bottom of the panel. Tick one to mark it done; drag to reorder. Subtasks go one level deep.",
           "Click a label to toggle it. \"Add label\" creates a new project label with a color.",
           "Write in \"Write a comment…\" and send to discuss the task. Comment counts show on Kanban cards.",
-          "Link an iTop ticket from the task's \"iTop ticket\" field — see \"iTop tickets\".",
+          "Link an iTop ticket from the task's \"iTop ticket\" field. See \"iTop tickets\".",
         ],
       },
     ],
@@ -328,8 +328,9 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         title: "Services and tools",
         points: [
           "Tick a service to include it; type a tool name and press Enter or \",\" to add it. Backspace removes the last tool.",
-          "On a project's Services tab, \"Add all subscribed\" brings in every service the customer subscribes to.",
-          "You can add a new service to the catalogue from the bottom of the list. Manage the full catalogue in Settings.",
+          "A customer's Services tab lists what the customer subscribes to; a project's Services tab lists what that project delivers. The two are saved separately.",
+          "On a project's Services tab, \"Add customer's services\" brings in every service the customer subscribes to, with its tools.",
+          "Admins can add a new service to the catalogue with \"Add service\" above the list. Manage the full catalogue in Settings, on the Service catalogue tab.",
         ],
       },
     ],
@@ -364,7 +365,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       {
         title: "Weekly updates from here",
         points: [
-          "Each customer has a weekly sync row with \"Mid-week sync\" and \"Reflection sync\" buttons — see \"Weekly Sync\".",
+          "Each customer has a weekly sync row with \"Mid-week sync\" and \"Reflection sync\" buttons. See \"Weekly Sync\".",
           "When iTop is connected, the \"iTop today\" strip shows new, resolved, and SLA-breached tickets. \"Add to note\" copies a ticket into today's operations note.",
         ],
       },
@@ -418,7 +419,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         points: [
           "Open a customer's Tickets tab. Switch between Table and Board, and filter by Incidents or Requests. The Table view also filters by Ongoing, Resolved this week, and Mine.",
           "On the Board, drag a card to change its state: to Assigned to take it, to Pending (needs a reason), to Resolved (needs a resolution code and solution), or to Closed. A card moves only after iTop accepts the change.",
-          "Click a ticket to open its panel: take actions, read and add public or private log entries, and \"Open in iTop ↗\".",
+          "Click a ticket to open its panel: take actions, read and add public or private log entries, and \"Open in iTop\".",
           "\"New ticket\" creates a user request or incident in iTop.",
           "\"Refresh from iTop\" fetches the latest tickets now.",
         ],
@@ -466,7 +467,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
           "Won, Lost, Cancelled, Archived, and Hold are not stages. A deal that is closed or on hold keeps the stage it stalled in.",
           "Sub-status is \"In progress\" or \"Waiting Sales input\". Switch it with \"Waiting for Sales input\" and \"Input received\" (not offered in Waiting Response).",
           "A deal can carry one tag at a time: \"Hold\" or \"Delayed\". Use \"Hold\" / \"Release hold\" and \"Mark delayed\" / \"Clear delayed\".",
-          "The outcome is \"Won\", \"Lost\", \"Cancelled\", or \"Archived\" and is set only by \"Close deal\" — see \"Opportunities\".",
+          "The outcome is \"Won\", \"Lost\", \"Cancelled\", or \"Archived\" and is set only by \"Close deal\". See \"Opportunities\".",
           "A \"Client\" chip marks a deal in Waiting Response, where the next move is the client's; in every other stage it is the SA's.",
         ],
       },
@@ -534,13 +535,13 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         title: "Assign a PIC",
         points: [
           "A deal with no PIC shows \"Assign PIC\" on its page and sits in the Swimlane's \"Unassigned\" row. Until it has a PIC, users who only hold the \"own\" permissions cannot edit, move, link, or delete it.",
-          "With \"Edit own opportunities\" you can assign a PIC (yourself or someone else) only while the deal has none. To change the PIC of an assigned deal, use \"Edit\" — that needs \"Edit all opportunities\", or \"Edit own opportunities\" on a deal you are the PIC of.",
+          "With \"Edit own opportunities\" you can assign a PIC (yourself or someone else) only while the deal has none. To change the PIC of an assigned deal, use \"Edit\", which needs \"Edit all opportunities\", or \"Edit own opportunities\" on a deal you are the PIC of.",
         ],
       },
       {
         title: "Hand a won deal to delivery",
         points: [
-          "After \"Close as Won\", \"Deal won — create the delivery project?\" offers \"Create project\" (or \"Dismiss\"). The \"Create project\" button stays on the deal page until a project exists; afterwards \"View project\" opens it.",
+          "After \"Close as Won\", \"Deal won. Create the delivery project?\" offers \"Create project\" (or \"Dismiss\"). The \"Create project\" button stays on the deal page until a project exists; afterwards \"View project\" opens it.",
           "The project form is prefilled from the deal: the name, a description that notes the deal, the deal's PIC as Solution Architect, and the customer when its name matches a Customer exactly. You become the project's TAM unless you pick another.",
           "You need \"Manage projects\" and edit rights on the deal. The default SA role has no \"Manage projects\", so an SA cannot create the project: ask a TAM or an Admin with Pipeline edit rights, or ask an admin to grant \"Manage projects\" in Admin › Roles.",
         ],
@@ -603,8 +604,9 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       {
         title: "Service Catalogue",
         points: [
+          "The catalogue is the one shared list of services. A customer subscribes to services from it, and a project marks the ones it delivers.",
           "Only admins can add, edit, deactivate, and delete catalogue services; everyone else picks from the list on a customer or project.",
-          "Deleting a service removes it from every customer and project that uses it.",
+          "Deleting a service removes it from every customer that subscribes to it and every project it is in.",
         ],
       },
     ],
@@ -685,7 +687,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
         title: "Open your notifications",
         points: [
           "Click the \"Notifications\" bell in the top bar. Each entry opens the project, task, or deal it is about.",
-          "\"All tasks in <project> are closed — mark the project Completed?\" is a prompt to finish a project; see \"Run a project\".",
+          "\"All tasks in <project> are closed. Mark the project Completed?\" is a prompt to finish a project; see \"Run a project\".",
         ],
       },
       {
@@ -729,7 +731,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
       {
         title: "Finish it",
         points: [
-          "When the last open task of an Active project is closed, the TAM and members get \"All tasks in <project> are closed — mark the project Completed?\". Solvro never completes the project for you: set Status to Completed in \"Edit project\".",
+          "When the last open task of an Active project is closed, the TAM and members get \"All tasks in <project> are closed. Mark the project Completed?\". Solvro never completes the project for you: set Status to Completed in \"Edit project\".",
         ],
       },
       {
@@ -772,7 +774,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
       {
         title: "Close the last task",
         points: [
-          "When you close the last open task of an Active project, the TAM and project members (including you, if you are the TAM or a member) are asked \"All tasks in <project> are closed — mark the project Completed?\". Closing tasks while the project is Planning or On hold sends nothing.",
+          "When you close the last open task of an Active project, the TAM and project members (including you, if you are the TAM or a member) are asked \"All tasks in <project> are closed. Mark the project Completed?\". Closing tasks while the project is Planning or On hold sends nothing.",
         ],
       },
     ],
@@ -872,7 +874,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
       {
         title: "Hand a won deal to delivery",
         points: [
-          "After \"Close as Won\", \"Deal won — create the delivery project?\" offers \"Create project\". The form is prefilled from the deal. You need \"Manage projects\" and edit rights on the deal.",
+          "After \"Close as Won\", \"Deal won. Create the delivery project?\" offers \"Create project\". The form is prefilled from the deal. You need \"Manage projects\" and edit rights on the deal.",
         ],
       },
     ],

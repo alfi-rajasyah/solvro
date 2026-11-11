@@ -38,7 +38,7 @@ export function Modal({
 
   return createPortal(
     <div
-      className="fixed inset-0 z-100 flex items-stretch justify-center bg-inverse-surface/40 p-0 backdrop-blur-sm md:items-center md:p-4"
+      className="fixed inset-0 z-100 flex items-stretch justify-center bg-inverse-surface/40 p-0 md:items-center md:p-4"
       onMouseDown={onClose}
     >
       <div
@@ -61,10 +61,10 @@ export function Modal({
             <button
               type="button"
               onClick={onClose}
-              className="flex h-7 w-7 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
+              className="tap-target flex h-7 w-7 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
               aria-label="Close"
             >
-              <span className="material-symbols-outlined text-base">close</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
             </button>
           </header>
         )}

@@ -559,7 +559,7 @@ describe("describeActivity - project lifecycle", () => {
 
   it("all tasks closed", () => {
     const e = proj("all_tasks_closed", { done: 4, cancelled: 1 });
-    expect(text(e)).toBe("maya.putri closed the last open task: all tasks in Acme rollout are closed — mark the project Completed?");
+    expect(text(e)).toBe("maya.putri closed the last open task: all tasks in Acme rollout are closed. Mark the project Completed?");
     expect(describeActivity(e).parts.filter((p) => p.kind === "entity").map((p) => p.text)).toEqual(["Acme rollout"]);
     expect(text(proj("all_tasks_closed", null, null))).toContain("all tasks in the project are closed");
   });

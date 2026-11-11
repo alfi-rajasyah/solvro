@@ -103,7 +103,7 @@ function NavGroup({ label, items }: { label: string; items: ReadonlyArray<{ id: 
               href={`#${t.id}`}
               className="flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
-              <span className="material-symbols-outlined text-[18px]">{t.icon}</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[18px]">{t.icon}</span>
               {t.title}
             </a>
           </li>
@@ -126,7 +126,7 @@ function GuideSection({ guide, topicTitle }: { guide: HelpGuide; topicTitle: Rea
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-[20px] text-primary">{guide.icon}</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[20px] text-primary">{guide.icon}</span>
           <h3 id={`${guide.id}-title`} className="text-lg font-semibold text-on-surface">
             {guide.title}
           </h3>
@@ -135,7 +135,7 @@ function GuideSection({ guide, topicTitle }: { guide: HelpGuide; topicTitle: Rea
           <div className="flex flex-wrap gap-x-4 gap-y-1">
             {guide.links.map((l) => (
               <Link key={l.to} to={l.to} className={LINK_CLASS}>
-                {l.label} →
+                {l.label}
               </Link>
             ))}
           </div>
@@ -187,7 +187,7 @@ function HelpSection({ topic }: { topic: HelpTopic }) {
     >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div className="flex items-center gap-2">
-          <span className="material-symbols-outlined text-[20px] text-primary">{topic.icon}</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[20px] text-primary">{topic.icon}</span>
           <h3 id={`${topic.id}-title`} className="text-lg font-semibold text-on-surface">
             {topic.title}
           </h3>
@@ -197,7 +197,7 @@ function HelpSection({ topic }: { topic: HelpTopic }) {
             to={topic.route}
             className={LINK_CLASS}
           >
-            Open {topic.title} →
+            Open {topic.title}
           </Link>
         )}
       </div>

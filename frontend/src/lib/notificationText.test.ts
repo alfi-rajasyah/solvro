@@ -199,7 +199,7 @@ describe("describeNotification - lifecycle", () => {
   it("all tasks closed has no actor and links to the project", () => {
     const n = notif({ reason: "all_tasks_closed" as AppNotification["reason"] }, pe({ done: 3, cancelled: 0 }, "all_tasks_closed"));
     const s = describeNotification(n);
-    expect(s.text).toBe("All tasks in Acme rollout are closed — mark the project Completed?");
+    expect(s.text).toBe("All tasks in Acme rollout are closed. Mark the project Completed?");
     expect(s.parts.some((p) => p.kind === "actor")).toBe(false);
     expect(notificationHref(n)).toBe("/projects/7");
   });

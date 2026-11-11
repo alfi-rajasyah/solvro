@@ -206,7 +206,7 @@ test.describe("Notifications", () => {
     await bell.click();
     const nudge = page
       .getByTestId("notification-item")
-      .filter({ hasText: "are closed — mark the project Completed?" });
+      .filter({ hasText: "are closed. Mark the project Completed?" });
     await expect(nudge).toHaveCount(1);
     await expect(nudge).toContainText("All tasks in Notify Project");
     await nudge.click();

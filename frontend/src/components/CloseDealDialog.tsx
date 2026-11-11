@@ -113,7 +113,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
             type="button"
             onClick={onClose}
             disabled={close.isPending}
-            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -121,7 +121,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
             type="submit"
             form="close-deal-form"
             disabled={close.isPending}
-            className={`rounded-lg px-4 py-1.5 text-xs font-bold disabled:opacity-60 ${
+            className={`rounded-sm px-4 py-1.5 text-xs font-bold disabled:opacity-60 ${
               outcome === "WON"
                 ? "bg-primary text-on-primary hover:bg-primary/90"
                 : outcome === "ARCHIVED"
@@ -148,7 +148,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
             {OUTCOMES.map((o) => (
               <label
                 key={o}
-                className={`flex cursor-pointer flex-col items-center gap-1 rounded-lg border px-3 py-3 text-center text-xs font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/30 ${
+                className={`flex cursor-pointer flex-col items-center gap-1 rounded-sm border px-3 py-3 text-center text-xs font-semibold transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary/30 ${
                   outcome === o
                     ? "border-primary bg-primary/10 text-primary"
                     : "border-outline-variant text-on-surface-variant hover:bg-surface-container"
@@ -190,7 +190,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
                 onChange={(e) => setReasonCategory(e.target.value as PipelineOutcomeReason)}
                 required
                 {...invalidProps("reasonCategory")}
-                className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               >
                 <option value="">Select a reason…</option>
                 {reasons.map((r) => (
@@ -219,7 +219,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
               rows={3}
               maxLength={500}
               {...invalidProps("reason")}
-              className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             />
           </label>
           {fieldErrors.reason && (

@@ -33,6 +33,7 @@ import {
   type ImportOpportunitiesResult,
   type ImportOpportunityRow,
 } from "@/lib/queries";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 
 interface Props {
   open: boolean;
@@ -247,7 +248,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
               type="button"
               onClick={handleClose}
               disabled={importMutation.isPending}
-              className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+              className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
             >
               Cancel
             </button>
@@ -255,7 +256,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
               type="button"
               onClick={handleImport}
               disabled={validCount === 0 || importMutation.isPending}
-              className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
+              className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
             >
               {importMutation.isPending
                 ? "Importing…"
@@ -266,7 +267,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90"
+            className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90"
           >
             Done
           </button>
@@ -274,7 +275,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
           <button
             type="button"
             onClick={handleClose}
-            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
+            className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
           >
             Cancel
           </button>
@@ -283,7 +284,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
     >
       {step === "upload" && (
         <div ref={stepRef} tabIndex={-1} className="space-y-4 focus:outline-hidden">
-          <div className="rounded-lg border border-dashed border-outline-variant bg-surface-container-low p-4">
+          <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-low p-4">
             <p className="mb-1 text-sm font-semibold text-on-surface">Don't have a template yet?</p>
             <p className="mb-3 text-xs text-on-surface-variant">
               Download the Excel template, fill it in, then upload it back here.
@@ -291,7 +292,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
             <button
               type="button"
               onClick={() => void downloadTemplate(setParseError)}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-surface-container"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-outline-variant px-3 py-1.5 text-xs font-semibold text-on-surface hover:bg-surface-container"
             >
               <span className="material-symbols-outlined text-base" aria-hidden="true">
                 download
@@ -300,7 +301,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
             </button>
           </div>
 
-          <div className="rounded-lg bg-surface-container-low p-3">
+          <div className="rounded-sm bg-surface-container-low p-3">
             <p className="mb-1.5 text-label-caps uppercase text-on-surface-variant">
               Valid stages
             </p>
@@ -324,7 +325,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
           {usersError && (
             <Alert variant="warning">
               <AlertDescription>
-                Couldn't load team members — PIC name matching will be skipped for this import.
+                Couldn't load team members. PIC name matching will be skipped for this import.
               </AlertDescription>
             </Alert>
           )}
@@ -347,7 +348,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
                 fileRef.current?.click();
               }
             }}
-            className={`rounded-lg border-2 border-dashed border-outline-variant p-8 text-center transition-colors ${
+            className={`rounded-sm border-2 border-dashed border-outline-variant p-8 text-center transition-colors ${
               usersLoading ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-primary"
             }`}
           >
@@ -413,12 +414,12 @@ export function PipelineImportDialog({ open, onClose }: Props) {
             <Alert variant="warning">
               <AlertDescription>
                 {validCount} rows are valid, but a single import is capped at {IMPORT_ROW_CAP}. Only the
-                first {IMPORT_ROW_CAP} will be imported — split the rest into another file.
+                first {IMPORT_ROW_CAP} will be imported. Split the rest into another file.
               </AlertDescription>
             </Alert>
           )}
 
-          <div className="max-h-72 overflow-auto rounded-lg border border-outline-variant text-xs">
+          <div className="max-h-72 overflow-auto rounded-sm border border-outline-variant text-xs">
             <table className="w-full">
               <thead className="sticky top-0 bg-surface-container-low">
                 <tr>
@@ -451,15 +452,15 @@ export function PipelineImportDialog({ open, onClose }: Props) {
                       )}
                     </td>
                     <td className="max-w-[150px] truncate px-3 py-2 font-medium text-on-surface">
-                      {row.title || "—"}
+                      {row.title || EMPTY_VALUE}
                     </td>
                     <td className="max-w-[120px] truncate px-3 py-2 text-on-surface-variant">
-                      {row.customerName || "—"}
+                      {row.customerName || EMPTY_VALUE}
                     </td>
                     <td className="px-3 py-2 tabular-nums text-on-surface">
-                      {row.dealValue > 0 ? formatIDR(row.dealValue) : "—"}
+                      {row.dealValue > 0 ? formatIDR(row.dealValue) : EMPTY_VALUE}
                     </td>
-                    <td className="px-3 py-2 text-on-surface-variant">{row.stage.toLowerCase() || "—"}</td>
+                    <td className="px-3 py-2 text-on-surface-variant">{row.stage.toLowerCase() || EMPTY_VALUE}</td>
                     <td className="px-3 py-2 text-on-surface-variant">
                       {row.picName ? (
                         <span className={row.picId ? "" : "italic text-warning"}>
@@ -467,7 +468,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
                           {!row.picId && " (not found)"}
                         </span>
                       ) : (
-                        "—"
+                        EMPTY_VALUE
                       )}
                     </td>
                     <td className="max-w-[180px] px-3 py-2 text-error">
@@ -528,7 +529,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
           </div>
 
           {result.results.length > 0 && (
-            <div className="max-h-64 overflow-auto rounded-lg border border-outline-variant text-xs">
+            <div className="max-h-64 overflow-auto rounded-sm border border-outline-variant text-xs">
               <table className="w-full">
                 <thead className="sticky top-0 bg-surface-container-low">
                   <tr>
@@ -558,10 +559,10 @@ export function PipelineImportDialog({ open, onClose }: Props) {
                           {submitted?.rowNum ?? r.row}
                         </td>
                         <td className="max-w-[150px] truncate px-3 py-2 text-on-surface">
-                          {submitted?.title || "—"}
+                          {submitted?.title || EMPTY_VALUE}
                         </td>
                         <td className="max-w-[120px] truncate px-3 py-2 text-on-surface-variant">
-                          {submitted?.customerName || "—"}
+                          {submitted?.customerName || EMPTY_VALUE}
                         </td>
                         <td className="px-3 py-2">
                           <Chip

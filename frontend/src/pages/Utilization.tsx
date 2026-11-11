@@ -120,9 +120,9 @@ export function Utilization() {
             type="button"
             onClick={() => goToWeek(shiftWeek(week, -1))}
             aria-label="Previous week"
-            className="flex h-8 w-8 items-center justify-center rounded-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="tap-target flex h-8 w-8 items-center justify-center rounded-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
-            <span className="material-symbols-outlined text-lg">chevron_left</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">chevron_left</span>
           </button>
           <div className="text-center">
             <div className="text-label-caps uppercase text-on-surface-variant">
@@ -134,9 +134,9 @@ export function Utilization() {
             type="button"
             onClick={() => goToWeek(shiftWeek(week, 1))}
             aria-label="Next week"
-            className="flex h-8 w-8 items-center justify-center rounded-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="tap-target flex h-8 w-8 items-center justify-center rounded-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
-            <span className="material-symbols-outlined text-lg">chevron_right</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">chevron_right</span>
           </button>
         </div>
       </div>
@@ -161,7 +161,7 @@ export function Utilization() {
           ))}
         </nav>
 
-        <div className="flex items-center gap-2 text-[12px] text-on-surface-variant">
+        <div className="flex items-center gap-2 text-meta text-on-surface-variant">
           <span>Source · iTop Time Tracking</span>
           <span>· {formatSyncedAt(data?.syncedAt ?? null)}</span>
           <button
@@ -172,7 +172,7 @@ export function Utilization() {
             aria-label="Refresh from iTop"
             className="inline-flex items-center justify-center rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
-            <span className="material-symbols-outlined text-[17px]">refresh</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[17px]">refresh</span>
           </button>
         </div>
       </div>
@@ -200,11 +200,10 @@ export function Utilization() {
           message={
             isAdmin ? (
               <>
-                An admin connects it under Admin › iTop —{" "}
+                An admin connects it under Admin › iTop.{" "}
                 <Link to="/admin" className="text-primary hover:underline">
-                  go to Admin
+                  Go to Admin
                 </Link>
-                .
               </>
             ) : (
               "An admin connects it under Admin › iTop."
@@ -217,7 +216,7 @@ export function Utilization() {
         <>
           <UtilizationTiles tiles={data.tiles} scope={scope} />
           <UtilizationTable data={data} scope={scope} />
-          <p className="text-[13px] text-on-surface-variant">
+          <p className="text-xs text-on-surface-variant">
             Hours come from iTop TimeSpent entries. To change a number, edit the entry in iTop.
           </p>
         </>

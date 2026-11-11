@@ -1,3 +1,4 @@
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -142,7 +143,7 @@ function ProgressCell({ project }: { project: ProjectSummary }) {
 
 function HealthCell({ project }: { project: ProjectSummary }) {
   const health = project.health;
-  if (!health) return <span className="text-meta text-on-surface-variant">—</span>;
+  if (!health) return <span className="text-meta text-on-surface-variant">{EMPTY_VALUE}</span>;
   if (health.overdueCount === 0 && health.openRiskCount === 0) {
     return <span className="text-meta text-on-surface-variant">No issues</span>;
   }
@@ -240,7 +241,7 @@ function ProjectsDataGrid({ projects }: { projects: ProjectSummary[] }) {
         header: ({ column }) => <DataGridColumnHeader column={column} title="SA" />,
         sortingFn: personNameSortingFn,
         cell: ({ row }) => (
-          <span className="text-on-surface-variant">{row.original.sa?.username ?? "—"}</span>
+          <span className="text-on-surface-variant">{row.original.sa?.username ?? EMPTY_VALUE}</span>
         ),
         meta: { skeleton: <Skeleton className="h-3.5 w-20" /> },
       },
@@ -701,7 +702,7 @@ function WeeklyUpdateField({
           value ? (isDone ? "text-on-surface" : "text-on-surface-variant") : "text-on-surface-variant",
         ].join(" ")}
       >
-        {value || "—"}
+        {value || EMPTY_VALUE}
       </p>
     </div>
   );

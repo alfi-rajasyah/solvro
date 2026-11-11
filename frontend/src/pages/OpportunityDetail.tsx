@@ -82,6 +82,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { fmtAgo, fmtDateTime } from "@/lib/formatDate";
 import { dealMentionCandidates } from "@/lib/mentions";
@@ -160,7 +161,7 @@ function closedByUsername(activities: OpportunityActivity[] | undefined): string
 // know).
 function detailCaption(deal: Opportunity, closedBy: string | null): string {
   if (deal.outcome !== null) {
-    const dateText = deal.closedAt ? fmtDateTime(deal.closedAt) : "—";
+    const dateText = deal.closedAt ? fmtDateTime(deal.closedAt) : EMPTY_VALUE;
     const parts = [closedBy ? `Closed ${dateText} by ${closedBy}` : `Closed ${dateText}`];
     if (deal.outcomeReason) parts.push(deal.outcomeReason);
     return parts.join(" · ");
@@ -356,7 +357,7 @@ export function OpportunityDetail() {
           to="/pipeline"
           className="inline-flex items-center gap-1 font-display text-xs font-semibold text-on-surface-variant hover:text-primary"
         >
-          <span className="material-symbols-outlined text-[17px]">chevron_left</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[17px]">chevron_left</span>
           Pipeline
         </Link>
 
@@ -390,7 +391,7 @@ export function OpportunityDetail() {
                 shareable address. */}
             <CopyLinkButton
               label="Copy link"
-              className="h-8 w-8 rounded-sm border border-outline-variant hover:border-primary hover:text-primary"
+              className="tap-target h-8 w-8 rounded-sm border border-outline-variant hover:border-primary hover:text-primary"
             />
             {/* Persistent handoff affordance (PRD §2.10) — deliberately NOT
                 gated on the transient `justWonOffer` banner below: it must
@@ -413,7 +414,7 @@ export function OpportunityDetail() {
                 to={`/projects/${deal.projectId}`}
                 className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
               >
-                <span className="material-symbols-outlined text-base">business_center</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base">business_center</span>
                 View project
               </Link>
             )}
@@ -423,7 +424,7 @@ export function OpportunityDetail() {
                 onClick={() => setHandoffOpen(true)}
                 className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-xs font-semibold text-primary hover:bg-primary/10"
               >
-                <span className="material-symbols-outlined text-base">rocket_launch</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base">rocket_launch</span>
                 Create project
               </button>
             )}
@@ -435,7 +436,7 @@ export function OpportunityDetail() {
                 disabled={updateOpportunity.isPending}
                 className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-base">
+                <span aria-hidden="true" className="material-symbols-outlined text-base">
                   {deal.subStatus === "WAITING_SALES_INPUT" ? "check_circle" : "schedule"}
                 </span>
                 {deal.subStatus === "WAITING_SALES_INPUT" ? "Input received" : "Waiting for Sales input"}
@@ -454,7 +455,7 @@ export function OpportunityDetail() {
                 disabled={updateOpportunity.isPending}
                 className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-base">
+                <span aria-hidden="true" className="material-symbols-outlined text-base">
                   {deal.statusTag === "HOLD" ? "play_circle" : "pause_circle"}
                 </span>
                 {deal.statusTag === "HOLD" ? "Release hold" : "Hold"}
@@ -467,7 +468,7 @@ export function OpportunityDetail() {
                 disabled={updateOpportunity.isPending}
                 className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-base">
+                <span aria-hidden="true" className="material-symbols-outlined text-base">
                   {deal.statusTag === "DELAYED" ? "event_available" : "event"}
                 </span>
                 {deal.statusTag === "DELAYED" ? "Clear delayed" : "Mark delayed"}
@@ -479,7 +480,7 @@ export function OpportunityDetail() {
                 onClick={() => setCloseDealOpen(true)}
                 className="inline-flex items-center gap-1 rounded-sm border border-error px-2.5 py-1.5 font-display text-xs font-semibold text-error hover:bg-error/10"
               >
-                <span className="material-symbols-outlined text-base">flag</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base">flag</span>
                 Close deal
               </button>
             )}
@@ -490,7 +491,7 @@ export function OpportunityDetail() {
                 disabled={reopenOpportunity.isPending}
                 className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-xs font-semibold text-primary hover:bg-primary/10 disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-base">restart_alt</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base">restart_alt</span>
                 Reopen
               </button>
             )}
@@ -501,7 +502,7 @@ export function OpportunityDetail() {
                 onClick={() => setAssignOpen(true)}
                 className="inline-flex items-center gap-1 rounded-sm border border-primary px-2.5 py-1.5 font-display text-xs font-semibold text-primary hover:bg-primary/10"
               >
-                <span className="material-symbols-outlined text-base">person_add</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base">person_add</span>
                 Assign PIC
               </button>
             )}
@@ -511,7 +512,7 @@ export function OpportunityDetail() {
                 onClick={() => setEditOpen(true)}
                 className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
               >
-                <span className="material-symbols-outlined text-base">edit</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base">edit</span>
                 Edit
               </button>
             )}
@@ -521,7 +522,7 @@ export function OpportunityDetail() {
                 onClick={() => setConfirmDeleteOpen(true)}
                 className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2.5 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-error hover:text-error"
               >
-                <span className="material-symbols-outlined text-base">delete</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-base">delete</span>
                 Delete
               </button>
             )}
@@ -564,7 +565,7 @@ export function OpportunityDetail() {
           is closed) so this wouldn't re-show a stale offer. */}
       {justWonOffer && !deal.projectId && (
         <Alert variant="success">
-          <AlertDescription>Deal won — create the delivery project?</AlertDescription>
+          <AlertDescription>Deal won. Create the delivery project?</AlertDescription>
           <AlertAction>
             <button
               type="button"
@@ -699,7 +700,7 @@ function StageMenu({
             className="inline-flex items-center gap-1 rounded-full outline-hidden hover:opacity-80 focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             <StageChip stage={stage} />
-            <span className="material-symbols-outlined text-[16px] text-on-surface-variant">
+            <span aria-hidden="true" className="material-symbols-outlined text-[16px] text-on-surface-variant">
               expand_more
             </span>
           </button>
@@ -727,7 +728,7 @@ function MetaItem({
 }) {
   return (
     <div className="flex items-start gap-2">
-      <span className="material-symbols-outlined mt-0.5 text-[17px] text-on-surface-variant">
+      <span aria-hidden="true" className="material-symbols-outlined mt-0.5 text-[17px] text-on-surface-variant">
         {icon}
       </span>
       <div className="min-w-0">
@@ -758,16 +759,16 @@ function MetaGrid({ deal }: { deal: Opportunity }) {
           </Chip>
         </MetaItem>
         <MetaItem icon="today" label="Request date">
-          {deal.requestDate ? formatPipelineDate(deal.requestDate) : "—"}
+          {deal.requestDate ? formatPipelineDate(deal.requestDate) : EMPTY_VALUE}
         </MetaItem>
         <MetaItem icon="event" label="Deadline">
-          {deal.deadline ? formatPipelineDate(deal.deadline) : "—"}
+          {deal.deadline ? formatPipelineDate(deal.deadline) : EMPTY_VALUE}
         </MetaItem>
         <MetaItem icon="public" label="Lead source">
-          {deal.leadSource || "—"}
+          {deal.leadSource || EMPTY_VALUE}
         </MetaItem>
         <MetaItem icon="inventory_2" label="Product / Solution">
-          {deal.productSolution || "—"}
+          {deal.productSolution || EMPTY_VALUE}
         </MetaItem>
         {/* Open + waiting on the client (D3/D10): the SA is waiting for the
             Sales team to clear the flag — see SubStatusChip in the header. */}
@@ -791,7 +792,7 @@ function MetaGrid({ deal }: { deal: Opportunity }) {
                 : OUTCOME_LABELS[deal.outcome]}
             </MetaItem>
             <MetaItem icon="event_available" label="Closed">
-              {deal.closedAt ? fmtDateTime(deal.closedAt) : "—"}
+              {deal.closedAt ? fmtDateTime(deal.closedAt) : EMPTY_VALUE}
             </MetaItem>
           </>
         )}

@@ -87,6 +87,7 @@ export function OperationsCard({ customer, today, days, currentUserId, canDelete
           currentUserId={currentUserId}
           canDeleteAny={canDeleteAny}
           placeholder="What happened outside a project today?"
+          fieldLabel="Operations note"
           ariaLabel={`Operations note for ${customer.name}`}
           rowsId={`week-rows-customer-${customer.id}`}
           extraFromNote={(note) => ({ title: note.title })}
@@ -95,14 +96,17 @@ export function OperationsCard({ customer, today, days, currentUserId, canDelete
             <p className="mb-0.5 text-sm font-semibold text-on-surface">{note.title}</p>
           )}
           renderExtraFields={(extra, setExtra) => (
-            <Input
-              value={extra.title}
-              onChange={(e) => setExtra({ ...extra, title: e.target.value })}
-              placeholder="Title, e.g. Oslo edge tunnel outage"
-              aria-label="Title"
-              maxLength={120}
-              required
-            />
+            <label className="block space-y-1">
+              <span className="block text-label-caps uppercase text-on-surface-variant">Title</span>
+              <Input
+                value={extra.title}
+                onChange={(e) => setExtra({ ...extra, title: e.target.value })}
+                placeholder="Title, e.g. Oslo edge tunnel outage"
+                aria-label="Title"
+                maxLength={120}
+                required
+              />
+            </label>
           )}
           onAdd={(day, body, extra) =>
             addNote.mutate({

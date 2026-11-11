@@ -29,7 +29,7 @@ export function WeekStrip({ days, today, coverage, onDayClick }: WeekStripProps)
             key={day}
             type="button"
             onClick={() => onDayClick(day)}
-            aria-label={`Go to ${label} — ${cov.withNote} of ${cov.total} customers noted`}
+            aria-label={`Go to ${label}: ${cov.withNote} of ${cov.total} customers noted`}
             className={[
               "flex flex-col items-center gap-0.5 rounded-sm border px-2 py-2 text-center transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
               isToday

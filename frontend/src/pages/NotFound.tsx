@@ -10,9 +10,9 @@ export function NotFound() {
   const { pathname, search } = useLocation();
   return (
     <div className="mx-auto w-full max-w-xl pt-4 md:pt-12">
+      <h1 className="mb-3 font-display text-h1 text-on-surface">Page not found</h1>
       <EmptyState
         icon="explore_off"
-        title="Page not found"
         message={
           <>
             Nothing lives at{" "}

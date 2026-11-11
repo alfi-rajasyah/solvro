@@ -13,7 +13,7 @@
 // collapsed shell with nothing in it would be useless. The caller keys this
 // component by the week (e.g. `days[0]`) so switching weeks remounts it
 // fresh rather than carrying stale collapsed/expanded state across weeks.
-import { type ReactNode, type Ref, useEffect, useRef, useState } from "react";
+import { type ReactNode, type Ref, useEffect, useId, useRef, useState } from "react";
 import { ConfirmModal } from "@/components/ConfirmModal";
 import { Kbd, KbdGroup } from "@/components/ui/kbd";
 import { Textarea } from "@/components/ui/textarea";
@@ -43,6 +43,8 @@ export interface WeekNotesEditorProps<N extends WeekNoteBase> {
   /** Wildcard users (Decision 9) may delete any note, not just their own. */
   canDeleteAny: boolean;
   placeholder: string;
+  /** Visible label above the note box. Must be contained in `ariaLabel` so the accessible name still starts with what sighted users read. */
+  fieldLabel: string;
   ariaLabel: string;
   /** Unique id for the day-rows container, e.g. `week-rows-project-3` / `week-rows-customer-7` — wired to the "Show/Hide week" toggle's `aria-controls`. */
   rowsId: string;
@@ -96,6 +98,7 @@ export function WeekNotesEditor<N extends WeekNoteBase>({
   currentUserId,
   canDeleteAny,
   placeholder,
+  fieldLabel,
   ariaLabel,
   rowsId,
   extraFromNote,
@@ -284,6 +287,7 @@ export function WeekNotesEditor<N extends WeekNoteBase>({
                       renderExtraFields={renderExtraFields}
                       extraValid={extraValid}
                       placeholder={placeholder}
+                      fieldLabel={fieldLabel}
                       ariaLabel={ariaLabel}
                       onSave={saveActiveEdit}
                       onCancel={() => setActiveEdit(null)}
@@ -354,6 +358,7 @@ export function WeekNotesEditor<N extends WeekNoteBase>({
                     renderExtraFields={renderExtraFields}
                     extraValid={extraValid}
                     placeholder={placeholder}
+                    fieldLabel={fieldLabel}
                     ariaLabel={ariaLabel}
                     onSave={saveActiveEdit}
                     onCancel={() => setActiveEdit(null)}
@@ -370,6 +375,7 @@ export function WeekNotesEditor<N extends WeekNoteBase>({
                     renderExtraFields={renderExtraFields}
                     extraValid={extraValid}
                     placeholder={placeholder}
+                    fieldLabel={fieldLabel}
                     ariaLabel={ariaLabel}
                     onSave={saveToday}
                     saving={addPending}
@@ -403,6 +409,7 @@ function NoteEditorForm({
   renderExtraFields,
   extraValid,
   placeholder,
+  fieldLabel,
   ariaLabel,
   onSave,
   onCancel,
@@ -418,6 +425,7 @@ function NoteEditorForm({
   renderExtraFields?: (extra: WeekNoteExtra, setExtra: (next: WeekNoteExtra) => void) => ReactNode;
   extraValid?: (extra: WeekNoteExtra) => boolean;
   placeholder: string;
+  fieldLabel: string;
   ariaLabel: string;
   onSave: () => void;
   onCancel?: () => void;
@@ -427,11 +435,16 @@ function NoteEditorForm({
   /** Only passed for the persistent "today" row — see WeekNotesEditor's `pendingInsert` effect. */
   textareaRef?: Ref<HTMLTextAreaElement>;
 }) {
+  const textareaId = useId();
   const disabled = value.trim().length === 0 || saving || (extraValid ? !extraValid(extra) : false);
   return (
     <div className="space-y-2 rounded-sm border border-outline-variant bg-surface p-2">
       {renderExtraFields?.(extra, onExtraChange)}
+      <label htmlFor={textareaId} className="block text-label-caps uppercase text-on-surface-variant">
+        {fieldLabel}
+      </label>
       <Textarea
+        id={textareaId}
         ref={textareaRef}
         value={value}
         onChange={(e) => onChange(e.target.value)}
@@ -458,7 +471,7 @@ function NoteEditorForm({
               type="button"
               onClick={onDelete}
               disabled={deleting}
-              className="text-[12px] font-semibold text-error hover:underline disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="text-meta font-semibold text-error hover:underline disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
               Delete
             </button>
@@ -467,7 +480,7 @@ function NoteEditorForm({
             <button
               type="button"
               onClick={onCancel}
-              className="rounded-sm border border-outline-variant px-3 py-1.5 font-display text-[12px] font-semibold text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="rounded-sm border border-outline-variant px-3 py-1.5 font-display text-meta font-semibold text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
               Cancel
             </button>
@@ -476,7 +489,7 @@ function NoteEditorForm({
             type="button"
             onClick={onSave}
             disabled={disabled}
-            className="rounded-sm bg-primary px-3 py-1.5 font-display text-[12px] font-semibold text-on-primary hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="rounded-sm bg-primary px-3 py-1.5 font-display text-meta font-semibold text-on-primary hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             {saving ? "Saving…" : "Save note"}
           </button>

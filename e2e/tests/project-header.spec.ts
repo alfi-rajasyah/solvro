@@ -18,7 +18,7 @@ test.describe("Project header", () => {
 
   // Risks tab (views/ProjectRisks.tsx): the Mitigated status control takes its
   // colours from the theme-aware chip tokens, not the light-only amber palette.
-  test("Mitigated risk status uses theme chip tokens in dark mode", async ({
+  test("Mitigated risk status uses the theme amber token in dark mode", async ({
     page,
     seededProject,
   }, testInfo) => {
@@ -42,8 +42,11 @@ test.describe("Project header", () => {
 
     const status = page.getByLabel(`Status of risk: ${description}`);
     await expect(status).toBeVisible();
-    await expect(status).toHaveClass(/bg-chip-amber-bg/);
-    await expect(status).not.toHaveClass(/bg-amber-100/);
+    // The editable status is a native select: it carries its tone as text
+    // colour on the standard input surface, from the theme token, never a raw
+    // palette class.
+    await expect(status).toHaveClass(/text-chip-amber-text/);
+    await expect(status).not.toHaveClass(/(bg|text)-amber-\d/);
   });
 
   test("Delete project is reachable only through the more-actions menu", async ({

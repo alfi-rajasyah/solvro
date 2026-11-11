@@ -102,7 +102,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -110,7 +110,7 @@ export function RiskFormModal({ open, onClose, projectId, risk }: Props) {
             type="button"
             onClick={onSubmit}
             disabled={busy}
-            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {busy ? "Saving…" : isEdit ? "Save changes" : "Create risk"}
           </button>

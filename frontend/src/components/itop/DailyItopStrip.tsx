@@ -173,13 +173,13 @@ function DailyItopStripRow({
           href={url}
           target="_blank"
           rel="noopener noreferrer"
-          className="min-w-0 flex-1 truncate text-[12px] text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          className="min-w-0 flex-1 truncate text-meta text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           title={ticket.title}
         >
           <span className="font-mono font-semibold">{ticket.ref}</span> {ticket.title}
         </a>
       ) : (
-        <span className="min-w-0 flex-1 truncate text-[12px] text-on-surface" title={ticket.title}>
+        <span className="min-w-0 flex-1 truncate text-meta text-on-surface" title={ticket.title}>
           <span className="font-mono font-semibold">{ticket.ref}</span> {ticket.title}
         </span>
       )}

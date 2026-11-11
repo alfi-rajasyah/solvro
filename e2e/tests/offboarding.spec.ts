@@ -45,7 +45,7 @@ test.describe("Offboarding handover", () => {
     await (await deactivateButton(page, leaver.username)).click();
     await expect(page.getByTestId("handover-modal")).toHaveCount(0);
     await expect.poll(() => userActive(base, admin.token, leaver.id)).toBe(false);
-    await expect(page.getByRole("row").filter({ hasText: leaver.username })).toContainText("Disabled");
+    await expect(page.getByRole("row").filter({ hasText: leaver.username })).toContainText("Inactive");
   });
 
   test("the API refuses a plain deactivate while work is held (409 handover_required)", async ({}, testInfo) => {
@@ -155,7 +155,7 @@ test.describe("Offboarding handover", () => {
     expect(saved).toHaveLength(1);
     expect(saved[0]!.visibility).toBe("INTERNAL");
 
-    await expect(page.getByRole("row").filter({ hasText: leaver.username })).toContainText("Disabled");
+    await expect(page.getByRole("row").filter({ hasText: leaver.username })).toContainText("Inactive");
   });
 
   test("Cancel in the handover dialog leaves the user active and untouched", async ({ page }, testInfo) => {

@@ -234,7 +234,7 @@ export function TaskTicketField({
       ) : null}
       {url && (
         <a href={url} target="_blank" rel="noopener noreferrer" className={LINK_CLASS}>
-          Open in iTop ↗
+          Open in iTop
         </a>
       )}
       {canEdit && (

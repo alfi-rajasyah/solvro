@@ -24,8 +24,8 @@ const MAX_DESCRIPTION_LENGTH = 2000;
 /**
  * `name` comes straight from the deal. `description` composes the deal's
  * own free-text description (when it has one) above a provenance note in
- * PRD §2.10's format — `From pipeline deal: {title} — {product_solution} —
- * Rp {value}` — clamped to `MAX_DESCRIPTION_LENGTH` (finding S2): only the
+ * PRD §2.10's format, with a middle dot where the PRD wrote an em dash
+ * (`From pipeline deal: {title} · {product_solution} · Rp {value}`) — clamped to `MAX_DESCRIPTION_LENGTH` (finding S2): only the
  * deal's own description gets truncated to make room; the provenance note
  * is always kept intact, since it's the one part of this composed string
  * that actually says where the project came from. `saId` prefills to the
@@ -47,7 +47,7 @@ export function computeHandoffDefaults(
   customers: CustomerSummary[],
   users: UserSummary[],
 ): HandoffDefaults {
-  const note = `From pipeline deal: ${deal.title} — ${deal.productSolution} — ${formatIDR(deal.dealValue)}`;
+  const note = `From pipeline deal: ${deal.title} · ${deal.productSolution} · ${formatIDR(deal.dealValue)}`;
   const description = deal.description ? clampComposedDescription(deal.description, note) : note;
 
   const targetName = deal.customerName.trim().toLowerCase();
