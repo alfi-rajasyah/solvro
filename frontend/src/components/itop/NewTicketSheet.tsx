@@ -101,7 +101,7 @@ export function NewTicketSheet({
       {
         onSuccess: (result) => {
           if (isStaleTicketCreate(result)) {
-            setStaleNotice(`Created in iTop as #${result.id} — it appears after the next sync.`);
+            setStaleNotice(`Created in iTop as #${result.id}. It appears after the next sync.`);
             return;
           }
           const created = { id: result.id, ref: result.ref };
@@ -127,7 +127,7 @@ export function NewTicketSheet({
             type="button"
             onClick={handleClose}
             disabled={createTicket.isPending}
-            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -141,7 +141,7 @@ export function NewTicketSheet({
             // than auto-closing, since there's no id yet to open a panel
             // on).
             disabled={!canSubmit || createTicket.isPending || staleNotice !== null}
-            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {createTicket.isPending ? "Creating…" : "Create in iTop"}
           </button>
@@ -243,7 +243,7 @@ export function NewTicketSheet({
       )}
 
       {myToken?.personName && (
-        <p className="mt-3 text-[12px] text-on-surface-variant">Created in iTop as {myToken.personName}</p>
+        <p className="mt-3 text-meta text-on-surface-variant">Created in iTop as {myToken.personName}</p>
       )}
     </Modal>
   );

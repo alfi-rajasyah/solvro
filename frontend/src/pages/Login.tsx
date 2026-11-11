@@ -101,9 +101,13 @@ export function Login() {
   // in dark mode regardless of the user's theme preference. Scoping the class
   // to this subtree makes every CSS-var token resolve to its `.dark` value.
   return (
-    <div className="dark grid h-screen grid-cols-1 overflow-hidden bg-background md:grid-cols-[44%_1fr]">
-      {/* Left brand panel. Wordmark pinned top, footer pinned bottom; the hero
-          copy gets `my-auto` to vertically center it in the space between. */}
+    <main className="dark grid min-h-screen grid-cols-1 bg-background md:h-screen md:grid-cols-[44%_1fr] md:overflow-hidden">
+      {/* Left brand panel (md and up). Wordmark pinned top; the hero copy gets
+          `my-auto` to centre it in the space below. The look is the owner's
+          (kept 2026-11-10 over the audit's style findings); what the audit
+          changed is the content: the body line and the third pill say what
+          Solvro does today, and the hardcoded version line is gone
+          (docs/archive/plans/antislop-audit-001-2026-11-10.md, items 6, 7). */}
       <div className="relative hidden flex-col overflow-hidden bg-background p-10 md:flex">
         {/* Decorative rings */}
         <div
@@ -133,14 +137,13 @@ export function Login() {
           </span>
         </div>
 
-        {/* Hero copy */}
+        {/* Hero copy. A paragraph, not a heading: the page's one h1 is
+            "Sign in", which exists at every width. */}
         <div className="relative z-10 my-auto">
-          <div
-            className="mb-3 text-label-caps uppercase text-primary"
-          >
+          <div className="mb-3 text-label-caps uppercase text-primary">
             Project Operations
           </div>
-          <h1
+          <p
             className="text-white"
             style={{
               fontSize: 40,
@@ -152,19 +155,19 @@ export function Login() {
             Manage projects.
             <br />
             <span className="text-primary">Ship</span> on time.
-          </h1>
+          </p>
           <p
-            className="mt-3 text-on-surface-variant/45"
+            className="mt-3 text-on-surface-variant"
             style={{
               fontSize: 12,
               maxWidth: 240,
               lineHeight: 1.6,
             }}
           >
-            One place to track projects, log updates, and report to customers.
+            Elitery&apos;s workspace for project delivery and the sales pipeline.
           </p>
           <div className="mt-5 flex flex-wrap gap-2">
-            {["Project tracking", "Daily notes", "Customer reports"].map(
+            {["Project tracking", "Daily notes", "Sales pipeline"].map(
               (label) => (
                 <span
                   key={label}
@@ -176,20 +179,14 @@ export function Login() {
             )}
           </div>
         </div>
-
-        {/* Footer version/build */}
-        <div
-          className="relative z-10 text-meta text-on-surface-variant/60"
-        >
-          v1.4.0 · build 2305
-        </div>
       </div>
 
       {/* Right form panel */}
-      <div className="flex flex-col items-center justify-center bg-surface px-8">
+      <div className="flex flex-col items-center justify-center bg-surface px-8 py-10">
         <div className="w-full" style={{ maxWidth: 280 }}>
-          {/* Mobile-only wordmark */}
-          <div className="mb-8 flex items-center gap-2.5 md:hidden">
+          {/* Phone: the brand panel is hidden, so the wordmark and the line
+              sit above the form instead. */}
+          <div className="mb-3 flex items-center gap-2.5 md:hidden">
             <BrandMark className="h-8 w-8" />
             <span
               className="text-on-surface"
@@ -198,13 +195,16 @@ export function Login() {
               Solvro
             </span>
           </div>
+          <p className="mb-8 text-sm text-on-surface-variant md:hidden">
+            Elitery&apos;s workspace for project delivery and the sales pipeline.
+          </p>
 
-          <h2
+          <h1
             className="text-on-surface"
             style={{ fontSize: 20, fontWeight: 500, letterSpacing: "-0.3px" }}
           >
             Sign in
-          </h2>
+          </h1>
           <p
             className="mb-8 mt-1 text-on-surface-variant"
             style={{ fontSize: 12 }}
@@ -217,7 +217,7 @@ export function Login() {
           {googleConfigLoading ? (
             <div className="h-10 animate-pulse rounded-sm bg-surface-container" />
           ) : googleAvailable ? (
-            <GoogleOAuthProvider clientId={googleConfig!.clientId!}>
+            <GoogleOAuthProvider clientId={googleConfig!.clientId!} locale="en">
               <div className="flex justify-center">
                 <GoogleLogin
                   onSuccess={handleGoogleCredential}
@@ -261,12 +261,12 @@ export function Login() {
               <details className="group rounded-sm border border-outline-variant bg-surface-container-lowest open:bg-surface-container">
                 <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm font-semibold text-on-surface marker:hidden">
                   <span className="flex items-center gap-2">
-                    <span className="material-symbols-outlined text-base text-on-surface-variant">
+                    <span aria-hidden="true" className="material-symbols-outlined text-base text-on-surface-variant">
                       key
                     </span>
                     Admin sign-in (password)
                   </span>
-                  <span className="material-symbols-outlined text-base text-on-surface-variant transition-transform group-open:rotate-180">
+                  <span aria-hidden="true" className="material-symbols-outlined text-base text-on-surface-variant transition-transform group-open:rotate-180">
                     expand_more
                   </span>
                 </summary>
@@ -308,7 +308,7 @@ export function Login() {
           </p>
         </div>
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -340,7 +340,7 @@ function PasswordForm({
           Email
         </span>
         <div className={`mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 ${FIELD_FOCUS_WITHIN}`}>
-          <span className="material-symbols-outlined text-base text-on-surface-variant">
+          <span aria-hidden="true" className="material-symbols-outlined text-base text-on-surface-variant">
             mail
           </span>
           <input
@@ -360,7 +360,7 @@ function PasswordForm({
           Password
         </span>
         <div className={`mt-1 flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 ${FIELD_FOCUS_WITHIN}`}>
-          <span className="material-symbols-outlined text-base text-on-surface-variant">
+          <span aria-hidden="true" className="material-symbols-outlined text-base text-on-surface-variant">
             lock
           </span>
           <input
@@ -378,7 +378,7 @@ function PasswordForm({
             aria-label={showPassword ? "Hide password" : "Show password"}
             className="text-on-surface-variant hover:text-on-surface"
           >
-            <span className="material-symbols-outlined text-base">
+            <span aria-hidden="true" className="material-symbols-outlined text-base">
               {showPassword ? "visibility_off" : "visibility"}
             </span>
           </button>

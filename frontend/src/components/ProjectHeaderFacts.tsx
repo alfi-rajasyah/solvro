@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { fmtRange } from "@/lib/formatDate";
 import type { ProjectDetail } from "@/lib/queries";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 
 // Facts row under the project header: who, when, how far along, how healthy.
 // Numbers come from `project.health` (GET /projects/:id, backend
@@ -126,7 +127,7 @@ export function ProjectHeaderFacts({ project }: { project: ProjectDetail }) {
               </span>
             </span>
           ) : (
-            <span className="text-on-surface-variant">—</span>
+            <span className="text-on-surface-variant">{EMPTY_VALUE}</span>
           )}
         </Fact>
       </dl>

@@ -3,6 +3,7 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { dateToDay, dayToDate, formatDisplay } from "@/lib/dateField";
 import { cn, FIELD_FOCUS } from "@/lib/utils";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 
 interface DateFieldProps {
   /**
@@ -47,7 +48,7 @@ const triggerBaseClasses =
 
 const variantClasses = {
   boxed:
-    `rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface ${FIELD_FOCUS}`,
+    `rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-meta text-on-surface ${FIELD_FOCUS}`,
   bare: "border-none bg-transparent text-xs font-semibold text-on-surface",
 } as const;
 
@@ -135,7 +136,7 @@ export function DateField({
         }
         className={cn(triggerBaseClasses, variantClasses[variant], className)}
       >
-        {triggerLabel !== undefined ? triggerLabel || "—" : formatDisplay(value) || "—"}
+        {triggerLabel !== undefined ? triggerLabel || EMPTY_VALUE : formatDisplay(value) || EMPTY_VALUE}
       </PopoverTrigger>
       <PopoverContent align="start" positionerClassName="z-101" className="w-auto p-0! shadow-overlay">
         <Calendar

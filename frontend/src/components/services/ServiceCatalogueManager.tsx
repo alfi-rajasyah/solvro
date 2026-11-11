@@ -1,4 +1,5 @@
-import { FIELD_FOCUS } from "@/lib/utils";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
+import { FIELD_FOCUS, TOOLBAR_BUTTON_OUTLINE, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_STAT } from "@/lib/utils";
 import { useState, type FormEvent } from "react";
 import {
   getCoreRowModel,
@@ -45,6 +46,7 @@ export function ServiceCatalogueManager() {
   const remove = useDeleteService();
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Service | null>(null);
+  const [adding, setAdding] = useState(false);
   const [newName, setNewName] = useState("");
   const [newDesc, setNewDesc] = useState("");
   const [editingId, setEditingId] = useState<number | null>(null);
@@ -116,7 +118,7 @@ export function ServiceCatalogueManager() {
           />
         ) : (
           <span className={["text-on-surface-variant", s.active ? "" : "opacity-60"].join(" ")}>
-            {s.description || "—"}
+            {s.description || EMPTY_VALUE}
           </span>
         );
       },
@@ -230,6 +232,7 @@ export function ServiceCatalogueManager() {
       });
       setNewName("");
       setNewDesc("");
+      setAdding(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create service.");
     }
@@ -276,12 +279,38 @@ export function ServiceCatalogueManager() {
   }
 
   return (
-    <div className="space-y-4">
-      <p className="text-sm text-on-surface-variant">
-        Shared service catalogue. Only admins can add, edit, or delete
-        services — inline from a customer's or project's Services tab, or
-        here; everyone else picks from the list.
+    <div className="space-y-3">
+      <p className="text-meta text-on-surface-variant">
+        The one shared list of services. A customer subscribes to services from
+        it on their Services tab, and a project marks the ones it delivers on
+        its own. Only admins can add, rename, deactivate or delete a service,
+        here or with &quot;Add service&quot; on either Services tab.
       </p>
+
+      {/* Same toolbar and add form as the Services tabs (lib/utils.ts). */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <div className={TOOLBAR_STAT}>
+            <span className="text-sm font-bold tabular-nums text-on-surface">{rows.length}</span>
+            {rows.length === 1 ? "Service" : "Services"}
+          </div>
+          <div className={TOOLBAR_STAT}>
+            <span className="text-sm font-bold tabular-nums text-on-surface">
+              {rows.filter((row) => row.active).length}
+            </span>
+            Active
+          </div>
+        </div>
+        <button
+          type="button"
+          aria-expanded={adding}
+          onClick={() => setAdding((v) => !v)}
+          className={TOOLBAR_BUTTON_PRIMARY}
+        >
+          <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
+          Add service
+        </button>
+      </div>
 
       {error && (
         <div className="rounded-sm border border-error/40 bg-error/10 px-3 py-2 text-sm text-error">
@@ -289,49 +318,55 @@ export function ServiceCatalogueManager() {
         </div>
       )}
 
-      <form
-        onSubmit={handleAdd}
-        className="flex flex-wrap items-end gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest p-3"
-      >
-        <label className="w-full md:flex-1 md:min-w-[160px]">
-          <span className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
-            Name
-          </span>
-          <input
-            type="text"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-            maxLength={100}
-            placeholder="e.g. Penetration Testing"
-            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
-          />
-        </label>
-        <label className="w-full md:flex-2 md:min-w-[240px]">
-          <span className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
-            Description
-          </span>
-          <input
-            type="text"
-            value={newDesc}
-            onChange={(e) => setNewDesc(e.target.value)}
-            maxLength={1000}
-            placeholder="Short blurb shown in the catalogue"
-            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
-          />
-        </label>
-        <button
-          type="submit"
-          disabled={create.isPending || !newName.trim()}
-          className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
+      {adding && (
+        <form
+          onSubmit={handleAdd}
+          className="flex flex-wrap items-end gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest p-3"
         >
-          {create.isPending ? "Adding…" : "Add service"}
-        </button>
-      </form>
+          <label className="w-full md:min-w-[160px] md:flex-1">
+            <span className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
+              Name
+            </span>
+            <input
+              type="text"
+              autoFocus
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              maxLength={100}
+              placeholder="e.g. Penetration Testing"
+              className={`h-8 w-full rounded-sm border border-outline-variant bg-surface px-2 text-sm ${FIELD_FOCUS}`}
+            />
+          </label>
+          <label className="w-full md:min-w-[240px] md:flex-2">
+            <span className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
+              Description
+            </span>
+            <input
+              type="text"
+              value={newDesc}
+              onChange={(e) => setNewDesc(e.target.value)}
+              maxLength={1000}
+              placeholder="Short blurb shown in the catalogue"
+              className={`h-8 w-full rounded-sm border border-outline-variant bg-surface px-2 text-sm ${FIELD_FOCUS}`}
+            />
+          </label>
+          <button type="button" onClick={() => setAdding(false)} className={TOOLBAR_BUTTON_OUTLINE}>
+            Cancel
+          </button>
+          <button
+            type="submit"
+            disabled={create.isPending || !newName.trim()}
+            className={TOOLBAR_BUTTON_PRIMARY}
+          >
+            {create.isPending ? "Adding…" : "Add to catalogue"}
+          </button>
+        </form>
+      )}
 
       <DataGrid
         table={table}
         recordCount={rows.length}
-        emptyMessage="No services yet — add the first one above."
+        emptyMessage="No services yet. Use Add service to create the first one."
         tableLayout={{
           dense: true,
           rowBorder: true,
@@ -364,7 +399,7 @@ export function ServiceCatalogueManager() {
         onClose={() => setDeleting(null)}
         onConfirm={() => deleting && void handleDelete(deleting)}
         title="Delete service"
-        body={`Delete service "${deleting?.name ?? ""}"? It will be removed from every customer and project that has it assigned.`}
+        body={`Delete service "${deleting?.name ?? ""}"? It will be removed from every customer that subscribes to it and every project it is in.`}
         confirmLabel="Delete"
         confirmTone="danger"
         busy={remove.isPending}

@@ -37,7 +37,7 @@ function NavItem({
   const linkClass = ({ isActive }: { isActive: boolean }) =>
     [
       "group relative flex items-center rounded-sm transition-colors duration-150",
-      expanded ? "gap-2.5 px-3 py-2 text-[13px]" : "h-10 w-10 justify-center",
+      expanded ? "gap-2.5 px-3 py-2 text-xs" : "h-10 w-10 justify-center",
       isActive ? "bg-primary/20 text-on-surface" : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface",
     ].join(" ");
 
@@ -122,7 +122,7 @@ export function Sidebar() {
           type="button"
           onClick={close}
           aria-label="Close sidebar"
-          className="fixed inset-0 z-40 bg-black/40 backdrop-blur-[1px] md:hidden"
+          className="fixed inset-0 z-40 bg-black/40 md:hidden"
         />
       )}
 
@@ -154,9 +154,9 @@ export function Sidebar() {
             type="button"
             onClick={toggle}
             aria-label={expanded ? "Collapse sidebar" : "Expand sidebar"}
-            className="flex h-8 w-8 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
+            className="tap-target flex h-8 w-8 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
           >
-            <span className="material-symbols-outlined text-lg">
+            <span aria-hidden="true" className="material-symbols-outlined text-lg">
               {expanded ? "menu_open" : "menu"}
             </span>
           </button>

@@ -1,4 +1,5 @@
-import { FIELD_FOCUS } from "@/lib/utils";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
+import { FIELD_FOCUS, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_BUTTON_OUTLINE, TOOLBAR_BOX } from "@/lib/utils";
 import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
 import {
   DndContext,
@@ -430,13 +431,13 @@ export function ProjectList() {
             type="button"
             onClick={() => setFilterOpen((v) => !v)}
             className={[
-              "inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 font-display text-xs font-semibold transition-colors",
+              `${TOOLBAR_BOX} border font-semibold transition-colors`,
               filterActive
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container",
             ].join(" ")}
           >
-            <span className="material-symbols-outlined text-base">filter_alt</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">filter_alt</span>
             Filter
             {filterActive && (
               <span className="flex h-4 w-4 items-center justify-center rounded-full bg-primary text-meta leading-none font-bold text-on-primary">
@@ -447,7 +448,7 @@ export function ProjectList() {
           {filterOpen && (
             <>
               <div className="fixed inset-0 z-10" onClick={() => setFilterOpen(false)} />
-              <div className="absolute right-0 z-20 mt-2 w-64 rounded-lg border border-outline-variant bg-surface-container-lowest p-3 shadow-overlay">
+              <div className="absolute right-0 z-20 mt-2 w-64 rounded-sm border border-outline-variant bg-surface-container-lowest p-3 shadow-overlay">
                 <div className="mb-3">
                   <label htmlFor={`${filterUid}-epic`} className="mb-1 block text-label-caps uppercase text-on-surface-variant">
                     Epic
@@ -459,7 +460,7 @@ export function ProjectList() {
                       const v = e.target.value;
                       setFilterEpicId(v === "" ? "" : v === "none" ? null : Number(v));
                     }}
-                    className={`w-full rounded-lg border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
+                    className={`w-full rounded-sm border border-outline-variant bg-surface-container px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
                   >
                     <option value="">All</option>
                     <option value="none">No epic</option>
@@ -487,9 +488,9 @@ export function ProjectList() {
           <button
             type="button"
             onClick={() => setReorderingSections(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
+            className={TOOLBAR_BUTTON_OUTLINE}
           >
-            <span className="material-symbols-outlined text-base">reorder</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">reorder</span>
             Reorder sections
           </button>
         )}
@@ -497,9 +498,9 @@ export function ProjectList() {
           <button
             type="button"
             onClick={() => setAddingSection(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
+            className={TOOLBAR_BUTTON_OUTLINE}
           >
-            <span className="material-symbols-outlined text-base">add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
             Add section
           </button>
         )}
@@ -507,9 +508,9 @@ export function ProjectList() {
           <button
             type="button"
             onClick={() => setCreateTaskCtx({ sectionId: null, parentTaskId: null })}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary/90"
+            className={TOOLBAR_BUTTON_PRIMARY}
           >
-            <span className="material-symbols-outlined text-base">add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
             Add task
           </button>
         )}
@@ -719,7 +720,7 @@ function SectionGroup({
           className="text-on-surface-variant hover:text-on-surface"
           aria-label={collapsed ? "Expand section" : "Collapse section"}
         >
-          <span className="material-symbols-outlined text-base">
+          <span aria-hidden="true" className="material-symbols-outlined text-base">
             {collapsed ? "chevron_right" : "expand_more"}
           </span>
         </button>
@@ -747,14 +748,14 @@ function SectionGroup({
             </button>
           </form>
         ) : (
-          <h3
+          <h2
             className={[
               "font-display text-sm font-semibold",
               section ? "text-on-surface" : "italic text-on-surface-variant",
             ].join(" ")}
           >
             {section?.name ?? "No section"}
-          </h3>
+          </h2>
         )}
         <span className="rounded-full bg-surface-container-high px-1.5 py-0 font-mono text-meta text-on-surface-variant">
           {nodes.length}
@@ -764,31 +765,31 @@ function SectionGroup({
             <button
               type="button"
               onClick={() => onRename(section)}
-              className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               title={section ? "Rename section" : "Promote into a real section"}
             >
-              <span className="material-symbols-outlined text-[17px]">edit</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[17px]">edit</span>
             </button>
             {section && (
               <button
                 type="button"
                 onClick={() => onDuplicate(section)}
                 disabled={duplicatingSectionId === section.id}
-                className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-default disabled:opacity-50"
+                className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-default disabled:opacity-50"
                 title="Duplicate section"
                 aria-label="Duplicate section"
               >
-                <span className="material-symbols-outlined text-[17px]">content_copy</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[17px]">content_copy</span>
               </button>
             )}
             {section && (
               <button
                 type="button"
                 onClick={() => onDelete(section)}
-                className="rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-on-error-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-error-container hover:text-on-error-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                 title="Delete section"
               >
-                <span className="material-symbols-outlined text-[17px]">delete</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[17px]">delete</span>
               </button>
             )}
           </div>
@@ -815,16 +816,16 @@ function SectionGroup({
           ))}
 
           {nodes.length === 0 && (
-            <div className="px-10 py-2 text-[12px] text-on-surface-variant">No tasks in this section.</div>
+            <div className="px-10 py-2 text-meta text-on-surface-variant">No tasks in this section.</div>
           )}
 
           {canEdit && (
             <button
               type="button"
               onClick={onAddTask}
-              className="flex w-full items-center gap-2 px-10 py-1 text-left text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
+              className="flex w-full items-center gap-2 px-10 py-1 text-left text-meta text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
             >
-              <span className="material-symbols-outlined text-[15px]">add</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[15px]">add</span>
               Add task…
             </button>
           )}
@@ -901,9 +902,11 @@ function TaskRow({
                 e.stopPropagation();
                 setExpanded((v) => !v);
               }}
+              aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+              aria-expanded={expanded}
               className="text-on-surface-variant hover:text-on-surface"
             >
-              <span className="material-symbols-outlined text-[15px]">
+              <span aria-hidden="true" className="material-symbols-outlined text-[15px]">
                 {expanded ? "expand_more" : "chevron_right"}
               </span>
             </button>
@@ -951,7 +954,7 @@ function TaskRow({
             className="flex grow items-center justify-start disabled:cursor-default"
             title={canEdit ? "Click to cycle priority" : undefined}
           >
-            <span className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}>
+            <span aria-hidden="true" className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}>
               flag
             </span>
           </button>
@@ -976,9 +979,11 @@ function TaskRow({
                 e.stopPropagation();
                 setExpanded((v) => !v);
               }}
-              className="shrink-0 text-on-surface-variant"
+              aria-label={expanded ? "Collapse subtasks" : "Expand subtasks"}
+              aria-expanded={expanded}
+              className="tap-target shrink-0 text-on-surface-variant"
             >
-              <span className="material-symbols-outlined text-[17px]">
+              <span aria-hidden="true" className="material-symbols-outlined text-[17px]">
                 {expanded ? "expand_more" : "chevron_right"}
               </span>
             </button>
@@ -992,7 +997,7 @@ function TaskRow({
           >
             {task.title}
           </span>
-          <span className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}>
+          <span aria-hidden="true" className={`material-symbols-outlined text-[15px] ${PRIORITY_ICON_CLASS[task.priority]}`}>
             flag
           </span>
           {task.isCriticalPath && <CriticalPathMark variant="glyph" />}
@@ -1038,9 +1043,9 @@ function TaskRow({
         <button
           type="button"
           onClick={() => onAddSubtask(task.id)}
-          className="flex w-full items-center gap-1.5 border-t border-outline-variant py-1 pl-[52px] text-left text-[12px] text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
+          className="flex w-full items-center gap-1.5 border-t border-outline-variant py-1 pl-[52px] text-left text-meta text-on-surface-variant hover:bg-surface-container-low hover:text-primary"
         >
-          <span className="material-symbols-outlined text-[14px]">add</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[14px]">add</span>
           Add subtask…
         </button>
       )}
@@ -1093,7 +1098,7 @@ function SubtaskRow({
           e.stopPropagation();
           onToggleDone(task);
         }}
-        title={task.status === "CANCELLED" ? "Cancelled — change its status to reopen" : undefined}
+        title={task.status === "CANCELLED" ? "Cancelled. Change its status to reopen." : undefined}
         aria-label={task.status === "CANCELLED" ? "Cancelled" : done ? "Mark not done" : "Mark done"}
         className={[
           "flex h-3.5 w-3.5 shrink-0 items-center justify-center rounded-full border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30",
@@ -1101,7 +1106,7 @@ function SubtaskRow({
           canEdit ? "cursor-pointer" : "cursor-default",
         ].join(" ")}
       >
-        {done && <span className="material-symbols-outlined text-meta leading-none">check</span>}
+        {done && <span aria-hidden="true" className="material-symbols-outlined text-meta leading-none">check</span>}
       </button>
       <span className="flex min-w-0 items-center gap-1">
         <span className={["truncate", done || task.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
@@ -1171,7 +1176,7 @@ function AssigneeOptions({
 }) {
   const addsMember = useAssigneeMembership(projectId);
   return (
-    <div className="absolute left-0 top-full z-20 mt-1 max-h-56 w-56 overflow-y-auto rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+    <div className="absolute left-0 top-full z-20 mt-1 max-h-56 w-56 overflow-y-auto rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
       <button
         type="button"
         onClick={() => onPick(null)}
@@ -1216,7 +1221,7 @@ function DueDateEditor({
   onSave: (start: string | null, due: string | null) => void;
 }) {
   if (!canEdit) {
-    return <span className="text-[12px] text-on-surface-variant">{fmt(dueISO, done)}</span>;
+    return <span className="text-meta text-on-surface-variant">{fmt(dueISO, done)}</span>;
   }
 
   const day = dayFromIso(dueISO);
@@ -1224,7 +1229,7 @@ function DueDateEditor({
   return (
     <DateField
       variant="bare"
-      className="text-[12px] font-[450] text-on-surface-variant hover:text-primary"
+      className="text-meta font-[450] text-on-surface-variant hover:text-primary"
       value={day}
       onChange={(next) => onSave(startISO, commitDraft(next, dueISO))}
       clearable
@@ -1254,7 +1259,7 @@ function StatusSelect({
       ].join(" ")}
     >
       {TASK_STATUS_LABEL[value]}
-      {canEdit && <span className="material-symbols-outlined text-meta">expand_more</span>}
+      {canEdit && <span aria-hidden="true" className="material-symbols-outlined text-meta">expand_more</span>}
     </span>
   );
 
@@ -1268,7 +1273,7 @@ function StatusSelect({
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute left-0 top-full z-20 mt-1 w-28 rounded-lg border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
+          <div className="absolute left-0 top-full z-20 mt-1 w-28 rounded-sm border border-outline-variant bg-surface-container-lowest py-1 shadow-overlay">
             {STATUSES.map((s) => (
               <button
                 key={s}
@@ -1344,5 +1349,5 @@ function fmt(iso: string | null, done: boolean): string {
   // The formatters read the UTC date part of the ISO instant, so this label's
   // day stays consistent with the tree cell, picker seed, and Gantt bar. A
   // finished task shows the plain date — "Nd late" would misreport it.
-  return (done ? fmtDay(iso) : fmtDue(iso)) || "—";
+  return (done ? fmtDay(iso) : fmtDue(iso)) || EMPTY_VALUE;
 }

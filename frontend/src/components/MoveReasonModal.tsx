@@ -50,7 +50,7 @@ export function MoveReasonModal({ open, onClose, onConfirm, dealTitle, busy = fa
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -58,7 +58,7 @@ export function MoveReasonModal({ open, onClose, onConfirm, dealTitle, busy = fa
             type="submit"
             form="move-reason-form"
             disabled={busy || reason.trim() === ""}
-            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {busy ? "Moving…" : "Move to RFP"}
           </button>
@@ -83,7 +83,7 @@ export function MoveReasonModal({ open, onClose, onConfirm, dealTitle, busy = fa
             required
             autoFocus
             disabled={busy}
-            className="w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           />
         </label>
 

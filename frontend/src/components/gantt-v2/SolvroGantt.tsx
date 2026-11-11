@@ -1109,7 +1109,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
                   "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-meta font-medium text-on-surface outline-hidden transition-colors hover:text-primary focus-visible:ring-2 focus-visible:ring-primary/30",
                 )}
               >
-                <span className="material-symbols-outlined text-[15px]">add</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[15px]">add</span>
                 Task
               </button>
               <button
@@ -1120,14 +1120,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
                   "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-meta font-medium text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/30",
                 )}
               >
-                <span className="material-symbols-outlined text-[15px]">add</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[15px]">add</span>
                 Section
               </button>
             </div>
           </>
         )}
 
-        <span className="ml-2 hidden font-mono text-[12px] text-on-surface-variant lg:inline">
+        <span className="ml-2 hidden font-mono text-meta text-on-surface-variant lg:inline">
           {tasks.filter((t) => t.startDate || t.dueDate).length} dated · {sections.length} sections
         </span>
 
@@ -1156,7 +1156,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
                 "inline-flex items-center gap-1 rounded-sm px-2.5 font-display text-meta font-medium text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50",
               )}
             >
-              <span className="material-symbols-outlined text-[15px]">today</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[15px]">today</span>
               Today
             </button>
             <button
@@ -1169,7 +1169,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
                 "inline-flex w-7 items-center justify-center rounded-sm text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50",
               )}
             >
-              <span className="material-symbols-outlined text-[15px]">chevron_left</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[15px]">chevron_left</span>
             </button>
             <button
               type="button"
@@ -1181,7 +1181,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
                 "inline-flex w-7 items-center justify-center rounded-sm text-on-surface-variant outline-hidden transition-colors hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/30 disabled:opacity-50",
               )}
             >
-              <span className="material-symbols-outlined text-[15px]">chevron_right</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[15px]">chevron_right</span>
             </button>
           </div>
           {/* resources.length gate: <Gantt> (and the GanttNavTitleSync bridge
@@ -1209,7 +1209,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
               title={
                 baselineLockedAt
                   ? `Baseline locked ${baselineLockedAtPretty}${baselineLockedBy ? ` by ${baselineLockedBy.username}` : ""}`
-                  : "No baseline locked yet — lock one from the Context panel"
+                  : "No baseline locked yet. Lock one from the Context panel"
               }
               className={cn(
                 TOOLBAR_ITEM_HEIGHT,
@@ -1219,7 +1219,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
                   : "text-on-surface-variant hover:text-on-surface",
               )}
             >
-              <span className="material-symbols-outlined text-[15px]">show_chart</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[15px]">show_chart</span>
               Baseline
             </button>
           </div>
@@ -1279,7 +1279,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
                 onValueChange={(v) => setColorBy(v as ColorByMode)}
               >
                 {COLOR_BY_MODES.map((mode) => (
-                  <DropdownMenuRadioItem key={mode} value={mode} className="text-[12px]">
+                  <DropdownMenuRadioItem key={mode} value={mode} className="text-meta">
                     {COLOR_BY_LABELS[mode]}
                   </DropdownMenuRadioItem>
                 ))}
@@ -1305,7 +1305,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
                     <span
                       key={`${colorBy}-${i}-${label}`}
                       title={label}
-                      className="flex min-w-0 items-center gap-2 text-[12px] text-on-surface-variant"
+                      className="flex min-w-0 items-center gap-2 text-meta text-on-surface-variant"
                     >
                       <span
                         className="h-2 w-2 shrink-0 rounded-[2px]"
@@ -1322,7 +1322,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
                       in the mode-specific list above. */}
                   <span
                     title={CRITICAL_PATH_LABEL}
-                    className="flex min-w-0 items-center gap-2 text-[12px] text-on-surface-variant"
+                    className="flex min-w-0 items-center gap-2 text-meta text-on-surface-variant"
                   >
                     {/* Phase review: a 2px ring on this 8px box left only a 4px
                         hole and read as a filled square. A 1px ring keeps a 6px
@@ -1372,14 +1372,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
                 <button
                   type="button"
                   onClick={() => runExport("excel")}
-                  className="block w-full px-3 py-1.5 text-left text-[12px] text-on-surface hover:bg-surface-container-low"
+                  className="block w-full px-3 py-1.5 text-left text-meta text-on-surface hover:bg-surface-container-low"
                 >
                   Excel
                 </button>
                 <button
                   type="button"
                   onClick={() => runExport("pdf")}
-                  className="block w-full px-3 py-1.5 text-left text-[12px] text-on-surface hover:bg-surface-container-low"
+                  className="block w-full px-3 py-1.5 text-left text-meta text-on-surface hover:bg-surface-container-low"
                 >
                   PDF
                 </button>

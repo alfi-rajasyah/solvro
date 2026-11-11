@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { TOOLBAR_BUTTON_OUTLINE } from "@/lib/utils";
 import { useProjectContext } from "../ProjectDetail";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { CardGridSkeleton } from "@/components/skeletons";
@@ -28,7 +29,7 @@ export function ProjectServices() {
   }, [project.customerId, customer]);
 
   // Subscribed services not yet assigned at the project level — the set the
-  // "Add all subscribed" bulk action fills in, carrying over the customer's
+  // "Add customer's services" bulk action fills in, carrying over the customer's
   // per-service tools for each newly-added row.
   const missingSubscribed = useMemo(() => {
     if (!customer) return [];
@@ -49,30 +50,13 @@ export function ProjectServices() {
       await update.mutateAsync(merged);
     } catch (err) {
       setAddAllError(
-        err instanceof ApiError ? err.message : "Could not add subscribed services.",
+        err instanceof ApiError ? err.message : "Could not add the customer's services.",
       );
     }
   }
 
   return (
     <div className="flex flex-col gap-4 md:min-h-0 md:flex-1">
-      {showAddAll && (
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <p className="font-display text-label-caps uppercase text-on-surface-variant">
-            Bulk actions
-          </p>
-          <button
-            type="button"
-            onClick={handleAddAllSubscribed}
-            disabled={update.isPending}
-            className="inline-flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container disabled:opacity-60"
-          >
-            <span className="material-symbols-outlined text-base">playlist_add</span>
-            Add all subscribed
-          </button>
-        </div>
-      )}
-
       {addAllError && (
         <Alert variant="destructive">
           <AlertDescription>{addAllError}</AlertDescription>
@@ -91,7 +75,20 @@ export function ProjectServices() {
             saving={update.isPending}
             subscribedServiceIds={subscribedServiceIds}
             title="Services in Scope"
-            description="Select the services in play for this engagement and the tools used for each. Services the customer subscribes to are badged."
+            toolbarActions={
+              showAddAll && (
+                <button
+                  type="button"
+                  onClick={handleAddAllSubscribed}
+                  disabled={update.isPending}
+                  className={TOOLBAR_BUTTON_OUTLINE}
+                >
+                  <span aria-hidden="true" className="material-symbols-outlined text-base">playlist_add</span>
+                  Add customer's services
+                </button>
+              )
+            }
+            description={'Tick the services this project delivers and list the tools used for each. "Subscribed" marks the ones the customer already subscribes to.'}
           />
         )}
       </div>

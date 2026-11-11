@@ -17,7 +17,7 @@ const SCOPE_LABEL: Record<ItopTicketScope, string> = {
 };
 
 const PILL_BASE =
-  "rounded-sm px-3 py-1 font-display text-[12px] font-semibold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
+  "rounded-sm px-3 py-1 font-display text-meta font-semibold whitespace-nowrap transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30";
 
 /** Exported (fix round, phase review) so other Tickets-tab toggle controls
  * (e.g. `TicketsTab.tsx`'s Table|Board `ViewSwitch`) share the exact same

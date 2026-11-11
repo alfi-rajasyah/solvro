@@ -35,9 +35,9 @@ export function PipelineOverviewPanel() {
   return (
     <section className="space-y-3">
       <header className="flex items-center justify-between">
-        <h3 className="font-display text-sm font-bold text-on-surface">Pipeline</h3>
-        <Link to="/pipeline" className="text-meta font-semibold text-primary hover:underline">
-          View pipeline →
+        <h2 className="font-display text-sm font-bold text-on-surface">Pipeline</h2>
+        <Link to="/pipeline" className="tap-target text-meta font-semibold text-primary hover:underline">
+          View pipeline
         </Link>
       </header>
 
@@ -126,7 +126,7 @@ function Kpi({ label, value, hint, icon, tone }: KpiProps) {
     <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
         <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
-        <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
+        <span aria-hidden="true" className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
         <span className="text-3xl font-bold tabular-nums text-on-surface">{value}</span>

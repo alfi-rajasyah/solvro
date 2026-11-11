@@ -1,3 +1,4 @@
+import { TOOLBAR_BUTTON_PRIMARY } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { ProjectFormModal } from "@/components/ProjectFormModal";
@@ -154,9 +155,9 @@ export function Projects() {
           <button
             type="button"
             onClick={() => setCreateOpen(true)}
-            className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-sm text-on-primary transition-colors hover:bg-primary-container font-semibold"
+            className={TOOLBAR_BUTTON_PRIMARY}
           >
-            <span className="material-symbols-outlined text-base">add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
             New project
           </button>
         )}
@@ -172,7 +173,7 @@ export function Projects() {
           allowMultiple={false}
         />
         {projects && projects.length > 0 && (
-          <span className="ml-auto font-mono text-[12px] text-on-surface-variant">
+          <span className="ml-auto font-mono text-meta text-on-surface-variant">
             {projects.length} {projects.length === 1 ? "project" : "projects"}
           </span>
         )}
@@ -234,12 +235,12 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
       </div>
 
       {/* Title */}
-      <h3 className="mb-1 truncate font-display text-sm font-bold leading-tight text-on-surface group-hover:text-primary">
+      <h2 className="mb-1 truncate font-display text-sm font-bold leading-tight text-on-surface group-hover:text-primary">
         {project.name}
-      </h3>
+      </h2>
 
       {/* Description */}
-      <p className="mb-3 line-clamp-2 min-h-[2.4rem] text-[12px] leading-snug text-on-surface-variant">
+      <p className="mb-3 line-clamp-2 min-h-[2.4rem] text-meta leading-snug text-on-surface-variant">
         {project.description ?? "No description."}
       </p>
 
@@ -298,7 +299,7 @@ function ProjectCard({ project }: { project: ProjectSummary }) {
             )}
             {project.baselineLockedAt && (
               <span className="flex items-center gap-1" title="Baseline locked">
-                <span className="material-symbols-outlined text-[14px] text-primary">bookmark</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[14px] text-primary">bookmark</span>
                 Baseline locked
               </span>
             )}
@@ -328,8 +329,8 @@ function avatarClass(seed: string) {
 
 function EmptyState({ onCreate }: { onCreate?: () => void }) {
   return (
-    <div className="rounded-xl border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center">
-      <span className="material-symbols-outlined mb-2 text-4xl text-on-surface-variant">
+    <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center">
+      <span aria-hidden="true" className="material-symbols-outlined mb-2 text-4xl text-on-surface-variant">
         folder_open
       </span>
       <p className="mb-4 text-sm text-on-surface-variant">No projects yet.</p>
@@ -337,9 +338,9 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
         <button
           type="button"
           onClick={onCreate}
-          className="inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
+          className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
         >
-          <span className="material-symbols-outlined text-base">add</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
           Create your first project
         </button>
       )}
@@ -349,15 +350,15 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
 
 function FilteredEmptyState({ filterName, onClear }: { filterName: string; onClear: () => void }) {
   return (
-    <div className="rounded-xl border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center">
-      <span className="material-symbols-outlined mb-2 text-4xl text-on-surface-variant">
+    <div className="rounded-sm border border-dashed border-outline-variant bg-surface-container-lowest p-12 text-center">
+      <span aria-hidden="true" className="material-symbols-outlined mb-2 text-4xl text-on-surface-variant">
         filter_alt_off
       </span>
       <p className="mb-4 text-sm text-on-surface-variant">No projects match {filterName}.</p>
       <button
         type="button"
         onClick={onClear}
-        className="inline-flex items-center gap-2 rounded-lg border border-outline-variant px-4 py-2 font-display text-xs font-bold text-on-surface hover:border-primary hover:text-primary"
+        className="inline-flex items-center gap-2 rounded-sm border border-outline-variant px-4 py-2 font-display text-xs font-bold text-on-surface hover:border-primary hover:text-primary"
       >
         Clear filters
       </button>
@@ -371,7 +372,7 @@ function SkeletonGrid() {
       {Array.from({ length: 3 }).map((_, i) => (
         <div
           key={i}
-          className="h-40 animate-pulse rounded-xl bg-surface-container-low"
+          className="h-40 animate-pulse rounded-sm bg-surface-container-low"
         />
       ))}
     </div>

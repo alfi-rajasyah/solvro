@@ -139,7 +139,7 @@ export function LinksSection({
             }}
             className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2 py-1 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
           >
-            <span className="material-symbols-outlined text-base">add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
             Add link
           </button>
         )}
@@ -350,7 +350,7 @@ function LinkRow({
 
   return (
     <li className="flex items-center gap-2 py-2">
-      <span className="material-symbols-outlined shrink-0 text-[17px] text-primary">
+      <span aria-hidden="true" className="material-symbols-outlined shrink-0 text-[17px] text-primary">
         {linkIcon(link.url)}
       </span>
       <a
@@ -370,17 +370,17 @@ function LinkRow({
             type="button"
             onClick={startEdit}
             aria-label="Edit link"
-            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
+            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
           >
-            <span className="material-symbols-outlined text-[16px]">edit</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[16px]">edit</span>
           </button>
           <button
             type="button"
             onClick={onDelete}
             aria-label="Delete link"
-            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-error"
+            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-error"
           >
-            <span className="material-symbols-outlined text-[16px]">delete</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[16px]">delete</span>
           </button>
         </div>
       )}

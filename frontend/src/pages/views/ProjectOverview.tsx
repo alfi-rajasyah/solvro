@@ -1,3 +1,4 @@
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
 import {
@@ -16,7 +17,7 @@ import { useProjectContext } from "../ProjectDetail";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { DealCard } from "@/components/DealCard";
 import { Alert, AlertDescription } from "@/components/reui/alert";
-import { scoreClass, scoreLevel } from "@/components/RiskFormModal";
+import { RiskScoreChip } from "@/components/RiskScoreChip";
 import { ProjectActivity } from "@/components/ProjectActivity";
 import { Chip } from "@/components/StatusChip";
 import { dateToDay, dayFromIso } from "@/lib/dateField";
@@ -109,7 +110,7 @@ export function ProjectOverview() {
           value={project.baselineLockedAt ? "Locked" : "Not set"}
           hint={
             project.baselineLockedAt
-              ? `by ${project.baselineLockedBy?.username ?? "—"} · ${fmtDay(dateToDay(new Date(project.baselineLockedAt)))}`
+              ? `by ${project.baselineLockedBy?.username ?? EMPTY_VALUE} · ${fmtDay(dateToDay(new Date(project.baselineLockedAt)))}`
               : "Lock to capture planned dates"
           }
           accent={project.baselineLockedAt ? "primary" : undefined}
@@ -120,9 +121,9 @@ export function ProjectOverview() {
       <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
         <header className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h3 className="font-display text-base font-semibold text-on-surface">
+            <h2 className="font-display text-base font-semibold text-on-surface">
               Progress S-Curve
-            </h3>
+            </h2>
             <p className="mt-0.5 text-xs text-on-surface-variant">
               Cumulative tasks scheduled to complete over time. Compares the locked
               baseline against the current (re-planned) schedule.
@@ -132,9 +133,9 @@ export function ProjectOverview() {
             <button
               type="button"
               onClick={openContext}
-              className="inline-flex items-center gap-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface hover:border-primary hover:text-primary"
+              className="inline-flex items-center gap-1.5 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-xs font-semibold text-on-surface hover:border-primary hover:text-primary"
             >
-              <span className="material-symbols-outlined text-base">lock</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-base">lock</span>
               Lock baseline
             </button>
           )}
@@ -210,7 +211,7 @@ function NeedsAttention({
   return (
     <section className={PANEL_CLASS}>
       <header className="mb-3 flex items-center justify-between">
-        <h3 className={PANEL_HEADING}>Needs attention</h3>
+        <h2 className={PANEL_HEADING}>Needs attention</h2>
         <span className="text-xs text-on-surface-variant">overdue + next 7 days</span>
       </header>
       {shown.length === 0 ? (
@@ -252,7 +253,7 @@ function NeedsAttention({
           className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline"
         >
           {rows.length - shown.length} more in List
-          <span className="material-symbols-outlined text-[15px]">chevron_right</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-[15px]">chevron_right</span>
         </Link>
       )}
     </section>
@@ -271,7 +272,7 @@ function StatusBreakdown({ tasks: allTasks }: { tasks: Task[] }) {
 
   return (
     <section className={PANEL_CLASS}>
-      <h3 className={`${PANEL_HEADING} mb-3`}>Status breakdown</h3>
+      <h2 className={`${PANEL_HEADING} mb-3`}>Status breakdown</h2>
       {allTasks.length === 0 ? (
         <PanelEmpty icon="list_alt" text="No tasks yet." />
       ) : (
@@ -324,7 +325,7 @@ function TopRisks({ projectId }: { projectId: number }) {
   return (
     <section className={PANEL_CLASS}>
       <header className="mb-3 flex items-center justify-between">
-        <h3 className={PANEL_HEADING}>Top open risks</h3>
+        <h2 className={PANEL_HEADING}>Top open risks</h2>
         <Link
           to={`/projects/${projectId}/risks`}
           className="text-xs font-semibold text-primary hover:underline"
@@ -341,24 +342,12 @@ function TopRisks({ projectId }: { projectId: number }) {
       ) : (
         <ul className="space-y-2">
           {top.map((risk) => {
-            const score = risk.probability * risk.impact;
             return (
               <li key={risk.id} className="flex items-center justify-between gap-3">
                 <span className="min-w-0 truncate text-sm text-on-surface">
                   {risk.description}
                 </span>
-                <span
-                  className={[
-                    "flex shrink-0 items-center gap-1 rounded-sm border px-1.5 py-0.5 text-xs font-bold tabular-nums",
-                    scoreClass(score),
-                  ].join(" ")}
-                  title={`${risk.probability} × ${risk.impact} = ${score}`}
-                >
-                  {score}
-                  <span className="font-display text-label-caps uppercase">
-                    {scoreLevel(score)}
-                  </span>
-                </span>
+                <RiskScoreChip probability={risk.probability} impact={risk.impact} />
               </li>
             );
           })}
@@ -383,7 +372,7 @@ function ProjectNotesPanel({ projectId }: { projectId: number }) {
   return (
     <section className={PANEL_CLASS}>
       <header className="mb-3 flex items-center justify-between">
-        <h3 className={PANEL_HEADING}>Notes</h3>
+        <h2 className={PANEL_HEADING}>Notes</h2>
         <Link
           to="/daily-review"
           className="text-xs font-semibold text-primary hover:underline"
@@ -431,7 +420,7 @@ function daysBefore(day: string, n: number): string {
 function PanelEmpty({ icon, text }: { icon: string; text: string }) {
   return (
     <div className="flex items-center gap-2 rounded-sm border border-dashed border-outline-variant px-3 py-4 text-xs text-on-surface-variant">
-      <span className="material-symbols-outlined text-base">{icon}</span>
+      <span aria-hidden="true" className="material-symbols-outlined text-base">{icon}</span>
       {text}
     </div>
   );
@@ -472,7 +461,7 @@ function Kpi({
     <div className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
       <div className="flex items-center justify-between">
         <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
-        <span className={`material-symbols-outlined text-base ${accent === "primary" ? "text-primary" : accent === "success" ? "text-success" : accent === "error" ? "text-error" : "text-on-surface-variant"}`}>{icon}</span>
+        <span aria-hidden="true" className={`material-symbols-outlined text-base ${accent === "primary" ? "text-primary" : accent === "success" ? "text-success" : accent === "error" ? "text-error" : "text-on-surface-variant"}`}>{icon}</span>
       </div>
       <div className={`mt-2 font-body text-3xl font-bold tabular-nums ${accentClass}`}>{value}</div>
       {progress !== undefined && (
@@ -500,7 +489,7 @@ function Legend2({ swatch, label }: { swatch: string; label: string }) {
 function EmptyChart({ icon, title, body }: { icon: string; title: string; body: string }) {
   return (
     <div className="flex h-72 flex-col items-center justify-center gap-2 rounded-sm border border-dashed border-outline-variant text-center">
-      <span className="material-symbols-outlined text-3xl text-on-surface-variant">{icon}</span>
+      <span aria-hidden="true" className="material-symbols-outlined text-3xl text-on-surface-variant">{icon}</span>
       <p className="text-sm font-semibold text-on-surface">{title}</p>
       <p className="text-xs text-on-surface-variant">{body}</p>
     </div>

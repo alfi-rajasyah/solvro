@@ -63,7 +63,7 @@ export function PicDrillDownModal({ picId, picName, deals, onClose }: PicDrillDo
                   <span className="text-xs font-semibold tabular-nums text-on-surface">
                     {formatIDRCompact(deal.dealValue)}
                   </span>
-                  <span className="material-symbols-outlined text-base text-on-surface-variant">
+                  <span aria-hidden="true" className="material-symbols-outlined text-base text-on-surface-variant">
                     chevron_right
                   </span>
                 </div>

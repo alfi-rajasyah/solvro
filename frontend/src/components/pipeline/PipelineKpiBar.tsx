@@ -95,7 +95,7 @@ function KpiTile({ label, value, hint, icon, tone }: KpiTileProps) {
     <div className="rounded-sm border border-outline-variant bg-surface-container p-4">
       <div className="flex items-center justify-between gap-2">
         <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
-        <span className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
+        <span aria-hidden="true" className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
       </div>
       <div className="mt-2 flex items-baseline gap-2">
         <span className="truncate text-2xl font-bold tabular-nums text-on-surface">

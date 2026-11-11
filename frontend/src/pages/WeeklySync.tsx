@@ -6,6 +6,7 @@ import { HEALTH_CLASS, WEEKLY_STATUS_BADGE } from "@/components/daily-review/Syn
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { Badge } from "@/components/reui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { weekNumberLabel } from "@/lib/dailyReviewStats";
 import { dateToDay } from "@/lib/dateField";
@@ -210,9 +211,9 @@ export function WeeklySync() {
               type="button"
               onClick={() => goToWeek(shiftWeek(week, -1))}
               aria-label="Previous week"
-              className="flex h-8 w-8 items-center justify-center rounded-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="tap-target flex h-8 w-8 items-center justify-center rounded-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
-              <span className="material-symbols-outlined text-lg">chevron_left</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">chevron_left</span>
             </button>
             <div className="text-center">
               <div className="text-label-caps uppercase text-on-surface-variant">
@@ -224,9 +225,9 @@ export function WeeklySync() {
               type="button"
               onClick={() => goToWeek(shiftWeek(week, 1))}
               aria-label="Next week"
-              className="flex h-8 w-8 items-center justify-center rounded-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+              className="tap-target flex h-8 w-8 items-center justify-center rounded-sm border border-outline-variant text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
-              <span className="material-symbols-outlined text-lg">chevron_right</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-lg">chevron_right</span>
             </button>
           </div>
 
@@ -236,15 +237,15 @@ export function WeeklySync() {
               onClick={handleCopy}
               disabled={!data}
               data-testid="weekly-sync-copy"
-              className="inline-flex items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container disabled:opacity-50"
+              className="inline-flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container disabled:opacity-50"
             >
-              <span className="material-symbols-outlined text-base">content_copy</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-base">content_copy</span>
               Copy as table
             </button>
             <span
               role="status"
               data-testid="weekly-sync-copied"
-              className="text-[12px] font-semibold text-on-surface-variant"
+              className="text-meta font-semibold text-on-surface-variant"
             >
               {copyMessage ?? ""}
             </span>
@@ -355,21 +356,21 @@ export function WeeklySync() {
           )}
 
           {noUpdateCount > 0 && (
-            <p data-testid="weekly-sync-hidden" className="text-[13px] text-on-surface-variant">
+            <p data-testid="weekly-sync-hidden" className="text-xs text-on-surface-variant">
               {noUpdateCount} {noUpdateCount === 1 ? "customer has" : "customers have"} no {tabLabel} update this
               week.{" "}
               <button
                 type="button"
                 onClick={() => setShowAll((v) => !v)}
                 data-testid="weekly-sync-hidden-toggle"
-                className="text-[12px] font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                className="text-meta font-semibold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
               >
                 {showAll ? "Hide them" : "Show them"}
               </button>
             </p>
           )}
 
-          <p className="text-[13px] text-on-surface-variant">
+          <p className="text-xs text-on-surface-variant">
             Click a row to open its {tabLabel} sync form. Copy as table pastes into Google Docs as a real table.
           </p>
         </>
@@ -442,10 +443,10 @@ function Cell({ children, border = "outline" }: { children: ReactNode; border?: 
 
 function TextCell({ value, border }: { value: string | null | undefined; border?: CellBorder }) {
   const trimmed = value?.trim();
-  return <Cell border={border}>{trimmed ? value : <span className="text-on-surface-variant">—</span>}</Cell>;
+  return <Cell border={border}>{trimmed ? value : <span className="text-on-surface-variant">{EMPTY_VALUE}</span>}</Cell>;
 }
 
-/** The Highlight cell: the title, plus a small "has detail" note glyph (native title tooltip) when `detail` is non-empty (plan D3/§4). No highlight → the same "—" fallback as any other text cell. */
+/** The Highlight cell: the title, plus a small "has detail" note glyph (native title tooltip) when `detail` is non-empty (plan D3/§4). No highlight → the same EMPTY_VALUE fallback as any other text cell. */
 function HighlightCell({ highlight, border }: { highlight: WeeklyHighlight | null; border: CellBorder }) {
   if (!highlight) return <TextCell value={undefined} border={border} />;
   const hasDetail = Boolean(highlight.detail?.trim());
@@ -545,7 +546,7 @@ function MidweekBlock({ customer, gridColsClass, clickable, onOpen }: MidweekBlo
               {isFirst && (
                 <>
                   <div className="font-semibold text-on-surface">{customer.name}</div>
-                  <div className="mt-0.5 text-[12px] text-on-surface-variant">{category ?? "—"}</div>
+                  <div className="mt-0.5 text-meta text-on-surface-variant">{category ?? EMPTY_VALUE}</div>
                 </>
               )}
             </Cell>
@@ -556,7 +557,7 @@ function MidweekBlock({ customer, gridColsClass, clickable, onOpen }: MidweekBlo
                     {WEEKLY_HEALTH_LABEL[health]}
                   </span>
                 ) : (
-                  <span className="text-on-surface-variant">—</span>
+                  <span className="text-on-surface-variant">{EMPTY_VALUE}</span>
                 ))}
             </Cell>
             <HighlightCell highlight={highlight} border={rowBorder} />
@@ -577,7 +578,7 @@ function MidweekBlock({ customer, gridColsClass, clickable, onOpen }: MidweekBlo
   );
 }
 
-/** The achievement title cell: the title, plus the same "has detail" note glyph as `HighlightCell` (native title tooltip), shown when `detail` is non-empty after trim (plan D3/§4). No achievement → the same "—" fallback as any other text cell. */
+/** The achievement title cell: the title, plus the same "has detail" note glyph as `HighlightCell` (native title tooltip), shown when `detail` is non-empty after trim (plan D3/§4). No achievement → the same EMPTY_VALUE fallback as any other text cell. */
 function AchievementTitleCell({
   achievement,
   border,
@@ -639,7 +640,7 @@ function ReflectionBlock({ customer, gridColsClass, clickable, onOpen }: Reflect
               {isFirst && (
                 <>
                   <div className="font-semibold text-on-surface">{customer.name}</div>
-                  <div className="mt-0.5 text-[12px] text-on-surface-variant">{category ?? "—"}</div>
+                  <div className="mt-0.5 text-meta text-on-surface-variant">{category ?? EMPTY_VALUE}</div>
                 </>
               )}
             </Cell>
@@ -650,7 +651,7 @@ function ReflectionBlock({ customer, gridColsClass, clickable, onOpen }: Reflect
                     {WEEKLY_HEALTH_LABEL[health]}
                   </span>
                 ) : (
-                  <span className="text-on-surface-variant">—</span>
+                  <span className="text-on-surface-variant">{EMPTY_VALUE}</span>
                 ))}
             </Cell>
             <AchievementTitleCell achievement={achievement} border={rowBorder} />

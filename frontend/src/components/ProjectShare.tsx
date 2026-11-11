@@ -50,7 +50,7 @@ export function ProjectShareButton({ project }: { project: ProjectDetail }) {
         aria-label="Share with a guest"
         title="Share with a guest"
         data-testid="share-button"
-        className={`inline-flex h-8 items-center gap-1.5 rounded-lg border border-outline-variant bg-surface-container-lowest px-2 font-display text-xs font-bold text-on-surface transition-colors hover:bg-surface-container ${FOCUS_RING}`}
+        className={`inline-flex h-8 items-center gap-1.5 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 font-display text-xs font-bold text-on-surface transition-colors hover:bg-surface-container ${FOCUS_RING}`}
       >
         <span className="material-symbols-outlined text-base" aria-hidden="true">
           ios_share
@@ -143,7 +143,7 @@ function ProjectShareDialog({
         <p className="text-xs text-on-surface-variant">
           Anyone with a guest link can view a read-only summary of this project without signing in:
           its name, customer and status, each phase with its dates and progress, and the
-          milestones. Nothing else is shared — no tasks, notes, comments, risks or people.
+          milestones. Nothing else is shared: no tasks, notes, comments, risks or people.
         </p>
 
         {error && (
@@ -186,7 +186,7 @@ function ProjectShareDialog({
           <button
             type="submit"
             disabled={create.isPending}
-            className={`rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60 ${FOCUS_RING}`}
+            className={`rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60 ${FOCUS_RING}`}
           >
             {create.isPending ? "Creating…" : "Create link"}
           </button>
@@ -195,7 +195,7 @@ function ProjectShareDialog({
         {created && <NewLinkPanel link={created} />}
 
         <section ref={listSection} aria-labelledby="share-links-heading">
-          <h3
+          <h2
             id="share-links-heading"
             ref={listHeading}
             tabIndex={-1}
@@ -203,7 +203,7 @@ function ProjectShareDialog({
             className="mb-2 text-label-caps uppercase text-on-surface-variant outline-hidden"
           >
             Guest links
-          </h3>
+          </h2>
           {links.isLoading ? (
             <SkeletonRegion className="space-y-2">
               {[0, 1].map((i) => (
@@ -289,7 +289,7 @@ function NewLinkPanel({ link }: { link: CreatedShareLink }) {
         <button
           type="button"
           onClick={() => void handleCopy()}
-          className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 ${FOCUS_RING}`}
+          className={`inline-flex shrink-0 items-center justify-center gap-1.5 rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 ${FOCUS_RING}`}
         >
           <span className="material-symbols-outlined text-base" aria-hidden="true">
             {state === "copied" ? "check" : "content_copy"}
@@ -297,14 +297,14 @@ function NewLinkPanel({ link }: { link: CreatedShareLink }) {
           {state === "copied" ? "Copied" : "Copy link"}
         </button>
       </div>
-      <p className="text-xs text-on-surface">You won't see this link again — copy it now.</p>
+      <p className="text-xs text-on-surface">You won't see this link again. Copy it now.</p>
       {/* Live region for both outcomes; a success is announced only to
           screen readers (the button already reads "Copied"). */}
       <p role="status" className={state === "failed" ? "text-xs text-error" : "sr-only"}>
         {state === "copied"
           ? "Link copied to clipboard."
           : state === "failed"
-            ? "Could not copy automatically — the link is selected, press Ctrl+C."
+            ? "Could not copy automatically. The link is selected, press Ctrl+C."
             : ""}
       </p>
     </section>
@@ -371,7 +371,7 @@ function ShareLinkRow({
             type="button"
             onClick={onAskRevoke}
             aria-label={`Revoke ${title}`}
-            className={`shrink-0 rounded-lg border border-outline-variant px-3 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container hover:text-error ${FOCUS_RING}`}
+            className={`shrink-0 rounded-sm border border-outline-variant px-3 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container hover:text-error ${FOCUS_RING}`}
           >
             Revoke
           </button>
@@ -393,7 +393,7 @@ function ShareLinkRow({
               onCancel();
             }}
             disabled={busy}
-            className={`rounded-lg border border-outline-variant px-3 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container ${FOCUS_RING}`}
+            className={`rounded-sm border border-outline-variant px-3 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container ${FOCUS_RING}`}
           >
             Cancel
           </button>
@@ -401,7 +401,7 @@ function ShareLinkRow({
             type="button"
             onClick={onRevoke}
             disabled={busy}
-            className={`rounded-lg bg-error px-3 py-1 text-xs font-bold text-on-error hover:bg-error/90 disabled:opacity-60 ${FOCUS_RING}`}
+            className={`rounded-sm bg-error px-3 py-1 text-xs font-bold text-on-error hover:bg-error/90 disabled:opacity-60 ${FOCUS_RING}`}
           >
             {busy ? "Revoking…" : "Revoke link"}
           </button>

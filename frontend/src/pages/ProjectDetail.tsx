@@ -169,6 +169,9 @@ export function ProjectDetail() {
           (TopBar.tsx); the description lives in the Context sidebar
           (RightSidebar.tsx). This row keeps the project's facts and its
           actions next to the tabs. */}
+      {/* The TopBar already shows the name visually; this is the page's h1
+          for assistive tech and the document outline. */}
+      <h1 className="sr-only">{project.name}</h1>
       <div className="mb-3 flex items-start justify-between gap-3 md:gap-4">
         <ProjectHeaderFacts project={project} />
 
@@ -183,15 +186,15 @@ export function ProjectDetail() {
           {canEdit && isOwner && <ProjectShareButton project={project} />}
           <CopyLinkButton
             label="Copy link"
-            className="h-8 w-8 rounded-lg border border-outline-variant bg-surface-container-lowest hover:bg-surface-container"
+            className="tap-target h-8 w-8 rounded-sm border border-outline-variant bg-surface-container-lowest hover:bg-surface-container"
           />
           {canEdit && (
             <button
               type="button"
               onClick={() => setEditOpen(true)}
-              className="hidden items-center gap-2 rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container md:inline-flex"
+              className="hidden items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 font-display text-xs font-bold text-on-surface hover:bg-surface-container md:inline-flex"
             >
-              <span className="material-symbols-outlined text-base">edit</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-base">edit</span>
               Edit
             </button>
           )}
@@ -203,7 +206,7 @@ export function ProjectDetail() {
                   aria-label="More project actions"
                   title="More project actions"
                   className={[
-                    "h-8 w-8 items-center justify-center rounded-lg border border-outline-variant bg-surface-container-lowest text-on-surface-variant outline-hidden transition-colors hover:bg-surface-container hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/30",
+                    "tap-target h-8 w-8 items-center justify-center rounded-sm border border-outline-variant bg-surface-container-lowest text-on-surface-variant outline-hidden transition-colors hover:bg-surface-container hover:text-on-surface focus-visible:ring-2 focus-visible:ring-primary/30",
                     canDelete ? "inline-flex" : "inline-flex md:hidden",
                   ].join(" ")}
                 >
@@ -262,7 +265,7 @@ export function ProjectDetail() {
             aria-label={contextOpen ? "Hide project context" : "Show project context"}
             title={contextOpen ? "Hide project context" : "Show project context"}
             className={[
-              "hidden h-8 w-8 items-center justify-center rounded-lg border transition-colors md:inline-flex",
+              "tap-target hidden h-8 w-8 items-center justify-center rounded-sm border transition-colors md:inline-flex",
               contextOpen
                 ? "border-primary bg-primary/10 text-primary"
                 : "border-outline-variant bg-surface-container-lowest text-on-surface-variant hover:bg-surface-container hover:text-on-surface",
@@ -291,7 +294,7 @@ export function ProjectDetail() {
               to={tab.to}
               className={({ isActive }) =>
                 [
-                  "-mb-px border-b-2 px-1 pb-3 font-display text-sm transition-colors",
+                  "tap-target -mb-px border-b-2 px-1 pb-3 font-display text-sm transition-colors",
                   isActive
                     ? "border-primary text-primary"
                     : "border-transparent text-on-surface-variant hover:text-on-surface",

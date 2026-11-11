@@ -10,6 +10,7 @@ import {
   rangeFromPair,
 } from "@/lib/dateField";
 import { cn, FIELD_FOCUS } from "@/lib/utils";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 
 interface DateRangeFieldProps {
   /** Plain calendar day, `"yyyy-MM-dd"` — no time, no timezone. Null = unset. */
@@ -83,7 +84,7 @@ const triggerBaseClasses =
 
 const variantClasses = {
   boxed:
-    `rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-[12px] text-on-surface ${FIELD_FOCUS}`,
+    `rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-0.5 font-mono text-meta text-on-surface ${FIELD_FOCUS}`,
   bare: "border-none bg-transparent text-xs font-semibold text-on-surface",
 } as const;
 
@@ -94,10 +95,10 @@ const footerButtonClasses =
 function formatRangeDisplay(
   start: string | null,
   end: string | null,
-  emptyLabel = "—",
+  emptyLabel = EMPTY_VALUE,
 ): string {
   if (!start && !end) return emptyLabel;
-  return `${formatDisplay(start) || "—"} – ${formatDisplay(end) || "—"}`;
+  return `${formatDisplay(start) || EMPTY_VALUE} – ${formatDisplay(end) || EMPTY_VALUE}`;
 }
 
 /**

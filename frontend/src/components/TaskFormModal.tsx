@@ -368,7 +368,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
         className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container"
         aria-label="Close"
       >
-        <span className="material-symbols-outlined text-base">close</span>
+        <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
       </button>
     </div>
   );
@@ -398,7 +398,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               type="button"
               onClick={() => setConfirmDeleteOpen(true)}
               disabled={submitting}
-              className="mr-auto rounded-lg border border-error/40 px-3 py-1.5 text-xs font-medium text-error hover:bg-error/10 disabled:opacity-50"
+              className="mr-auto rounded-sm border border-error/40 px-3 py-1.5 text-xs font-medium text-error hover:bg-error/10 disabled:opacity-50"
             >
               {remove.isPending ? "Deleting…" : "Delete task"}
             </button>
@@ -407,7 +407,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             type="button"
             onClick={requestClose}
             disabled={submitting}
-            className="ml-auto rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="ml-auto rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -415,7 +415,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             type="submit"
             form="task-form"
             disabled={submitting}
-            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {submitting ? "Saving…" : isEdit ? "Save" : "Create task"}
           </button>
@@ -435,14 +435,14 @@ export function TaskFormModal(props: TaskFormModalProps) {
               placeholder="Task title"
               aria-label="Task title"
               {...invalidProps("title")}
-              className="flex-1 border-none bg-transparent text-lg font-bold text-on-surface outline-hidden placeholder:text-on-surface-variant/40 focus:outline-hidden"
+              className={`flex-1 border-none bg-transparent text-lg font-bold text-on-surface outline-hidden placeholder:text-on-surface-variant/40 focus:outline-hidden ${FIELD_FOCUS}`}
             />
           </div>
           <FieldError id={errorId("title")} message={fieldErrors.title} />
         </div>
 
         {/* Icon field rows */}
-        <div className="space-y-2 rounded-xl border border-outline-variant bg-surface-container-low p-3">
+        <div className="space-y-2 rounded-sm border border-outline-variant bg-surface-container-low p-3">
           {/* Priority */}
           <FieldRow icon="flag" label="Priority" error={fieldErrors.priority} errorId={errorId("priority")}>
             <select
@@ -451,7 +451,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               disabled={!canEdit}
               aria-label="Priority"
               {...invalidProps("priority")}
-              className={`cursor-pointer border-none bg-transparent text-xs font-semibold focus:outline-hidden disabled:cursor-default ${PRIORITY_COLOR[priority]}`}
+              className={`cursor-pointer border-none bg-transparent text-xs font-semibold focus:outline-hidden disabled:cursor-default ${PRIORITY_COLOR[priority]} ${FIELD_FOCUS}`}
             >
               {PRIORITIES.map((p) => (
                 <option key={p} value={p}>
@@ -469,7 +469,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               disabled={!canEdit}
               aria-label="Status"
               {...invalidProps("status")}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
+              className={`cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default ${FIELD_FOCUS}`}
             >
               {STATUSES.map((s) => (
                 <option key={s} value={s}>
@@ -504,7 +504,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               disabled={!canEdit}
               aria-label="Assignee"
               {...invalidProps("assignedToId")}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
+              className={`cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default ${FIELD_FOCUS}`}
             >
               <option value="">Unassigned</option>
               {(users ?? []).map((u) => (
@@ -546,7 +546,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               disabled={!canEdit}
               aria-label="Parent task"
               {...invalidProps("parentTaskId")}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
+              className={`cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default ${FIELD_FOCUS}`}
             >
               <option value="">Top level</option>
               {possibleParents.map((t) => (
@@ -567,7 +567,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               disabled={!canEdit}
               aria-label="Section"
               {...invalidProps("sectionId")}
-              className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
+              className={`cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default ${FIELD_FOCUS}`}
             >
               <option value="">No section</option>
               {(sections ?? []).map((s) => (
@@ -589,7 +589,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
                 disabled={!canEdit || parentTaskId !== ""}
                 aria-label="Epic"
                 {...invalidProps("epicId")}
-                className="cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default"
+                className={`cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default ${FIELD_FOCUS}`}
               >
                 <option value="">No epic</option>
                 {(epics ?? []).map((e) => (
@@ -631,7 +631,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             aria-label="Description"
             disabled={!canEdit}
             {...invalidProps("description")}
-            className={`w-full resize-y rounded-lg border bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 ${FIELD_FOCUS} disabled:cursor-default ${
+            className={`w-full resize-y rounded-sm border bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 ${FIELD_FOCUS} disabled:cursor-default ${
               fieldErrors.description ? "border-error" : "border-outline-variant"
             }`}
           />
@@ -647,7 +647,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             {subtasks.length === 0 ? (
               <p className="text-xs text-on-surface-variant">No subtasks yet.</p>
             ) : (
-              <ul className="divide-y divide-outline-variant rounded-xl border border-outline-variant">
+              <ul className="divide-y divide-outline-variant rounded-sm border border-outline-variant">
                 {subtasks.map((s, index) => (
                   <SubtaskRow
                     key={s.id}
@@ -737,7 +737,7 @@ export function SubtaskRow({
         type="checkbox"
         checked={s.status === "DONE"}
         disabled={s.status === "CANCELLED"}
-        title={s.status === "CANCELLED" ? "Cancelled — change its status to reopen" : undefined}
+        title={s.status === "CANCELLED" ? "Cancelled. Change its status to reopen" : undefined}
         // A checkbox with no label has no accessible name
         // (docs/archive/plans/application-review-2026-10-22.md, F-37).
         aria-label={`Mark subtask "${s.title}" done`}
@@ -757,7 +757,7 @@ export function SubtaskRow({
           aria-label="Move subtask up"
           className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
         >
-          <span className="material-symbols-outlined text-sm">keyboard_arrow_up</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-sm">keyboard_arrow_up</span>
         </button>
         <button
           type="button"
@@ -766,7 +766,7 @@ export function SubtaskRow({
           aria-label="Move subtask down"
           className="rounded-sm p-0.5 text-on-surface-variant hover:bg-surface-container disabled:pointer-events-none disabled:opacity-30"
         >
-          <span className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
+          <span aria-hidden="true" className="material-symbols-outlined text-sm">keyboard_arrow_down</span>
         </button>
       </div>
     </li>
@@ -789,7 +789,7 @@ function FieldRow({
 }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="material-symbols-outlined w-5 shrink-0 text-sm text-on-surface-variant">
+      <span aria-hidden="true" className="material-symbols-outlined w-5 shrink-0 text-sm text-on-surface-variant">
         {icon}
       </span>
       <span className="w-20 shrink-0 text-xs text-on-surface-variant">{label}</span>
