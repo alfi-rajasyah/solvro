@@ -49,8 +49,11 @@ export const TASK_STATUS_TONE_CLASS: Record<TaskStatus, string> = {
 // `PipelineFlagChips.tsx`'s `OwnerChip` — the one flag chip rendered as an
 // outline rather than a solid tone — can compose the same base sizing/type
 // instead of keeping a second, hand-copied string in sync by hand.
+// `whitespace-nowrap`: a chip is one line. In a narrow table column a
+// wrapping pill ("Idle · 27 wd", "Technical Clarification") turned into a
+// three-line blob; the column grows to fit the chip instead.
 export const CHIP_BASE =
-  "inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-display text-meta font-semibold leading-[18px]";
+  "inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2 py-0.5 font-display text-meta font-semibold leading-[18px]";
 
 export function ProjectStatusChip({ status }: { status: ProjectStatus }) {
   return (

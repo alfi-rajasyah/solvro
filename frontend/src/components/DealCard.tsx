@@ -54,6 +54,7 @@ import {
   useOpportunities,
   useUsers,
 } from "@/lib/queries";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 
 // ─────────────────────────────────────────────────────────────────────────
 // DealCard
@@ -291,7 +292,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -299,7 +300,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             type="submit"
             form="handoff-project-form"
             disabled={submitting}
-            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {submitting ? "Creating…" : "Create project"}
           </button>
@@ -320,7 +321,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             onChange={(e) => setName(e.target.value)}
             maxLength={200}
             autoFocus
-            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 
@@ -330,7 +331,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             onChange={(e) => setDescription(e.target.value)}
             rows={4}
             maxLength={2000}
-            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           />
         </Field>
 
@@ -338,11 +339,11 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
           <select
             value={customerId === "" ? "" : String(customerId)}
             onChange={(e) => setCustomerId(e.target.value === "" ? "" : Number(e.target.value))}
-            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           >
             <option value="">
               {customers_.length === 0
-                ? "No customers — create one in the Customers tab first"
+                ? "No customers. Create one in the Customers tab first"
                 : "Select customer…"}
             </option>
             {customers_.map((c) => (
@@ -358,7 +359,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             <select
               value={saId === "" ? "" : String(saId)}
               onChange={(e) => setSaId(e.target.value === "" ? "" : Number(e.target.value))}
-              className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               <option value="">No SA</option>
               {users_.map((u) => (
@@ -373,7 +374,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
             <select
               value={tamId === "" ? "" : String(tamId)}
               onChange={(e) => setTamId(e.target.value === "" ? "" : Number(e.target.value))}
-              className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
+              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
               <option value="">Select TAM…</option>
               {users_.map((u) => (
@@ -389,7 +390,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
           <select
             value={status}
             onChange={(e) => setStatus(e.target.value as ProjectStatus)}
-            className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
+            className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
           >
             {PROJECT_STATUSES.map((s) => (
               <option key={s} value={s}>
@@ -399,7 +400,7 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
           </select>
         </Field>
 
-        <Field label="WIP limit — leave empty for none">
+        <Field label="WIP limit (leave empty for none)">
           <div className="grid grid-cols-3 gap-3">
             {WIP_COLUMNS.map((col) => (
               <label key={col.id} className="block">
@@ -411,8 +412,8 @@ export function HandoffProjectModal({ open, onClose, deal }: HandoffProjectModal
                   inputMode="numeric"
                   value={wipLimits[col.id]}
                   onChange={(e) => setWipLimits((prev) => ({ ...prev, [col.id]: e.target.value }))}
-                  placeholder="—"
-                  className={`w-full rounded-lg border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
+                  placeholder={EMPTY_VALUE}
+                  className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-sm text-on-surface ${FIELD_FOCUS}`}
                 />
               </label>
             ))}

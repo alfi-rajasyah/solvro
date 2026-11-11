@@ -314,7 +314,18 @@ function PicPerformancePanel({
       cell: ({ row }) => (
         <div className="flex items-center gap-2">
           <AssigneeAvatar user={{ id: row.original.picId, username: row.original.picName }} size="xs" />
-          <span className="truncate font-medium text-on-surface">{row.original.picName}</span>
+          <button
+            type="button"
+            onClick={(e) => {
+              // The row also opens the drill-down on click; stop it so one
+              // activation does not fire twice.
+              e.stopPropagation();
+              onSelectPic(row.original.picId, row.original.picName);
+            }}
+            className="truncate rounded-sm font-medium text-on-surface hover:text-primary focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-primary/30"
+          >
+            {row.original.picName}
+          </button>
         </div>
       ),
     },
@@ -630,7 +641,7 @@ function CloseReasonsPanel({
   return (
     <div className="grid gap-4 lg:grid-cols-3">
       <section className={`${PANEL_CLASS} lg:col-span-2`}>
-        <h3 className={`${PANEL_HEADING} mb-3`}>Close reasons by stage — {year}</h3>
+        <h3 className={`${PANEL_HEADING} mb-3`}>Close reasons by stage, {year}</h3>
         {rows.length === 0 ? (
           <EmptyState
             icon="fact_check"
@@ -652,7 +663,7 @@ function CloseReasonsPanel({
         )}
       </section>
       <section className={PANEL_CLASS}>
-        <h3 className={`${PANEL_HEADING} mb-3`}>Win rate — {year}</h3>
+        <h3 className={`${PANEL_HEADING} mb-3`}>Win rate, {year}</h3>
         <p className="text-4xl font-bold tabular-nums text-primary">{winRate}%</p>
         <p className="mt-1 text-meta text-on-surface-variant">Won ÷ closed deals, {year}</p>
       </section>

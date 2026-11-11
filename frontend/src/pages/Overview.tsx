@@ -7,6 +7,7 @@ import {
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { EmptyState } from "@/components/EmptyState";
 import { ProjectStatusChip } from "@/components/StatusChip";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { dateToDay, dayFromIso } from "@/lib/dateField";
 import { fmtDay, fmtDayLong } from "@/lib/formatDate";
@@ -117,9 +118,9 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
       {/* Projects needing attention */}
       <div className="min-w-0 rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
         <header className="mb-3 flex items-center justify-between">
-          <h3 className="font-display text-sm font-bold text-on-surface">Projects needing attention</h3>
-          <Link to="/projects" className="text-meta font-semibold text-primary hover:underline">
-            View all →
+          <h2 className="font-display text-sm font-bold text-on-surface">Projects needing attention</h2>
+          <Link to="/projects" className="tap-target text-meta font-semibold text-primary hover:underline">
+            View all
           </Link>
         </header>
         {data.portfolio.length === 0 ? (
@@ -149,10 +150,10 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
                   <li key={p.id} className="min-w-0">
                     <Link
                       to={`/projects/${p.id}`}
-                      className={`flex items-center gap-3 rounded-sm border border-l-3 border-outline-variant bg-surface-container-lowest px-3 py-2 transition-colors hover:border-y-primary hover:border-r-primary ${healthBorder(p)}`}
+                      className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 transition-colors hover:border-primary md:flex-nowrap"
                     >
                       <span className="font-mono text-meta text-on-surface-variant">P-{String(p.id).padStart(3, "0")}</span>
-                      <span className="min-w-0 flex-1 truncate text-sm font-semibold text-on-surface">{p.name}</span>
+                      <span className="min-w-0 flex-1 basis-[70%] text-sm font-semibold text-on-surface md:basis-auto md:truncate">{p.name}</span>
                       {overdueTasks > 0 && (
                         <span
                           title="Open tasks past their due date"
@@ -181,7 +182,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
       {/* Full-width portfolio timeline */}
       <section className="space-y-3">
         <header>
-          <h3 className="font-display text-sm font-bold text-on-surface">Portfolio timeline</h3>
+          <h2 className="font-display text-sm font-bold text-on-surface">Portfolio timeline</h2>
           <p className="text-xs text-on-surface-variant">
             Where each of your projects sits across the year
           </p>
@@ -205,9 +206,9 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
       {hasPermission(user, "project:read") && (
         <div className="min-w-0 rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
           <header className="mb-3 flex items-center justify-between">
-            <h3 className="font-display text-sm font-bold text-on-surface">Recent notes</h3>
-            <Link to="/daily-review" className="text-meta font-semibold text-primary hover:underline">
-              Daily Review →
+            <h2 className="font-display text-sm font-bold text-on-surface">Recent notes</h2>
+            <Link to="/daily-review" className="tap-target text-meta font-semibold text-primary hover:underline">
+              Daily Review
             </Link>
           </header>
           <RecentNotesFeed />
@@ -275,7 +276,7 @@ function RecentNotesFeed() {
   }
   return (
     <>
-      {isError && <p className="mb-2 text-xs text-error">Could not refresh — showing the last loaded notes.</p>}
+      {isError && <p className="mb-2 text-xs text-error">Could not refresh. Showing the last loaded notes.</p>}
       {data.notes.length === 0 ? (
         <EmptyHint label={`No notes in the last ${windowDays(data.from, data.to)} days.`} />
       ) : (
@@ -300,7 +301,7 @@ function RecentNoteRow({ note }: { note: RecentNote }) {
   return (
     <li className="py-2 first:pt-0 last:pb-0">
       <div className="flex items-baseline gap-2 text-meta text-on-surface-variant">
-        <span className="shrink-0 tabular-nums">{day ? fmtDay(day) : "—"}</span>
+        <span className="shrink-0 tabular-nums">{day ? fmtDay(day) : EMPTY_VALUE}</span>
         <span className="min-w-0 truncate">
           {note.customer ? (
             <Link to={`/customers/${note.customer.id}`} className="hover:text-primary hover:underline">
@@ -350,15 +351,9 @@ function SkeletonGrid() {
 }
 
 // Health signal comes from portfolio[].isOverdue (real schedule data):
-// overdue (error) → active on-track (primary) → everything else (muted).
+// overdue first, then active, then everything else.
 function healthRank(p: { status: ProjectStatus; isOverdue: boolean }): number {
   if (p.isOverdue) return 0;
   if (p.status === "ACTIVE") return 1;
   return 2;
-}
-// Left-edge accent of an attention row, as token classes.
-function healthBorder(p: { status: ProjectStatus; isOverdue: boolean }): string {
-  if (p.isOverdue) return "border-l-error";
-  if (p.status === "ACTIVE") return "border-l-primary";
-  return "border-l-on-surface-variant/40";
 }

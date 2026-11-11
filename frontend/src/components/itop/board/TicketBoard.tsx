@@ -200,13 +200,13 @@ export function TicketBoard({
     <div>
       {canWrite && !actionsEnabled && (
         <p className="mb-2 text-xs text-on-surface-variant">
-          Actions from Solvro are off (Admin › iTop) — cards can&apos;t be moved here.
+          Actions from Solvro are off (Admin › iTop), so cards can&apos;t be moved here.
         </p>
       )}
       {canWrite && actionsEnabled && !tokenSet && (
         <p className="mb-2 text-xs text-on-surface-variant">
           Add your personal iTop token in{" "}
-          <Link to="/settings" className="font-semibold underline">
+          <Link to="/settings?tab=integrations" className="font-semibold underline">
             Settings
           </Link>{" "}
           to move cards here.
@@ -286,7 +286,7 @@ export function TicketBoard({
                   ].join(" ")}
                 >
                   <div className="flex items-center gap-2 px-1 pb-1">
-                    <h3 className="text-sm font-bold text-on-surface">{COLUMN_LABELS[column]}</h3>
+                    <h2 className="text-sm font-bold text-on-surface">{COLUMN_LABELS[column]}</h2>
                     <span className="rounded-full bg-surface-container-high px-2 py-0.5 text-meta font-medium text-on-surface-variant">
                       {columnTickets.length}
                     </span>
@@ -310,7 +310,7 @@ export function TicketBoard({
                     ))}
 
                     {columnTickets.length === 0 && (
-                      <div className="rounded-lg border border-dashed border-outline-variant px-3 py-6 text-center text-xs text-on-surface-variant">
+                      <div className="rounded-sm border border-dashed border-outline-variant px-3 py-6 text-center text-xs text-on-surface-variant">
                         No tickets
                       </div>
                     )}

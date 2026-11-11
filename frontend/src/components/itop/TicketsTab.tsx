@@ -1,3 +1,4 @@
+import { TOOLBAR_BUTTON_PRIMARY } from "@/lib/utils";
 // Customer detail page's "Tickets" tab (Task 1.8): composes the filter
 // chips, the ticket list, and the synced/refresh row. Rendered by
 // CustomerDetail.tsx only once the customer is known to be iTop-configured
@@ -130,9 +131,9 @@ export function TicketsTab({
             <button
               type="button"
               onClick={() => setNewTicketOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 font-display text-[12px] font-bold text-on-primary hover:bg-primary/90"
+              className={TOOLBAR_BUTTON_PRIMARY}
             >
-              <span className="material-symbols-outlined text-base">add</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
               New ticket
             </button>
           )}

@@ -185,7 +185,9 @@
 
 @layer base {
   /* Light theme — off-white surfaces, Elitery Green primary darkened to
-     #25823a for WCAG AA contrast on white (was #2d9042; F-1 note below). Values from DESIGN.md frontmatter
+     #1f7533 so it holds WCAG AA as text on every surface it sits on, down to
+     surface-container-high (was #25823a, AA on white only; before that
+     #2d9042; F-1 note below). Values from DESIGN.md frontmatter
      light overrides; tokens the spec omits for light (inverse-*, *-container,
      secondary/tertiary, error family) are derived from the same palette —
      see CHANGELOG. */
@@ -204,7 +206,7 @@
     --inverse-on-surface: 240 237 232;
     --outline: 154 154 151;
     --outline-variant: 208 208 204;
-    --primary: 37 130 58;
+    --primary: 31 117 51;
     --on-primary: 255 255 255;
     --primary-container: 200 230 207;
     --on-primary-container: 15 43 22;
@@ -303,6 +305,31 @@
     @apply font-display;
   }
 
+  /* Tailwind v4 leaves buttons on the default arrow. Every enabled control
+     shows a pointer and every disabled one shows not-allowed, set once here
+     so no component has to remember (a utility such as cursor-text still
+     wins, since utilities sit above the base layer). A drag-and-drop
+     wrapper is left out of the disabled rule: dnd-kit marks a card
+     aria-disabled when dragging is off, and the card can still be opened. */
+  button,
+  summary,
+  select,
+  label[for],
+  [role="button"],
+  [role="tab"],
+  [role="switch"],
+  [role="checkbox"],
+  [role="radio"],
+  [role="menuitem"],
+  [role="option"] {
+    cursor: pointer;
+  }
+  button:disabled,
+  select:disabled,
+  [aria-disabled="true"]:not([aria-roledescription="sortable"]) {
+    cursor: not-allowed;
+  }
+
   /* Native form controls follow the theme. */
   .dark input[type="text"],
   .dark input[type="email"],
@@ -318,6 +345,27 @@
 @layer components {
   .material-symbols-outlined {
     font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  }
+}
+
+/* Touch target: on touch input (and only there) a small control gets a hit
+   area of at least 44px, centred on it, without changing how it looks or
+   how the row around it lays out. Desktop density is untouched. Put it on
+   the control itself; do not combine it with `absolute`/`fixed` on the same
+   element or with an `after:` utility, since it claims both
+   (docs/archive/plans/antislop-audit-001-2026-11-10.md, item 12). */
+@utility tap-target {
+  @media (pointer: coarse) {
+    position: relative;
+    &::after {
+      content: "";
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: max(100%, 44px);
+      height: max(100%, 44px);
+      transform: translate(-50%, -50%);
+    }
   }
 }
 

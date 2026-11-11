@@ -8,5 +8,5 @@ export const LIGHT_PREVIEW_VARS: Record<string, string> = {
   "--background": "249 249 247",
   "--surface-container-lowest": "255 255 255",
   "--outline-variant": "208 208 204",
-  "--primary": "37 130 58",
+  "--primary": "31 117 51",
 };

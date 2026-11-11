@@ -369,14 +369,14 @@ function positiveInt(v: unknown): number | null {
 }
 
 /**
- * "All tasks in <project> are closed — mark the project Completed?"
+ * "All tasks in <project> are closed. Mark the project Completed?"
  * (docs/archive/plans/feedback-round-lifecycle-spec.md, F3). Shared with the
  * notification list, which shows it without the actor.
  */
 export function allTasksClosedParts(project: string | null): Parts {
   return project
-    ? [txt("All tasks in "), ent(project), txt(" are closed — mark the project Completed?")]
-    : [txt("All tasks in the project are closed — mark the project Completed?")];
+    ? [txt("All tasks in "), ent(project), txt(" are closed. Mark the project Completed?")]
+    : [txt("All tasks in the project are closed. Mark the project Completed?")];
 }
 
 /** "handed over alice's 3 tasks and 1 epic to bob" / "... left them unassigned"; null when nothing usable. */
@@ -640,8 +640,8 @@ function buildBody(event: ActivityEvent, canViewPipeline: boolean): Parts {
       // Feed rows always lead with the actor, so the question follows a clause.
       if (event.action === "all_tasks_closed") {
         return label
-          ? [txt("closed the last open task: all tasks in "), ent(label), txt(" are closed — mark the project Completed?")]
-          : [txt("closed the last open task: all tasks in the project are closed — mark the project Completed?")];
+          ? [txt("closed the last open task: all tasks in "), ent(label), txt(" are closed. Mark the project Completed?")]
+          : [txt("closed the last open task: all tasks in the project are closed. Mark the project Completed?")];
       }
       if (event.action === "deleted") return [txt("deleted the project")];
       break;

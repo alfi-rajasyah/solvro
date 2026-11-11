@@ -16,7 +16,7 @@
 import { type ReactNode, useState } from "react";
 import { Link } from "react-router-dom";
 import { ConfirmModal } from "@/components/ConfirmModal";
-import { scoreClass, scoreLevel } from "@/components/RiskFormModal";
+import { RiskScoreChip } from "@/components/RiskScoreChip";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { dueDateLabel } from "@/lib/dailyReviewStats";
@@ -111,8 +111,8 @@ export function ProjectCard({
   return (
     <article className="rounded-sm border border-outline-variant bg-surface-container-lowest">
       {unassigned && (
-        <div className="flex flex-wrap items-center gap-1.5 border-b border-outline-variant bg-chip-amber-bg px-4 py-2 text-[12px] font-medium text-chip-amber-text">
-          <span className="material-symbols-outlined text-base">warning</span>
+        <div className="flex flex-wrap items-center gap-1.5 border-b border-outline-variant bg-chip-amber-bg px-4 py-2 text-meta font-medium text-chip-amber-text">
+          <span aria-hidden="true" className="material-symbols-outlined text-base">warning</span>
           <span>
             Weekly updates are per customer. Assign a customer to{" "}
             <Link to={`/projects/${project.id}/overview`} className="underline hover:no-underline">
@@ -134,7 +134,7 @@ export function ProjectCard({
           aria-expanded={bodyExpanded}
           aria-controls={bodyId}
           aria-label={bodyExpanded ? "Collapse project" : "Expand project"}
-          className="flex h-6 w-6 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          className="tap-target flex h-6 w-6 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
         >
           <span className="material-symbols-outlined text-lg" aria-hidden="true">
             {bodyExpanded ? "expand_less" : "expand_more"}
@@ -170,7 +170,7 @@ export function ProjectCard({
               className="rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
             >
               <span className="flex items-center gap-1 rounded-full bg-chip-emerald-bg px-2 py-0.5 text-meta font-bold text-chip-emerald-text">
-                <span className="material-symbols-outlined text-sm">check_circle</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-sm">check_circle</span>
                 Reviewed {fmtTime(reviewToday.createdAt)}
               </span>
             </button>
@@ -263,17 +263,11 @@ export function ProjectCard({
                       </AttentionColumn>
                       <AttentionColumn label="Open risks" count={project.openRisks.length} tone="warn">
                         {project.openRisks.map((r) => {
-                          const score = r.probability * r.impact;
                           const pending = updateRisk.isPending && updateRisk.variables?.id === r.id;
                           return (
                             <li key={r.id} className={`flex items-center gap-2 ${pending ? "opacity-60" : ""}`}>
                               <span className="min-w-0 flex-1 truncate text-sm text-on-surface">{r.description}</span>
-                              <span
-                                className={`shrink-0 rounded-sm border px-1.5 py-0.5 text-meta font-bold ${scoreClass(score)}`}
-                                title={`${r.probability} × ${r.impact} = ${score}`}
-                              >
-                                {scoreLevel(score)}
-                              </span>
+                              <RiskScoreChip probability={r.probability} impact={r.impact} levelOnly />
                               <Select
                                 items={riskStatusOptions}
                                 value={r.status}
@@ -325,6 +319,7 @@ export function ProjectCard({
               currentUserId={currentUserId}
               canDeleteAny={canDeleteAny}
               placeholder='What happened on this project today? Nothing? Use "Mark reviewed".'
+              fieldLabel="Note"
               ariaLabel={`Note for ${project.name}`}
               rowsId={`week-rows-project-${project.id}`}
               onAdd={(day, body) => addNote.mutate({ body, noteDate: day })}

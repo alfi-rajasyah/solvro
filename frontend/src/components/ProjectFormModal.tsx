@@ -17,6 +17,7 @@ import {
   useUpdateProject,
   useUsers,
 } from "@/lib/queries";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 
 const PROJECT_STATUSES: ProjectStatus[] = [
   "PLANNING",
@@ -238,7 +239,7 @@ export function ProjectFormModal({
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -246,7 +247,7 @@ export function ProjectFormModal({
             type="submit"
             form="project-form"
             disabled={submitting}
-            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {submitting ? "Saving…" : isEdit ? "Save changes" : "Create project"}
           </button>
@@ -289,7 +290,7 @@ export function ProjectFormModal({
           >
             <option value="">
               {customers && customers.length === 0
-                ? "No customers — create one in the Customers tab first"
+                ? "No customers. Create one in the Customers tab first"
                 : "Select customer…"}
             </option>
             {(customers ?? []).map((c) => (
@@ -366,7 +367,7 @@ export function ProjectFormModal({
           </Field>
         )}
 
-        <Field label="WIP limit — leave empty for none" error={fieldErrors.wipLimits} errorId={errorId("wipLimits")}>
+        <Field label="WIP limit (leave empty for none)" error={fieldErrors.wipLimits} errorId={errorId("wipLimits")}>
           <div className="grid grid-cols-3 gap-3">
             {WIP_COLUMNS.map((col) => (
               <label key={col.value} className="block">
@@ -382,7 +383,7 @@ export function ProjectFormModal({
                   onChange={(e) =>
                     setWipLimits((prev) => ({ ...prev, [col.value]: e.target.value }))
                   }
-                  placeholder="—"
+                  placeholder={EMPTY_VALUE}
                   {...invalidProps("wipLimits")}
                   className={inputClass(fieldErrors.wipLimits, true)}
                 />
@@ -421,7 +422,7 @@ export function ProjectFormModal({
 }
 
 function inputClass(error: string | undefined, compact = false): string {
-  return `w-full rounded-lg border bg-surface-container-lowest text-sm text-on-surface ${FIELD_FOCUS} ${
+  return `w-full rounded-sm border bg-surface-container-lowest text-sm text-on-surface ${FIELD_FOCUS} ${
     compact ? "px-2 py-1.5" : "px-3 py-2"
   } ${error ? "border-error" : "border-outline-variant"}`;
 }

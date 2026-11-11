@@ -43,7 +43,7 @@ export function PermissionPicker({
           <li key={perm.value}>
             <label
               title={perm.hint}
-              className={`flex items-center gap-2.5 px-3 py-1.5 text-[13px] ${
+              className={`flex items-center gap-2.5 px-3 py-1.5 text-xs ${
                 disabled ? "opacity-50" : "cursor-pointer hover:bg-surface-container-low"
               }`}
             >
@@ -55,14 +55,14 @@ export function PermissionPicker({
                 className="accent-primary"
               />
               <span className="font-mono text-on-surface">{perm.value}</span>
-              <span className="text-on-surface-variant">— {perm.label}</span>
+              <span className="text-on-surface-variant">{perm.label}</span>
             </label>
           </li>
         );
       })}
       {unknown.map((perm) => (
         <li key={`unknown:${perm}`}>
-          <label className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-[13px] hover:bg-surface-container-low">
+          <label className="flex cursor-pointer items-center gap-2.5 px-3 py-1.5 text-xs hover:bg-surface-container-low">
             <input
               type="checkbox"
               checked
@@ -70,7 +70,7 @@ export function PermissionPicker({
               className="accent-primary"
             />
             <span className="font-mono text-on-surface">{perm}</span>
-            <span className="text-error">— no longer in the catalogue</span>
+            <span className="text-error">(no longer in the catalogue)</span>
           </label>
         </li>
       ))}

@@ -123,7 +123,7 @@ function GuestError({ error, onRetry }: { error: unknown; onRetry: () => void })
   const unavailable = status === 404;
   const icon = rateLimited ? "hourglass_top" : unavailable ? "link_off" : "error";
   const title = rateLimited
-    ? "Too many requests — try again in a minute"
+    ? "Too many requests. Try again in a minute"
     : unavailable
       ? "This link has expired or is no longer available"
       : "Something went wrong";
@@ -147,7 +147,7 @@ function GuestError({ error, onRetry }: { error: unknown; onRetry: () => void })
         <button
           type="button"
           onClick={onRetry}
-          className="mt-3 rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface outline-hidden hover:bg-surface-container focus-visible:ring-2 focus-visible:ring-primary/30"
+          className="mt-3 rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface outline-hidden hover:bg-surface-container focus-visible:ring-2 focus-visible:ring-primary/30"
         >
           Try again
         </button>

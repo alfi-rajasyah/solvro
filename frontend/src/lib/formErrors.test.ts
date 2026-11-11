@@ -57,7 +57,7 @@ describe("formErrorMessage", () => {
   it("lists fields the form does not render as Field: message", () => {
     const err = validation({ title: ["Required"], assignedToId: ["Expected number"], labelIds: ["Too many"] });
     expect(formErrorMessage(err, "Save failed.", ["title"])).toBe(
-      "Invalid request — Assigned to id: Expected number; Label ids: Too many",
+      "Invalid request (Assigned to id: Expected number; Label ids: Too many)",
     );
   });
 
@@ -69,12 +69,12 @@ describe("formErrorMessage", () => {
       dueDate: ["A milestone requires a due date"],
     });
     expect(formErrorMessage(err, "Save failed.", ["name"])).toBe(
-      "Invalid request — Tam id: Expected number; Start date: Invalid date; Due date: A milestone requires a due date",
+      "Invalid request (Tam id: Expected number; Start date: Invalid date; Due date: A milestone requires a due date)",
     );
   });
 
   it("includes form-level messages", () => {
     const err = validation({}, ["Provide at least one field"]);
-    expect(formErrorMessage(err, "Save failed.")).toBe("Invalid request — Provide at least one field");
+    expect(formErrorMessage(err, "Save failed.")).toBe("Invalid request (Provide at least one field)");
   });
 });

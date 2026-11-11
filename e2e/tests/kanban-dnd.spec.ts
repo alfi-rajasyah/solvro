@@ -198,7 +198,7 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
 
     const grip = await gripFor(page, "Beta", "Drag to reorder");
     const col =
-      (await page.locator("h3", { hasText: "In progress" }).first().boundingBox()) ??
+      (await page.locator("h2", { hasText: "In progress" }).first().boundingBox()) ??
       (await page.getByText("In progress", { exact: true }).first().boundingBox());
     expect(grip, "grip for Beta not found").toBeTruthy();
     expect(col, "In Progress column not found").toBeTruthy();
@@ -321,7 +321,7 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     expect(source, "need a non-DONE top-level task to drag").toBeTruthy();
 
     const grip = await gripFor(page, source!.title, "Drag to reorder");
-    const doneHdr = await page.locator("h3", { hasText: /done/i }).first().boundingBox();
+    const doneHdr = await page.locator("h2", { hasText: /done/i }).first().boundingBox();
     expect(grip, `grip for ${source!.title} not found`).toBeTruthy();
     expect(doneHdr, "Done column header not found").toBeTruthy();
 
@@ -893,7 +893,7 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // comments.
     const grip = await gripFor(page, tagged.title, "Drag to reorder");
     const col =
-      (await page.locator("h3", { hasText: "In progress" }).first().boundingBox()) ??
+      (await page.locator("h2", { hasText: "In progress" }).first().boundingBox()) ??
       (await page.getByText("In progress", { exact: true }).first().boundingBox());
     expect(grip, `grip for ${tagged.title} not found`).toBeTruthy();
     expect(col, "In Progress column not found").toBeTruthy();

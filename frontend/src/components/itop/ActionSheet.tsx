@@ -91,7 +91,7 @@ export function ActionSheet({
             type="button"
             onClick={onClose}
             disabled={busy}
-            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -99,7 +99,7 @@ export function ActionSheet({
             type="button"
             onClick={handleConfirm}
             disabled={busy || !canConfirm}
-            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {busy
               ? "Working…"
@@ -194,7 +194,7 @@ export function ActionSheet({
       )}
 
       {personName && (
-        <p className="mt-3 text-[12px] text-on-surface-variant">
+        <p className="mt-3 text-meta text-on-surface-variant">
           Written to iTop as {personName}
         </p>
       )}

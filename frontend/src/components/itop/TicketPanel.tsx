@@ -11,6 +11,7 @@
 // on `assign_to_me` opens the team ActionSheet instead of surfacing as a
 // plain error; any other failure shows iTop's message inline and leaves the
 // ticket untouched.
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/reui/alert";
@@ -109,7 +110,7 @@ export function TicketPanel({
           setActionSheet(null);
           if (fresh.staleAfterWrite) {
             setStaleNotice(
-              "Applied in iTop. The list refreshes on the next sync — use Refresh to see it now.",
+              "Applied in iTop. The list refreshes on the next sync. Use Refresh to see it now.",
             );
           }
         },
@@ -151,7 +152,7 @@ export function TicketPanel({
           onDone();
           if (fresh.staleAfterWrite) {
             setStaleNotice(
-              "Applied in iTop. The list refreshes on the next sync — use Refresh to see it now.",
+              "Applied in iTop. The list refreshes on the next sync. Use Refresh to see it now.",
             );
           }
         },
@@ -174,8 +175,8 @@ export function TicketPanel({
         <div className="flex items-center gap-2 border-b border-outline-variant px-4 py-3">
           {ticket && (
             <>
-              <span className="font-mono text-[13px] text-on-surface">{ticket.ref}</span>
-              <span className="text-[12px] text-on-surface-variant">
+              <span className="font-mono text-xs text-on-surface">{ticket.ref}</span>
+              <span className="text-meta text-on-surface-variant">
                 {CLASS_LABEL[ticket.class] ?? ticket.class}
               </span>
               <Chip tone={statusTone(ticket)}>{statusLabel(ticket.status)}</Chip>
@@ -185,10 +186,10 @@ export function TicketPanel({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
+            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container-high"
             aria-label="Close"
           >
-            <span className="material-symbols-outlined text-base">close</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
           </button>
         </div>
 
@@ -225,9 +226,9 @@ export function TicketPanel({
                     href={url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="font-display text-[12px] font-bold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+                    className="font-display text-meta font-bold text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
                   >
-                    Open in iTop ↗
+                    Open in iTop
                   </a>
                 )}
               </div>
@@ -246,7 +247,7 @@ export function TicketPanel({
                 <Alert className="mt-2">
                   <AlertDescription>
                     Add your personal iTop token in{" "}
-                    <Link to="/settings" className="font-semibold underline">
+                    <Link to="/settings?tab=integrations" className="font-semibold underline">
                       Settings
                     </Link>{" "}
                     to act from here.
@@ -267,15 +268,15 @@ export function TicketPanel({
               )}
 
               <div className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 text-sm">
-                <Fact label="Caller" value={ticket.callerName ?? "—"} />
-                <Fact label="Service" value={ticket.serviceName ?? "—"} />
-                <Fact label="Team" value={ticket.teamName ?? "—"} />
+                <Fact label="Caller" value={ticket.callerName ?? EMPTY_VALUE} />
+                <Fact label="Service" value={ticket.serviceName ?? EMPTY_VALUE} />
+                <Fact label="Team" value={ticket.teamName ?? EMPTY_VALUE} />
                 <Fact label="Agent" value={ticket.agentName ?? "Unassigned"} />
-                <Fact label="Priority" value={ticket.priority ? priorityLabel(ticket.priority) : "—"} />
+                <Fact label="Priority" value={ticket.priority ? priorityLabel(ticket.priority) : EMPTY_VALUE} />
                 <Fact label="TTO/TTR" value={slaLabel(ticket)} />
                 <Fact
                   label="Started"
-                  value={ticket.startDate ? `${ageLabel(ticket.startDate)} ago` : "—"}
+                  value={ticket.startDate ? `${ageLabel(ticket.startDate)} ago` : EMPTY_VALUE}
                 />
                 <Fact label="Last update" value={`${ageLabel(ticket.lastUpdate)} ago`} />
               </div>

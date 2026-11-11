@@ -1,4 +1,5 @@
-import { FIELD_FOCUS } from "@/lib/utils";
+import { EMPTY_VALUE } from "@/lib/emptyValue";
+import { FIELD_FOCUS, TOOLBAR_BUTTON_PRIMARY } from "@/lib/utils";
 import { useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useProjectContext } from "../ProjectDetail";
@@ -171,9 +172,9 @@ export function ProjectEpics() {
           <button
             type="button"
             onClick={() => setCreating(true)}
-            className="inline-flex items-center gap-2 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
+            className={TOOLBAR_BUTTON_PRIMARY}
           >
-            <span className="material-symbols-outlined text-base">add</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
             Add epic
           </button>
         )}
@@ -367,7 +368,7 @@ function ProgressBar({ done, total }: { done: number; total: number }) {
       </div>
       <span
         data-testid="epic-progress-text"
-        className="font-mono text-[12px] text-on-surface-variant"
+        className="font-mono text-meta text-on-surface-variant"
       >
         {done}/{total}
       </span>
@@ -484,7 +485,7 @@ function TitleCell({
             onStartRename();
           }}
           aria-label={`Rename ${epic.title}`}
-          className="material-symbols-outlined shrink-0 rounded-sm p-1 text-[15px] text-on-surface-variant/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          className="tap-target material-symbols-outlined shrink-0 rounded-sm p-1 text-[15px] text-on-surface-variant/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
         >
           edit
         </button>
@@ -509,8 +510,8 @@ function EpicRow(props: RowProps) {
       <td className="px-3 py-2 align-middle text-on-surface-variant">
         {epic.owner?.username ?? "Unassigned"}
       </td>
-      <td className="px-3 py-2 align-middle text-[12px] text-on-surface-variant">
-        {fmtDay(epic.dueDate) || "—"}
+      <td className="px-3 py-2 align-middle text-meta text-on-surface-variant">
+        {fmtDay(epic.dueDate) || EMPTY_VALUE}
       </td>
       <td className="px-3 py-2 align-middle">
         <ProgressBar done={epic.progress.done} total={epic.progress.total} />
@@ -521,7 +522,7 @@ function EpicRow(props: RowProps) {
             type="button"
             onClick={onDelete}
             aria-label={`Delete ${epic.title}`}
-            className="material-symbols-outlined rounded-sm p-1 text-[17px] text-on-surface-variant/60 hover:bg-error-container hover:text-error"
+            className="tap-target material-symbols-outlined rounded-sm p-1 text-[17px] text-on-surface-variant/60 hover:bg-error-container hover:text-error"
           >
             delete
           </button>
@@ -544,17 +545,17 @@ function EpicCard(props: RowProps) {
             type="button"
             onClick={onDelete}
             aria-label={`Delete ${epic.title}`}
-            className="material-symbols-outlined shrink-0 rounded-sm p-1 text-[17px] text-on-surface-variant/60 hover:bg-error-container hover:text-error"
+            className="tap-target material-symbols-outlined shrink-0 rounded-sm p-1 text-[17px] text-on-surface-variant/60 hover:bg-error-container hover:text-error"
           >
             delete
           </button>
         )}
       </div>
       <button type="button" onClick={onOpen} className="mt-2 block w-full text-left">
-        <div className="flex flex-wrap items-center gap-2 text-[12px]">
+        <div className="flex flex-wrap items-center gap-2 text-meta">
           <TaskStatusChip status={epic.status} />
           <span className="text-on-surface-variant">{epic.owner?.username ?? "Unassigned"}</span>
-          <span className="text-on-surface-variant">{fmtDay(epic.dueDate) || "—"}</span>
+          <span className="text-on-surface-variant">{fmtDay(epic.dueDate) || EMPTY_VALUE}</span>
         </div>
         <div className="mt-2">
           <ProgressBar done={epic.progress.done} total={epic.progress.total} />

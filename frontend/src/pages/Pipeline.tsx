@@ -1,3 +1,4 @@
+import { TOOLBAR_BUTTON_PRIMARY } from "@/lib/utils";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { OpportunityFormModal } from "@/components/OpportunityFormModal";
@@ -171,7 +172,7 @@ export function Pipeline() {
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          <div className="inline-flex overflow-hidden rounded-lg border border-outline-variant" role="group">
+          <div className="inline-flex overflow-hidden rounded-sm border border-outline-variant" role="group">
             {VIEW_MODES.map((mode, idx) => {
               const active = mode.id === view;
               return (
@@ -188,7 +189,7 @@ export function Pipeline() {
                       : "text-on-surface-variant hover:bg-surface-container",
                   ].join(" ")}
                 >
-                  <span className="material-symbols-outlined text-base">{mode.icon}</span>
+                  <span aria-hidden="true" className="material-symbols-outlined text-base">{mode.icon}</span>
                   {mode.label}
                 </button>
               );
@@ -196,7 +197,7 @@ export function Pipeline() {
           </div>
 
           <div
-            className="inline-flex overflow-hidden rounded-lg border border-outline-variant"
+            className="inline-flex overflow-hidden rounded-sm border border-outline-variant"
             role="group"
             aria-label="Deal status"
           >
@@ -229,7 +230,7 @@ export function Pipeline() {
               onClick={() => setImportOpen(true)}
               className="inline-flex items-center gap-1.5 rounded-sm border border-outline-variant px-3 py-1.5 font-display text-xs font-semibold text-on-surface-variant transition-colors hover:bg-surface-container"
             >
-              <span className="material-symbols-outlined text-base">upload_file</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-base">upload_file</span>
               Import
             </button>
           )}
@@ -238,9 +239,9 @@ export function Pipeline() {
             <button
               type="button"
               onClick={() => setCreateOpen(true)}
-              className="inline-flex items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-semibold text-on-primary transition-colors hover:bg-primary-container"
+              className={TOOLBAR_BUTTON_PRIMARY}
             >
-              <span className="material-symbols-outlined text-base">add</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
               New opportunity
             </button>
           )}

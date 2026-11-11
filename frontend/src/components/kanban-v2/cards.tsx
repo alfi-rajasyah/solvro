@@ -80,6 +80,7 @@ export function TaskCard({
       onClick={handleClick}
       className={[
         "group/card touch-manipulation rounded-sm border bg-surface-container-lowest p-3 transition-colors",
+        onClick ? "cursor-pointer" : "",
         dragging
           ? "rotate-[-1.2deg] border-[1.5px] border-primary shadow-overlay ring-2 ring-primary"
           : "border-outline-variant hover:border-primary",
@@ -100,17 +101,17 @@ export function TaskCard({
               aria-label="Drag to reorder"
               className="mt-0.5 inline-flex shrink-0 touch-none items-center text-on-surface-variant/60 transition-opacity md:pointer-fine:opacity-0 md:pointer-fine:group-focus-within/card:opacity-100 md:pointer-fine:group-hover/card:opacity-100 md:pointer-fine:[[data-slot=kanban-item]:focus-visible_&]:opacity-100"
             >
-              <span className="material-symbols-outlined text-[16px]">drag_indicator</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[16px]">drag_indicator</span>
             </KanbanItemHandle>
           )}
           <p
             className={[
-              "min-w-0 text-[15px] font-bold leading-tight",
+              "min-w-0 text-sm font-bold leading-tight",
               cancelled ? "text-on-surface-variant line-through" : "text-on-surface",
             ].join(" ")}
           >
             {task.status === "DONE" && (
-              <span className="material-symbols-outlined mr-1 align-text-bottom text-[14px] text-primary">
+              <span aria-hidden="true" className="material-symbols-outlined mr-1 align-text-bottom text-[14px] text-primary">
                 check_circle
               </span>
             )}
@@ -128,7 +129,7 @@ export function TaskCard({
               onMenuClick();
             }}
             onPointerDown={(e) => e.stopPropagation()}
-            className="material-symbols-outlined shrink-0 text-[17px] text-on-surface-variant hover:text-on-surface md:hidden"
+            className="tap-target material-symbols-outlined shrink-0 text-[17px] text-on-surface-variant hover:text-on-surface md:hidden"
             aria-label="Card options"
           >
             more_horiz
@@ -152,7 +153,7 @@ export function TaskCard({
 
       {/* Description */}
       {task.description && (
-        <p className="mb-2 line-clamp-2 text-[13px] leading-snug text-on-surface-variant">
+        <p className="mb-2 line-clamp-2 text-xs leading-snug text-on-surface-variant">
           {task.description}
         </p>
       )}
@@ -162,7 +163,7 @@ export function TaskCard({
       {subtasks.length > 0 && (
         <div className="mb-2">
           <div className="mb-1 flex items-center gap-1 font-display text-label-caps uppercase text-on-surface-variant">
-            <span className="material-symbols-outlined text-[12px]">check_circle</span>
+            <span aria-hidden="true" className="material-symbols-outlined text-[12px]">check_circle</span>
             Subtasks {subtasksDone}/{subtasksTotal}
           </div>
           <ul className="space-y-0.5 border-l border-outline-variant/60 pl-2">
@@ -195,7 +196,7 @@ export function TaskCard({
           )}
           {task._count.comments > 0 && (
             <span className="flex items-center gap-0.5">
-              <span className="material-symbols-outlined text-[14px]">chat_bubble</span>
+              <span aria-hidden="true" className="material-symbols-outlined text-[14px]">chat_bubble</span>
               {task._count.comments}
             </span>
           )}
@@ -232,14 +233,14 @@ export function SubtaskRow({
   const done = task.status === "DONE";
   const cancelled = task.status === "CANCELLED";
   return (
-    <div className="flex touch-manipulation items-center gap-1.5 rounded-sm px-0.5 py-0.5 text-[12px]">
+    <div className="flex touch-manipulation items-center gap-1.5 rounded-sm px-0.5 py-0.5 text-meta">
       {/* Toggle only, DONE<->TODO, permission-gated the same way the old
           board gated it (`canMove` -> `task:write`, ProjectKanban.tsx:451-454,
           642-643). No drag surface — subtask dragging is retired. */}
       <button
         type="button"
         disabled={!canToggle || cancelled}
-        title={cancelled ? "Cancelled — change its status to reopen" : undefined}
+        title={cancelled ? "Cancelled. Change its status to reopen" : undefined}
         onPointerDown={(e) => e.stopPropagation()}
         onClick={(e) => {
           e.stopPropagation();
@@ -254,7 +255,7 @@ export function SubtaskRow({
           canToggle ? "cursor-pointer" : "cursor-default",
         ].join(" ")}
       >
-        {done && <span className="material-symbols-outlined text-meta leading-none">check</span>}
+        {done && <span aria-hidden="true" className="material-symbols-outlined text-meta leading-none">check</span>}
       </button>
       <span
         onPointerDown={(e) => e.stopPropagation()}

@@ -38,6 +38,7 @@
 // Outcome, Tag, Sub-status, Idle — surface the flow redesign's independent
 // attributes; a fifth, Closed, only appears while browsing the closed half
 // of the list.
+import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
@@ -227,7 +228,7 @@ export function PipelineList({ deals, closedView, isLoading = false }: PipelineL
         enableSorting: false,
         cell: ({ row }) => (
           <span className="block max-w-48 truncate text-xs text-on-surface-variant">
-            {row.original.productSolution || "—"}
+            {row.original.productSolution || EMPTY_VALUE}
           </span>
         ),
         meta: { skeleton: <Skeleton className="h-3.5 w-32" /> },
@@ -244,7 +245,7 @@ export function PipelineList({ deals, closedView, isLoading = false }: PipelineL
         header: ({ column }) => <DataGridColumnHeader column={column} title="Request date" />,
         cell: ({ row }) => (
           <span className="text-xs text-on-surface-variant">
-            {row.original.requestDate ? formatPipelineDate(row.original.requestDate) : "—"}
+            {row.original.requestDate ? formatPipelineDate(row.original.requestDate) : EMPTY_VALUE}
           </span>
         ),
         meta: { skeleton: <Skeleton className="h-3.5 w-16" /> },
@@ -268,7 +269,7 @@ export function PipelineList({ deals, closedView, isLoading = false }: PipelineL
                   : "text-xs text-on-surface-variant"
               }
             >
-              {deal.deadline ? formatPipelineDate(deal.deadline) : "—"}
+              {deal.deadline ? formatPipelineDate(deal.deadline) : EMPTY_VALUE}
               {overdue && " · Overdue"}
             </span>
           );
@@ -285,7 +286,7 @@ export function PipelineList({ deals, closedView, isLoading = false }: PipelineL
       header: ({ column }) => <DataGridColumnHeader column={column} title="Closed" />,
       cell: ({ row }) => (
         <span className="text-xs text-on-surface-variant">
-          {row.original.closedAt ? fmtDateTime(row.original.closedAt) : "—"}
+          {row.original.closedAt ? fmtDateTime(row.original.closedAt) : EMPTY_VALUE}
         </span>
       ),
       meta: { skeleton: <Skeleton className="h-3.5 w-16" /> },

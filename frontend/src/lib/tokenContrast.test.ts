@@ -67,10 +67,34 @@ describe.each([":root", ".dark"] as const)("token contrast in %s", (selector) =>
   });
 });
 
-describe("primary as text", () => {
-  it("light --primary on --background is at least 4.5:1 (links, active labels)", () => {
+// `text-primary` (links, counts, active labels) sits on the page and inside
+// cards, panels and hovered rows, so it is pinned against every surface it is
+// allowed on, in both themes. Tuning it for white alone left it at 3.8:1 on
+// the hover tint (docs/archive/plans/antislop-audit-001-2026-11-10.md, item 1).
+const PRIMARY_TEXT_SURFACES = [
+  "background",
+  "surface",
+  "surface-container-lowest",
+  "surface-container-low",
+  "surface-container",
+];
+
+describe.each([":root", ".dark"] as const)("primary as text in %s", (selector) => {
+  const tokens = block(selector);
+
+  it.each(PRIMARY_TEXT_SURFACES)("--primary on --%s is at least 4.5:1", (surface) => {
+    expect(tokens[surface], `--${surface} missing`).toBeDefined();
+    expect(contrast(tokens.primary, tokens[surface])).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
+// The hover tint is pinned for light only. Dark Elitery Green (#3aae51) on
+// dark surface-container-high measures 4.4986:1, a hair under 4.5, and the
+// dark brand green is not this test's to move.
+describe("primary as text on the hover tint", () => {
+  it("light --primary on --surface-container-high is at least 4.5:1", () => {
     const light = block(":root");
-    expect(contrast(light.primary, light.background)).toBeGreaterThanOrEqual(4.5);
+    expect(contrast(light.primary, light["surface-container-high"])).toBeGreaterThanOrEqual(4.5);
   });
 });
 

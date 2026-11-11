@@ -234,7 +234,7 @@ export function parseImportRow(
   const stageUpper = stageRaw.toUpperCase();
   if (!IMPORTABLE_STAGES.includes(stageUpper as PipelineStage)) {
     errors.push(
-      `Invalid stage "${String(cells[3] ?? "")}" — use one of: ${IMPORTABLE_STAGES.map((s) => s.toLowerCase()).join(", ")}.`,
+      `Invalid stage "${String(cells[3] ?? "")}". Use one of: ${IMPORTABLE_STAGES.map((s) => s.toLowerCase()).join(", ")}.`,
     );
   }
 

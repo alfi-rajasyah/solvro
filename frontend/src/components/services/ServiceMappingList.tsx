@@ -1,5 +1,6 @@
-import { FIELD_FOCUS } from "@/lib/utils";
-import { useMemo, useState, type FormEvent, type KeyboardEvent } from "react";
+import { FIELD_FOCUS, TOOLBAR_BUTTON_OUTLINE, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_STAT } from "@/lib/utils";
+import { useId, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { CHIP_BASE, Chip } from "@/components/StatusChip";
 import { EmptyState } from "@/components/EmptyState";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ApiError } from "@/lib/api";
@@ -27,7 +28,22 @@ export interface ServiceMappingListProps {
   /** Copy overrides so customer/project screens can keep distinct headings. */
   title: string;
   description: string;
+  /**
+   * What a ticked service is on this screen: "In this project" for a project
+   * (the default), "Subscribed" for a customer. Names the count card and the two
+   * groups of the table.
+   */
+  assignedLabel?: string;
+  unassignedLabel?: string;
+  /** Extra toolbar buttons from the host screen (the project's "Add all subscribed"). */
+  toolbarActions?: ReactNode;
 }
+
+// Row template, shared by the header and every row so the columns line up.
+// Phone: checkbox + one content column, everything else stacks under the name.
+const ROW_BASE = "grid grid-cols-[16px_minmax(0,1fr)] items-start gap-x-3 gap-y-2 px-3";
+const ROW_COLS = "md:grid-cols-[16px_minmax(0,2fr)_minmax(0,3fr)]";
+const ROW_COLS_WITH_SUBSCRIPTION = "md:grid-cols-[16px_minmax(0,2fr)_176px_minmax(0,3fr)]";
 
 /**
  * Reusable service-catalogue mapping UI: checkbox rows to assign/unassign a
@@ -46,7 +62,12 @@ export function ServiceMappingList({
   subscribedServiceIds,
   title,
   description,
+  assignedLabel = "In this project",
+  unassignedLabel = "Not in this project",
+  toolbarActions,
 }: ServiceMappingListProps) {
+  const [adding, setAdding] = useState(false);
+  const idPrefix = useId();
   const { data: catalogue, isLoading } = useServices();
   const create = useCreateService();
   const [error, setError] = useState<string | null>(null);
@@ -132,19 +153,60 @@ export function ServiceMappingList({
       ]);
       setNewName("");
       setNewDesc("");
+      setAdding(false);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Could not create service.");
     }
   }
 
+  const showSubscription = Boolean(subscribedServiceIds);
+  const cols = showSubscription ? ROW_COLS_WITH_SUBSCRIPTION : ROW_COLS;
+  // Ticked services first, as their own group: "what is on this project" is
+  // the answer the tab exists to give. Each group keeps the sort above.
+  const groups = [
+    { key: "assigned", label: assignedLabel, rows: sortedCatalogue.filter((s) => assignmentByServiceId.has(s.id)) },
+    { key: "unassigned", label: unassignedLabel, rows: sortedCatalogue.filter((s) => !assignmentByServiceId.has(s.id)) },
+  ];
+  const subscribedCount = subscribedServiceIds
+    ? sortedCatalogue.filter((s) => subscribedServiceIds.has(s.id)).length
+    : 0;
+
   return (
-    <div className="space-y-4">
-      <div>
-        <h2 className="font-display text-label-caps uppercase text-on-surface">
-          {title}
-        </h2>
-        <p className="text-[12px] text-on-surface-variant">{description}</p>
+    <div className="space-y-3">
+      <h2 className="sr-only">{title}</h2>
+
+      {/* Toolbar: counts on the left, actions on the right, in the shared
+          toolbar box (lib/utils.ts) like every other project tab. */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex flex-wrap gap-2">
+          <div className={TOOLBAR_STAT}>
+            <span className="text-sm font-bold tabular-nums text-on-surface">{groups[0].rows.length}</span>
+            {assignedLabel}
+          </div>
+          {showSubscription && (
+            <div className={TOOLBAR_STAT}>
+              <span className="text-sm font-bold tabular-nums text-on-surface">{subscribedCount}</span>
+              Customer subscribes to
+            </div>
+          )}
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {toolbarActions}
+          {canMutate && canCreateService && (
+            <button
+              type="button"
+              aria-expanded={adding}
+              onClick={() => setAdding((v) => !v)}
+              className={TOOLBAR_BUTTON_OUTLINE}
+            >
+              <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
+              Add service
+            </button>
+          )}
+        </div>
       </div>
+
+      <p className="text-meta text-on-surface-variant">{description}</p>
 
       {error && (
         <Alert variant="destructive">
@@ -152,111 +214,29 @@ export function ServiceMappingList({
         </Alert>
       )}
 
-      {isLoading ? (
-        <div className="h-24 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
-      ) : !catalogue || catalogue.length === 0 ? (
-        <EmptyState
-          icon="category"
-          message={
-            canCreateService
-              ? "No services yet — add the first one below."
-              : "No services yet — ask an admin to add one."
-          }
-        />
-      ) : (
-        <div className="space-y-1.5">
-          {sortedCatalogue.map((s) => {
-            const assignment = assignmentByServiceId.get(s.id);
-            const assigned = Boolean(assignment);
-            const subscribed = subscribedServiceIds?.has(s.id) ?? false;
-            return (
-              <div
-                key={s.id}
-                className={[
-                  "rounded-sm border px-3 py-2 transition-colors",
-                  assigned
-                    ? "border-primary bg-primary/5"
-                    : "border-outline-variant bg-surface-container-lowest",
-                  !s.active ? "opacity-60" : "",
-                ].join(" ")}
-              >
-                <button
-                  type="button"
-                  disabled={!canMutate || saving}
-                  onClick={() => toggle(s.id)}
-                  className={[
-                    "flex w-full items-center justify-between gap-3 text-left text-sm",
-                    canMutate ? "" : "cursor-default",
-                  ].join(" ")}
-                >
-                  <div className="flex min-w-0 items-center gap-2">
-                    <span
-                      className={[
-                        "material-symbols-outlined text-[19px]",
-                        assigned ? "text-primary" : "text-on-surface-variant",
-                      ].join(" ")}
-                    >
-                      {assigned ? "check_box" : "check_box_outline_blank"}
-                    </span>
-                    <div className="min-w-0">
-                      <p className="flex flex-wrap items-center gap-2 font-medium text-on-surface">
-                        {s.name}
-                        {!s.active && (
-                          <span className="font-display text-label-caps uppercase text-on-surface-variant">
-                            inactive
-                          </span>
-                        )}
-                        {subscribed && (
-                          <span className="inline-flex items-center rounded-full border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-display text-label-caps uppercase text-primary">
-                            Subscribed
-                          </span>
-                        )}
-                      </p>
-                      {s.description && (
-                        <p className="truncate text-[12px] text-on-surface-variant">
-                          {s.description}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </button>
-
-                {assigned && assignment && (
-                  <div className="mt-2 border-t border-outline-variant/60 pt-2">
-                    <ToolsEditor
-                      serviceName={s.name}
-                      tools={assignment.tools}
-                      canMutate={canMutate}
-                      saving={saving}
-                      onChange={(next) => setTools(s.id, next)}
-                    />
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {canMutate && canCreateService && (
+      {/* New catalogue entry (admins). The catalogue is shared by every
+          customer and project, so the form says so and stays closed until
+          asked for. */}
+      {adding && canMutate && canCreateService && (
         <form
           onSubmit={handleAdd}
           className="flex flex-wrap items-end gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest p-3"
         >
-          <label className="w-full md:flex-1 md:min-w-[160px]">
+          <label className="w-full md:min-w-[160px] md:flex-1">
             <span className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
               Name
             </span>
             <input
               type="text"
+              autoFocus
               value={newName}
               onChange={(e) => setNewName(e.target.value)}
               maxLength={100}
               placeholder="e.g. Penetration Testing"
-              className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
+              className={`h-8 w-full rounded-sm border border-outline-variant bg-surface px-2 text-sm ${FIELD_FOCUS}`}
             />
           </label>
-          <label className="w-full md:flex-2 md:min-w-[240px]">
+          <label className="w-full md:min-w-[240px] md:flex-2">
             <span className="mb-1 block font-display text-label-caps uppercase text-on-surface-variant">
               Description
             </span>
@@ -266,17 +246,127 @@ export function ServiceMappingList({
               onChange={(e) => setNewDesc(e.target.value)}
               maxLength={1000}
               placeholder="Short blurb shown in the catalogue"
-              className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1.5 text-sm ${FIELD_FOCUS}`}
+              className={`h-8 w-full rounded-sm border border-outline-variant bg-surface px-2 text-sm ${FIELD_FOCUS}`}
             />
           </label>
+          <button type="button" onClick={() => setAdding(false)} className={TOOLBAR_BUTTON_OUTLINE}>
+            Cancel
+          </button>
           <button
             type="submit"
             disabled={create.isPending || !newName.trim()}
-            className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
+            className={TOOLBAR_BUTTON_PRIMARY}
           >
-            {create.isPending ? "Adding…" : "Add service"}
+            {create.isPending ? "Adding…" : "Add to catalogue"}
           </button>
+          <p className="w-full text-meta text-on-surface-variant">
+            Adds the service to the shared catalogue for every customer and project, and ticks it here.
+          </p>
         </form>
+      )}
+
+      {isLoading ? (
+        <div className="h-24 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+      ) : !catalogue || catalogue.length === 0 ? (
+        <EmptyState
+          icon="category"
+          message={
+            canCreateService
+              ? "No services yet. Use Add service to create the first one."
+              : "No services yet. Ask an admin to add one."
+          }
+        />
+      ) : (
+        <div className="overflow-hidden rounded-sm border border-outline-variant bg-surface-container-lowest">
+          {/* Column labels (md and up; on a phone each row stacks and labels itself). */}
+          <div
+            aria-hidden="true"
+            className={`${ROW_BASE} ${cols} hidden bg-surface-container-low py-2 font-display text-label-caps uppercase text-on-surface-variant md:grid`}
+          >
+            <span />
+            <span>Service</span>
+            {showSubscription && <span>Customer subscription</span>}
+            <span>Tools</span>
+          </div>
+
+          {groups.map((group, groupIndex) => (
+            <section key={group.key} aria-label={`${group.label}: ${group.rows.length}`}>
+              <h3
+                className={`border-outline-variant bg-surface-container-low/50 px-3 py-1.5 text-meta font-semibold text-on-surface-variant ${
+                  groupIndex === 0 ? "md:border-t" : "border-t"
+                }`}
+              >
+                {group.label} · <span className="tabular-nums">{group.rows.length}</span>
+              </h3>
+              {group.rows.length === 0 ? (
+                <p className="border-t border-outline-variant px-3 py-3 text-meta text-on-surface-variant">
+                  {group.key === "assigned"
+                    ? canMutate
+                      ? "Nothing here yet. Tick a service below to add it."
+                      : "Nothing here yet."
+                    : "Every service in the catalogue is ticked."}
+                </p>
+              ) : (
+                <ul>
+                  {group.rows.map((s) => {
+                    const assignment = assignmentByServiceId.get(s.id);
+                    const subscribed = subscribedServiceIds?.has(s.id) ?? false;
+                    const checkboxId = `${idPrefix}-service-${s.id}`;
+                    return (
+                      <li
+                        key={s.id}
+                        className={[
+                          ROW_BASE,
+                          cols,
+                          "border-t border-outline-variant py-2.5",
+                          assignment ? "bg-primary/5" : "",
+                        ].join(" ")}
+                      >
+                        <input
+                          id={checkboxId}
+                          type="checkbox"
+                          checked={Boolean(assignment)}
+                          disabled={!canMutate || saving}
+                          onChange={() => toggle(s.id)}
+                          className={`mt-0.5 h-4 w-4 rounded-xs accent-primary ${FIELD_FOCUS} ${canMutate ? "cursor-pointer" : ""}`}
+                        />
+                        <label
+                          htmlFor={checkboxId}
+                          className={`min-w-0 ${!s.active ? "opacity-70" : ""} ${canMutate ? "" : "cursor-default"}`}
+                        >
+                          <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-on-surface">
+                            {s.name}
+                            {!s.active && <Chip tone="gray">Inactive</Chip>}
+                          </span>
+                          {s.description && (
+                            <span className="block text-meta text-on-surface-variant">{s.description}</span>
+                          )}
+                        </label>
+                        {showSubscription && (
+                          <div className={`col-start-2 md:col-start-auto ${subscribed ? "" : "hidden md:block"}`}>
+                            {subscribed && <Chip tone="blue">Subscribed</Chip>}
+                          </div>
+                        )}
+                        <div className={`col-start-2 min-w-0 md:col-start-auto ${assignment ? "" : "hidden md:block"}`}>
+                          {assignment && (
+                            <ToolsEditor
+                              serviceName={s.name}
+                              tools={assignment.tools}
+                              canMutate={canMutate}
+                              saving={saving}
+                              onChange={(next) => setTools(s.id, next)}
+                              labelClassName="md:hidden"
+                            />
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </section>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -288,7 +378,10 @@ export function ToolsEditor({
   canMutate,
   saving,
   onChange,
+  labelClassName = "",
 }: {
+  /** Extra classes for the "Tools used" label (the table hides it where a column header says it). */
+  labelClassName?: string;
   /** One editor renders per assigned service, so the service names its input. */
   serviceName: string;
   tools: string[];
@@ -324,14 +417,14 @@ export function ToolsEditor({
 
   return (
     <div>
-      <p className="mb-1 font-display text-label-caps uppercase text-on-surface-variant">
+      <p className={`mb-1 font-display text-label-caps uppercase text-on-surface-variant ${labelClassName}`}>
         Tools used
       </p>
       <div className="flex flex-wrap items-center gap-1.5">
         {tools.map((t, i) => (
           <span
             key={`${t}-${i}`}
-            className="inline-flex items-center gap-1 rounded-full border border-primary/30 bg-primary/10 px-2 py-0.5 font-mono text-[12px] text-primary"
+            className={`${CHIP_BASE} bg-surface-container-high text-on-surface`}
           >
             {t}
             {canMutate && (
@@ -340,9 +433,9 @@ export function ToolsEditor({
                 onClick={() => remove(i)}
                 disabled={saving}
                 aria-label={`Remove ${t}`}
-                className="rounded-full text-primary/70 hover:text-primary disabled:opacity-50"
+                className="-mr-0.5 inline-flex rounded-full text-on-surface-variant hover:text-on-surface disabled:opacity-50"
               >
-                <span className="material-symbols-outlined text-[13px]">close</span>
+                <span aria-hidden="true" className="material-symbols-outlined text-[13px]">close</span>
               </button>
             )}
           </span>
@@ -357,11 +450,11 @@ export function ToolsEditor({
             disabled={saving}
             placeholder={tools.length === 0 ? "e.g. Acronis, Crowdstrike" : "Add tool…"}
             aria-label={`Add tool for ${serviceName}`}
-            className={`min-w-[140px] flex-1 rounded-sm border border-outline-variant bg-surface px-2 py-0.5 text-[12px] ${FIELD_FOCUS} disabled:opacity-50`}
+            className={`h-[22px] w-44 rounded-sm border border-outline-variant bg-surface px-2 text-meta ${FIELD_FOCUS} disabled:opacity-50`}
           />
         )}
         {!canMutate && tools.length === 0 && (
-          <span className="text-[12px] italic text-on-surface-variant">
+          <span className="text-meta italic text-on-surface-variant">
             No tools listed.
           </span>
         )}

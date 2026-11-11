@@ -31,7 +31,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
   const update = useUpdateCustomer(customer?.id ?? 0);
   const { data: users } = useUsers();
   const { user } = useAuth();
-  // "— none —" (an unassigned TAM) is only offered to view-all users
+  // "None" (an unassigned TAM) is only offered to view-all users
   // (Decision 4, customer-visibility-spec.md §3) — a non-view-all user can
   // never submit `tamId: null`, since they could never see the customer
   // again afterward.
@@ -72,7 +72,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
       // Decision 4 (a non-view-all user can never submit `tamId: null`) is
       // a create-time rule only. `PATCH /customers/:id` still accepts
       // `tamId: null` from anyone, so an already-unowned customer stays
-      // unowned unless someone deliberately picks a TAM. The "— none —"
+      // unowned unless someone deliberately picks a TAM. The "None"
       // option is rendered below whenever it's the customer's current
       // value, so this is always a selectable initial value.
       const initial = customer.tamId != null ? String(customer.tamId) : "";
@@ -84,7 +84,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
       setAccountManager("");
       setSolutionArchitect("");
       // On create, the TAM select pre-selects the current user regardless
-      // of role — a view-all user can still change it to "— none —".
+      // of role — a view-all user can still change it to "None".
       const initial = user ? String(user.id) : "";
       setTam(initial);
       setInitialTam(initial);
@@ -130,7 +130,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
       accountManager: accountManager.trim() || undefined,
       solutionArchitect: solutionArchitect.trim() || undefined,
       // Always sent (never omitted) so clearing the select back to
-      // "— none —" actually unassigns the TAM instead of being dropped.
+      // "None" actually unassigns the TAM instead of being dropped.
       ...(isEdit && !canChangeOwner ? {} : { tamId: tam ? Number(tam) : null }),
       description: description.trim(),
     };
@@ -174,7 +174,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
             type="button"
             onClick={onClose}
             disabled={submitting}
-            className="rounded-lg border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
+            className="rounded-sm border border-outline-variant px-4 py-1.5 text-xs font-semibold text-on-surface-variant hover:bg-surface-container disabled:opacity-50"
           >
             Cancel
           </button>
@@ -182,7 +182,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
             type="submit"
             form="customer-form"
             disabled={submitting}
-            className="rounded-lg bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 text-xs font-bold text-on-primary hover:bg-primary/90 disabled:opacity-60"
           >
             {submitting ? "Saving…" : isEdit ? "Save changes" : "Create customer"}
           </button>
@@ -208,7 +208,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
               value={accountManager}
               onChange={(e) => setAccountManager(e.target.value)}
               maxLength={200}
-              placeholder="Free text — anyone, internal or external"
+              placeholder="Free text: anyone, internal or external"
               className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             />
           </Field>
@@ -218,7 +218,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
               onChange={(e) => setSolutionArchitect(e.target.value)}
               className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface ${FIELD_FOCUS}`}
             >
-              <option value="">— None —</option>
+              <option value="">None</option>
               {solutionArchitectOptions.map((u) => (
                 <option key={u.id} value={u.username}>
                   {u.username} ({u.role})
@@ -242,7 +242,7 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
                   (an already-unowned customer stays selectable as "none"),
                   never on create (Decision 4). */}
               {(viewAll || (isEdit && customer?.tamId == null)) && (
-                <option value="">— none —</option>
+                <option value="">None</option>
               )}
               {solutionArchitectOptions.map((u) => (
                 <option key={u.id} value={u.id}>
