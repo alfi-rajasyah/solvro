@@ -128,6 +128,46 @@ export function diffOpportunityChanges(
   return changes;
 }
 
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+/** "2026-11-20" -> "20 Nov 2026", the app's day-first display form. */
+const dayText = (day: string) => `${Number(day.slice(8, 10))} ${MONTHS[Number(day.slice(5, 7)) - 1]} ${day.slice(0, 4)}`;
+/** 650000000 -> "Rp 650.000.000", as the deal page shows it. */
+const rupiahText = (n: number) => `Rp ${String(Math.round(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ".")}`;
+
+const FIELD_SENTENCES: ReadonlyArray<[field: string, label: string, text: (v: unknown) => string]> = [
+  ["title", "title", (v) => `"${String(v)}"`],
+  ["customerName", "customer", (v) => `"${String(v)}"`],
+  ["dealValue", "value", (v) => rupiahText(Number(v))],
+  ["winProbability", "win probability", (v) => `${Math.round(Number(v))}%`],
+  ["deadline", "deadline", (v) => dayText(String(v))],
+  ["requestDate", "request date", (v) => dayText(String(v))],
+  ["leadSource", "lead source", (v) => `"${String(v)}"`],
+];
+
+/**
+ * Timeline sentences for a deal's plain field edits, from
+ * `diffOpportunityChanges` output: "Changed value from Rp 500.000.000 to
+ * Rp 650.000.000", "Set deadline to 20 Nov 2026", "Cleared lead source". The
+ * two long free-text fields report the edit without their text. Sub-status,
+ * status tag and PIC are left out: their callers write their own sentences.
+ * Deal edits are readable in the Activity timeline this way (user decision
+ * 2026-11-12), not only in the structured change log.
+ */
+export function fieldChangeSentences(changes: ActivityChanges): string[] {
+  const sentences: string[] = [];
+  const empty = (v: unknown) => v === null || v === undefined || v === "";
+  for (const [field, label, text] of FIELD_SENTENCES) {
+    const change = changes[field] as { from: unknown; to: unknown } | undefined;
+    if (!change) continue;
+    if (empty(change.to)) sentences.push(`Cleared ${label}`);
+    else if (empty(change.from)) sentences.push(`Set ${label} to ${text(change.to)}`);
+    else sentences.push(`Changed ${label} from ${text(change.from)} to ${text(change.to)}`);
+  }
+  if (changes.productSolution) sentences.push("Updated the product solution");
+  if (changes.description) sentences.push("Updated the description");
+  return sentences;
+}
+
 /** Changes recorded for a freshly created deal. */
 export function opportunityCreatedChanges(after: {
   stage: string;

@@ -732,6 +732,7 @@ adminRouter.put(
         actorId: req.user!.sub,
         name: result.name,
         changes: await diffProjectSeats(tx, before, result),
+        via: "Project Override",
       });
       return result;
     });

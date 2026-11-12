@@ -129,8 +129,18 @@ describe("PATCH /opportunities/:id", () => {
       deadline: { from: null, to: "2026-12-31" },
     });
     expect(JSON.stringify(events[0]!.changes)).not.toContain("secret");
-    // Plain field edits add no timeline sentence.
-    expect(await sentences(id)).toEqual(["Created"]);
+    // The field edits share one timeline entry, a line per field; the
+    // description's text stays out of it.
+    const timeline = await sentences(id);
+    expect(timeline).toHaveLength(2);
+    expect(timeline[0]).toBe("Created");
+    expect(timeline[1]!.split("\n")).toEqual([
+      expect.stringMatching(/^Changed title from ".+" to "Renamed deal"$/),
+      "Changed value from Rp 100 to Rp 2.500.000.000",
+      "Set deadline to 31 Dec 2026",
+      "Updated the description",
+    ]);
+    expect(timeline[1]).not.toContain("secret");
   });
 
   it("a no-op PATCH (same values, or an empty body) records no event and no sentence", async () => {
