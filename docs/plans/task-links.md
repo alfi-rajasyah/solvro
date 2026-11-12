@@ -56,4 +56,11 @@ timeline (`routes/publicShare.ts`), or any customer-facing output.
 
 ## Delivery Gate (antislop)
 
-Pending: record PASS/FAIL here after the click-through in both themes and at 375px.
+PASS (2026-11-12). Task panel with one long-label link, checked at 375px in
+light and dark theme and at 1440px in light theme. The section sits between
+Subtasks and Comments; the label fits on one line next to the edit and delete
+icons, with no horizontal overflow at 375px. The keyboard-focused "Add link"
+button shows its focus ring in both themes. No new copy: the section reuses
+the shared LinksSection strings. Verification: backend vitest 1353/1353,
+frontend 1197/1197 (UTC and Asia/Jakarta), `task-links.spec.ts` passes on
+desktop and mobile.
