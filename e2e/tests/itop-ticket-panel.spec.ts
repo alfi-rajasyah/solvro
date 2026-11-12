@@ -369,6 +369,13 @@ test.describe("Ticket panel", () => {
     await panel.getByPlaceholder("Add a log entry…").fill("Escalated to L2.");
     await panel.getByRole("button", { name: "Add entry" }).click();
 
-    await expect(panel.getByText("Escalated to L2.")).toBeVisible();
+    // Scoped to the Public log list: the composer keeps the typed text until
+    // iTop accepts the entry, so for a moment the same words sit both in the
+    // new list entry and in the textarea, and an unscoped getByText matches
+    // two elements.
+    await expect(
+      panel.getByRole("tabpanel", { name: "Public" }).getByText("Escalated to L2."),
+    ).toBeVisible();
+    await expect(panel.getByRole("textbox", { name: "New log entry" })).toHaveValue("");
   });
 });

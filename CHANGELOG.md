@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-12 — Help deep links land on their topic; two flaky browser tests
+
+- `frontend/src/pages/Help.tsx`: a `/help#<topic>` link could open on the wrong topic. The page scrolled to the topic once, then the web fonts (the text font and the icon font) finished loading and changed the height of every section above it, so the topic moved out of view. The page now scrolls the topic back into view each time its height changes, until the reader scrolls, clicks or types, or for 5 seconds at most. This was the cause of the intermittent `e2e/tests/help.spec.ts` "a /help#<topic> link scrolls to that topic" failure.
+- `e2e/tests/itop-ticket-panel.spec.ts`: "adding a public log entry shows it in the list" looks for the new entry inside the Public log list, then checks that the composer is empty. The composer keeps the typed text until iTop accepts the entry, so for a moment the same words were in two elements and the unscoped text lookup failed.
+- `docs/ISSUES.md`: the "passed only on retry" entry now records the causes. The `itop-task-ref.spec.ts` "Create in iTop" failure was the shared e2e project: `itop-daily-review.spec.ts` moves its project to a new customer, so the next spec's mocked customer no longer matched and the button stayed hidden. Seeding one project per spec file (2026-11-12) already removed it.
+
 ### Security — 2026-11-12 — The offboarding handover no longer leaves customers unowned
 
 - `backend/src/routes/admin.ts`, `backend/src/lib/offboarding.ts`: `POST /admin/users/:id/offboard` now needs a new owner for every customer the leaver owns. A `null` `newOwnerId` is refused with `400`, and the owner must still be an active user who is not the leaver (`400 owner_not_found`). Before, the handover could clear `Customer.tamId`, and any TAM could then claim the customer and every project under it.
