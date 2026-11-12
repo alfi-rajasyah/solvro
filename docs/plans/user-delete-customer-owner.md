@@ -22,4 +22,14 @@ Decided by the user on 2026-11-12 (decisions log item D-10), option "Require rea
 
 ## Delivery Gate
 
-Pending: the click-through in both themes and at 375px is recorded here before the PR merges.
+Run on 2026-11-12 against the built CI stack, with throwaway users and made-up customers. Result: PASS.
+
+- PASS: no em dash in the visible copy of the five dialog states (loading, plain, owner picker before and after the choice, error).
+- PASS: text is readable in both themes. The lowest contrast is 6.30:1 (dark) and 6.46:1 (light).
+- PASS: at 375px the page and the open dialog have no horizontal scroll, and the dialog fills the screen.
+- PASS: the Delete button shows "Loading…" while the customer list loads, then the dialog opens.
+- PASS: the confirm button stays disabled until every customer has an owner; its label is "Move customers and delete".
+- PASS: a user who owns no customers gets the plain dialog, with "Delete" enabled at once.
+- PASS: the layout is correct in light and dark at 1440x900 and at 375px.
+
+Note, not part of this change: at 1440px the Admin users table is wider than its container, so the Actions column is cut at the right edge ("Delete" reads "Delet"). The table scrolls inside itself. Not checked on `develop`.
