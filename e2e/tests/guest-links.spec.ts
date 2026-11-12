@@ -121,15 +121,12 @@ async function setup(base: string): Promise<Setup> {
   const noteCustomer = `SECRET-NOTE-CUSTOMER-${s}`;
   const risk = `SECRET-RISK-${s}`;
   const comment = `SECRET-COMMENT-${s}`;
-  for (const [body, visibility] of [
-    [noteInternal, "INTERNAL"],
-    [noteCustomer, "CUSTOMER_FACING"],
-  ] as const) {
+  for (const body of [noteInternal, noteCustomer]) {
     await json(
       await fetch(`${base}/api/projects/${project.id}/notes`, {
         method: "POST",
         headers: H,
-        body: JSON.stringify({ body, visibility }),
+        body: JSON.stringify({ body }),
       }),
     );
   }

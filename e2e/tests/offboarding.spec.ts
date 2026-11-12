@@ -144,8 +144,8 @@ test.describe("Offboarding handover", () => {
     const cust = await api<{ tamId: number | null }>(base, admin.token, "GET", `/customers/${customer.id}`);
     expect(cust.tamId).toBe(receiver.id);
 
-    // The handover note is saved on the project, INTERNAL (never customer-facing).
-    const notes = await api<{ body: string; visibility: string }[]>(
+    // The handover note is saved on the project.
+    const notes = await api<{ body: string }[]>(
       base,
       admin.token,
       "GET",
@@ -153,7 +153,6 @@ test.describe("Offboarding handover", () => {
     );
     const saved = notes.filter((n) => n.body === NOTE);
     expect(saved).toHaveLength(1);
-    expect(saved[0]!.visibility).toBe("INTERNAL");
 
     await expect(page.getByRole("row").filter({ hasText: leaver.username })).toContainText("Inactive");
   });
