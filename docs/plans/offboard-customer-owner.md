@@ -14,4 +14,12 @@ Decided by the user on 2026-11-12 (decisions log item D-14), option "Require an 
 
 ## Delivery Gate
 
-Pending.
+Run on 2026-11-12 against the built CI stack, with a made-up TAM who leads one project and owns two made-up customers (Admin > Users > Deactivate). Result: PASS.
+
+- PASS: no em dash in the visible copy, in light and dark at 1440x900 and at 375px.
+- PASS: both owner pickers show "Choose an owner" with the required marker.
+- PASS: "Hand over and deactivate" stays disabled at the start, after the new TAM is chosen, and after one of two owners; it is enabled after both.
+- PASS: the hint "Choose a new owner for every customer <user> owns to continue." shows until every customer has an owner.
+- PASS: no horizontal scroll at 375px, on the page and with the dialog open. The lowest text contrast is 4.57:1 (the light "Active" project chip, unchanged code).
+
+Seen in unchanged code, not part of this change: at 1440px the "Apply to all" placeholder is cut by the select arrow.
