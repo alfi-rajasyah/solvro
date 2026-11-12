@@ -17,6 +17,13 @@ export const UNREADABLE_FILE_MESSAGE = "Could not read the file. Make sure it is
 /** Most data rows one file may hold, header excluded. The import itself takes 500 per call. */
 export const MAX_FILE_ROWS = 5000;
 
+/**
+ * Most `<row>` and `<c>` elements one sheet may hold, blank ones included,
+ * so a sheet of empty or out-of-range cells cannot keep the reader busy.
+ */
+export const MAX_SHEET_ROW_ELEMENTS = 50_000;
+export const MAX_SHEET_CELL_ELEMENTS = 200_000;
+
 /** Columns read from each row. The template has 10; the rest are ignored. */
 export const MAX_COLUMNS = 16;
 

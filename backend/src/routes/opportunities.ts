@@ -516,8 +516,9 @@ opportunitiesRouter.post(
 // matched to user ids. Nothing is written. The browser no longer parses
 // workbooks (docs/archive/plans/application-review-2026-10-22.md, B-18), so
 // this is the only place a user-chosen workbook is read. Same permission as
-// the import itself. The 1 MB cap (the nginx /api/ limit too) and the reader's own limits (ZIP expansion,
-// 5000 rows, 16 columns) bound the work one request can cause.
+// the import itself. The 1 MB cap (the nginx /api/ limit too) and the
+// reader's own limits (ZIP expansion, row and cell counts, 16 columns) bound
+// the work one request can cause.
 const IMPORT_FILE_LIMIT = "1mb";
 
 opportunitiesRouter.post(

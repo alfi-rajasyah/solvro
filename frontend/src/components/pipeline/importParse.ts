@@ -13,9 +13,6 @@ export const IMPORTABLE_STAGES: PipelineStage[] = STAGE_ORDER;
 // sends in one request.
 export const IMPORT_ROW_CAP = 500;
 
-/** The import file's size limit, as enforced by the preview route. */
-export const IMPORT_FILE_MAX_BYTES = 1024 * 1024;
-
 export const TEMPLATE_HEADERS = [
   "Title",
   "Company",
@@ -29,22 +26,4 @@ export const TEMPLATE_HEADERS = [
   "Activity Log",
 ] as const;
 
-/** One row of the preview, as `POST /opportunities/import/preview` returns it. */
-export interface ParsedRow {
-  rowNum: number;
-  title: string;
-  customerName: string;
-  dealValue: number;
-  // Uppercased candidate stage token. It may not be a valid PipelineStage;
-  // `status`/`errors` decide whether the row is ever submitted.
-  stage: string;
-  picName: string;
-  picId: number | null;
-  deadline: string | null; // "yyyy-MM-dd" day string, never an ISO instant
-  productSolution: string;
-  winProbability: number;
-  leadSource: string;
-  activityLog: string;
-  status: "valid" | "invalid";
-  errors: string[];
-}
+export { IMPORT_FILE_MAX_BYTES, type ParsedRow } from "@/lib/pipelineImport";

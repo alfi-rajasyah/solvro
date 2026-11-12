@@ -132,7 +132,13 @@ export function PipelineImportDialog({ open, onClose }: Props) {
     stepRef.current?.focus();
   }, [step]);
 
+  // The preview request in flight, aborted when the dialog resets so a late
+  // answer never lands in a closed or restarted dialog.
+  const previewAbort = useRef<AbortController | null>(null);
+
   const reset = useCallback(() => {
+    previewAbort.current?.abort();
+    previewAbort.current = null;
     setStep("upload");
     setFileName("");
     setParsing(false);
@@ -157,16 +163,22 @@ export function PipelineImportDialog({ open, onClose }: Props) {
     setParseError(null);
     setRows([]);
 
+    let controller: AbortController | null = null;
     try {
       // Checked here too, so a large file fails before the upload, not after.
       if (file.size > IMPORT_FILE_MAX_BYTES) {
         setParseError(`The file is larger than ${IMPORT_FILE_MAX_MB} MB. Split it into smaller files.`);
         return;
       }
-      const { rows: parsed } = await previewImportFile(file);
+      previewAbort.current?.abort();
+      controller = new AbortController();
+      previewAbort.current = controller;
+      const { rows: parsed } = await previewImportFile(file, controller.signal);
+      if (controller.signal.aborted) return;
       setRows(parsed);
       setStep("preview");
     } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
       // The server's message names the problem (unreadable file, old .xls,
       // too many rows); a network failure has its own readable message.
       setParseError(
@@ -177,7 +189,8 @@ export function PipelineImportDialog({ open, onClose }: Props) {
             : "Could not read the file. Make sure it is a valid .xlsx or .csv export.",
       );
     } finally {
-      setParsing(false);
+      // A request that was replaced or reset leaves the state to its successor.
+      if (!controller || previewAbort.current === controller) setParsing(false);
       // N4: without this, re-picking the SAME file (e.g. fixed externally
       // and re-uploaded under the same name) doesn't fire another `change`
       // event — the input's value is unchanged from the browser's

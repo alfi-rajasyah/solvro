@@ -29,8 +29,27 @@ export function readImportFile(buf: Buffer): FileRows {
   }
   // A NUL byte means binary data or UTF-16 text, neither of which is a CSV
   // this importer reads.
-  if (buf.includes(0)) throw new ImportFileError("unreadable_file", UNREADABLE_FILE_MESSAGE);
-  return { rows: readCsv(buf.toString("utf8")), date1904: false };
+  if (buf.includes(0)) {
+    const utf16 = (buf[0] === 0xff && buf[1] === 0xfe) || (buf[0] === 0xfe && buf[1] === 0xff);
+    throw new ImportFileError(
+      "unreadable_file",
+      utf16 ? "This CSV is saved as UTF-16. Save it as CSV UTF-8, then upload it again." : UNREADABLE_FILE_MESSAGE,
+    );
+  }
+  return { rows: readCsv(decodeCsv(buf)), date1904: false };
+}
+
+/**
+ * UTF-8 when the bytes are valid UTF-8, else Windows-1252: Excel's plain
+ * "CSV (Comma delimited)" save uses the Windows code page, and decoding it
+ * as UTF-8 would turn every accented letter into U+FFFD.
+ */
+export function decodeCsv(buf: Buffer): string {
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(buf);
+  } catch {
+    return new TextDecoder("windows-1252").decode(buf);
+  }
 }
 
 /** `picByUsername` maps a lowercased username to a user id. */

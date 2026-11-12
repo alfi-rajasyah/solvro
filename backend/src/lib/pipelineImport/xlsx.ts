@@ -4,7 +4,15 @@
 // stay Excel serial numbers), booleans for TRUE/FALSE, "" for a blank cell.
 // Only non-blank rows are returned; the first one is the header.
 import { openZip, ZipError, type ZipArchive } from "./zip.js";
-import { ImportFileError, MAX_COLUMNS, MAX_FILE_ROWS, tooManyRows, UNREADABLE_FILE_MESSAGE } from "./errors.js";
+import {
+  ImportFileError,
+  MAX_COLUMNS,
+  MAX_FILE_ROWS,
+  MAX_SHEET_CELL_ELEMENTS,
+  MAX_SHEET_ROW_ELEMENTS,
+  tooManyRows,
+  UNREADABLE_FILE_MESSAGE,
+} from "./errors.js";
 import { attrByLocalName, decodeXmlText, elements, firstInner, parseAttrs, rootPrefix, stripElements } from "./xml.js";
 
 export type CellValue = string | number | boolean;
@@ -15,8 +23,9 @@ export interface SheetRows {
   date1904: boolean;
 }
 
-// An import file is at most 1 MB on the wire; its XML may not expand past this.
-const ZIP_LIMITS = { maxEntries: 2000, maxTotalBytes: 64 * 1024 * 1024 };
+// An import file is at most 1 MB on the wire; its XML may not expand past
+// this. A full 5000-row sheet with its shared strings is a few MB.
+const ZIP_LIMITS = { maxEntries: 2000, maxTotalBytes: 16 * 1024 * 1024 };
 
 function unreadable(): ImportFileError {
   return new ImportFileError("unreadable_file", UNREADABLE_FILE_MESSAGE);
@@ -111,8 +120,10 @@ function cellValue(attrs: Map<string, string>, inner: string | null, p: string, 
       return shared[Number.parseInt(v, 10)] ?? "";
     case "b":
       return v.trim() === "1" || v.trim().toLowerCase() === "true";
-    case "str":
     case "e":
+      // An error cell (#N/A, #REF!) reads as blank, as SheetJS gave it.
+      return "";
+    case "str":
     case "d":
       return v;
     default: {
@@ -132,11 +143,15 @@ function readSheet(xml: string, shared: string[]): CellValue[][] {
   const data = firstInner(xml, `${p}sheetData`);
   if (data === null) return [];
   const rows: CellValue[][] = [];
+  let rowElements = 0;
+  let cellElements = 0;
   for (const rowEl of elements(data, `${p}row`)) {
+    if (++rowElements > MAX_SHEET_ROW_ELEMENTS) throw tooManyRows();
     if (rowEl.inner === null) continue;
     const row: CellValue[] = [];
     let next = 0;
     for (const c of elements(rowEl.inner, `${p}c`)) {
+      if (++cellElements > MAX_SHEET_CELL_ELEMENTS) throw tooManyRows();
       const a = parseAttrs(c.attrs);
       const ref = a.get("r");
       const col = ref ? (columnOf(ref) ?? next) : next;

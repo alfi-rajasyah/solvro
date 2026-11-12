@@ -4,7 +4,7 @@
 import { describe, expect, it } from "vitest";
 import { readImportFile, parseImportFile, ImportFileError } from "../src/lib/pipelineImport/index.js";
 import { readCsv } from "../src/lib/pipelineImport/csv.js";
-import { MAX_FILE_ROWS } from "../src/lib/pipelineImport/errors.js";
+import { MAX_FILE_ROWS, MAX_SHEET_ROW_ELEMENTS } from "../src/lib/pipelineImport/errors.js";
 import { decodeXmlText } from "../src/lib/pipelineImport/xml.js";
 import { buildXlsx, buildZip } from "./xlsxFixture.js";
 
@@ -86,6 +86,19 @@ describe("readImportFile: xlsx", () => {
   });
 });
 
+describe("readImportFile: sheet scan limits", () => {
+  it("refuses a sheet of more blank rows than MAX_SHEET_ROW_ELEMENTS", () => {
+    const blank = '<row><c r="A1"/></row>'.repeat(MAX_SHEET_ROW_ELEMENTS + 1);
+    const sheetXml = `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${blank}</sheetData></worksheet>`;
+    expect(codeOf(() => readImportFile(buildXlsx([], { sheetXml })))).toBe("too_many_rows");
+  });
+
+  it("reads an error cell as blank", () => {
+    const sheetXml = `<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData><row r="1"><c r="A1" t="e"><v>#N/A</v></c><c r="B1" t="inlineStr"><is><t>x</t></is></c></row></sheetData></worksheet>`;
+    expect(readImportFile(buildXlsx([], { sheetXml })).rows).toEqual([["", "x"]]);
+  });
+});
+
 describe("readImportFile: format detection", () => {
   it("names a legacy .xls or password-protected file", () => {
     const ole = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0]);
@@ -95,6 +108,22 @@ describe("readImportFile: format detection", () => {
   it("refuses an empty file and binary data", () => {
     expect(codeOf(() => readImportFile(Buffer.alloc(0)))).toBe("empty_file");
     expect(codeOf(() => readImportFile(Buffer.from([0x41, 0x00, 0x42])))).toBe("unreadable_file");
+  });
+
+  it("names a UTF-16 CSV", () => {
+    const err = (() => {
+      try {
+        readImportFile(Buffer.from([0xff, 0xfe, 0x41, 0x00]));
+      } catch (e) {
+        return e as Error;
+      }
+    })();
+    expect(err?.message).toMatch(/CSV UTF-8/);
+  });
+
+  it("reads a Windows-1252 CSV without corrupting accented letters", () => {
+    const buf = Buffer.from([...Buffer.from("Title\nCaf"), 0xe9, 0x20, 0x93, 0x41, 0x94, 0x20, 0x96]);
+    expect(readImportFile(buf).rows).toEqual([["Title"], ["Caf\u00e9 \u201cA\u201d \u2013"]]);
   });
 
   it("reads other text as CSV", () => {

@@ -21,7 +21,7 @@ import {
 } from "./taskConflict";
 import { parseWeekKey } from "./isoWeek";
 import { ownerOf } from "./pipelineFormat";
-import type { ParsedRow } from "@/components/pipeline/importParse";
+import type { ParsedRow } from "./pipelineImport";
 import type {
   IdleState,
   PipelineOutcome,
@@ -5430,11 +5430,13 @@ export function useHandoffOpportunity(id: string) {
 // ─────────────────────────────────────────────────────────────────────────
 
 /** Parses an import file on the server. Nothing is written. */
-export function previewImportFile(file: Blob) {
+export function previewImportFile(file: Blob, signal?: AbortSignal) {
   return apiRequest<{ rows: ParsedRow[] }>("/opportunities/import/preview", {
     method: "POST",
     body: file,
-    timeoutMs: 0, // a large workbook on a slow link can take a while to upload
+    signal,
+    // Longer than the default: a 1 MB upload on a slow link takes a while.
+    timeoutMs: 120_000,
   });
 }
 
