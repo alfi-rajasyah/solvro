@@ -176,7 +176,7 @@ test.describe("Project lifecycle", () => {
     await expect(page.getByText("1 in on-hold projects not counted")).toBeVisible();
 
     // The "On hold, past due" link lists the task the Overdue tile leaves out.
-    const heldLink = page.getByRole("link", { name: "1 on hold, past due" });
+    const heldLink = page.getByRole("link", { name: "1 past-due task on hold" });
     await expect(heldLink).toHaveAttribute("href", "/tasks?view=on-hold-past-due");
     await heldLink.click();
     await expect(page).toHaveURL(/\/tasks\?view=on-hold-past-due/);

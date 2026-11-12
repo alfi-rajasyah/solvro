@@ -17,7 +17,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Added — 2026-11-12 — "On hold, past due" list for tasks that overdue counts leave out
 
-- `frontend/src/pages/Overview.tsx`: when open tasks of on-hold projects are past due, "Projects needing attention" shows a "<n> on hold, past due" link beside "View all". Before, the Overdue tile only said how many tasks it left out, and no list showed them.
+- `frontend/src/pages/Overview.tsx`: when open tasks of on-hold projects are past due, "Projects needing attention" shows a "<n> past-due tasks on hold" link beside "View all". Before, the Overdue tile only said how many tasks it left out, and no list showed them.
 - `frontend/src/pages/Tasks.tsx`: a new "On hold, past due" view (`/tasks?view=on-hold-past-due`) lists those tasks. They keep no overdue styling, because the on-hold rule still applies.
 - `backend/src/routes/tasks.ts`: `GET /tasks` accepts `onHoldPastDue=true`: open tasks due before the caller's `today` in on-hold projects. Cancelled projects are not included. With `topLevel=true` the count equals the Overview's `workCounts.onHoldExcluded`.
 - `frontend/src/lib/queries.ts`, `frontend/src/lib/helpContent.ts`: the filter option and the Overview help text.

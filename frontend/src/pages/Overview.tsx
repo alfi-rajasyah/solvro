@@ -127,7 +127,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
                 to="/tasks?view=on-hold-past-due"
                 className="tap-target text-meta font-semibold text-primary hover:underline"
               >
-                {onHoldExcluded} on hold, past due
+                {onHoldExcluded} past-due {onHoldExcluded === 1 ? "task" : "tasks"} on hold
               </Link>
             )}
             <Link to="/projects" className="tap-target text-meta font-semibold text-primary hover:underline">
