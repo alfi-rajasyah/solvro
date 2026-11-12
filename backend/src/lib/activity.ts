@@ -26,7 +26,8 @@ export type ActivityEntityType =
   | "opportunity_note"
   | "opportunity_link"
   | "share_link"
-  | "project_link";
+  | "project_link"
+  | "task_link";
 export type ActivityAction =
   | "created"
   | "updated"

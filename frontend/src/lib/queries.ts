@@ -250,6 +250,8 @@ export type ActivityEntityType =
   | "opportunity_link"
   // A document link on a project (customer links record no activity).
   | "project_link"
+  // A document link on a task; `changes.taskId` names the task.
+  | "task_link"
   | "share_link";
 export type ActivityAction =
   | "created"
@@ -803,6 +805,7 @@ export const queryKeys = {
   // entity, so the key is the bare prefix the link mutations invalidate.
   projectLinks: (id: number) => ["projects", id, "links"] as const,
   customerLinks: (id: number) => ["customers", id, "links"] as const,
+  taskLinks: (taskId: number) => ["tasks", taskId, "links"] as const,
   tasks: (filter?: TasksFilter) => ["tasks", filter ?? {}] as const,
   comments: (taskId: number) => ["tasks", taskId, "comments"] as const,
   search: (q: string) => ["search", q] as const,
@@ -3187,6 +3190,15 @@ export interface CustomerLink {
   createdAt: string;
 }
 
+// Same shape on a task (GET/POST /tasks/:id/links, PATCH/DELETE .../:linkId).
+export interface TaskLink {
+  id: string;
+  taskId: number;
+  label: string;
+  url: string;
+  createdAt: string;
+}
+
 export interface CreateLinkInput {
   label: string;
   url: string;
@@ -3287,6 +3299,53 @@ export function useDeleteCustomerLink(customerId: number) {
       apiRequest<void>(`/customers/${customerId}/links/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.customerLinks(customerId) });
+    },
+  });
+}
+
+// Task links: reading follows the task read gate, writing `task:write`.
+// Writes record a project activity event, so the project feed refreshes too.
+export function useTaskLinks(taskId: number | null) {
+  const live = useLiveRefresh();
+  return useQuery({
+    ...live,
+    queryKey: taskId ? queryKeys.taskLinks(taskId) : ["tasks", "noop", "links"],
+    queryFn: ({ signal }) => apiRequest<TaskLink[]>(`/tasks/${taskId}/links`, { signal }),
+    enabled: taskId !== null,
+  });
+}
+
+export function useAddTaskLink(taskId: number, projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateLinkInput) =>
+      apiRequest<TaskLink>(`/tasks/${taskId}/links`, { method: "POST", body: input }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.taskLinks(taskId) });
+      void invalidateProjectActivity(qc, projectId);
+    },
+  });
+}
+
+export function useUpdateTaskLink(taskId: number, projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateLinkInput }) =>
+      apiRequest<TaskLink>(`/tasks/${taskId}/links/${id}`, { method: "PATCH", body: patch }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.taskLinks(taskId) });
+      void invalidateProjectActivity(qc, projectId);
+    },
+  });
+}
+
+export function useDeleteTaskLink(taskId: number, projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiRequest<void>(`/tasks/${taskId}/links/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.taskLinks(taskId) });
+      void invalidateProjectActivity(qc, projectId);
     },
   });
 }
