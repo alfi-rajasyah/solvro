@@ -1,14 +1,15 @@
 // Excel/CSV import dialog for the Pipeline board (PRD §2.9, M4.18). Three
 // steps — upload, preview, done — mirroring the reference app's
 // `ImportExcelDialog` (../VeloraApp components/import-excel-dialog.tsx,
-// read-only oracle): download a client-generated template, parse the
-// workbook client-side with per-row validation, then POST the valid rows
-// through `useImportOpportunities` and show the server's per-row results.
+// read-only oracle): download a client-generated template, send the chosen
+// file to the server for parsing and per-row validation
+// (`previewImportFile`), then POST the valid rows through
+// `useImportOpportunities` and show the server's per-row results.
 //
-// `xlsx` (SheetJS) is imported lazily (`loadXlsx()`), both here
-// and in `downloadTemplate` below, so the ~600KB parser never lands in the
-// main bundle for users who never open this dialog — the only approved new
-// frontend dependency this program introduces (root CLAUDE.md Guardrails).
+// The browser never parses an uploaded workbook
+// (docs/archive/plans/application-review-2026-10-22.md, B-18). `exceljs` is
+// imported lazily (`loadExcelJs()`) only to write the template, so it never
+// lands in the main bundle for users who never open this dialog.
 //
 // Errors render inline via `reui/alert.tsx` — Solvro has no toast system
 // (frontend/CLAUDE.md / PRD §2.11).
@@ -16,20 +17,19 @@ import { useCallback, useEffect, useRef, useState, type ChangeEvent } from "reac
 import { Modal } from "./Modal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import {
-  extractDataRows,
+  IMPORT_FILE_MAX_BYTES,
   IMPORT_ROW_CAP,
   IMPORTABLE_STAGES,
-  parseImportRow,
   TEMPLATE_HEADERS,
   type ParsedRow,
 } from "@/components/pipeline/importParse";
 import { Chip } from "@/components/StatusChip";
 import { ApiError } from "@/lib/api";
-import { loadXlsx, XLSX_LOAD_ERROR, XlsxLoadError, type XlsxModule } from "@/lib/loadXlsx";
+import { EXCELJS_LOAD_ERROR, ExcelJsLoadError, loadExcelJs, type ExcelJsModule } from "@/lib/loadExcelJs";
 import { formatIDR, type PipelineStage } from "@/lib/pipelineFormat";
 import {
+  previewImportFile,
   useImportOpportunities,
-  useUsers,
   type ImportOpportunitiesResult,
   type ImportOpportunityRow,
 } from "@/lib/queries";
@@ -49,11 +49,11 @@ type Step = "upload" | "preview" | "done";
  * (docs/archive/plans/application-review-2026-10-22.md, F-40).
  */
 async function downloadTemplate(onLoadError: (message: string) => void) {
-  let XLSX: XlsxModule;
+  let ExcelJS: ExcelJsModule["default"];
   try {
-    XLSX = await loadXlsx();
+    ExcelJS = (await loadExcelJs()).default;
   } catch (err) {
-    onLoadError(err instanceof XlsxLoadError ? err.message : XLSX_LOAD_ERROR);
+    onLoadError(err instanceof ExcelJsLoadError ? err.message : EXCELJS_LOAD_ERROR);
     return;
   }
   const example = [
@@ -81,31 +81,30 @@ async function downloadTemplate(onLoadError: (message: string) => void) {
     "* Optional: seeds the deal's first activity note",
   ];
 
-  const ws = XLSX.utils.aoa_to_sheet([[...TEMPLATE_HEADERS], example, note]);
-  ws["!cols"] = [
-    { wch: 30 },
-    { wch: 25 },
-    { wch: 18 },
-    { wch: 24 },
-    { wch: 20 },
-    { wch: 15 },
-    { wch: 25 },
-    { wch: 16 },
-    { wch: 18 },
-    { wch: 30 },
-  ];
+  const widths = [30, 25, 18, 24, 20, 15, 25, 16, 18, 30];
 
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, "Opportunities");
-  XLSX.writeFile(wb, "solvro-pipeline-import-template.xlsx");
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Opportunities");
+  ws.columns = widths.map((width) => ({ width }));
+  ws.addRows([[...TEMPLATE_HEADERS], example, note]);
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const url = URL.createObjectURL(
+    new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+  );
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "solvro-pipeline-import-template.xlsx";
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
 }
+
+const IMPORT_FILE_MAX_MB = IMPORT_FILE_MAX_BYTES / (1024 * 1024);
 
 export function PipelineImportDialog({ open, onClose }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
-  // N6: PIC matching (`picByUsername` in `handleFile` below) silently comes
-  // up empty for every row if the file gets picked/parsed before this query
-  // resolves — surfaced + gated on below rather than left implicit.
-  const { data: users, isLoading: usersLoading, isError: usersError } = useUsers();
   const importMutation = useImportOpportunities();
 
   // S5: focused on every step transition so a screen reader announces the
@@ -159,29 +158,23 @@ export function PipelineImportDialog({ open, onClose }: Props) {
     setRows([]);
 
     try {
-      const XLSX = await loadXlsx();
-      const buffer = await file.arrayBuffer();
-      const wb = XLSX.read(buffer, { type: "array" });
-      const firstSheet = wb.SheetNames[0];
-      if (!firstSheet) throw new Error("Empty workbook");
-      const ws = wb.Sheets[firstSheet];
-      const raw: unknown[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: "" });
-
-      const picByUsername = new Map<string, number>();
-      for (const u of users ?? []) picByUsername.set(u.username.toLowerCase(), u.id);
-
-      const dataRows = extractDataRows(raw);
-      const parsed: ParsedRow[] = dataRows.map((r, idx) => parseImportRow(r, idx, picByUsername));
-
+      // Checked here too, so a large file fails before the upload, not after.
+      if (file.size > IMPORT_FILE_MAX_BYTES) {
+        setParseError(`The file is larger than ${IMPORT_FILE_MAX_MB} MB. Split it into smaller files.`);
+        return;
+      }
+      const { rows: parsed } = await previewImportFile(file);
       setRows(parsed);
       setStep("preview");
     } catch (err) {
-      // A chunk that will not load is not the file's fault: say so, or the
-      // user re-exports a perfectly good workbook.
+      // The server's message names the problem (unreadable file, old .xls,
+      // too many rows); a network failure has its own readable message.
       setParseError(
-        err instanceof XlsxLoadError
-          ? err.message
-          : "Could not read the file. Make sure it's a valid .xlsx or .csv export.",
+        err instanceof ApiError && err.status === 413
+          ? `The file is larger than ${IMPORT_FILE_MAX_MB} MB. Split it into smaller files.`
+          : err instanceof ApiError
+            ? err.message
+            : "Could not read the file. Make sure it is a valid .xlsx or .csv export.",
       );
     } finally {
       setParsing(false);
@@ -314,32 +307,16 @@ export function PipelineImportDialog({ open, onClose }: Props) {
             </div>
           </div>
 
-          {/* N6: PIC matching depends on `users` being loaded — block the
-              picker until the query resolves (success OR error) rather than
-              letting a parse race ahead with an empty picByUsername map. */}
-          {usersLoading && (
-            <p role="status" aria-live="polite" className="text-xs text-on-surface-variant">
-              Loading team members for PIC matching…
-            </p>
-          )}
-          {usersError && (
-            <Alert variant="warning">
-              <AlertDescription>
-                Couldn't load team members. PIC name matching will be skipped for this import.
-              </AlertDescription>
-            </Alert>
-          )}
-
           <div
             role="button"
-            aria-disabled={usersLoading}
-            tabIndex={usersLoading ? -1 : 0}
+            aria-disabled={parsing}
+            tabIndex={parsing ? -1 : 0}
             onClick={() => {
-              if (usersLoading) return;
+              if (parsing) return;
               fileRef.current?.click();
             }}
             onKeyDown={(e) => {
-              if (usersLoading) return;
+              if (parsing) return;
               if (e.key === "Enter" || e.key === " ") {
                 // N5: without this, Space also scrolls the modal body (the
                 // browser's default action for Space on a non-native,
@@ -349,7 +326,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
               }
             }}
             className={`rounded-sm border-2 border-dashed border-outline-variant p-8 text-center transition-colors ${
-              usersLoading ? "cursor-not-allowed opacity-60" : "cursor-pointer hover:border-primary"
+              parsing ? "cursor-wait" : "cursor-pointer hover:border-primary"
             }`}
           >
             {parsing ? (
@@ -365,7 +342,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
                   upload_file
                 </span>
                 <p className="text-sm font-medium text-on-surface">Click to upload a file</p>
-                <p className="text-xs text-on-surface-variant">Format: .xlsx or .csv</p>
+                <p className="text-xs text-on-surface-variant">Format: .xlsx or .csv, up to {IMPORT_FILE_MAX_MB} MB</p>
                 {fileName && <p className="mt-1 text-xs font-medium text-primary">{fileName}</p>}
               </div>
             )}
@@ -375,7 +352,7 @@ export function PipelineImportDialog({ open, onClose }: Props) {
             type="file"
             accept=".xlsx,.csv"
             className="hidden"
-            disabled={usersLoading}
+            disabled={parsing}
             onChange={handleFile}
           />
 

@@ -26,6 +26,7 @@ export class ApiError extends Error {
 
 interface RequestOptions {
   method?: "GET" | "POST" | "PATCH" | "PUT" | "DELETE";
+  /** JSON-encoded, except a `Blob` (or `File`), which is sent as raw bytes. */
   body?: unknown;
   signal?: AbortSignal;
   auth?: boolean;
@@ -103,7 +104,8 @@ export async function apiRequestWithHeaders<T>(
   { method = "GET", body, signal, auth = true, timeoutMs }: RequestOptions = {},
 ): Promise<{ data: T; headers: Headers }> {
   const headers: Record<string, string> = {};
-  if (body !== undefined) headers["Content-Type"] = "application/json";
+  const raw = body instanceof Blob;
+  if (body !== undefined) headers["Content-Type"] = raw ? "application/octet-stream" : "application/json";
 
   const token = auth ? getToken() : null;
   if (token) headers["Authorization"] = `Bearer ${token}`;
@@ -114,7 +116,7 @@ export async function apiRequestWithHeaders<T>(
     res = await fetch(`${BASE_URL}${path}`, {
       method,
       headers,
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
       signal: requestSignal(signal, timeoutMs),
     });
     // Reading the body is covered by the same signal — a timeout can also

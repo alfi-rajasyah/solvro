@@ -21,6 +21,7 @@ import {
 } from "./taskConflict";
 import { parseWeekKey } from "./isoWeek";
 import { ownerOf } from "./pipelineFormat";
+import type { ParsedRow } from "@/components/pipeline/importParse";
 import type {
   IdleState,
   PipelineOutcome,
@@ -5415,9 +5416,11 @@ export function useHandoffOpportunity(id: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Pipeline — Excel import (PRD §2.9). `PipelineImportDialog.tsx` parses the
-// workbook client-side (SheetJS/`xlsx`, lazy-loaded) and POSTs the parsed
-// rows here; the server re-validates and does the actual create/skip work.
+// Pipeline — Excel import (PRD §2.9). `PipelineImportDialog.tsx` sends the
+// chosen file to POST /opportunities/import/preview, which parses and
+// validates it on the server (the browser never parses a workbook,
+// docs/archive/plans/application-review-2026-10-22.md, B-18), then POSTs the
+// valid rows here; the server validates again and does the create/skip work.
 // `ImportOpportunityRow` mirrors `importRowSchema` in
 // backend/src/routes/opportunities.ts's POST /import field-for-field, plus
 // `activityLog`, which seeds the deal's first `OpportunityActivity` note the
@@ -5425,6 +5428,15 @@ export function useHandoffOpportunity(id: string) {
 // app/api/opportunities/import/route.ts, read-only reference) — Opportunity
 // itself has no activity-log column.
 // ─────────────────────────────────────────────────────────────────────────
+
+/** Parses an import file on the server. Nothing is written. */
+export function previewImportFile(file: Blob) {
+  return apiRequest<{ rows: ParsedRow[] }>("/opportunities/import/preview", {
+    method: "POST",
+    body: file,
+    timeoutMs: 0, // a large workbook on a slow link can take a while to upload
+  });
+}
 
 export interface ImportOpportunityRow {
   title: string;

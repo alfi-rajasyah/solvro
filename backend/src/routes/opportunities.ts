@@ -1,9 +1,9 @@
-import { Router } from "express";
+import express, { Router } from "express";
 import { z } from "zod";
 import { PipelineOutcome, PipelineOutcomeReason, PipelineStage, PipelineStatusTag, PipelineSubStatus } from "@prisma/client";
 import type { Opportunity, Prisma } from "@prisma/client";
 import { prisma } from "../prisma.js";
-import { hasPermission, requireAuth, requirePermission } from "../http/auth.js";
+import { hasPermission, permissionsOf, requireAuth, requirePermission } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { isValidDayString, utcMidnightOfDayString } from "../lib/dateBoundary.js";
@@ -19,6 +19,7 @@ import {
 } from "../lib/opportunityActivity.js";
 import { notifyForEvent } from "../lib/notifications.js";
 import { logger } from "../logger.js";
+import { ImportFileError, parseImportFile } from "../lib/pipelineImport/index.js";
 // Anti-drift seam (finding S6): the handoff body is byte-for-byte the same
 // shape as a plain project create, so this reuses routes/projects.ts's own
 // `createProjectSchema` (which already composes `wipLimitsSchema`) instead
@@ -507,6 +508,41 @@ opportunitiesRouter.post(
     });
 
     res.status(201).json(serializeOpportunity(created));
+  },
+);
+
+// Import preview: the dialog sends the chosen .xlsx or .csv file as raw
+// bytes and gets back every data row, parsed and validated, with PIC names
+// matched to user ids. Nothing is written. The browser no longer parses
+// workbooks (docs/archive/plans/application-review-2026-10-22.md, B-18), so
+// this is the only place a user-chosen workbook is read. Same permission as
+// the import itself. The 1 MB cap (the nginx /api/ limit too) and the reader's own limits (ZIP expansion,
+// 5000 rows, 16 columns) bound the work one request can cause.
+const IMPORT_FILE_LIMIT = "1mb";
+
+opportunitiesRouter.post(
+  "/import/preview",
+  requirePermission("pipeline:create"),
+  express.raw({ type: "application/octet-stream", limit: IMPORT_FILE_LIMIT }),
+  async (req, res) => {
+    if (!Buffer.isBuffer(req.body)) {
+      throw new HttpError(415, "unsupported_media_type", "Send the file as application/octet-stream");
+    }
+    // Same set the user pickers list (GET /users): accounts with no
+    // permissions cannot be a PIC.
+    const users = await prisma.user.findMany({
+      select: { username: true, id: true, role: { select: { permissions: true } } },
+    });
+    const picByUsername = new Map<string, number>();
+    for (const u of users) {
+      if (permissionsOf(u.role.permissions).length > 0) picByUsername.set(u.username.toLowerCase(), u.id);
+    }
+    try {
+      res.json({ rows: parseImportFile(req.body, picByUsername) });
+    } catch (err) {
+      if (err instanceof ImportFileError) throw new HttpError(400, err.code, err.message);
+      throw err;
+    }
   },
 );
 

@@ -15,6 +15,18 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-12 — Pipeline import files are read on the server
+
+- `backend/src/routes/opportunities.ts`: new `POST /opportunities/import/preview` (permission `pipeline:create`, the same as the import). The Import opportunities dialog sends the chosen `.xlsx` or `.csv` file as raw bytes (`application/octet-stream`, at most 1 MB, the same limit nginx sets on `/api/`) and gets back every row, parsed and validated, with PIC names matched to users. Nothing is written. Errors answer 400 with a code: `unreadable_file`, `legacy_xls` (an old `.xls` or a password-protected workbook), `empty_file` or `too_many_rows` (more than 5000 rows); a larger file answers 413.
+- `backend/src/lib/pipelineImport/` (new): a small reader for `.xlsx` (ZIP and SpreadsheetML, first worksheet only) and CSV (comma, semicolon or tab, detected from the first line), with no new dependency. The ZIP reader limits how far an archive may expand (64 MB), so a compressed "zip bomb" fails fast. The row rules (`parseRow.ts`) moved unchanged from the frontend, plus support for workbooks that use the 1904 date system.
+- `frontend/src/components/PipelineImportDialog.tsx`: the dialog uploads the file instead of parsing it in the browser, and no longer waits for the team list before the file picker opens (PIC matching happens on the server). A file over 1 MB is refused before the upload. The template download is written with `exceljs`, which the Gantt export already uses.
+- `frontend/src/lib/api.ts`: a request body that is a `Blob` or `File` is sent as raw bytes.
+- `frontend/src/lib/loadXlsx.ts` replaced by `frontend/src/lib/loadExcelJs.ts`.
+
+### Removed — 2026-11-12 — The `xlsx` (SheetJS) dependency
+
+- `frontend/package.json`: `xlsx@0.18.5` is removed. It had known advisories (prototype pollution, ReDoS) and npm has no fixed release. The browser no longer parses any workbook.
+
 ### Removed — 2026-11-12 — The staging branch and its deploy
 
 - `.github/workflows/docker-publish.yml`: the `deploy-staging` job is removed and images publish from `main` only (plus `v*` tags). `:staging` images are no longer built. The repository secrets `OPENSHIP_STAGING_HOOK_URL` and `OPENSHIP_STAGING_HOOK_TOKEN` are no longer read.
