@@ -4287,7 +4287,7 @@ export interface OffboardBody {
     newSaId?: number | null;
     note?: string;
   }[];
-  customers: { customerId: number; newOwnerId: number | null }[];
+  customers: { customerId: number; newOwnerId: number }[];
   dealsPicId?: number | null;
 }
 

@@ -18,7 +18,7 @@ Decided by the user on 2026-11-12 (decisions log item D-10), option "Require rea
 
 ## Out of scope
 
-- The offboarding handover (`POST /admin/users/:id/offboard`) keeps its "No owner" choice. That also leaves a customer unowned; it is recorded in `docs/ISSUES.md`.
+- The offboarding handover (`POST /admin/users/:id/offboard`) keeps its "No owner" choice. That also leaves a customer unowned; it is recorded in `docs/ISSUES.md`. Closed later the same day by `docs/archive/plans/offboard-customer-owner.md`.
 
 ## Delivery Gate
 

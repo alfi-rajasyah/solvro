@@ -121,10 +121,12 @@ test.describe("Offboarding handover", () => {
     await expect(tam.locator("option", { hasText: leaver.username })).toHaveCount(0);
 
     await tam.selectOption({ label: receiver.username });
+    // Still disabled: every owned customer needs a new owner too.
+    await expect(submit).toBeDisabled();
+    await page.getByTestId(`handover-owner-${customer.id}`).selectOption({ label: receiver.username });
     await expect(submit).toBeEnabled();
     await page.getByTestId("handover-apply-all").selectOption({ label: receiver.username });
     await expect(page.getByTestId(`handover-assignee-${project.id}`)).toHaveValue(String(receiver.id));
-    await page.getByTestId(`handover-owner-${customer.id}`).selectOption({ label: receiver.username });
     await page.getByTestId(`handover-note-${project.id}`).fill(NOTE);
 
     await submit.click();

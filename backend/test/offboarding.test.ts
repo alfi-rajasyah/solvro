@@ -283,7 +283,10 @@ describe("POST /admin/users/:id/offboard", () => {
     const customer = await prisma.customer.create({
       data: { name: uniq("C"), description: "d", tamId: w.leaver.userId },
     });
-    const noProject = await offboard(w, { projects: [], customers: [{ customerId: customer.id, newOwnerId: null }] });
+    const noProject = await offboard(w, {
+      projects: [],
+      customers: [{ customerId: customer.id, newOwnerId: w.receiver.userId }],
+    });
     expect(noProject.status).toBe(400);
     expect(noProject.body.code).toBe("handover_incomplete");
     expect(noProject.body.details).toEqual({ projectIds: [project.id], customerIds: [] });
@@ -391,14 +394,16 @@ describe("POST /admin/users/:id/offboard", () => {
     ).toBe(1);
   });
 
-  it("customer owner can be cleared", async () => {
+  it("400 for a null customer owner: a handover never leaves a customer unowned", async () => {
     const w = await world();
     const customer = await prisma.customer.create({
       data: { name: uniq("C"), description: "d", tamId: w.leaver.userId },
     });
     const res = await offboard(w, { projects: [], customers: [{ customerId: customer.id, newOwnerId: null }] });
-    expect(res.status).toBe(200);
-    expect((await prisma.customer.findUniqueOrThrow({ where: { id: customer.id } })).tamId).toBeNull();
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("validation_error");
+    expect((await prisma.customer.findUniqueOrThrow({ where: { id: customer.id } })).tamId).toBe(w.leaver.userId);
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: w.leaver.userId } })).active).toBe(true);
   });
 
   it("deal PIC: unassigned when omitted; an ineligible receiver is refused and nothing changes", async () => {
