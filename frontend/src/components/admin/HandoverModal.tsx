@@ -56,7 +56,7 @@ function mergeDraft(fresh: HandoverDraft, prev: HandoverDraft): HandoverDraft {
   return { projects, customers, dealsPicId: prev.dealsPicId };
 }
 
-function PersonSelect({
+export function PersonSelect({
   label,
   value,
   onChange,

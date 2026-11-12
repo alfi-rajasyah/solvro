@@ -4353,12 +4353,26 @@ export function useAdminResetPassword() {
 export function useAdminDeleteUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) =>
-      apiRequest<void>(`/admin/users/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
+    // `customers` names a new owner for every customer the user owns; the
+    // server refuses the delete without one
+    // (docs/archive/plans/user-delete-customer-owner.md).
+    mutationFn: ({
+      id,
+      customers = [],
+    }: {
+      id: number;
+      customers?: { customerId: number; newOwnerId: number }[];
+    }) => apiRequest<void>(`/admin/users/${id}`, { method: "DELETE", body: { customers } }),
+    onSuccess: (_data, { id, customers = [] }) => {
       qc.invalidateQueries({ queryKey: adminQueryKeys.users });
       qc.invalidateQueries({ queryKey: queryKeys.users });
       qc.invalidateQueries({ queryKey: adminQueryKeys.roles });
+      qc.removeQueries({ queryKey: adminQueryKeys.handoverPreview(id) });
+      if (customers.length > 0) {
+        qc.invalidateQueries({ queryKey: queryKeys.customers });
+        qc.invalidateQueries({ queryKey: ["projects"] });
+        qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      }
     },
   });
 }

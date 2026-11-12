@@ -432,6 +432,80 @@ export async function offboardUser(
   return { user, customerOwnerChanges };
 }
 
+/**
+ * Locks the customers a user owns and the user's row, in the same order as
+ * `offboardUser` (customers ascending, then the user), and returns the owned
+ * customers as seen under the locks. A customer write that names this user as
+ * owner takes FOR KEY SHARE on the user row, so the list cannot grow after
+ * this returns.
+ */
+export async function lockOwnedCustomers(
+  tx: Tx,
+  userId: number,
+  extraCustomerIds: number[],
+): Promise<{ id: number; name: string }[]> {
+  const firstLook = await tx.customer.findMany({ where: { tamId: userId }, select: { id: true } });
+  const lockIds = [...new Set([...firstLook.map((c) => c.id), ...extraCustomerIds])].sort((a, b) => a - b);
+  if (lockIds.length > 0) {
+    await tx.$queryRaw`SELECT id FROM customers WHERE id IN (${Prisma.join(lockIds)}) ORDER BY id FOR NO KEY UPDATE`;
+  }
+  await tx.$queryRaw`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`;
+  return tx.customer.findMany({
+    where: { tamId: userId },
+    select: { id: true, name: true },
+    orderBy: { id: "asc" },
+  });
+}
+
+/**
+ * Gives every customer the leaver owns a new, active owner before the leaver
+ * is deleted: an unowned customer is claimable by any TAM, so a delete must
+ * never leave one behind (docs/archive/plans/user-delete-customer-owner.md). Call after `lockOwnedCustomers`, in the
+ * same transaction. Every owned customer must have a choice; choices for
+ * customers the leaver no longer owns are ignored.
+ */
+export async function reassignOwnedCustomers(
+  tx: Tx,
+  input: {
+    leaverId: number;
+    owned: { id: number; name: string }[];
+    choices: { customerId: number; newOwnerId: number }[];
+  },
+): Promise<{ customerId: number; from: number; to: number | null }[]> {
+  const { leaverId, owned, choices } = input;
+  const byCustomer = new Map(choices.map((c) => [c.customerId, c.newOwnerId]));
+  const missing = owned.filter((c) => !byCustomer.has(c.id));
+  if (missing.length > 0) {
+    throw new HttpError(
+      409,
+      "customer_owner_required",
+      `Choose a new owner for ${missing.length === 1 ? `"${missing[0].name}"` : `${missing.length} customers`} before you delete this user.`,
+      { customers: missing },
+    );
+  }
+  const changes: { customerId: number; from: number; to: number | null }[] = [];
+  for (const c of owned) {
+    const newOwnerId = byCustomer.get(c.id)!;
+    await withRow({ customerId: c.id }, async () => {
+      assertNotLeaver(newOwnerId, leaverId, "owner");
+      await assertActiveUser(tx, newOwnerId, "owner");
+    });
+    try {
+      await tx.customer.update({ where: { id: c.id }, data: { tam: { connect: { id: newOwnerId } } } });
+    } catch (err) {
+      // The new owner was deleted after the check above: blame the owner, not the leaver.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && (err.code === "P2003" || err.code === "P2025")) {
+        throw new HttpError(400, "owner_not_found", "The selected owner does not exist or is inactive", {
+          customerId: c.id,
+        });
+      }
+      throw err;
+    }
+    changes.push({ customerId: c.id, from: leaverId, to: newOwnerId });
+  }
+  return changes;
+}
+
 /** Logs the customer owner changes the way PATCH /customers/:id does; call after commit. */
 export function logCustomerOwnerChanges(
   actorId: number,
