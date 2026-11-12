@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-12 — A duplicated task keeps its document links
+
+- `backend/src/lib/duplicate.ts`: duplicating a task, a subtask, or a section now copies each task's document links to the copy as new rows, with the same label and URL and in the same order. Before, a copy started with no links. Editing or removing a link on the copy does not change the source. Comments and dependencies are still not copied.
+- `backend/test/taskDuplicate.test.ts`: a test for links on the copy and on its copied subtasks.
+- `docs/plans/task-links.md`: the duplicate rule is updated.
+
 ### Security — 2026-11-12 — Deleting a user no longer leaves their customers unowned
 
 - `backend/src/routes/admin.ts`: `DELETE /admin/users/:id` now takes a body `{ customers: [{ customerId, newOwnerId }] }`. When the user owns customers, every one of them must get a new owner, or the delete answers `409 customer_owner_required` with the list of customers that still need one. The new owner must be an active user other than the one being deleted (`400 owner_not_found` otherwise). The owner changes and the delete run in one transaction, so a failure changes nothing, and each owner change is logged as `customer.owner_changed`. Before, `Customer.tamId` was cleared by the delete, and any TAM could then claim the customer and every project under it.

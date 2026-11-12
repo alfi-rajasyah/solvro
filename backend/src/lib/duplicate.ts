@@ -22,6 +22,10 @@ export interface DuplicateOverrides {
 // copies keep epicId") — same project, so no cross-project validation is
 // needed here the way routes/tasks.ts and routes/projects.ts need it on a
 // client-supplied epicId.
+// Document links (TaskLink) ARE copied: each copy gets its own new rows with
+// the same label and url (user decision 2026-11-12, after
+// docs/archive/plans/task-links.md shipped with "not copied"). No activity
+// event is written for a copied link; the duplicate itself is the event.
 const TASK_SELECT = {
   id: true,
   projectId: true,
@@ -37,6 +41,10 @@ const TASK_SELECT = {
   parentTaskId: true,
   epicId: true,
   labels: { select: { id: true } },
+  links: {
+    select: { label: true, url: true },
+    orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+  },
 } satisfies Prisma.TaskSelect;
 
 type SourceTask = Prisma.TaskGetPayload<{ select: typeof TASK_SELECT }>;
@@ -48,6 +56,10 @@ async function copyOne(
   newSectionId: number | null,
   position: number,
 ): Promise<number> {
+  // Links inserted in one transaction would all get the same now(), and
+  // TaskLink ids are UUIDs, so the list order (createdAt, then id) would come
+  // out random. One millisecond apart per link keeps the source's order.
+  const linkBase = Date.now();
   const copy = await tx.task.create({
     data: {
       projectId: source.projectId,
@@ -70,6 +82,16 @@ async function copyOne(
         source.labels.length > 0
           ? { connect: source.labels.map((l) => ({ id: l.id })) }
           : undefined,
+      links:
+        source.links.length > 0
+          ? {
+              create: source.links.map((l, i) => ({
+                label: l.label,
+                url: l.url,
+                createdAt: new Date(linkBase + i),
+              })),
+            }
+          : undefined,
     },
     select: { id: true },
   });
@@ -81,7 +103,8 @@ async function copyOne(
  * its own subtasks (in source `position` then `id` order) — the shared
  * engine behind `POST /tasks/:id/duplicate` and `POST /sections/:id/duplicate`.
  * Every copy: resets `status` to `TODO`, clears both baseline date columns,
- * connects the same labels as its source, and gets no `TaskDependency` rows
+ * connects the same labels as its source, gets new copies of its source's
+ * document links (same label and url), and gets no `TaskDependency` rows
  * (dependencies are dropped; comments are never copied). A subtask source
  * naturally copies with no subtasks of its own — max depth is 1, so it has
  * none to find. Every top-level copy keeps its source's own `parentTaskId`
@@ -108,8 +131,9 @@ async function copyOne(
  * for every subtask of those sources), the append position is counted ONCE
  * per destination sibling list (`countSiblings`) and then incremented in
  * memory — a brand-new parent's subtask list starts at 0 with no count at
- * all — and each copy costs exactly one INSERT. So a section duplicate with
- * N top-level tasks and M subtasks each runs 2 + 1 + N + N·M statements, not
+ * all — and each copy costs one INSERT, plus one per document link it
+ * carries. So a section duplicate with N top-level tasks and M subtasks each
+ * runs 2 + 1 + N + N·M statements plus the link rows, not
  * a COUNT before every row. Throws if any id in `sourceIds` doesn't resolve
  * to an existing task.
  *
