@@ -91,14 +91,14 @@ describe("GET/POST /projects/:id/notes", () => {
     expect(res.status).toBe(400);
   });
 
-  it("defaults visibility to INTERNAL when the body omits it", async () => {
+  it("returns no visibility field and ignores one in the body", async () => {
     const res = await request(app)
       .post(`/projects/${projectId}/notes`)
       .set("Authorization", `Bearer ${adminToken}`)
-      .send({ body: "internal by default" });
+      .send({ body: "no visibility level", visibility: "CUSTOMER_FACING" });
 
     expect(res.status).toBe(201);
-    expect(res.body.visibility).toBe("INTERNAL");
+    expect(res.body).not.toHaveProperty("visibility");
   });
 
   it("from/to window returns only notes inside it, inclusive at both ends, ordered noteDate desc", async () => {

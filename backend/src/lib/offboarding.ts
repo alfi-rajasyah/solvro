@@ -313,9 +313,6 @@ export async function offboardUser(
           authorId: actorId,
           body: note,
           noteDate: today,
-          // Explicit, never the column default: a handover note must not be
-          // able to reach an export (CLAUDE.md guardrail, INTERNAL notes).
-          visibility: "INTERNAL",
         },
       });
     }

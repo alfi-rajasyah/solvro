@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { z } from "zod";
 import {
-  NoteVisibility,
   Prisma,
   Priority,
   ProjectStatus,
@@ -898,8 +897,8 @@ projectsRouter.post(
 );
 
 // Project-scoped Daily Review notes.
-// INTERNAL is the default visibility; CUSTOMER_FACING is opt-in per note
-// and is the only visibility any customer-facing output may ever surface.
+// Notes are internal records: no note may reach an export, a guest link,
+// or any customer-facing output (CLAUDE.md guardrail).
 // Plain calendar day ("yyyy-MM-dd", no time/zone) — noteDate/reviewDate are
 // `@db.Date` columns for exactly this reason. Same house day-string helper
 // routes/tasks.ts and routes/opportunities.ts use (lib/dateBoundary.ts).
@@ -908,7 +907,6 @@ const dayStringSchema = z
   .refine(isValidDayString, { message: "Must be a valid yyyy-MM-dd date" });
 
 const noteListQuerySchema = z.object({
-  visibility: z.nativeEnum(NoteVisibility).optional(),
   limit: z.coerce.number().int().min(1).max(100).optional(),
   from: dayStringSchema.optional(),
   to: dayStringSchema.optional(),
@@ -916,7 +914,6 @@ const noteListQuerySchema = z.object({
 
 const createNoteSchema = z.object({
   body: z.string().min(1).max(4000),
-  visibility: z.nativeEnum(NoteVisibility).optional(),
   noteDate: dayStringSchema.optional(),
 });
 
@@ -935,13 +932,12 @@ projectsRouter.get(
   validate("query", noteListQuerySchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
-    const { visibility, limit, from, to } = req.query as unknown as z.infer<
+    const { limit, from, to } = req.query as unknown as z.infer<
       typeof noteListQuerySchema
     >;
     await ensureProjectVisible(req.user!, id);
 
     const where: Prisma.ProjectNoteWhereInput = { projectId: id };
-    if (visibility) where.visibility = visibility;
     if (from || to) {
       where.noteDate = {
         ...(from && { gte: utcMidnightOfDayString(from) }),
@@ -986,18 +982,16 @@ projectsRouter.post(
             ? utcMidnightOfDayString(body.noteDate)
             : utcMidnightOf(Date.now()),
           body: body.body,
-          visibility: body.visibility ?? "INTERNAL",
         },
         include: { author: { select: { id: true, username: true } } },
       });
-      // Note events carry the id and visibility only — never the body.
+      // Note events carry the id only — never the body.
       await recordActivity(tx, {
         projectId: id,
         actorId: req.user!.sub,
         entityType: "note",
         entityId: created.id,
         action: "created",
-        changes: { visibility: created.visibility },
       });
       return created;
     });
@@ -1037,7 +1031,8 @@ projectsRouter.patch(
           entityType: "note",
           entityId: noteId,
           action: "updated",
-          changes: { visibility: result.visibility },
+          // A flag only, like a task description: never the body text.
+          changes: { body: { changed: true } },
         });
       }
       return result;
@@ -1074,7 +1069,6 @@ projectsRouter.delete(
         entityType: "note",
         entityId: noteId,
         action: "deleted",
-        changes: { visibility: note.visibility },
       });
     });
     res.status(204).send();

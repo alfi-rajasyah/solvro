@@ -124,11 +124,12 @@ if grep -q gantt-task-react backend/package.json frontend/package.json 2>/dev/nu
   fail guardrail-no-gantt-lib "gantt-task-react found in a package.json (Guardrail: never install)"
 else pass guardrail-no-gantt-lib; fi
 
-# INTERNAL-notes guardrail. The Reports export packet was removed 2026-08-03.
-# While frontend/src/lib/export/ exists, it must filter CUSTOMER_FACING (re-arm
-# branch). Without it, the gate instead pins the note-consuming file set to an
-# allowlist: a new consumer must be hand-verified to never surface INTERNAL
-# notes in customer-facing output, then added here. (2026-08-29: DailyReview.tsx
+# Notes-never-exported guardrail. The Reports export packet was removed
+# 2026-08-03 and the note visibility column was dropped 2026-11-12, so no note
+# is ever safe to export. If frontend/src/lib/export/ comes back, it must not
+# read notes at all (re-arm branch). Without it, the gate pins the
+# note-consuming file set to an allowlist: a new consumer must be hand-verified
+# to never surface a note in customer-facing output, then added here. (2026-08-29: DailyReview.tsx
 # reads notes through GET /daily-review now; ProjectOverview.tsx shows a read-only,
 # in-app 14-day note feed — verified: no export/customer-facing path.
 # 2026-08-31: Overview.tsx shows the read-only 7-day "Recent notes" feed via
@@ -136,12 +137,13 @@ else pass guardrail-no-gantt-lib; fi
 NOTE_ALLOWLIST="frontend/src/lib/queries.ts
 frontend/src/pages/Overview.tsx
 frontend/src/pages/views/ProjectOverview.tsx"
-NOTE_CONSUMERS="$(grep -rl 'useProjectNotes\|useRecentNotes\|NoteVisibility' frontend/src --include='*.ts' --include='*.tsx' 2>/dev/null | sort)"
+NOTE_CONSUMERS="$(grep -rl 'useProjectNotes\|useRecentNotes' frontend/src --include='*.ts' --include='*.tsx' 2>/dev/null | sort)"
 if [ -d frontend/src/lib/export ]; then
-  if grep -rq CUSTOMER_FACING frontend/src/lib/export/; then pass guardrail-internal-notes
-  else fail guardrail-internal-notes "no CUSTOMER_FACING visibility filter found in frontend/src/lib/export/ (Guardrail: INTERNAL notes never in exports)"; fi
+  if grep -rq 'useProjectNotes\|useRecentNotes\|ProjectNote\|/notes' frontend/src/lib/export/; then
+    fail guardrail-internal-notes "frontend/src/lib/export/ reads notes (Guardrail: notes never in exports)"
+  else pass guardrail-internal-notes; fi
 elif [ "$NOTE_CONSUMERS" = "$NOTE_ALLOWLIST" ]; then pass "guardrail-internal-notes (note consumers match allowlist)"
-else fail guardrail-internal-notes "note-consuming files drifted from the allowlist (Guardrail: INTERNAL notes never in customer-facing output) — got: $(echo "$NOTE_CONSUMERS" | tr '\n' ' ')"; fi
+else fail guardrail-internal-notes "note-consuming files drifted from the allowlist (Guardrail: notes never in customer-facing output) — got: $(echo "$NOTE_CONSUMERS" | tr '\n' ' ')"; fi
 
 # Inverted 2026-10-01: .claude/, the CLAUDE.md files and docs/ are TRACKED by user
 # decision (they were local-only before). The check guards the inverse mistake —
@@ -222,7 +224,7 @@ GUEST_FILES="$(ls backend/src/lib/shareLinks.ts backend/src/routes/publicShare.t
 if [ -n "$GUEST_FILES" ]; then
   GUEST_HITS="$(cat $GUEST_FILES | grep -vE '^\s*(//|/?\*)' | grep -nE 'projectNote|customerNote|ProjectNote|CustomerNote|\bnotes\s*:' || true)"
   if [ -n "$GUEST_HITS" ]; then
-    fail guardrail-guest-links-no-notes "the guest-link modules reference notes (Guardrail: INTERNAL notes never in customer-facing output): $(echo "$GUEST_HITS" | head -3 | tr '\n' ' ')"
+    fail guardrail-guest-links-no-notes "the guest-link modules reference notes (Guardrail: notes never in customer-facing output): $(echo "$GUEST_HITS" | head -3 | tr '\n' ' ')"
   else pass guardrail-guest-links-no-notes; fi
 else pass "guardrail-guest-links-no-notes (no guest-link module yet)"; fi
 

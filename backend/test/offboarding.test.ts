@@ -243,7 +243,7 @@ describe("POST /admin/users/:id/offboard", () => {
     });
     expect(notes).toHaveLength(3);
     for (const n of notes) {
-      expect(n).toMatchObject({ visibility: "INTERNAL", authorId: w.admin.userId });
+      expect(n).toMatchObject({ authorId: w.admin.userId });
     }
     expect(notes[0]!.body).toMatch(/^Changed TAM from .+ to .+ \(Offboarding\)$/);
     expect(notes[1]!.body).toMatch(/^Changed SA from .+ to .+ \(Offboarding\)$/);

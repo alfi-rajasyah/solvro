@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-11-12 — The note visibility column
+
+- `backend/prisma/schema.prisma`, migration `20261112120000_drop_note_visibility`: the `visibility` column on `project_notes` and the `NoteVisibility` enum are dropped. Every note was `INTERNAL`, no screen set or read the level, and no export exists. All notes are now internal by definition: no note of any kind may reach an export, a guest link, or any customer-facing output.
+- `backend/src/routes/projects.ts`: `GET /projects/:id/notes` no longer takes a `visibility` filter, `POST` ignores a `visibility` field, and note responses no longer carry one. Note activity events now hold only the note id; an edit records `{ body: { changed: true } }`, never the text. Older events keep their stored value, so the activity feed still reads them.
+- `backend/src/lib/offboarding.ts`, `backend/src/lib/projectSeats.ts`: the handover and seat-change notes no longer set a visibility.
+- `frontend/src/lib/queries.ts`: the `NoteVisibility` type and the `visibility` option of `useProjectNotes` are removed.
+- `CLAUDE.md`, `README.md`, `.claude/scripts/gates.sh`: the notes guardrail now reads "Notes never appear in exports or customer-facing output", and the export check fails if a future `frontend/src/lib/export/` reads notes at all.
+
 ### Security — 2026-11-12 — Only a customer's owner can delete it
 
 - `backend/src/lib/visibility.ts`: `DELETE /customers/:id` now needs the customer's current owner, an unowned customer, or `project:view-all`. Before, a TAM of one project under someone else's customer could delete that customer, which clears the customer link on every project under it. This is the same rule that the owner change in `PATCH /customers/:id` has used since the September 2026 penetration-test fix (finding M1). Callers who see the customer but do not own it get 403 `owner_only`; callers who cannot see it still get 404.
