@@ -185,13 +185,10 @@ export function CustomerDetail() {
     );
   }
 
-  // Members reaching this customer through a project can edit its profile but
-  // not change its owner or delete it (server: 403 owner_only).
-  const canOwn = canOwnCustomer(
-    user,
-    customer,
-    customer.projects.map((p) => p.tamId),
-  );
+  // Callers reaching this customer through a project (as its TAM, SA or a
+  // member) can edit its profile but not change its owner or delete it
+  // (server: 403 owner_only).
+  const canOwn = canOwnCustomer(user, customer);
 
   async function handleDelete() {
     if (!customer) return;

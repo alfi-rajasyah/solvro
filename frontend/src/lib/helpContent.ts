@@ -313,6 +313,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         points: [
           "Click \"New customer\". Name and Description are required. Account Manager is free text; pick the Solution Architect from the user list.",
           "The TAM owns the customer. A Solution Architect, on a customer or a project, is not an owner. If you hand a customer to another TAM, you can lose access to it unless one of its projects is yours.",
+          "Only the customer's TAM can delete it or hand it to another TAM. Admins can do this for any customer.",
           "Deleting a customer keeps its projects; they lose the customer link.",
         ],
       },

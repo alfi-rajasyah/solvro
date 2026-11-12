@@ -33,19 +33,18 @@ export function canOwnProject(
 }
 
 /**
- * Owner access to a customer: view-all, the customer's owner, an unowned
- * customer, or being TAM of one of its projects. `projectTamIds` are the TAM
- * ids of the customer's projects the caller can see.
+ * Owner access to a customer (change its owner, delete it): view-all, the
+ * customer's owner, or an unowned customer. Being TAM of one of its projects
+ * does not qualify (pentest finding M1; the backend's
+ * `ensureCustomerOwnerAccess` and the PATCH owner-change guard).
  */
 export function canOwnCustomer(
   user: AuthUser | null | undefined,
   customer: { tamId: number | null },
-  projectTamIds: readonly number[],
 ): boolean {
   if (!user) return false;
   if (hasViewAll(user)) return true;
-  if (customer.tamId === null || customer.tamId === user.id) return true;
-  return projectTamIds.includes(user.id);
+  return customer.tamId === null || customer.tamId === user.id;
 }
 
 export const OWNER_ONLY_MESSAGE =
