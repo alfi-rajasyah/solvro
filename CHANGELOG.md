@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-12 — Each end-to-end spec file gets its own seeded project
+
+- `e2e/fixtures/test.ts`: the `seededProject` fixture now seeds one project per spec file (and per `--repeat-each` repeat) instead of one per Playwright worker. With one worker, every spec file in a run shared the same project, so tasks, sections and reorders from earlier files leaked into later ones. That made drag tests fail whenever an earlier file ran first in the same run: the List reorder test (`list-dnd.spec.ts`, "Gamma onto Alpha") found Gamma already moved by the Kanban tests, the List order check (`kanban-dnd.spec.ts`, R3) found other files' sections, and Gantt bars or connectors (`gantt-parity.spec.ts`) sat below the visible pane. A full local run failed these tests every time, and CI showed them as flaky (failing on the first attempt, passing on the retry in a new worker), depending on where its shards split the files.
+- `e2e/tests/pipeline-form.spec.ts`: the `afterAll` clean-up signs in for its own token, because a hook cannot use the now test-scoped fixture.
+
 ### Added — 2026-11-12 — "On hold, past due" list for tasks that overdue counts leave out
 
 - `frontend/src/pages/Overview.tsx`: when open tasks of on-hold projects are past due, "Projects needing attention" shows a "<n> past-due tasks on hold" link beside "View all". Before, the Overdue tile only said how many tasks it left out, and no list showed them.
