@@ -18,7 +18,7 @@ No file storage.
 - **Edit rights:** read follows the task read gate (`project:read` or
   `pipeline:view`, plus task visibility, same as comments). Writes need
   `task:write`, the same gate as editing the task in the panel.
-- **Duplicate:** links are not copied to a duplicated task (same as comments).
+- **Duplicate:** links are copied to a duplicated task and its copied subtasks as new rows (user decision 2026-11-12, changed after the first release, which did not copy them).
 
 ## Data model
 
