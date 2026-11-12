@@ -345,7 +345,7 @@ export async function offboardUser(
   }
 
   // ---- Customers ---------------------------------------------------------
-  const customerOwnerChanges: { customerId: number; from: number; to: number | null }[] = [];
+  const customerOwnerChanges: { customerId: number; from: number; to: number }[] = [];
   for (const c of preview.customers) {
     const { newOwnerId } = byCustomer.get(c.id)!;
     await withRow({ customerId: c.id }, async () => {

@@ -401,6 +401,7 @@ describe("POST /admin/users/:id/offboard", () => {
     });
     const res = await offboard(w, { projects: [], customers: [{ customerId: customer.id, newOwnerId: null }] });
     expect(res.status).toBe(400);
+    expect(res.body.code).toBe("validation_error");
     expect((await prisma.customer.findUniqueOrThrow({ where: { id: customer.id } })).tamId).toBe(w.leaver.userId);
     expect((await prisma.user.findUniqueOrThrow({ where: { id: w.leaver.userId } })).active).toBe(true);
   });

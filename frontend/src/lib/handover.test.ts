@@ -65,6 +65,12 @@ describe("handover draft", () => {
     });
   });
 
+  it("leaves out a customer whose owner is not chosen yet", () => {
+    const draft = initialDraft(preview);
+    draft.projects[1].newTamId = 5;
+    expect(buildOffboardBody(preview, draft).customers).toEqual([]);
+  });
+
   it("omits dealsPicId when there are no open deals", () => {
     const body = buildOffboardBody({ ...preview, openDeals: 0 }, initialDraft(preview));
     expect("dealsPicId" in body).toBe(false);
