@@ -14,6 +14,9 @@ interface ConfirmModalProps {
   cancelLabel?: string;
   confirmTone?: Tone;
   busy?: boolean;
+  /** Keeps the confirm button disabled, for a dialog that needs input first. */
+  confirmDisabled?: boolean;
+  confirmTestId?: string;
 }
 
 export function ConfirmModal({
@@ -26,6 +29,8 @@ export function ConfirmModal({
   cancelLabel = "Cancel",
   confirmTone = "primary",
   busy = false,
+  confirmDisabled = false,
+  confirmTestId,
 }: ConfirmModalProps) {
   const confirmClass =
     confirmTone === "warning"
@@ -52,7 +57,8 @@ export function ConfirmModal({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={busy}
+            disabled={busy || confirmDisabled}
+            data-testid={confirmTestId}
             className={confirmClass}
           >
             {busy ? "Working…" : confirmLabel}

@@ -15,6 +15,7 @@ import { Chip, ProjectStatusChip } from "@/components/StatusChip";
 import { Tabs } from "@/components/Tabs";
 import { ItopTab } from "@/components/admin/ItopTab";
 import { HandoverModal } from "@/components/admin/HandoverModal";
+import { DeleteUserModal } from "@/components/admin/DeleteUserModal";
 import { ApiError } from "@/lib/api";
 import {
   type AdminProject,
@@ -24,7 +25,6 @@ import {
   useAdminCreateRole,
   useAdminCreateUser,
   useAdminDeleteRole,
-  useAdminDeleteUser,
   useAdminProjects,
   useAdminReassignProject,
   useAdminResetPassword,
@@ -124,13 +124,16 @@ function UsersTab() {
   const rows = users ?? EMPTY_USERS;
   const { data: roles } = useAdminRoles();
   const createUser = useAdminCreateUser();
-  const deleteUser = useAdminDeleteUser();
   const updateRole = useAdminUpdateRole();
   const setActive = useAdminSetActive();
   const fetchHandoverPreview = useAdminFetchHandoverPreview();
   const [handover, setHandover] = useState<{ user: AdminUser; preview: HandoverPreview } | null>(null);
   const resetPassword = useAdminResetPassword();
-  const [deletingUser, setDeletingUser] = useState<AdminUser | null>(null);
+  const [deletingUser, setDeletingUser] = useState<
+    { user: AdminUser; customers: HandoverPreview["customers"] } | null
+  >(null);
+  // The user whose Delete click is still loading their customer list.
+  const [loadingDeleteId, setLoadingDeleteId] = useState<number | null>(null);
   const [resettingUser, setResettingUser] = useState<AdminUser | null>(null);
   const [resetResult, setResetResult] = useState<
     { username: string; tempPassword: string } | null
@@ -161,7 +164,7 @@ function UsersTab() {
   const [sorting, setSorting] = useState<SortingState>([]);
 
   // `handleRoleChange`/`handleToggleActive`/`handleResetPassword`/
-  // `handleDelete` are `function` declarations further down this component —
+  // `startDelete` are `function` declarations further down this component —
   // hoisted within the function body, so referencing them here (columns are
   // defined before their textual position) is valid.
   //
@@ -339,8 +342,9 @@ function UsersTab() {
             </button>
             <button
               type="button"
-              onClick={() => setDeletingUser(u)}
-              disabled={isSelf || deleteUser.isPending}
+              onClick={() => void startDelete(u)}
+              disabled={isSelf || loadingDeleteId !== null}
+              aria-busy={loadingDeleteId === u.id || undefined}
               className="rounded-sm px-2 py-1 font-display text-sm text-on-surface-variant hover:bg-error-container hover:text-on-error-container disabled:cursor-not-allowed disabled:opacity-50 font-semibold"
               title={
                 isSelf
@@ -348,7 +352,7 @@ function UsersTab() {
                   : "Permanently delete this user"
               }
             >
-              Delete
+              {loadingDeleteId === u.id ? "Loading…" : "Delete"}
             </button>
           </div>
         );
@@ -463,13 +467,32 @@ function UsersTab() {
     }
   }
 
-  async function handleDelete(u: AdminUser) {
-    setDeletingUser(null);
+  // The delete dialog asks for a new owner for each customer the user owns, so
+  // it opens with a fresh list of those customers
+  // (docs/archive/plans/user-delete-customer-owner.md).
+  async function startDelete(u: AdminUser) {
+    if (loadingDeleteId !== null) return;
     setError(null);
+    setLoadingDeleteId(u.id);
     try {
-      await deleteUser.mutateAsync(u.id);
+      const preview = await fetchHandoverPreview(u.id);
+      setDeletingUser({ user: u, customers: preview.customers });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Failed to delete user.");
+      setError(err instanceof ApiError ? err.message : "Could not load this user's customers.");
+    } finally {
+      setLoadingDeleteId(null);
+    }
+  }
+
+  // Resolves true once the dialog has a fresh customer list; false when the reload failed.
+  async function reloadDeleteCustomers(): Promise<boolean> {
+    if (!deletingUser) return false;
+    try {
+      const preview = await fetchHandoverPreview(deletingUser.user.id);
+      setDeletingUser({ user: deletingUser.user, customers: preview.customers });
+      return true;
+    } catch {
+      return false;
     }
   }
 
@@ -639,16 +662,16 @@ function UsersTab() {
           onStale={reloadHandoverPreview}
         />
       )}
-      <ConfirmModal
-        open={deletingUser !== null}
-        onClose={() => setDeletingUser(null)}
-        onConfirm={() => deletingUser && void handleDelete(deletingUser)}
-        title="Delete user"
-        body={`Permanently delete ${deletingUser?.username ?? ""} (${deletingUser?.email ?? ""})? This cannot be undone.`}
-        confirmLabel="Delete"
-        confirmTone="danger"
-        busy={deleteUser.isPending}
-      />
+      {deletingUser && (
+        <DeleteUserModal
+          key={deletingUser.user.id}
+          user={deletingUser.user}
+          customers={deletingUser.customers}
+          onClose={() => setDeletingUser(null)}
+          onDeleted={() => setDeletingUser(null)}
+          onStale={reloadDeleteCustomers}
+        />
+      )}
       <ConfirmModal
         open={resettingUser !== null}
         onClose={() => setResettingUser(null)}

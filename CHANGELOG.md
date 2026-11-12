@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Security — 2026-11-12 — Deleting a user no longer leaves their customers unowned
+
+- `backend/src/routes/admin.ts`: `DELETE /admin/users/:id` now takes a body `{ customers: [{ customerId, newOwnerId }] }`. When the user owns customers, every one of them must get a new owner, or the delete answers `409 customer_owner_required` with the list of customers that still need one. The new owner must be an active user other than the one being deleted (`400 owner_not_found` otherwise). The owner changes and the delete run in one transaction, so a failure changes nothing, and each owner change is logged as `customer.owner_changed`. Before, `Customer.tamId` was cleared by the delete, and any TAM could then claim the customer and every project under it.
+- `backend/src/lib/offboarding.ts`: new `lockOwnedCustomers` and `reassignOwnedCustomers` helpers, which lock in the same order as the offboarding handover.
+- `frontend/src/components/admin/DeleteUserModal.tsx`, `frontend/src/lib/userDelete.ts`, `frontend/src/pages/Admin.tsx`: Admin > Users > Delete opens a dialog that lists the customers the user owns, with a required owner picker for each. The confirm button reads "Move customers and delete" and stays disabled until every customer has an owner. A user who owns no customers gets the same plain confirm as before.
+- `frontend/src/components/ConfirmModal.tsx`: new optional `confirmDisabled` and `confirmTestId` props, so a confirm dialog can wait for input before its button is enabled.
+
 ### Fixed — 2026-11-12 — Each end-to-end spec file gets its own seeded project
 
 - `e2e/fixtures/test.ts`: the `seededProject` fixture now seeds one project per spec file (and per `--repeat-each` repeat) instead of one per Playwright worker. With one worker, every spec file in a run shared the same project, so tasks, sections and reorders from earlier files leaked into later ones. That made drag tests fail whenever an earlier file ran first in the same run: the List reorder test (`list-dnd.spec.ts`, "Gamma onto Alpha") found Gamma already moved by the Kanban tests, the List order check (`kanban-dnd.spec.ts`, R3) found other files' sections, and Gantt bars or connectors (`gantt-parity.spec.ts`) sat below the visible pane. A full local run failed these tests every time, and CI showed them as flaky (failing on the first attempt, passing on the retry in a new worker), depending on where its shards split the files.
