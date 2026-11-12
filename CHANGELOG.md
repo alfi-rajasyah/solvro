@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Security — 2026-11-12 — The offboarding handover no longer leaves customers unowned
+
+- `backend/src/routes/admin.ts`, `backend/src/lib/offboarding.ts`: `POST /admin/users/:id/offboard` now needs a new owner for every customer the leaver owns. A `null` `newOwnerId` is refused with `400`, and the owner must still be an active user who is not the leaver (`400 owner_not_found`). Before, the handover could clear `Customer.tamId`, and any TAM could then claim the customer and every project under it.
+- `frontend/src/components/admin/HandoverModal.tsx`, `frontend/src/lib/handover.ts`, `frontend/src/lib/queries.ts`: the customer owner pickers in Admin > Users > Hand over are required and start at "Choose an owner"; "No owner" is gone. "Hand over and deactivate" stays disabled until every customer has an owner, with a hint line. The Customers section says that the new owner gets full access, as the Delete user dialog does.
+- `frontend/src/lib/helpContent.ts`: the Help topic for the handover describes the required owner.
+- Tests: `backend/test/offboarding.test.ts`, `frontend/src/lib/handover.test.ts`, `e2e/tests/offboarding.spec.ts`.
+- Docs: plan `docs/plans/offboard-customer-owner.md`; `docs/ISSUES.md` follow-up closed; the shipped user-delete plan moved to `docs/archive/plans/`.
+
 ### Changed — 2026-11-12 — A duplicated task keeps its document links
 
 - `backend/src/lib/duplicate.ts`: duplicating a task, a subtask, or a section now copies each task's document links to the copy as new rows, with the same label and URL and in the same order. Before, a copy started with no links. Editing or removing a link on the copy does not change the source. Comments and dependencies are still not copied.

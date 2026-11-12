@@ -120,7 +120,8 @@ export interface OffboardInput {
     newSaId?: number | null;
     note?: string;
   }[];
-  customers: { customerId: number; newOwnerId: number | null }[];
+  /** Every owned customer needs a new owner (docs/archive/plans/offboard-customer-owner.md). */
+  customers: { customerId: number; newOwnerId: number }[];
   dealsPicId?: number | null;
 }
 
@@ -347,17 +348,12 @@ export async function offboardUser(
   const customerOwnerChanges: { customerId: number; from: number; to: number | null }[] = [];
   for (const c of preview.customers) {
     const { newOwnerId } = byCustomer.get(c.id)!;
-    if (newOwnerId !== null) {
-      await withRow({ customerId: c.id }, async () => {
-        assertNotLeaver(newOwnerId, leaverId, "owner");
-        // Active, unlike PATCH /customers/:id (see the SA seat above).
-        await assertActiveUser(tx, newOwnerId, "owner");
-      });
-    }
-    await tx.customer.update({
-      where: { id: c.id },
-      data: { tam: newOwnerId === null ? { disconnect: true } : { connect: { id: newOwnerId } } },
+    await withRow({ customerId: c.id }, async () => {
+      assertNotLeaver(newOwnerId, leaverId, "owner");
+      // Active, unlike PATCH /customers/:id (see the SA seat above).
+      await assertActiveUser(tx, newOwnerId, "owner");
     });
+    await tx.customer.update({ where: { id: c.id }, data: { tam: { connect: { id: newOwnerId } } } });
     customerOwnerChanges.push({ customerId: c.id, from: leaverId, to: newOwnerId });
   }
 

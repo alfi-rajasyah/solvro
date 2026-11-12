@@ -7,6 +7,7 @@ import {
   handoverReceivers,
   initialDraft,
   isHandoverComplete,
+  missingOwnerCustomerIds,
   missingTamProjectIds,
 } from "@/lib/handover";
 import type { HandoverPreview } from "@/lib/queries";
@@ -23,15 +24,27 @@ const preview: HandoverPreview = {
 describe("handover draft", () => {
   it("is incomplete until the required TAM is chosen", () => {
     const draft = initialDraft(preview);
+    draft.customers[9] = 7;
     expect(missingTamProjectIds(preview, draft)).toEqual([1]);
     expect(isHandoverComplete(preview, draft)).toBe(false);
     draft.projects[1].newTamId = 5;
     expect(isHandoverComplete(preview, draft)).toBe(true);
   });
 
+  it("is incomplete until every customer has a new owner", () => {
+    const draft = initialDraft(preview);
+    draft.projects[1].newTamId = 5;
+    expect(missingOwnerCustomerIds(preview, draft)).toEqual([9]);
+    expect(isHandoverComplete(preview, draft)).toBe(false);
+    draft.customers[9] = 7;
+    expect(missingOwnerCustomerIds(preview, draft)).toEqual([]);
+    expect(isHandoverComplete(preview, draft)).toBe(true);
+  });
+
   it("is incomplete when a note is over the limit", () => {
     const draft = initialDraft(preview);
     draft.projects[1].newTamId = 5;
+    draft.customers[9] = 7;
     draft.projects[2].note = "x".repeat(2001);
     expect(isHandoverComplete(preview, draft)).toBe(false);
   });

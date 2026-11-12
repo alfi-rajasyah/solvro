@@ -936,7 +936,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
       {
         title: "Customers and Pipeline",
         points: [
-          "Each customer they own gets an owner picker (\"No owner\" is allowed).",
+          "Each customer they own gets a required owner picker. The handover cannot finish until every customer has a new owner.",
           "If they are PIC of open deals, one picker, \"PIC for <n> open deals\", reassigns them all.",
         ],
       },

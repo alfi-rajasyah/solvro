@@ -285,7 +285,9 @@ const offboardSchema = z
       )
       .max(500),
     customers: z
-      .array(z.object({ customerId: userIdField, newOwnerId: userIdField.nullable() }))
+      // Every owned customer gets a new owner: an unowned customer is claimable
+      // by any TAM (docs/archive/plans/offboard-customer-owner.md).
+      .array(z.object({ customerId: userIdField, newOwnerId: userIdField }))
       .max(500),
     dealsPicId: userIdField.nullable().optional(),
   })
