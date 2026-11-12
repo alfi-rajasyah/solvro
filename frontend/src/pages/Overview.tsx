@@ -117,11 +117,23 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
 
       {/* Projects needing attention */}
       <div className="min-w-0 rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
-        <header className="mb-3 flex items-center justify-between">
+        <header className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-1">
           <h2 className="font-display text-sm font-bold text-on-surface">Projects needing attention</h2>
-          <Link to="/projects" className="tap-target text-meta font-semibold text-primary hover:underline">
-            View all
-          </Link>
+          <div className="flex items-center gap-4">
+            {/* Past-due tasks of on-hold projects stay out of every overdue
+                count; this link is the one place that lists them. */}
+            {onHoldExcluded > 0 && (
+              <Link
+                to="/tasks?view=on-hold-past-due"
+                className="tap-target text-meta font-semibold text-primary hover:underline"
+              >
+                {onHoldExcluded} past-due {onHoldExcluded === 1 ? "task" : "tasks"} on hold
+              </Link>
+            )}
+            <Link to="/projects" className="tap-target text-meta font-semibold text-primary hover:underline">
+              View all
+            </Link>
+          </div>
         </header>
         {data.portfolio.length === 0 ? (
           <EmptyHint label="No projects yet." />
