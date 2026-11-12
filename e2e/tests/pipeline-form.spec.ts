@@ -400,8 +400,9 @@ test.describe("Pipeline import — desktop", () => {
     // Row 1: genuinely valid, new — imports. Stage cell deliberately matches
     // the downloaded template's own example row verbatim ("Technical
     // Clarification", title case with a space — PipelineImportDialog.tsx's
-    // `downloadTemplate`), proving the parser (importParse.ts's
-    // `parseImportRow`, trim/lowercase/underscore) accepts that literal
+    // `downloadTemplate`), proving the server-side parser (backend
+    // lib/pipelineImport/parseRow.ts's `parseImportRow`, trim/lowercase/
+    // underscore) accepts that literal
     // format, not just the lowercase-with-underscore one the other rows use.
     const validRow = [
       validTitle,
@@ -415,11 +416,11 @@ test.describe("Pipeline import — desktop", () => {
       "",
       "",
     ];
-    // Row 2: missing Title — caught by the CLIENT-side parse (importParse.ts's
-    // `parseImportRow`), never reaches the server at all.
+    // Row 2: missing Title. The preview (POST /opportunities/import/preview)
+    // marks it invalid, so it is never sent to POST /opportunities/import.
     const missingTitleRow = ["", missingTitleCompany, "", "assessment", "", "", "", "", "", ""];
-    // Row 3: passes every client-side check (importParse.ts has no dedupe
-    // logic of its own — only the server does), but duplicates row 1's
+    // Row 3: passes every preview check (the preview has no dedupe logic;
+    // only the import does), but duplicates row 1's
     // title+company — the SERVER skips it as a duplicate.
     const dupRow = [dupTitle, dupCompany, "999000000", "rfp", "", "", "", "80", "", ""];
     const csv = [header, validRow, missingTitleRow, dupRow].map((r) => r.join(",")).join("\n");
@@ -432,7 +433,7 @@ test.describe("Pipeline import — desktop", () => {
     await expect(dialog).toBeVisible();
 
     // 2026-09-25 flow redesign (D9): the upload step's "Valid stages" chips
-    // are `IMPORTABLE_STAGES` (importParse.ts) — exactly the 6
+    // are `IMPORTABLE_STAGES` (frontend importParse.ts, backend parseRow.ts) — exactly the 6
     // `PipelineStage` values, lowercased; Won/Drop/Hold are no longer
     // importable (rejected the same way any unrecognized literal is).
     await expect(dialog.getByText("Valid stages", { exact: true })).toBeVisible();
@@ -456,7 +457,7 @@ test.describe("Pipeline import — desktop", () => {
       .locator('input[type="file"]')
       .setInputFiles({ name: "pipeline-import-fixture.csv", mimeType: "text/csv", buffer: Buffer.from(csv, "utf-8") });
 
-    // Preview step: 2 rows pass the client-side parse (valid + the
+    // Preview step: 2 rows pass the server-side preview (valid + the
     // not-yet-known-duplicate), 1 fails it (missing title) — see the
     // per-row comments above for why the duplicate isn't caught here.
     await expect(dialog.getByText("2 valid", { exact: true })).toBeVisible({ timeout: 10_000 });

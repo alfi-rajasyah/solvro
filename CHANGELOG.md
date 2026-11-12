@@ -15,6 +15,19 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-12 — Pipeline import files are read on the server
+
+- `backend/src/routes/opportunities.ts`: new `POST /opportunities/import/preview` (permission `pipeline:create`, the same as the import). The Import opportunities dialog sends the chosen `.xlsx` or `.csv` file as raw bytes (`application/octet-stream`, at most 1 MB, the same limit nginx sets on `/api/`) and gets back every row, parsed and validated, with PIC names matched to users. Nothing is written. Errors answer 400 with a code: `unreadable_file`, `legacy_xls` (an old `.xls` or a password-protected workbook), `empty_file` or `too_many_rows` (more than 5000 rows); a larger file answers 413.
+- `backend/src/lib/pipelineImport/` (new): a small reader for `.xlsx` (ZIP and SpreadsheetML, first worksheet only) and CSV (comma, semicolon or tab, detected from the first line), with no new dependency. The reader limits how far an archive may expand (16 MB) and how many rows and cells a sheet may hold (50,000 and 200,000, blank ones included), so a compressed "zip bomb" or a sheet of empty cells fails fast. The row rules (`parseRow.ts`) moved unchanged from the frontend, plus support for workbooks that use the 1904 date system.
+- Behavior changes for some files: every CSV cell now stays text until the row rules read it, so `01/02/2026` is 1 February as the template says (it was read US-style as 2 January) and `50%` is 50. A CSV saved by Excel in the Windows code page keeps its accented letters. A UTF-16 CSV is refused with a message to save it as CSV UTF-8. An error cell such as `#N/A` reads as blank.
+- `frontend/src/components/PipelineImportDialog.tsx`: the dialog uploads the file instead of parsing it in the browser, and no longer waits for the team list before the file picker opens (PIC matching happens on the server). A file over 1 MB is refused before the upload. The template download is written with `exceljs`, which the Gantt export already uses.
+- `frontend/src/lib/api.ts`: a request body that is a `Blob` or `File` is sent as raw bytes.
+- `frontend/src/lib/loadXlsx.ts` replaced by `frontend/src/lib/loadExcelJs.ts`; the preview response type lives in `frontend/src/lib/pipelineImport.ts`. Closing the dialog cancels a preview upload in flight, and the upload gives up after 2 minutes.
+
+### Removed — 2026-11-12 — The `xlsx` (SheetJS) dependency
+
+- `frontend/package.json`: `xlsx@0.18.5` is removed. It had known advisories (prototype pollution, ReDoS) and npm has no fixed release. The browser no longer parses any workbook.
+
 ### Removed — 2026-11-12 — The staging branch and its deploy
 
 - `.github/workflows/docker-publish.yml`: the `deploy-staging` job is removed and images publish from `main` only (plus `v*` tags). `:staging` images are no longer built. The repository secrets `OPENSHIP_STAGING_HOOK_URL` and `OPENSHIP_STAGING_HOOK_TOKEN` are no longer read.

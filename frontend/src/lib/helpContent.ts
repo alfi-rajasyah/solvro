@@ -487,7 +487,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         points: [
           "\"New opportunity\" needs the \"Create opportunities\" permission. Title and Customer are required; Customer is plain text, not a link to a Customer record.",
           "Optional fields: \"Deal value (IDR)\", \"Win probability (%)\" (50 by default), PIC, \"Request date\", Deadline, \"Product / solution\", \"Lead source\", and Description. The form starts at the Assessment stage with you as the PIC; change either, or choose \"No PIC\".",
-          "\"Import\" (same permission) opens \"Import opportunities\": download the Excel template, upload an .xlsx or .csv file, check the preview, then \"Import N valid rows\". Only the six stage names are accepted, a file imports up to 500 rows at a time, and a row with the same title and customer as an existing deal is skipped.",
+          "\"Import\" (same permission) opens \"Import opportunities\": download the Excel template, upload an .xlsx or .csv file of up to 1 MB, check the preview, then \"Import N valid rows\". Only the six stage names are accepted, a file imports up to 500 rows at a time, and a row with the same title and customer as an existing deal is skipped.",
           "Admins can review every import run in Admin › Pipeline.",
         ],
       },
