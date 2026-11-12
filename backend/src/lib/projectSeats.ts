@@ -88,9 +88,6 @@ export async function recordSeatChangeNotes(
         authorId: input.actorId,
         body,
         noteDate: input.noteDate ?? utcMidnightOf(new Date()),
-        // Explicit, never the column default: a system note must not be able
-        // to reach an export (CLAUDE.md guardrail, INTERNAL notes).
-        visibility: "INTERNAL",
       },
     });
   }

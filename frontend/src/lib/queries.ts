@@ -489,14 +489,11 @@ export interface RecentNotesResponse {
   notes: RecentNote[];
 }
 
-export type NoteVisibility = "INTERNAL" | "CUSTOMER_FACING";
-
 export interface ProjectNote {
   id: number;
   projectId: number;
   authorId: number;
   body: string;
-  visibility: NoteVisibility;
   // The calendar day the note is logically ABOUT — distinct from
   // `createdAt` (the row's creation instant). Stored as @db.Date on the
   // backend but it ARRIVES as an ISO instant ("yyyy-MM-ddT00:00:00.000Z"),
@@ -737,7 +734,6 @@ export interface ProjectReviewRecord {
 }
 
 export interface ProjectNotesWindow {
-  visibility?: NoteVisibility;
   limit?: number;
   from?: string;
   to?: string;
@@ -773,7 +769,7 @@ export const queryKeys = {
   projectEpics: (id: number) => ["projects", id, "epics"] as const,
   epic: (id: number) => ["epics", id] as const,
   projectRisks: (id: number) => ["projects", id, "risks"] as const,
-  // `window` (visibility/limit/from/to) is appended to the key so each
+  // `window` (limit/from/to) is appended to the key so each
   // filtered view caches independently. Mutations invalidate the whole
   // `["projects", id, "notes"]` PREFIX (see useAddProjectNote etc. below)
   // rather than this full key, so a note write refreshes every bucket, not
@@ -783,7 +779,6 @@ export const queryKeys = {
       "projects",
       id,
       "notes",
-      window.visibility ?? "all",
       window.limit ?? null,
       window.from ?? null,
       window.to ?? null,
@@ -2712,16 +2707,15 @@ export function useDailyReview(week: string) {
 
 export function useProjectNotes(
   id: number | null,
-  opts: { visibility?: NoteVisibility; limit?: number; from?: string; to?: string } = {},
+  opts: { limit?: number; from?: string; to?: string } = {},
 ) {
-  const { visibility, limit, from, to } = opts;
+  const { limit, from, to } = opts;
   return useQuery({
     queryKey: id
-      ? queryKeys.projectNotes(id, { visibility, limit, from, to })
+      ? queryKeys.projectNotes(id, { limit, from, to })
       : ["projects", "noop", "notes"],
     queryFn: ({ signal }) => {
       const params = new URLSearchParams();
-      if (visibility) params.set("visibility", visibility);
       if (limit) params.set("limit", String(limit));
       if (from) params.set("from", from);
       if (to) params.set("to", to);
@@ -2735,10 +2729,7 @@ export function useProjectNotes(
   });
 }
 
-// The Internal/Customer-facing toggle is gone from the UI (Decision 1,
-// daily-review-v2-spec.md §3) — every note the UI writes gets the API's
-// INTERNAL default, so `visibility` is deliberately absent here and never
-// sent by this mutation. `noteDate` is a plain "yyyy-MM-dd" day string (the
+// `noteDate` is a plain "yyyy-MM-dd" day string (the
 // DateField/day-strip contract) — the API stores and returns every
 // `@db.Date` field (`noteDate`, `reviewDate`, ...) as an ISO instant
 // (`T00:00:00.000Z`), so every optimistic write below converts at the
@@ -2791,7 +2782,7 @@ export function useAddProjectNote(projectId: number) {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
       qc.invalidateQueries({ queryKey: queryKeys.recentNotesRoot });
-      // Every visibility/window-bucketed key for this project (see
+      // Every window-bucketed key for this project (see
       // queryKeys.projectNotes's doc) — not just the "all, unwindowed" one.
       qc.invalidateQueries({ queryKey: ["projects", projectId, "notes"] });
       invalidateProjectActivity(qc, projectId);

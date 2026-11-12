@@ -7,7 +7,7 @@
 // label changes, update its entry in the same change.
 //
 // Deliberately absent: the /tasks page (hidden from the sidebar by design),
-// note visibility (no UI control), backend-only operations, and the customer
+// backend-only operations, and the customer
 // page's placeholder tabs (Topology, Organization Structure, Documents).
 
 export interface HelpEntry {

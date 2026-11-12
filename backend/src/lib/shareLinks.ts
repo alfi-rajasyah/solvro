@@ -5,10 +5,10 @@ import { dayString } from "./activity.js";
 // Guest links (docs/archive/plans/collaboration-and-sharing.md, L4): a
 // read-only, unauthenticated view of one project's timeline.
 //
-// PRIVACY INVARIANT (root CLAUDE.md, INTERNAL notes guardrail): the public
+// PRIVACY INVARIANT (root CLAUDE.md, notes-never-exported guardrail): the public
 // payload is built from an explicit allow-list — project name / customer name /
 // status, section names with derived dates + status, and milestone
-// title / date / done. It must never carry notes (either visibility), comments,
+// title / date / done. It must never carry notes, comments,
 // risks, people, emails, iTop data, the activity feed, or any detail of a
 // non-milestone task. buildPublicSharePayload selects only the columns it
 // needs so a new Task/Project column can never leak by accident.
