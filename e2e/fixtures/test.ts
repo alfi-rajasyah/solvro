@@ -1,23 +1,39 @@
 import { test as base, type Page, type Request, type TestInfo } from "@playwright/test";
 import { seedFixture, type SeededFixture } from "./seed";
 
-// Worker-scoped fixture: one seeded project per worker (effectively per test
-// file, since playwright.config.ts pins workers: 1 and each spec file below
-// only needs a single fresh project). Avoids reseeding per-test while still
-// guaranteeing specs never depend on pre-existing data beyond the admin user.
+// One seeded project per spec file. Tests in one file share it (several
+// files build on what their own earlier tests did), but no file ever sees
+// another file's tasks. A worker runs many files in a row (workers: 1), so a
+// worker-scoped project would carry every earlier file's rows into the next:
+// List sections, Gantt rows and Kanban cards that push targets off screen or
+// change the order a test expects. The cache lives in the worker; the key is
+// the file plus the --repeat-each index, so each repeat also starts clean.
+// The fixture is test-scoped, so a beforeAll/afterAll hook cannot use it;
+// a hook that needs the API signs in with `login()` from ./seed.
 interface WorkerFixtures {
+  seedCache: Map<string, Promise<SeededFixture>>;
+}
+interface TestFixtures {
   seededProject: SeededFixture;
 }
 
-export const test = base.extend<{}, WorkerFixtures>({
-  seededProject: [
-    async ({}, use, workerInfo) => {
-      const base = workerInfo.project.use.baseURL ?? "http://localhost:8080";
-      const fixture = await seedFixture(base);
-      await use(fixture);
+export const test = base.extend<TestFixtures, WorkerFixtures>({
+  seedCache: [
+    async ({}, use) => {
+      await use(new Map());
     },
     { scope: "worker" },
   ],
+  seededProject: async ({ seedCache }, use, testInfo) => {
+    const key = `${testInfo.file}#${testInfo.repeatEachIndex}`;
+    let seeded = seedCache.get(key);
+    if (!seeded) {
+      seeded = seedFixture(apiBase(testInfo));
+      seedCache.set(key, seeded);
+      seeded.catch(() => seedCache.delete(key));
+    }
+    await use(await seeded);
+  },
 });
 
 export { expect } from "@playwright/test";

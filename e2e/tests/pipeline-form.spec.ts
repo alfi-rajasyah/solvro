@@ -1,5 +1,6 @@
 import { test, expect, loginViaUi, apiBase, ADMIN_EMAIL, ADMIN_PASSWORD } from "../fixtures/test";
 import type { Locator, Page } from "@playwright/test";
+import { login } from "../fixtures/seed";
 
 // M6.27 — e2e coverage for the Pipeline module's opportunity FORM/DETAIL/
 // IMPORT surfaces (OpportunityFormModal.tsx, OpportunityDetail.tsx,
@@ -97,14 +98,17 @@ let viewerRoleId: number | null = null;
 let assignerUserId: number | null = null;
 let assignerRoleId: number | null = null;
 
-test.afterAll(async ({ seededProject }, workerInfo) => {
+test.afterAll(async ({}, workerInfo) => {
   // Deliberately NOT `apiBase(testInfo)` (fixtures/test.ts) — that helper's
   // parameter type is the full per-test `TestInfo`, which `afterAll` never
   // receives (only the worker-scoped `WorkerInfo`); the two share the
   // `.project.use.baseURL` shape this file actually needs, so a tiny local
   // equivalent avoids a type mismatch for no behavioral difference.
+  // `seededProject` is test-scoped (fixtures/test.ts), so the hook signs in
+  // for its own admin token.
   const base = new URL(workerInfo.project.use.baseURL ?? "http://localhost:8080").origin;
-  const ctx: ApiCtx = { base, token: seededProject.token };
+  const { token } = await login(base);
+  const ctx: ApiCtx = { base, token };
 
   for (const id of createdOpportunityIds) {
     await apiDeleteOpportunity(ctx, id);
