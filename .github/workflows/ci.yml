@@ -3,17 +3,17 @@ name: CI
 # What runs where (kept lean to save GitHub Actions minutes):
 # - PR into develop: typecheck, backend tests, desktop e2e in 4 parallel shards.
 #   This is the merge gate.
-# - PR into staging or main (a promotion of already-tested code): typecheck and
-#   backend tests only.
-# - Push to staging or main: the full suite, desktop and mobile e2e (4 shards
-#   each). A green run
+# - PR into main (the release PR from develop): the full suite, desktop and
+#   mobile e2e (4 shards each). There is no staging branch, so this is the one
+#   place mobile runs before the code reaches main.
+# - Push to main: the full suite again, on the merged commit. A green run
 #   here is what lets docker-publish.yml ship images.
 # - Push to develop does not run: every change reached it through a tested PR,
 #   and nothing publishes from develop.
 # - Draft PRs wait until they are marked ready; docs-only changes never run.
 on:
   pull_request:
-    branches: [develop, staging, main]
+    branches: [develop, main]
     types: [opened, synchronize, reopened, ready_for_review]
     paths-ignore:
       - "**/*.md"
@@ -22,7 +22,7 @@ on:
       - "notes/**"
       - "LICENSE*"
   push:
-    branches: [staging, main]
+    branches: [main]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
@@ -200,22 +200,22 @@ jobs:
   # (7 min once), and the apt step for Playwright's system dependencies has
   # taken from 15 s to 7 min. 20 and then 30 minutes both cancelled a run
   # that was passing (at test 176 of 190, then at 191 of 193).
-  # e2e runs on PRs into develop (desktop only) and on pushes to staging/main
-  # or a manual run (desktop and mobile). Mobile regressions on a feature PR
-  # therefore surface at the staging push, which blocks publishing.
+  # e2e runs on PRs into develop (desktop only) and on PRs into main, pushes
+  # to main or a manual run (desktop and mobile). Mobile regressions on a
+  # feature PR therefore surface on the release PR into main, before merge.
   # Each project is split into 4 shards (`--shard=N/4`), each on its own stack
   # and database, so no check runs much past 10 minutes. Playwright splits the
   # suite by spec file (fullyParallel is off). Only the first desktop shard
   # writes the image layer cache; the others read it.
   e2e:
     name: e2e (${{ matrix.project }} ${{ matrix.shard }}/4)
-    if: github.event_name != 'pull_request' || (github.base_ref == 'develop' && !github.event.pull_request.draft)
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        project: ${{ github.event_name == 'pull_request' && fromJSON('["desktop"]') || fromJSON('["desktop","mobile"]') }}
+        project: ${{ github.event_name == 'pull_request' && github.base_ref == 'develop' && fromJSON('["desktop"]') || fromJSON('["desktop","mobile"]') }}
         shard: [1, 2, 3, 4]
     env:
       ADMIN_EMAIL: qa@solvro.test
