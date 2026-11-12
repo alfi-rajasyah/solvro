@@ -34,33 +34,21 @@ import {
   type CustomerSummary,
   useCustomers,
   useDeleteCustomer,
-  useProjects,
 } from "@/lib/queries";
 
 export function Customers() {
   const { user } = useAuth();
   const { data: customers, isLoading, isError, error } = useCustomers();
   const deleteCustomer = useDeleteCustomer();
-  // TAM ids of the visible projects per customer — the "TAM of one of its
-  // projects" arm of customer ownership (the list rows only carry a count).
-  const { data: projects } = useProjects();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<CustomerSummary | null>(null);
   const [deleting, setDeleting] = useState<CustomerSummary | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const projectTamIdsByCustomer = useMemo(() => {
-    const map = new Map<number, number[]>();
-    for (const p of projects ?? []) {
-      if (p.customerId === null) continue;
-      map.set(p.customerId, [...(map.get(p.customerId) ?? []), p.tamId]);
-    }
-    return map;
-  }, [projects]);
   // Owner-only actions (change owner, delete) — see lib/ownerAccess.ts.
   const ownsCustomer = useCallback(
-    (c: CustomerSummary) => canOwnCustomer(user, c, projectTamIdsByCustomer.get(c.id) ?? []),
-    [user, projectTamIdsByCustomer],
+    (c: CustomerSummary) => canOwnCustomer(user, c),
+    [user],
   );
 
   const canMutate = hasPermission(user, "project:write");
