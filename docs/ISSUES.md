@@ -234,6 +234,10 @@ cited files; entries marked *code check* below carry the result).
   account page was rewritten; grep finds no "attachments" text in
   `frontend/src/pages/CustomerDetail.tsx`), so no attachment trace remains in
   the UI. Still not built.
+  *Resolved 2026-11-12 (decision D-13, "Links only")*: tasks get label + URL
+  document links, the same as projects and customers
+  (`docs/plans/task-links.md`). File uploads stay out: no storage, no size
+  limit, nothing new to back up or to gate from exports.
 
 ---
 

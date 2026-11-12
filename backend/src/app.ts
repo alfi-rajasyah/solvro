@@ -14,6 +14,7 @@ import { projectsRouter } from "./routes/projects.js";
 import { projectMembersRouter } from "./routes/projectMembers.js";
 import { shareLinksRouter } from "./routes/shareLinks.js";
 import { projectLinksRouter } from "./routes/projectLinks.js";
+import { taskLinksRouter } from "./routes/taskLinks.js";
 import { customerLinksRouter } from "./routes/customerLinks.js";
 import { publicShareRouter } from "./routes/publicShare.js";
 import { activityRouter } from "./routes/activity.js";
@@ -96,6 +97,7 @@ export function createApp(opts: CreateAppOptions = {}): Express {
   app.use("/daily-review", dailyReviewRouter);
   app.use("/notes", notesRouter);
   app.use("/tasks", tasksRouter);
+  app.use("/tasks", taskLinksRouter);
   app.use("/labels", labelsRouter);
   app.use("/sections", sectionsRouter);
   app.use("/epics", epicsRouter);

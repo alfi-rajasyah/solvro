@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/api";
 import { FIELD_FOCUS } from "@/lib/utils";
 
 // Label + URL document links, shared by the Pipeline deal page, a project's
-// Context panel and a customer's Overview tab. The host owns the data: it
+// Context panel, a customer's Links tab and the task panel. The host owns the data: it
 // passes the list and the three mutation results (each hook is scoped to its
 // own entity), so this component never knows which entity the links belong to.
 // Only `id`, `label` and `url` are read from a row.

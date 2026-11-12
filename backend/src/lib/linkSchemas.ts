@@ -1,8 +1,9 @@
 import { z } from "zod";
 
 // Label + plain http(s) URL document links, shared by the deal links
-// (routes/opportunityItems.ts), project links (routes/projectLinks.ts) and
-// customer links (routes/customerLinks.ts). Matches VeloraApp's
+// (routes/opportunityItems.ts), project links (routes/projectLinks.ts),
+// customer links (routes/customerLinks.ts) and task links
+// (routes/taskLinks.ts). Matches VeloraApp's
 // opportunity_links contract (Velora's `documents` table stored
 // file_name/file_url pairs that were always links, never uploads — see
 // docs/archive/plans/pipeline-native-port-plan.md).

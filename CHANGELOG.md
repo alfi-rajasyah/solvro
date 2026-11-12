@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-11-12 — Document links on tasks
+
+- The task panel has a "Links" section, the same label + URL list a project's Context panel and a customer's Links tab already have (`frontend/src/components/TaskPanel.tsx`, reusing `frontend/src/components/LinksSection.tsx`). Anyone who can open the task can read its links; adding, editing or removing one needs the same `task:write` permission as editing the task. Links open in a new tab. This settles task attachments as links only: Solvro stores no uploaded files.
+- `backend/src/routes/taskLinks.ts`: `GET/POST /tasks/:id/links` and `PATCH/DELETE /tasks/:id/links/:linkId`, with the same rules as project links: `http`/`https` URLs only (up to 2000 characters), a label of 1 to 200 characters, and a 404 for a task the caller cannot see or a link that belongs to another task.
+- `backend/prisma/schema.prisma`: new `TaskLink` table (`task_links`, migration `20261112160000_task_links`). A task's links are deleted with the task and are not copied when the task is duplicated.
+- Each add, edit or removal writes an entry to the project's activity feed, for example "added the link Runbook to the task Kickoff", which opens the task. The entry holds the link's label, never its URL. Task links are internal: they never reach an export or the guest view.
+
 ### Removed — 2026-11-12 — The note visibility column
 
 - `backend/prisma/schema.prisma`, migration `20261112120000_drop_note_visibility`: the `visibility` column on `project_notes` and the `NoteVisibility` enum are dropped. Every note was `INTERNAL`, no screen set or read the level, and no export exists. All notes are now internal by definition: no note of any kind may reach an export, a guest link, or any customer-facing output.

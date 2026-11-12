@@ -488,6 +488,7 @@ model Task {
   position          Int              @default(0) @map("position")
   labels            Label[]
   comments          Comment[]
+  links             TaskLink[]
   // Dependency edges (Gantt connector arrows).
   predecessors      TaskDependency[] @relation("DependencySuccessor")
   successors        TaskDependency[] @relation("DependencyPredecessor")
@@ -882,6 +883,20 @@ model CustomerLink {
 
   @@index([customerId])
   @@map("customer_links")
+}
+
+// Same shape on a task (task panel, "Links"). Internal only, same as
+// ProjectLink. Not copied when a task is duplicated.
+model TaskLink {
+  id        String   @id @default(uuid())
+  taskId    Int      @map("task_id")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label     String
+  url       String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([taskId])
+  @@map("task_links")
 }
 
 model OpportunityLink {

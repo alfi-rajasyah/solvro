@@ -513,6 +513,17 @@ function projectLinkSentence(changes: Changes | null, action: ActivityEvent["act
   return null;
 }
 
+// entityLabel is the task title; changes carry the link label (never the URL).
+function taskLinkSentence(changes: Changes | null, action: ActivityEvent["action"], taskTitle: string | null): Parts | null {
+  const linkLabel = strField(changes?.label);
+  const link: Parts = linkLabel ? [txt("the link "), ent(clip(linkLabel))] : [txt("a link")];
+  const task: Parts = taskTitle ? [txt("the task "), ent(taskTitle)] : [txt("a task")];
+  if (action === "added") return [txt("added "), ...link, txt(" to "), ...task];
+  if (action === "updated") return [txt("updated "), ...link, txt(" on "), ...task];
+  if (action === "removed") return [txt("removed "), ...link, txt(" from "), ...task];
+  return null;
+}
+
 function buildBody(event: ActivityEvent, canViewPipeline: boolean): Parts {
   const changes = isRecord(event.changes) ? event.changes : null;
   const label = typeof event.entityLabel === "string" && event.entityLabel ? event.entityLabel : null;
@@ -598,6 +609,11 @@ function buildBody(event: ActivityEvent, canViewPipeline: boolean): Parts {
       if (body) return body;
       break;
     }
+    case "task_link": {
+      const body = taskLinkSentence(changes, event.action, label);
+      if (body) return body;
+      break;
+    }
     case "member":
       if (event.action === "added") {
         return label
@@ -656,8 +672,12 @@ export function eventTaskId(event: ActivityEvent): number | null {
   if (event.entityType === "task" && event.action !== "deleted") {
     return Number.isInteger(event.entityId) ? event.entityId : null;
   }
-  // Comment events may carry the task they belong to; entityId is the comment.
-  if (event.entityType === "comment" && event.action !== "deleted" && isRecord(event.changes)) {
+  // Comment and task-link events carry the task they belong to in `changes`.
+  if (
+    (event.entityType === "comment" || event.entityType === "task_link") &&
+    event.action !== "deleted" &&
+    isRecord(event.changes)
+  ) {
     const id = event.changes.taskId;
     if (typeof id === "number" && Number.isInteger(id)) return id;
   }

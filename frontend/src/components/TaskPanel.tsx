@@ -10,6 +10,7 @@ import {
 import { EpicChip } from "./EpicChip";
 import { InlineDateRangeEditor } from "./InlineDateRangeEditor";
 import { LabelPicker } from "./LabelPicker";
+import { LinksSection } from "./LinksSection";
 import { TASK_STATUS_TONE_CLASS } from "./StatusChip";
 import { TaskConflictDialog } from "./TaskConflictDialog";
 import { TaskTicketField } from "@/components/itop/TaskTicketField";
@@ -39,15 +40,19 @@ import {
   type TaskStatus,
   type UpdateTaskInput,
   useAddComment,
+  useAddTaskLink,
   useComments,
   useCreateTask,
   useDeleteTask,
+  useDeleteTaskLink,
   useDuplicateTask,
   useItopStatus,
   useProject,
   useProjectEpics,
   useProjectLabels,
   useProjectMembers,
+  useTaskLinks,
+  useUpdateTaskLink,
   useProjectSections,
   useProjectTasks,
   useUpdateTask,
@@ -978,6 +983,11 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
             </div>
           )}
 
+          {/* Document links */}
+          <div className="mt-4">
+            <PanelLinks taskId={task.id} projectId={projectId} canEdit={canEdit} />
+          </div>
+
           {error && (
             <Alert variant="destructive" className="mt-4">
               <AlertDescription className="text-xs">{error}</AlertDescription>
@@ -1037,6 +1047,29 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
         busy={deleteTask.isPending}
       />
     </>
+  );
+}
+
+// Label + URL document links on the task, through the shared LinksSection
+// (same component as the project Context panel). Editing follows the same
+// `task:write` gate as the rest of the panel and the backend link routes.
+function PanelLinks({ taskId, projectId, canEdit }: { taskId: number; projectId: number; canEdit: boolean }) {
+  const links = useTaskLinks(taskId);
+  const addLink = useAddTaskLink(taskId, projectId);
+  const updateLink = useUpdateTaskLink(taskId, projectId);
+  const deleteLink = useDeleteTaskLink(taskId, projectId);
+  return (
+    <LinksSection
+      chrome="panel"
+      canEdit={canEdit}
+      links={links.data}
+      isLoading={links.isLoading}
+      isError={links.isError}
+      error={links.error}
+      addLink={addLink}
+      updateLink={updateLink}
+      deleteLink={deleteLink}
+    />
   );
 }
 
