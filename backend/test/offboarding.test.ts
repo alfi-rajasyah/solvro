@@ -236,9 +236,18 @@ describe("POST /admin/users/:id/offboard", () => {
     expect(dealEvents.map((e) => e.action)).toContain("assigned");
 
     // INTERNAL note, authored by the admin, body absent from every event.
-    const notes = await prisma.projectNote.findMany({ where: { projectId: project.id } });
-    expect(notes).toHaveLength(1);
-    expect(notes[0]).toMatchObject({ visibility: "INTERNAL", authorId: w.admin.userId });
+    // The seat changes are logged as notes too, ahead of the handover note.
+    const notes = await prisma.projectNote.findMany({
+      where: { projectId: project.id },
+      orderBy: { id: "asc" },
+    });
+    expect(notes).toHaveLength(3);
+    for (const n of notes) {
+      expect(n).toMatchObject({ visibility: "INTERNAL", authorId: w.admin.userId });
+    }
+    expect(notes[0]!.body).toMatch(/^Changed TAM from .+ to .+ \(Offboarding\)$/);
+    expect(notes[1]!.body).toMatch(/^Changed SA from .+ to .+ \(Offboarding\)$/);
+    expect(notes[2]!.body).toBe("SECRET handover body");
     const events = await prisma.activityEvent.findMany({ where: { projectId: project.id } });
     expect(JSON.stringify(events)).not.toContain("SECRET");
     const upd = events.find((e) => e.entityType === "project" && e.action === "updated")!;
@@ -260,7 +269,10 @@ describe("POST /admin/users/:id/offboard", () => {
       customers: [],
     });
     expect(res.status).toBe(200);
-    expect(await prisma.projectNote.count({ where: { projectId: project.id } })).toBe(0);
+    // No handover note; only the TAM change is logged.
+    const notes = await prisma.projectNote.findMany({ where: { projectId: project.id } });
+    expect(notes).toHaveLength(1);
+    expect(notes[0]!.body).toMatch(/^Changed TAM from .+ to .+ \(Offboarding\)$/);
     expect((await prisma.task.findUniqueOrThrow({ where: { id: open1.id } })).assignedToId).toBeNull();
     expect(await prisma.notification.count({ where: { reason: "tasks_handed_over", activityEvent: { projectId: project.id } } })).toBe(0);
   });

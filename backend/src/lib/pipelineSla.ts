@@ -4,19 +4,20 @@ import { workingDaysBetween } from "./workingDays.js";
 
 // Idle-alert SLA table (opportunity-pipeline-flow-spec §7) and its
 // computation (opportunity-flow-redesign D1: computed on every read, never a
-// job — no scheduler, no stored `idle_alert` column, no run log). These
-// numbers are placeholders the team validates; there is no Admin editor for
-// them in this phase (D8/D14).
+// job — no scheduler, no stored `idle_alert` column, no run log). The idle
+// numbers are placeholders the team validates; Waiting Sales input is 14
+// working days in every stage (user decision 2026-11-12). There is no Admin
+// editor for them in this phase (D8/D14).
 
 export const PIPELINE_SLA: Record<
   PipelineStage,
   { waitingDays: number | null; idleWarningDays: number; idleCriticalDays: number | null }
 > = {
-  ASSESSMENT: { waitingDays: 2, idleWarningDays: 5, idleCriticalDays: null },
-  TECHNICAL_CLARIFICATION: { waitingDays: 2, idleWarningDays: 5, idleCriticalDays: null },
-  POC: { waitingDays: 3, idleWarningDays: 7, idleCriticalDays: null },
-  RFP: { waitingDays: 2, idleWarningDays: 5, idleCriticalDays: null },
-  DELIVER_PROPOSAL: { waitingDays: 3, idleWarningDays: 7, idleCriticalDays: null },
+  ASSESSMENT: { waitingDays: 14, idleWarningDays: 5, idleCriticalDays: null },
+  TECHNICAL_CLARIFICATION: { waitingDays: 14, idleWarningDays: 5, idleCriticalDays: null },
+  POC: { waitingDays: 14, idleWarningDays: 7, idleCriticalDays: null },
+  RFP: { waitingDays: 14, idleWarningDays: 5, idleCriticalDays: null },
+  DELIVER_PROPOSAL: { waitingDays: 14, idleWarningDays: 7, idleCriticalDays: null },
   WAITING_RESPONSE: { waitingDays: null, idleWarningDays: 7, idleCriticalDays: 14 },
 };
 

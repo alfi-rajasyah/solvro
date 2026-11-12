@@ -13,6 +13,7 @@ import { computeIdle } from "../lib/pipelineSla.js";
 import { recordActivity, shortLabel } from "../lib/activity.js";
 import {
   diffOpportunityChanges,
+  fieldChangeSentences,
   opportunityCreatedChanges,
   recordOpportunityChange,
 } from "../lib/opportunityActivity.js";
@@ -720,7 +721,7 @@ opportunitiesRouter.post(
 // no Sales-input gate to track while the deal sits with the client, D3).
 // Real transitions (not "same value again") bump waitingInputSince and log
 // one of the fixed activity notes; plain field edits (title, value, ...)
-// still write no note, as before. Wrapped in one transaction with the
+// write one note listing each edit (`fieldChangeSentences`). Wrapped in one transaction with the
 // update so the row change and its note are atomic.
 opportunitiesRouter.patch(
   "/:id",
@@ -816,12 +817,16 @@ opportunitiesRouter.patch(
       if ((before.pic?.id ?? null) !== (result.pic?.id ?? null)) {
         notes.push(result.pic ? `Assigned to ${result.pic.username}` : "Unassigned");
       }
+      // Plain field edits share one timeline entry, a line per field.
+      const changes = diffOpportunityChanges(before, result);
+      const fieldLines = fieldChangeSentences(changes);
+      if (fieldLines.length > 0) notes.push(fieldLines.join("\n"));
       const event = await recordOpportunityChange(tx, {
         opportunityId: id,
         actorId: req.user!.sub,
         action: "updated",
         entityLabel: result.title,
-        changes: diffOpportunityChanges(before, result),
+        changes,
         note: notes,
       });
       await notifyForEvent(tx, event);

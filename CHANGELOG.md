@@ -15,6 +15,40 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Removed — 2026-11-12 — The staging branch and its deploy
+
+- `.github/workflows/docker-publish.yml`: the `deploy-staging` job is removed and images publish from `main` only (plus `v*` tags). `:staging` images are no longer built. The repository secrets `OPENSHIP_STAGING_HOOK_URL` and `OPENSHIP_STAGING_HOOK_TOKEN` are no longer read.
+- `.github/workflows/keep-staging.yml` (deleted): it recreated `staging` after a release PR merged; there is no such branch now.
+- `.github/workflows/ci.yml`: CI no longer runs for `staging`. A release is now a pull request from `develop` straight into `main`, and that pull request runs the full suite, desktop and mobile end-to-end tests included, because it is the only check before the code reaches `main`. A push to `main` still runs the full suite before images publish.
+- `CLAUDE.md`, `e2e/CLAUDE.md`: the branch flow is two branches, `develop` and `main`.
+
+### Added — 2026-11-12 — TAM and SA changes are written into the project's notes
+
+- `backend/src/lib/projectSeats.ts`: a change of a project's TAM or SA now also writes a note on the project, authored by the person who made the change, for example "Changed TAM from alice to bob". Filling an empty SA seat reads "Set SA to bob" and removing the SA reads "Removed SA alice". These are ordinary project notes: they appear in Daily Review and the weekly drafts, and count as a note for that day. The note is always `INTERNAL`, so it never reaches an export or a customer-facing view. Re-saving the current holder writes nothing. The activity feed entry and the notification to the new holder are unchanged.
+- `backend/src/routes/admin.ts`: a reassignment from Admin > Project Override ends its note with "(Project Override)" so the notes show the change was made by an admin outside the project.
+- `backend/src/lib/offboarding.ts`: the seat changes of an offboarding handover are logged the same way, ending with "(Offboarding)", next to the optional handover note.
+- `frontend/src/lib/helpContent.ts`: the Admin help topic says that TAM and SA changes land in the project's notes.
+- `backend/test/activity.test.ts`, `backend/test/notifications.test.ts`, `backend/test/offboarding.test.ts`: cover the three paths.
+
+### Added — 2026-11-12 — Deal edits appear in the deal's Activity
+
+- `backend/src/lib/opportunityActivity.ts`, `backend/src/routes/opportunities.ts`: editing a deal's fields now adds an entry to the Activity timeline on the deal page, next to the notes, written by the person who made the edit. One save makes one entry with a line per field, for example "Changed value from Rp 500.000.000 to Rp 650.000.000" or "Set deadline to 20 Nov 2026". Title, customer, value, win probability, deadline, request date and lead source show the old and new values; the description and the product solution only say they were updated. Stage moves, PIC changes, sub-status, holds and closes already had their own entries and are unchanged. The "Field changes" list below the timeline stays as it is.
+- `frontend/src/lib/helpContent.ts`: the Pipeline help says field edits land in the Activity feed.
+- `backend/test/opportunityActivity.test.ts`: covers the new entry.
+
+### Fixed — 2026-11-12 — Search finds pipeline deals
+
+- `backend/src/routes/search.ts`: search covered projects, tasks and customers only, so a deal never showed up. It now also returns up to 8 deals whose title or customer name matches, closed and archived ones included, for anyone who can view the pipeline. A user without that permission gets no deals.
+- `frontend/src/components/CommandPalette.tsx`, `frontend/src/lib/queries.ts`: the search dialog shows a "Deals" group that opens the deal page; the placeholder and the help text (`frontend/src/lib/helpContent.ts`) name deals.
+- `backend/test/search.test.ts`: covers the match and the permission rule.
+
+### Changed — 2026-11-12 — "Waiting Sales input" allows 14 working days
+
+- `backend/src/lib/pipelineSla.ts`, `frontend/src/lib/pipelineFormat.ts`: a deal waiting on Sales input now warns after more than 14 working days in every stage (it was 2, or 3 in PoC and Delivered Proposal) and turns critical after twice that, 28. The idle thresholds for deals that are not waiting on Sales, and Waiting Response, are unchanged.
+- `frontend/src/lib/helpContent.ts`: the Pipeline help states the new numbers.
+- `backend/test/pipelineSla.test.ts`: thresholds updated.
+- `backend/scripts/seed-demo.ts`: the demo deal that waits on Sales input is backdated past 14 working days, so the demo still shows the warning.
+
 ### Added — 2026-11-10 — A quality filter for interface and copy work
 
 - `docs/reference/antislop.md` (new): the antislop rule set (v3.2.27, MIT, unmodified upstream file), kept in the repository so everyone working on the interface reads the same rules. It is a filter applied after `docs/DESIGN.md`, not a second design system.

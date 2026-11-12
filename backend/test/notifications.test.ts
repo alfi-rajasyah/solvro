@@ -171,9 +171,22 @@ describe("admin project reassign (F-25)", () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ reason: "assigned", activityEventId: events[0]!.id });
 
+    // The handover is written into the project's notes by the admin, INTERNAL.
+    const [tamRow, otherRow] = await Promise.all(
+      [tam, other].map((u) => prisma.user.findUniqueOrThrow({ where: { id: u.userId } })),
+    );
+    const projectNotes = await prisma.projectNote.findMany({ where: { projectId: project.id } });
+    expect(projectNotes).toHaveLength(1);
+    expect(projectNotes[0]).toMatchObject({
+      authorId: admin.userId,
+      visibility: "INTERNAL",
+      body: `Changed TAM from ${tamRow!.username} to ${otherRow!.username} (Project Override)`,
+    });
+
     // Same TAM again: nothing new.
     expect((await reassign(other.userId)).status).toBe(200);
     expect(await prisma.activityEvent.count({ where: { projectId: project.id } })).toBe(1);
+    expect(await prisma.projectNote.count({ where: { projectId: project.id } })).toBe(1);
     expect(await notesFor(other.userId)).toHaveLength(1);
   });
 });

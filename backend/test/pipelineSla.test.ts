@@ -13,7 +13,8 @@ const NOW = new Date("2026-09-25T00:00:00.000Z"); // Friday
 // "from" dates such that workingDaysBetween(from, NOW) === the given working
 // day count (verified against lib/workingDays.ts directly in
 // workingDays.test.ts) — Sept 2026 has no Indonesian public holiday, so
-// these are plain weekday-counting offsets.
+// those are plain weekday-counting offsets; the August one (29) was read
+// off workingDaysBetween itself, which also skips that month's holidays.
 const DAYS_AGO: Record<number, string> = {
   2: "2026-09-23",
   3: "2026-09-22",
@@ -22,7 +23,9 @@ const DAYS_AGO: Record<number, string> = {
   6: "2026-09-17",
   7: "2026-09-16",
   8: "2026-09-15",
+  14: "2026-09-07",
   15: "2026-09-04",
+  29: "2026-08-13",
 };
 
 function since(n: number): Date {
@@ -65,11 +68,11 @@ describe("computeIdle — closed deal", () => {
 
 describe("computeIdle — waiting basis (subStatus WAITING_SALES_INPUT)", () => {
   const waitingCases: { stage: PipelineStage; waitingDays: number }[] = [
-    { stage: PipelineStage.ASSESSMENT, waitingDays: 2 },
-    { stage: PipelineStage.TECHNICAL_CLARIFICATION, waitingDays: 2 },
-    { stage: PipelineStage.RFP, waitingDays: 2 },
-    { stage: PipelineStage.POC, waitingDays: 3 },
-    { stage: PipelineStage.DELIVER_PROPOSAL, waitingDays: 3 },
+    { stage: PipelineStage.ASSESSMENT, waitingDays: 14 },
+    { stage: PipelineStage.TECHNICAL_CLARIFICATION, waitingDays: 14 },
+    { stage: PipelineStage.RFP, waitingDays: 14 },
+    { stage: PipelineStage.POC, waitingDays: 14 },
+    { stage: PipelineStage.DELIVER_PROPOSAL, waitingDays: 14 },
   ];
 
   it.each(waitingCases)(

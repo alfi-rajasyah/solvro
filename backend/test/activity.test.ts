@@ -692,6 +692,33 @@ describe("project TAM / SA changes", () => {
     expect(await notificationsOf(tam.userId)).toHaveLength(0);
   });
 
+  it("writes each seat change into the project's notes as INTERNAL, and nothing for an unrelated update", async () => {
+    const { tam, other, project } = await fixture();
+    const sa = await createUserWithRole("SA");
+    const patch = (body: Record<string, unknown>) =>
+      request(app).patch(`/projects/${project.id}`).set(auth(tam.token)).send(body);
+    const bodies = async () =>
+      (await prisma.projectNote.findMany({ where: { projectId: project.id }, orderBy: { id: "asc" } })).map(
+        (n) => ({ body: n.body, authorId: n.authorId, visibility: n.visibility }),
+      );
+    const [tamRow, otherRow, saRow] = await Promise.all(
+      [tam, other, sa].map((u) => prisma.user.findUniqueOrThrow({ where: { id: u.userId } })),
+    );
+    const by = { authorId: tam.userId, visibility: "INTERNAL" };
+
+    expect((await patch({ name: "Just a rename", tamId: tam.userId })).status).toBe(200);
+    expect(await bodies()).toEqual([]);
+
+    expect((await patch({ saId: sa.userId })).status).toBe(200);
+    expect((await patch({ saId: null })).status).toBe(200);
+    expect((await patch({ tamId: other.userId })).status).toBe(200);
+    expect(await bodies()).toEqual([
+      { body: `Set SA to ${saRow!.username}`, ...by },
+      { body: `Removed SA ${saRow!.username}`, ...by },
+      { body: `Changed TAM from ${tamRow!.username} to ${otherRow!.username}`, ...by },
+    ]);
+  });
+
   it("does not notify an SA who is the actor, nor on an unrelated update", async () => {
     const { tam, project } = await fixture();
     const res = await request(app)

@@ -84,7 +84,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         title: "Find your way around",
         points: [
           "The left sidebar lists every page you have access to, in groups: Workspace (Overview, Projects, Customers), Cadence (Daily Review, Weekly Sync), Sales (Pipeline), Insights (Utilization, Executive), and System (Settings, Admin). Groups with no page for you are hidden. Collapse it with the menu button at its top; on a phone, open it with the menu button in the top bar.",
-          "Press ⌘K (Ctrl+K on Windows/Linux) or use search in the top bar (the search icon on a phone) to jump to a page, project, task, or customer, or to run an action such as \"New project\", \"New customer\", or \"Add task\" (on a project page). Type at least 2 characters to search; actions appear without typing.",
+          "Press ⌘K (Ctrl+K on Windows/Linux) or use search in the top bar (the search icon on a phone) to jump to a page, project, task, customer, or pipeline deal, or to run an action such as \"New project\", \"New customer\", or \"Add task\" (on a project page). Type at least 2 characters to search; actions appear without typing.",
           "On a project page, the top bar reads \"Projects / <project name>\" with the project's status. Click \"Projects\" to go back to the list.",
           "Your avatar menu (top right) holds Settings and \"Sign out\".",
         ],
@@ -552,7 +552,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
           "Solvro flags a deal that goes quiet. Days count Monday to Friday, without Indonesian public holidays.",
           "A deal tagged \"Hold\" never raises an idle alert. \"Release hold\" restarts its clock from the release. A deal tagged \"Delayed\" still goes idle.",
           "Adding a note restarts the deal's clock, whatever its sub-status: in \"Waiting Sales input\" the waiting time counts again from the note.",
-          "\"Waiting Sales input\" warns after more than 2 working days (3 in PoC and Delivered Proposal) and turns critical after twice that. Otherwise a deal warns after more than 5 working days without activity (7 in PoC and Delivered Proposal).",
+          "\"Waiting Sales input\" warns after more than 14 working days and turns critical after more than 28. Otherwise a deal warns after more than 5 working days without activity (7 in PoC and Delivered Proposal).",
           "In Waiting Response a deal warns after 7 working days and turns critical after 14.",
           "The deal page shows \"SLA for this stage\" under its last activity, the List has an Idle column, and the \"Idle alerts\" tile counts the flagged deals.",
         ],
@@ -560,7 +560,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
       {
         title: "Notes and links",
         points: [
-          "The Activity feed holds every note. Write in \"Add a note…\" and press \"Add note\"; anyone with \"View pipeline\" can, which is how Sales replies. Stage-skip reasons, close notes, and PIC changes land here too.",
+          "The Activity feed holds every note. Write in \"Add a note…\" and press \"Add note\"; anyone with \"View pipeline\" can, which is how Sales replies. Stage-skip reasons, close notes, PIC changes, and edits to the deal's fields (value, deadline, win probability and so on, with the old and new values) land here too.",
           "\"Add link\" saves a labelled URL (for example a proposal) on the deal. It needs edit rights on the deal.",
         ],
       },
@@ -631,7 +631,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         title: "Sign-in and ownership",
         points: [
           "Sign-in: connect Google sign-in with a client ID and the allowed email domains.",
-          "Project Override: reassign the TAM of any project. The TAM is the project's owner; a Solution Architect is not an owner.",
+          "Project Override: reassign the TAM of any project. The TAM is the project's owner; a Solution Architect is not an owner. Every TAM or SA change, here, in \"Edit project\", or in an offboarding, is written into the project's notes with who made it.",
           "Pipeline: a read-only history of every Excel/CSV import run on the Pipeline board, newest first.",
         ],
       },

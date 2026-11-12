@@ -8,7 +8,7 @@ import { canUserSeePipeline, notifyForEvent } from "./notifications.js";
 import { recordOpportunityChange } from "./opportunityActivity.js";
 import { lockProject } from "./positionRepack.js";
 import { ensureAssigneeIsMember } from "./projectMembers.js";
-import { diffProjectSeats, projectSeatsSelect } from "./projectSeats.js";
+import { diffProjectSeats, projectSeatsSelect, recordSeatChangeNotes } from "./projectSeats.js";
 import { OPEN_TASK_STATUS_FILTER } from "./taskStatus.js";
 import { assertActiveUser } from "./users.js";
 
@@ -274,6 +274,7 @@ export async function offboardUser(
     if (Object.keys(seatData).length > 0) {
       const after = await tx.project.update({ where: { id: row.id }, data: seatData });
       Object.assign(changes, await diffProjectSeats(tx, before, after));
+      await recordSeatChangeNotes(tx, { projectId: row.id, actorId, changes, via: "Offboarding", noteDate: today });
     }
 
     const { count: tasks } = await tx.task.updateMany({

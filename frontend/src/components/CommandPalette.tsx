@@ -20,9 +20,9 @@ import { buildPaletteActions } from "@/lib/paletteActions";
 import { useSearch } from "@/lib/queries";
 
 interface PaletteItem {
-  value: string; // unique: "page:/overview", "action:new-project", "project:3", "task:17", "customer:2"
+  value: string; // unique: "page:/overview", "action:new-project", "project:3", "task:17", "customer:2", "deal:<uuid>"
   label: string;
-  group: "Pages" | "Actions" | "Projects" | "Tasks" | "Customers";
+  group: "Pages" | "Actions" | "Projects" | "Tasks" | "Customers" | "Deals";
   to: string;
   hint?: string; // secondary text: customer/project name or status
   icon?: string; // material symbol name (pages and actions)
@@ -42,7 +42,7 @@ function useDebounced(value: string, ms: number): string {
   return debounced;
 }
 
-const GROUP_ORDER: PaletteItem["group"][] = ["Pages", "Actions", "Projects", "Tasks", "Customers"];
+const GROUP_ORDER: PaletteItem["group"][] = ["Pages", "Actions", "Projects", "Tasks", "Customers", "Deals"];
 
 export function CommandPalette({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { user } = useAuth();
@@ -126,6 +126,13 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             group: "Customers" as const,
             to: `/customers/${c.id}`,
           })),
+          ...data.deals.map((d) => ({
+            value: `deal:${d.id}`,
+            label: d.title,
+            group: "Deals" as const,
+            to: `/pipeline/${d.id}`,
+            hint: d.customerName,
+          })),
         ];
     return [...pages, ...actions, ...remote];
   }, [user, pathname, search, query, data, hasQuery]);
@@ -190,7 +197,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             </span>
             <AutocompleteInput
               autoFocus
-              placeholder="Search projects, tasks, customers…"
+              placeholder="Search projects, tasks, customers, deals…"
               className="flex-1 border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant dark:bg-transparent rounded-none h-auto px-0 focus-visible:ring-0 focus-visible:border-transparent"
             />
             <span className="rounded-sm border border-outline-variant bg-surface-container-low px-1.5 py-0.5 font-mono text-meta text-on-surface-variant">

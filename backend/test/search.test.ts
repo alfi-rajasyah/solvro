@@ -77,6 +77,32 @@ describe("GET /search", () => {
     expect(res.body.customers).toEqual([{ id: customer.id, name: `${n} Corp` }]);
   });
 
+  it("returns deals matching the title or the customer name, to pipeline:view holders only", async () => {
+    const n = needle();
+    const byTitle = await prisma.opportunity.create({
+      data: { title: `Aaa ${n} firewall`, customerName: "Acme" },
+    });
+    const byCustomer = await prisma.opportunity.create({
+      data: { title: "Zzz CCTV rollout", customerName: `${n} Logistik`, outcome: "LOST" },
+    });
+    const search = (token: string) =>
+      request(app).get("/search").query({ q: n.toUpperCase() }).set("Authorization", `Bearer ${token}`);
+
+    const sales = await createUserWithRole("SALES");
+    const res = await search(sales.token);
+    expect(res.status).toBe(200);
+    expect(res.body.deals).toEqual([
+      { id: byTitle.id, title: `Aaa ${n} firewall`, customerName: "Acme" },
+      { id: byCustomer.id, title: "Zzz CCTV rollout", customerName: `${n} Logistik` },
+    ]);
+
+    // TAM holds project:read but not pipeline:view.
+    const tam = await createUserWithRole("TAM");
+    const hidden = await search(tam.token);
+    expect(hidden.status).toBe(200);
+    expect(hidden.body.deals).toEqual([]);
+  });
+
   it("matches case-insensitively", async () => {
     const { token, userId } = await createAdminAndToken();
     const n = needle();
