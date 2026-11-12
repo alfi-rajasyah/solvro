@@ -312,3 +312,45 @@ describe("/tasks?excludeOnHold= — due-range list matches the Overview tile (fe
     expect(res.status).toBe(400);
   });
 });
+
+describe("/tasks?onHoldPastDue= — on-hold, past-due list matches the Overview link (D-12)", () => {
+  async function listIds(qs: string): Promise<number[]> {
+    const res = await request(app).get(`/tasks?${qs}`).set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    return (res.body as Array<{ id: number }>).map((t) => t.id);
+  }
+
+  it("lists only open past-due tasks of an ON_HOLD project, and the count equals onHoldExcluded", async () => {
+    const late = await createTask({ dueDate: new Date("2026-08-01T00:00:00.000Z") });
+    const today = await createTask({ dueDate: new Date("2026-08-02T00:00:00.000Z") });
+    const done = await createTask({ status: "DONE", dueDate: new Date("2026-08-01T00:00:00.000Z") });
+    const qs = "onHoldPastDue=true&topLevel=true&today=2026-08-02";
+
+    // Active project: nothing listed, the rows are ordinary overdue work.
+    expect(await listIds(qs)).toEqual([]);
+
+    await prisma.project.update({ where: { id: projectId }, data: { status: "ON_HOLD" } });
+    const ids = await listIds(qs);
+    expect(ids).toContain(late);
+    expect(ids).not.toContain(today);
+    expect(ids).not.toContain(done);
+
+    const overview = await request(app)
+      .get("/overview?today=2026-08-02")
+      .set("Authorization", `Bearer ${token}`);
+    expect(overview.body.workCounts.onHoldExcluded).toBe(ids.length);
+  });
+
+  it("leaves out a CANCELLED project's tasks", async () => {
+    const id = await createTask({ dueDate: new Date("2026-08-01T00:00:00.000Z") });
+    await prisma.project.update({ where: { id: projectId }, data: { status: "CANCELLED" } });
+    expect(await listIds("onHoldPastDue=true&today=2026-08-02")).not.toContain(id);
+  });
+
+  it("rejects a non-boolean value", async () => {
+    const res = await request(app)
+      .get("/tasks?onHoldPastDue=yes")
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(400);
+  });
+});

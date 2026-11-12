@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-11-12 — "On hold, past due" list for tasks that overdue counts leave out
+
+- `frontend/src/pages/Overview.tsx`: when open tasks of on-hold projects are past due, "Projects needing attention" shows a "<n> on hold, past due" link beside "View all". Before, the Overdue tile only said how many tasks it left out, and no list showed them.
+- `frontend/src/pages/Tasks.tsx`: a new "On hold, past due" view (`/tasks?view=on-hold-past-due`) lists those tasks. They keep no overdue styling, because the on-hold rule still applies.
+- `backend/src/routes/tasks.ts`: `GET /tasks` accepts `onHoldPastDue=true`: open tasks due before the caller's `today` in on-hold projects. Cancelled projects are not included. With `topLevel=true` the count equals the Overview's `workCounts.onHoldExcluded`.
+- `frontend/src/lib/queries.ts`, `frontend/src/lib/helpContent.ts`: the filter option and the Overview help text.
+- Tests: `backend/test/tasksOverdue.test.ts`, `e2e/tests/project-lifecycle.spec.ts`.
+
 ### Added — 2026-11-12 — Document links on tasks
 
 - The task panel has a "Links" section, the same label + URL list a project's Context panel and a customer's Links tab already have (`frontend/src/components/TaskPanel.tsx`, reusing `frontend/src/components/LinksSection.tsx`). Anyone who can open the task can read its links; adding, editing or removing one needs the same `task:write` permission as editing the task. Links open in a new tab. This settles task attachments as links only: Solvro stores no uploaded files.

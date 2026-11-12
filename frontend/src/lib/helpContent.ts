@@ -133,7 +133,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
           "\"Recent notes\": project and operations notes from the last 7 days. Add notes on the Daily Review page.",
           "If you have Pipeline access, a \"Pipeline\" panel shows Pipeline Value, Active Deals, Won This Month, and On Hold, plus a bar of deals per stage. \"View pipeline\" opens the board.",
           "Projects marked \"Administrative project\" are left out of the counters, the timeline, and the attention list.",
-          "Tasks in projects whose Status is On hold or Cancelled never count as Overdue or Due this week. When on-hold tasks are left out, the Overdue tile says \"<n> in on-hold projects not counted\". They count again when the project is reactivated.",
+          "Tasks in projects whose Status is On hold or Cancelled never count as Overdue or Due this week. When on-hold tasks are left out, the Overdue tile says \"<n> in on-hold projects not counted\", and \"<n> on hold, past due\" beside \"View all\" in \"Projects needing attention\" opens the Tasks view \"On hold, past due\" that lists them. They count again when the project is reactivated.",
         ],
       },
     ],
@@ -681,7 +681,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
         points: [
           "Read the tiles: Overdue, Due this week, and Open risks. Overdue and Due this week open the Tasks list for that view; Open risks opens the Daily Review.",
           "\"Projects needing attention\" lists the projects with overdue tasks or open risks first.",
-          "Tasks in on-hold and cancelled projects are not counted as overdue; the Overdue tile says how many on-hold tasks it left out.",
+          "Tasks in on-hold and cancelled projects are not counted as overdue; the Overdue tile says how many on-hold tasks it left out, and \"<n> on hold, past due\" opens the list of them.",
         ],
       },
       {

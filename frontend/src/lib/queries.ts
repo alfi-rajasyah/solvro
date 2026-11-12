@@ -548,6 +548,8 @@ export interface TasksFilter {
   dueTo?: string;
   /** true = leave out tasks of ON_HOLD and CANCELLED projects (the "due this week" list). */
   excludeOnHold?: boolean;
+  /** true = only open tasks past due in ON_HOLD projects (left out of `overdue`). */
+  onHoldPastDue?: boolean;
   /** "due" = soonest first, undated last; default is board order. */
   sort?: "position" | "due";
 }
@@ -1467,6 +1469,11 @@ function tasksQueryOptions(filter: TasksFilter) {
     // falling back to its own UTC day when `today` is absent — see
     // backend/src/lib/dateBoundary.ts. Sent only when the overdue filter
     // itself is active; `today` isn't a TasksFilter option callers set.
+    params.set("today", dateToDay(new Date())!);
+  }
+  if (filter.onHoldPastDue) {
+    params.set("onHoldPastDue", "true");
+    // Same caller-day boundary as `overdue` above.
     params.set("today", dateToDay(new Date())!);
   }
   if (filter.open) params.set("open", "true");
