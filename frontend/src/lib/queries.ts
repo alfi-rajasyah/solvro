@@ -398,10 +398,18 @@ export interface SearchCustomerHit {
   name: string;
 }
 
+/** Pipeline deal; the list is empty for a caller without `pipeline:view`. */
+export interface SearchDealHit {
+  id: string;
+  title: string;
+  customerName: string;
+}
+
 export interface SearchResults {
   projects: SearchProjectHit[];
   tasks: SearchTaskHit[];
   customers: SearchCustomerHit[];
+  deals: SearchDealHit[];
 }
 
 export interface Comment {

@@ -902,10 +902,9 @@ function ActivitySection({
   );
 }
 
-// The Activity timeline above already has a sentence for every other deal
-// action (created, moved, closed, reopened, assigned, handed off, sub-status
-// and tag changes, notes, links), so this list keeps only the field edits,
-// the one event type that carries from/to values the timeline lacks.
+// The Activity timeline above has a sentence for every deal action, field
+// edits included since 2026-11-12. This list keeps only the field edits, as
+// the structured per-field record of them.
 const isFieldEdit = (event: ActivityEvent) =>
   event.entityType === "opportunity" && event.action === "updated";
 

@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { requireAnyPermission, requireAuth } from "../http/auth.js";
+import { hasPermission, requireAnyPermission, requireAuth } from "../http/auth.js";
 import { validate } from "../http/validate.js";
 import { customerVisibilityFilter, projectVisibilityFilter } from "../lib/visibility.js";
 
@@ -16,7 +16,7 @@ const searchQuerySchema = z.object({
     .transform((s) => s.replace(/[\\%_]/g, (c) => `\\${c}`)),
 });
 
-// 8 hits per group keeps the palette scannable and the three queries cheap
+// 8 hits per group keeps the palette scannable and the four queries cheap
 // (sub-200ms NFR). ProjectNote is deliberately NOT searched — INTERNAL-notes
 // guardrail; notes must never leak through a search surface.
 const GROUP_LIMIT = 8;
@@ -30,7 +30,11 @@ searchRouter.get("/", validate("query", searchQuerySchema), async (req, res) => 
   const { q } = req.query as unknown as z.infer<typeof searchQuerySchema>;
   const visible = projectVisibilityFilter(req.user!);
 
-  const [projects, tasks, customers] = await Promise.all([
+  // Deals are visible to every `pipeline:view` holder and to nobody else
+  // (same rule as GET /opportunities); closed and archived deals included.
+  const canSeePipeline = hasPermission(req.user!, "pipeline:view");
+
+  const [projects, tasks, customers, deals] = await Promise.all([
     prisma.project.findMany({
       where: { AND: [visible, { name: { contains: q, mode: "insensitive" } }] },
       select: {
@@ -71,6 +75,19 @@ searchRouter.get("/", validate("query", searchQuerySchema), async (req, res) => 
       orderBy: { name: "asc" },
       take: GROUP_LIMIT,
     }),
+    canSeePipeline
+      ? prisma.opportunity.findMany({
+          where: {
+            OR: [
+              { title: { contains: q, mode: "insensitive" } },
+              { customerName: { contains: q, mode: "insensitive" } },
+            ],
+          },
+          select: { id: true, title: true, customerName: true },
+          orderBy: { title: "asc" },
+          take: GROUP_LIMIT,
+        })
+      : [],
   ]);
 
   res.json({
@@ -88,5 +105,6 @@ searchRouter.get("/", validate("query", searchQuerySchema), async (req, res) => 
       projectName: t.project.name,
     })),
     customers,
+    deals,
   });
 });

@@ -208,11 +208,11 @@ export interface PipelineSlaHint {
 }
 
 export const PIPELINE_SLA_HINT: Record<PipelineStage, PipelineSlaHint> = {
-  ASSESSMENT: { waitingDays: 2, idleWarningDays: 5, idleCriticalDays: null },
-  TECHNICAL_CLARIFICATION: { waitingDays: 2, idleWarningDays: 5, idleCriticalDays: null },
-  POC: { waitingDays: 3, idleWarningDays: 7, idleCriticalDays: null },
-  RFP: { waitingDays: 2, idleWarningDays: 5, idleCriticalDays: null },
-  DELIVER_PROPOSAL: { waitingDays: 3, idleWarningDays: 7, idleCriticalDays: null },
+  ASSESSMENT: { waitingDays: 14, idleWarningDays: 5, idleCriticalDays: null },
+  TECHNICAL_CLARIFICATION: { waitingDays: 14, idleWarningDays: 5, idleCriticalDays: null },
+  POC: { waitingDays: 14, idleWarningDays: 7, idleCriticalDays: null },
+  RFP: { waitingDays: 14, idleWarningDays: 5, idleCriticalDays: null },
+  DELIVER_PROPOSAL: { waitingDays: 14, idleWarningDays: 7, idleCriticalDays: null },
   WAITING_RESPONSE: { waitingDays: null, idleWarningDays: 7, idleCriticalDays: 14 },
 };
 
