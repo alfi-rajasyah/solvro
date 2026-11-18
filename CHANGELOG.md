@@ -15,6 +15,89 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-18 — Agent instructions point at the code that exists
+
+- `CLAUDE.md`: the notes guardrail now names the Gantt exports (`frontend/src/lib/gantt/export*.ts`) as the export code to verify. It named `frontend/src/lib/export/`, which was deleted with the Reports export packet. Two dated notes in the Guardrails block (the old three-branch flow, a rewrite date) are removed. The rules themselves are unchanged.
+- `CLAUDE.md` and `.claude/scripts/gates.sh`: the spine list (paths whose changes get an immediate review) swaps the deleted `frontend/src/lib/export/` for `frontend/src/lib/gantt/export*`. The prose and the `SPINE` regex change together so they stay in step.
+- `.claude/agents/solvro-implementor.md`, `solvro-reviewer.md`, `solvro-docs-keeper.md`: the worked examples are removed from each `description`. They repeated rules the description, the agent body and `CLAUDE.md` already state, and loaded into every session. One of them described a task on the removed export packet. Dated history notes (Tailwind migration dates, "rule updated" stamps) are removed. The rules they carried are kept.
+- `.claude/reply-style.md`: the fixed limits (20 words per sentence, 5 list items) become "short sentences" and "as long as the content needs". Rule 1 now asks for the evidence after the answer instead of leaving it out until asked. Current models follow a fixed number literally, which cut useful content.
+
+### Fixed — 2026-11-12 — Help deep links land on their topic; two flaky browser tests
+
+- `frontend/src/pages/Help.tsx`: a `/help#<topic>` link could open on the wrong topic. The page scrolled to the topic once, then the web fonts (the text font and the icon font) finished loading and changed the height of every section above it, so the topic moved out of view. The page now scrolls the topic back into view each time its height changes, until the reader scrolls, clicks or types, or for 5 seconds at most. This was the cause of the intermittent `e2e/tests/help.spec.ts` "a /help#<topic> link scrolls to that topic" failure.
+- `e2e/tests/itop-ticket-panel.spec.ts`: "adding a public log entry shows it in the list" looks for the new entry inside the Public log list, then checks that the composer is empty. The composer keeps the typed text until iTop accepts the entry, so for a moment the same words were in two elements and the unscoped text lookup failed.
+- `docs/ISSUES.md`: the "passed only on retry" entry now records the causes. The `itop-task-ref.spec.ts` "Create in iTop" failure was the shared e2e project: `itop-daily-review.spec.ts` moves its project to a new customer, so the next spec's mocked customer no longer matched and the button stayed hidden. Seeding one project per spec file (2026-11-12) already removed it.
+
+### Security — 2026-11-12 — The offboarding handover no longer leaves customers unowned
+
+- `backend/src/routes/admin.ts`, `backend/src/lib/offboarding.ts`: `POST /admin/users/:id/offboard` now needs a new owner for every customer the leaver owns. A `null` `newOwnerId` is refused with `400`, and the owner must still be an active user who is not the leaver (`400 owner_not_found`). Before, the handover could clear `Customer.tamId`, and any TAM could then claim the customer and every project under it.
+- `frontend/src/components/admin/HandoverModal.tsx`, `frontend/src/lib/handover.ts`, `frontend/src/lib/queries.ts`: the customer owner pickers in Admin > Users > Hand over are required and start at "Choose an owner"; "No owner" is gone. "Hand over and deactivate" stays disabled until every customer has an owner, with a hint line. The Customers section says that the new owner gets full access, as the Delete user dialog does.
+- `frontend/src/lib/helpContent.ts`: the Help topic for the handover describes the required owner.
+- Tests: `backend/test/offboarding.test.ts`, `frontend/src/lib/handover.test.ts`, `e2e/tests/offboarding.spec.ts`.
+- Docs: plan `docs/plans/offboard-customer-owner.md`; `docs/ISSUES.md` follow-up closed; the shipped user-delete plan moved to `docs/archive/plans/`.
+
+### Changed — 2026-11-12 — A duplicated task keeps its document links
+
+- `backend/src/lib/duplicate.ts`: duplicating a task, a subtask, or a section now copies each task's document links to the copy as new rows, with the same label and URL and in the same order. Before, a copy started with no links. Editing or removing a link on the copy does not change the source. Comments and dependencies are still not copied.
+- `backend/test/taskDuplicate.test.ts`: a test for links on the copy and on its copied subtasks.
+- `docs/plans/task-links.md`: the duplicate rule is updated.
+
+### Security — 2026-11-12 — Deleting a user no longer leaves their customers unowned
+
+- `backend/src/routes/admin.ts`: `DELETE /admin/users/:id` now takes a body `{ customers: [{ customerId, newOwnerId }] }`. When the user owns customers, every one of them must get a new owner, or the delete answers `409 customer_owner_required` with the list of customers that still need one. The new owner must be an active user other than the one being deleted (`400 owner_not_found` otherwise). The owner changes and the delete run in one transaction, so a failure changes nothing, and each owner change is logged as `customer.owner_changed`. Before, `Customer.tamId` was cleared by the delete, and any TAM could then claim the customer and every project under it.
+- `backend/src/lib/offboarding.ts`: new `lockOwnedCustomers` and `reassignOwnedCustomers` helpers, which lock in the same order as the offboarding handover.
+- `frontend/src/components/admin/DeleteUserModal.tsx`, `frontend/src/lib/userDelete.ts`, `frontend/src/pages/Admin.tsx`: Admin > Users > Delete opens a dialog that lists the customers the user owns, with a required owner picker for each. The confirm button reads "Move customers and delete" and stays disabled until every customer has an owner. A user who owns no customers gets the same plain confirm as before.
+- `frontend/src/components/ConfirmModal.tsx`: new optional `confirmDisabled` and `confirmTestId` props, so a confirm dialog can wait for input before its button is enabled.
+
+### Fixed — 2026-11-12 — Each end-to-end spec file gets its own seeded project
+
+- `e2e/fixtures/test.ts`: the `seededProject` fixture now seeds one project per spec file (and per `--repeat-each` repeat) instead of one per Playwright worker. With one worker, every spec file in a run shared the same project, so tasks, sections and reorders from earlier files leaked into later ones. That made drag tests fail whenever an earlier file ran first in the same run: the List reorder test (`list-dnd.spec.ts`, "Gamma onto Alpha") found Gamma already moved by the Kanban tests, the List order check (`kanban-dnd.spec.ts`, R3) found other files' sections, and Gantt bars or connectors (`gantt-parity.spec.ts`) sat below the visible pane. A full local run failed these tests every time, and CI showed them as flaky (failing on the first attempt, passing on the retry in a new worker), depending on where its shards split the files.
+- `e2e/tests/pipeline-form.spec.ts`: the `afterAll` clean-up signs in for its own token, because a hook cannot use the now test-scoped fixture.
+
+### Added — 2026-11-12 — "On hold, past due" list for tasks that overdue counts leave out
+
+- `frontend/src/pages/Overview.tsx`: when open tasks of on-hold projects are past due, "Projects needing attention" shows a "<n> past-due tasks on hold" link beside "View all". Before, the Overdue tile only said how many tasks it left out, and no list showed them.
+- `frontend/src/pages/Tasks.tsx`: a new "On hold, past due" view (`/tasks?view=on-hold-past-due`) lists those tasks. They keep no overdue styling, because the on-hold rule still applies.
+- `backend/src/routes/tasks.ts`: `GET /tasks` accepts `onHoldPastDue=true`: open tasks due before the caller's `today` in on-hold projects. Cancelled projects are not included. With `topLevel=true` the count equals the Overview's `workCounts.onHoldExcluded`.
+- `frontend/src/lib/queries.ts`, `frontend/src/lib/helpContent.ts`: the filter option and the Overview help text.
+- Tests: `backend/test/tasksOverdue.test.ts`, `e2e/tests/project-lifecycle.spec.ts`.
+
+### Added — 2026-11-12 — Document links on tasks
+
+- The task panel has a "Links" section, the same label + URL list a project's Context panel and a customer's Links tab already have (`frontend/src/components/TaskPanel.tsx`, reusing `frontend/src/components/LinksSection.tsx`). Anyone who can open the task can read its links; adding, editing or removing one needs the same `task:write` permission as editing the task. Links open in a new tab. This settles task attachments as links only: Solvro stores no uploaded files.
+- `backend/src/routes/taskLinks.ts`: `GET/POST /tasks/:id/links` and `PATCH/DELETE /tasks/:id/links/:linkId`, with the same rules as project links: `http`/`https` URLs only (up to 2000 characters), a label of 1 to 200 characters, and a 404 for a task the caller cannot see or a link that belongs to another task.
+- `backend/prisma/schema.prisma`: new `TaskLink` table (`task_links`, migration `20261112160000_task_links`). A task's links are deleted with the task and are not copied when the task is duplicated.
+- Each add, edit or removal writes an entry to the project's activity feed, for example "added the link Runbook to the task Kickoff", which opens the task. The entry holds the link's label, never its URL. Task links are internal: they never reach an export or the guest view.
+
+### Removed — 2026-11-12 — The note visibility column
+
+- `backend/prisma/schema.prisma`, migration `20261112120000_drop_note_visibility`: the `visibility` column on `project_notes` and the `NoteVisibility` enum are dropped. Every note was `INTERNAL`, no screen set or read the level, and no export exists. All notes are now internal by definition: no note of any kind may reach an export, a guest link, or any customer-facing output.
+- `backend/src/routes/projects.ts`: `GET /projects/:id/notes` no longer takes a `visibility` filter, `POST` ignores a `visibility` field, and note responses no longer carry one. Note activity events now hold only the note id; an edit records `{ body: { changed: true } }`, never the text. Older events keep their stored value, so the activity feed still reads them.
+- `backend/src/lib/offboarding.ts`, `backend/src/lib/projectSeats.ts`: the handover and seat-change notes no longer set a visibility.
+- `frontend/src/lib/queries.ts`: the `NoteVisibility` type and the `visibility` option of `useProjectNotes` are removed.
+- `CLAUDE.md`, `README.md`, `.claude/scripts/gates.sh`: the notes guardrail now reads "Notes never appear in exports or customer-facing output", and the export check fails if a future `frontend/src/lib/export/` reads notes at all.
+
+### Security — 2026-11-12 — Only a customer's owner can delete it
+
+- `backend/src/lib/visibility.ts`: `DELETE /customers/:id` now needs the customer's current owner, an unowned customer, or `project:view-all`. Before, a TAM of one project under someone else's customer could delete that customer, which clears the customer link on every project under it. This is the same rule that the owner change in `PATCH /customers/:id` has used since the September 2026 penetration-test fix (finding M1). Callers who see the customer but do not own it get 403 `owner_only`; callers who cannot see it still get 404.
+- `frontend/src/lib/ownerAccess.ts`, `frontend/src/pages/Customers.tsx`, `frontend/src/pages/CustomerDetail.tsx`: the customer list and the customer page show Delete and the owner picker only to the owner, on an unowned customer, or to a view-all user, so a project TAM no longer sees controls the server refuses. The customer list no longer loads every project to decide this.
+- `frontend/src/lib/helpContent.ts`: the Customers help topic says who can delete a customer or hand it over.
+- `backend/CLAUDE.md`: the visibility convention states that the delete follows the same owner rule as the owner change.
+- `backend/test/pentestRemediation.test.ts`, `frontend/src/lib/ownerAccess.test.ts`: cover the refused project-TAM delete and the three allowed callers.
+
+### Changed — 2026-11-12 — Pipeline import files are read on the server
+
+- `backend/src/routes/opportunities.ts`: new `POST /opportunities/import/preview` (permission `pipeline:create`, the same as the import). The Import opportunities dialog sends the chosen `.xlsx` or `.csv` file as raw bytes (`application/octet-stream`, at most 1 MB, the same limit nginx sets on `/api/`) and gets back every row, parsed and validated, with PIC names matched to users. Nothing is written. Errors answer 400 with a code: `unreadable_file`, `legacy_xls` (an old `.xls` or a password-protected workbook), `empty_file` or `too_many_rows` (more than 5000 rows); a larger file answers 413.
+- `backend/src/lib/pipelineImport/` (new): a small reader for `.xlsx` (ZIP and SpreadsheetML, first worksheet only) and CSV (comma, semicolon or tab, detected from the first line), with no new dependency. The reader limits how far an archive may expand (16 MB) and how many rows and cells a sheet may hold (50,000 and 200,000, blank ones included), so a compressed "zip bomb" or a sheet of empty cells fails fast. The row rules (`parseRow.ts`) moved unchanged from the frontend, plus support for workbooks that use the 1904 date system.
+- Behavior changes for some files: every CSV cell now stays text until the row rules read it, so `01/02/2026` is 1 February as the template says (it was read US-style as 2 January) and `50%` is 50. A CSV saved by Excel in the Windows code page keeps its accented letters. A UTF-16 CSV is refused with a message to save it as CSV UTF-8. An error cell such as `#N/A` reads as blank.
+- `frontend/src/components/PipelineImportDialog.tsx`: the dialog uploads the file instead of parsing it in the browser, and no longer waits for the team list before the file picker opens (PIC matching happens on the server). A file over 1 MB is refused before the upload. The template download is written with `exceljs`, which the Gantt export already uses.
+- `frontend/src/lib/api.ts`: a request body that is a `Blob` or `File` is sent as raw bytes.
+- `frontend/src/lib/loadXlsx.ts` replaced by `frontend/src/lib/loadExcelJs.ts`; the preview response type lives in `frontend/src/lib/pipelineImport.ts`. Closing the dialog cancels a preview upload in flight, and the upload gives up after 2 minutes.
+
+### Removed — 2026-11-12 — The `xlsx` (SheetJS) dependency
+
+- `frontend/package.json`: `xlsx@0.18.5` is removed. It had known advisories (prototype pollution, ReDoS) and npm has no fixed release. The browser no longer parses any workbook.
+
 ### Removed — 2026-11-12 — The staging branch and its deploy
 
 - `.github/workflows/docker-publish.yml`: the `deploy-staging` job is removed and images publish from `main` only (plus `v*` tags). `:staging` images are no longer built. The repository secrets `OPENSHIP_STAGING_HOOK_URL` and `OPENSHIP_STAGING_HOOK_TOKEN` are no longer read.

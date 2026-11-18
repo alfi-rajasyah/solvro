@@ -36,7 +36,7 @@ Eight tabs under `/projects/:id`: Overview, List, Kanban, Gantt, Epics, Timeline
 - **Daily Review** (`/daily-review`) — a weekly, per-customer page: dated notes per project, operations notes per customer for issues outside any project, an explicit "Mark reviewed" stamp, and actionable overdue-task and open-risk lists. One request loads the whole page.
 - **Weekly Sync** (`/weekly-sync`) — two tables for Monday's read. **Mid-week**: one row per highlight with its own risk and action. **Reflection**: one row per achievement with its outstanding issue, lesson learned, next-week focus, and manager decision (rows that need a decision pin to the top). Each customer carries a Green / Amber / Red health and a Draft / Done status. Both forms draft themselves from the week's notes, and "Copy as table" puts the rows on the clipboard as TSV and HTML for pasting into a document.
 - **Recent notes** — a seven-day feed of project and operations notes on the Overview page.
-- Notes carry an `INTERNAL` / `CUSTOMER_FACING` visibility. Internal notes never reach an export, a search result, or a guest link. Project and customer document links are internal too: they never reach a guest link or an export.
+- Notes are internal. No note reaches an export, a search result, or a guest link. Project and customer document links are internal too: they never reach a guest link or an export.
 
 ### Collaboration
 

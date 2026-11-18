@@ -54,14 +54,6 @@ enum DependencyType {
   SOFT
 }
 
-// Daily Review note visibility. The Internal/Customer-facing toggle is
-// removed from the UI; the UI only ever writes INTERNAL. Column and default
-// stay so the "INTERNAL notes never appear in exports" guardrail holds.
-enum NoteVisibility {
-  INTERNAL
-  CUSTOMER_FACING
-}
-
 enum WeeklyHealth {
   GREEN
   AMBER
@@ -496,6 +488,7 @@ model Task {
   position          Int              @default(0) @map("position")
   labels            Label[]
   comments          Comment[]
+  links             TaskLink[]
   // Dependency edges (Gantt connector arrows).
   predecessors      TaskDependency[] @relation("DependencySuccessor")
   successors        TaskDependency[] @relation("DependencyPredecessor")
@@ -654,9 +647,8 @@ model Risk {
 }
 
 // Daily Review notes — TAM logs cross-project notes per session, each
-// scoped to a single project. The Internal/Customer-facing toggle is
-// removed from the UI; the UI only ever writes INTERNAL. Column and default
-// stay so the "INTERNAL notes never appear in exports" guardrail holds.
+// scoped to a single project. Notes have no visibility level: no note may
+// reach an export or any customer-facing output (CLAUDE.md guardrail).
 model ProjectNote {
   id         Int            @id @default(autoincrement())
   projectId  Int            @map("project_id")
@@ -664,7 +656,6 @@ model ProjectNote {
   authorId   Int            @map("author_id")
   author     User           @relation(fields: [authorId], references: [id])
   body       String         @db.Text
-  visibility NoteVisibility @default(INTERNAL)
   noteDate   DateTime       @map("note_date") @db.Date
   createdAt  DateTime       @default(now()) @map("created_at")
   updatedAt  DateTime       @updatedAt @map("updated_at")
@@ -892,6 +883,20 @@ model CustomerLink {
 
   @@index([customerId])
   @@map("customer_links")
+}
+
+// Same shape on a task (task panel, "Links"). Internal only, same as
+// ProjectLink. Not copied when a task is duplicated.
+model TaskLink {
+  id        String   @id @default(uuid())
+  taskId    Int      @map("task_id")
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  label     String
+  url       String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([taskId])
+  @@map("task_links")
 }
 
 model OpportunityLink {

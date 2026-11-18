@@ -121,10 +121,12 @@ test.describe("Offboarding handover", () => {
     await expect(tam.locator("option", { hasText: leaver.username })).toHaveCount(0);
 
     await tam.selectOption({ label: receiver.username });
+    // Still disabled: every owned customer needs a new owner too.
+    await expect(submit).toBeDisabled();
+    await page.getByTestId(`handover-owner-${customer.id}`).selectOption({ label: receiver.username });
     await expect(submit).toBeEnabled();
     await page.getByTestId("handover-apply-all").selectOption({ label: receiver.username });
     await expect(page.getByTestId(`handover-assignee-${project.id}`)).toHaveValue(String(receiver.id));
-    await page.getByTestId(`handover-owner-${customer.id}`).selectOption({ label: receiver.username });
     await page.getByTestId(`handover-note-${project.id}`).fill(NOTE);
 
     await submit.click();
@@ -144,8 +146,8 @@ test.describe("Offboarding handover", () => {
     const cust = await api<{ tamId: number | null }>(base, admin.token, "GET", `/customers/${customer.id}`);
     expect(cust.tamId).toBe(receiver.id);
 
-    // The handover note is saved on the project, INTERNAL (never customer-facing).
-    const notes = await api<{ body: string; visibility: string }[]>(
+    // The handover note is saved on the project.
+    const notes = await api<{ body: string }[]>(
       base,
       admin.token,
       "GET",
@@ -153,7 +155,6 @@ test.describe("Offboarding handover", () => {
     );
     const saved = notes.filter((n) => n.body === NOTE);
     expect(saved).toHaveLength(1);
-    expect(saved[0]!.visibility).toBe("INTERNAL");
 
     await expect(page.getByRole("row").filter({ hasText: leaver.username })).toContainText("Inactive");
   });

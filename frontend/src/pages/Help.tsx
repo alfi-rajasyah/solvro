@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -26,12 +26,34 @@ export function Help() {
 
   // /help#<topic> deep link: the sections render after the route mounts, so
   // the browser's own hash scroll finds nothing — scroll once they exist.
+  // The page keeps settling after that first scroll: the web fonts (text and
+  // the icon font) swap in late and change the height of every section above
+  // the target, which left a deep link showing the wrong topic. Until the
+  // reader scrolls or types, each change in the page's height scrolls the
+  // target back into view.
+  const rootRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (hash) document.getElementById(hash.slice(1))?.scrollIntoView();
+    if (!hash) return;
+    const id = hash.slice(1);
+    const scrollToTarget = () => document.getElementById(id)?.scrollIntoView();
+    scrollToTarget();
+    const root = rootRef.current;
+    if (!root || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(scrollToTarget);
+    observer.observe(root);
+    const release = () => observer.disconnect();
+    const events = ["wheel", "touchstart", "keydown", "mousedown"] as const;
+    for (const e of events) window.addEventListener(e, release, { once: true, passive: true });
+    const timer = window.setTimeout(release, 5000);
+    return () => {
+      release();
+      window.clearTimeout(timer);
+      for (const e of events) window.removeEventListener(e, release);
+    };
   }, [hash]);
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div ref={rootRef} className="mx-auto max-w-5xl space-y-6">
       <header className="space-y-3">
         <div>
           <h1 className="font-display text-h1 text-on-surface">How to use Solvro</h1>

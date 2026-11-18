@@ -534,7 +534,6 @@ describe("guardrail: nothing internal reaches the guest payload", () => {
         projectId: project.id,
         authorId: tam.userId,
         body: "SECRET-INTERNAL-NOTE-BODY",
-        visibility: "INTERNAL",
         noteDate: day("2026-10-01"),
       },
     });
@@ -543,7 +542,6 @@ describe("guardrail: nothing internal reaches the guest payload", () => {
         projectId: project.id,
         authorId: tam.userId,
         body: "SECRET-CUSTOMER-NOTE-BODY",
-        visibility: "CUSTOMER_FACING",
         noteDate: day("2026-10-01"),
       },
     });

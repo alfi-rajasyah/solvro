@@ -21,6 +21,7 @@ import {
 } from "./taskConflict";
 import { parseWeekKey } from "./isoWeek";
 import { ownerOf } from "./pipelineFormat";
+import type { ParsedRow } from "./pipelineImport";
 import type {
   IdleState,
   PipelineOutcome,
@@ -249,6 +250,8 @@ export type ActivityEntityType =
   | "opportunity_link"
   // A document link on a project (customer links record no activity).
   | "project_link"
+  // A document link on a task; `changes.taskId` names the task.
+  | "task_link"
   | "share_link";
 export type ActivityAction =
   | "created"
@@ -488,14 +491,11 @@ export interface RecentNotesResponse {
   notes: RecentNote[];
 }
 
-export type NoteVisibility = "INTERNAL" | "CUSTOMER_FACING";
-
 export interface ProjectNote {
   id: number;
   projectId: number;
   authorId: number;
   body: string;
-  visibility: NoteVisibility;
   // The calendar day the note is logically ABOUT — distinct from
   // `createdAt` (the row's creation instant). Stored as @db.Date on the
   // backend but it ARRIVES as an ISO instant ("yyyy-MM-ddT00:00:00.000Z"),
@@ -548,6 +548,8 @@ export interface TasksFilter {
   dueTo?: string;
   /** true = leave out tasks of ON_HOLD and CANCELLED projects (the "due this week" list). */
   excludeOnHold?: boolean;
+  /** true = only open tasks past due in ON_HOLD projects (left out of `overdue`). */
+  onHoldPastDue?: boolean;
   /** "due" = soonest first, undated last; default is board order. */
   sort?: "position" | "due";
 }
@@ -736,7 +738,6 @@ export interface ProjectReviewRecord {
 }
 
 export interface ProjectNotesWindow {
-  visibility?: NoteVisibility;
   limit?: number;
   from?: string;
   to?: string;
@@ -772,7 +773,7 @@ export const queryKeys = {
   projectEpics: (id: number) => ["projects", id, "epics"] as const,
   epic: (id: number) => ["epics", id] as const,
   projectRisks: (id: number) => ["projects", id, "risks"] as const,
-  // `window` (visibility/limit/from/to) is appended to the key so each
+  // `window` (limit/from/to) is appended to the key so each
   // filtered view caches independently. Mutations invalidate the whole
   // `["projects", id, "notes"]` PREFIX (see useAddProjectNote etc. below)
   // rather than this full key, so a note write refreshes every bucket, not
@@ -782,7 +783,6 @@ export const queryKeys = {
       "projects",
       id,
       "notes",
-      window.visibility ?? "all",
       window.limit ?? null,
       window.from ?? null,
       window.to ?? null,
@@ -807,6 +807,7 @@ export const queryKeys = {
   // entity, so the key is the bare prefix the link mutations invalidate.
   projectLinks: (id: number) => ["projects", id, "links"] as const,
   customerLinks: (id: number) => ["customers", id, "links"] as const,
+  taskLinks: (taskId: number) => ["tasks", taskId, "links"] as const,
   tasks: (filter?: TasksFilter) => ["tasks", filter ?? {}] as const,
   comments: (taskId: number) => ["tasks", taskId, "comments"] as const,
   search: (q: string) => ["search", q] as const,
@@ -1468,6 +1469,11 @@ function tasksQueryOptions(filter: TasksFilter) {
     // falling back to its own UTC day when `today` is absent — see
     // backend/src/lib/dateBoundary.ts. Sent only when the overdue filter
     // itself is active; `today` isn't a TasksFilter option callers set.
+    params.set("today", dateToDay(new Date())!);
+  }
+  if (filter.onHoldPastDue) {
+    params.set("onHoldPastDue", "true");
+    // Same caller-day boundary as `overdue` above.
     params.set("today", dateToDay(new Date())!);
   }
   if (filter.open) params.set("open", "true");
@@ -2711,16 +2717,15 @@ export function useDailyReview(week: string) {
 
 export function useProjectNotes(
   id: number | null,
-  opts: { visibility?: NoteVisibility; limit?: number; from?: string; to?: string } = {},
+  opts: { limit?: number; from?: string; to?: string } = {},
 ) {
-  const { visibility, limit, from, to } = opts;
+  const { limit, from, to } = opts;
   return useQuery({
     queryKey: id
-      ? queryKeys.projectNotes(id, { visibility, limit, from, to })
+      ? queryKeys.projectNotes(id, { limit, from, to })
       : ["projects", "noop", "notes"],
     queryFn: ({ signal }) => {
       const params = new URLSearchParams();
-      if (visibility) params.set("visibility", visibility);
       if (limit) params.set("limit", String(limit));
       if (from) params.set("from", from);
       if (to) params.set("to", to);
@@ -2734,10 +2739,7 @@ export function useProjectNotes(
   });
 }
 
-// The Internal/Customer-facing toggle is gone from the UI (Decision 1,
-// daily-review-v2-spec.md §3) — every note the UI writes gets the API's
-// INTERNAL default, so `visibility` is deliberately absent here and never
-// sent by this mutation. `noteDate` is a plain "yyyy-MM-dd" day string (the
+// `noteDate` is a plain "yyyy-MM-dd" day string (the
 // DateField/day-strip contract) — the API stores and returns every
 // `@db.Date` field (`noteDate`, `reviewDate`, ...) as an ISO instant
 // (`T00:00:00.000Z`), so every optimistic write below converts at the
@@ -2790,7 +2792,7 @@ export function useAddProjectNote(projectId: number) {
     onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
       qc.invalidateQueries({ queryKey: queryKeys.recentNotesRoot });
-      // Every visibility/window-bucketed key for this project (see
+      // Every window-bucketed key for this project (see
       // queryKeys.projectNotes's doc) — not just the "all, unwindowed" one.
       qc.invalidateQueries({ queryKey: ["projects", projectId, "notes"] });
       invalidateProjectActivity(qc, projectId);
@@ -3195,6 +3197,15 @@ export interface CustomerLink {
   createdAt: string;
 }
 
+// Same shape on a task (GET/POST /tasks/:id/links, PATCH/DELETE .../:linkId).
+export interface TaskLink {
+  id: string;
+  taskId: number;
+  label: string;
+  url: string;
+  createdAt: string;
+}
+
 export interface CreateLinkInput {
   label: string;
   url: string;
@@ -3295,6 +3306,53 @@ export function useDeleteCustomerLink(customerId: number) {
       apiRequest<void>(`/customers/${customerId}/links/${id}`, { method: "DELETE" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: queryKeys.customerLinks(customerId) });
+    },
+  });
+}
+
+// Task links: reading follows the task read gate, writing `task:write`.
+// Writes record a project activity event, so the project feed refreshes too.
+export function useTaskLinks(taskId: number | null) {
+  const live = useLiveRefresh();
+  return useQuery({
+    ...live,
+    queryKey: taskId ? queryKeys.taskLinks(taskId) : ["tasks", "noop", "links"],
+    queryFn: ({ signal }) => apiRequest<TaskLink[]>(`/tasks/${taskId}/links`, { signal }),
+    enabled: taskId !== null,
+  });
+}
+
+export function useAddTaskLink(taskId: number, projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateLinkInput) =>
+      apiRequest<TaskLink>(`/tasks/${taskId}/links`, { method: "POST", body: input }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.taskLinks(taskId) });
+      void invalidateProjectActivity(qc, projectId);
+    },
+  });
+}
+
+export function useUpdateTaskLink(taskId: number, projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, patch }: { id: string; patch: UpdateLinkInput }) =>
+      apiRequest<TaskLink>(`/tasks/${taskId}/links/${id}`, { method: "PATCH", body: patch }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.taskLinks(taskId) });
+      void invalidateProjectActivity(qc, projectId);
+    },
+  });
+}
+
+export function useDeleteTaskLink(taskId: number, projectId: number) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiRequest<void>(`/tasks/${taskId}/links/${id}`, { method: "DELETE" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.taskLinks(taskId) });
+      void invalidateProjectActivity(qc, projectId);
     },
   });
 }
@@ -4229,7 +4287,7 @@ export interface OffboardBody {
     newSaId?: number | null;
     note?: string;
   }[];
-  customers: { customerId: number; newOwnerId: number | null }[];
+  customers: { customerId: number; newOwnerId: number }[];
   dealsPicId?: number | null;
 }
 
@@ -4295,12 +4353,26 @@ export function useAdminResetPassword() {
 export function useAdminDeleteUser() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (id: number) =>
-      apiRequest<void>(`/admin/users/${id}`, { method: "DELETE" }),
-    onSuccess: () => {
+    // `customers` names a new owner for every customer the user owns; the
+    // server refuses the delete without one
+    // (docs/archive/plans/user-delete-customer-owner.md).
+    mutationFn: ({
+      id,
+      customers = [],
+    }: {
+      id: number;
+      customers?: { customerId: number; newOwnerId: number }[];
+    }) => apiRequest<void>(`/admin/users/${id}`, { method: "DELETE", body: { customers } }),
+    onSuccess: (_data, { id, customers = [] }) => {
       qc.invalidateQueries({ queryKey: adminQueryKeys.users });
       qc.invalidateQueries({ queryKey: queryKeys.users });
       qc.invalidateQueries({ queryKey: adminQueryKeys.roles });
+      qc.removeQueries({ queryKey: adminQueryKeys.handoverPreview(id) });
+      if (customers.length > 0) {
+        qc.invalidateQueries({ queryKey: queryKeys.customers });
+        qc.invalidateQueries({ queryKey: ["projects"] });
+        qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      }
     },
   });
 }
@@ -5415,9 +5487,11 @@ export function useHandoffOpportunity(id: string) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Pipeline — Excel import (PRD §2.9). `PipelineImportDialog.tsx` parses the
-// workbook client-side (SheetJS/`xlsx`, lazy-loaded) and POSTs the parsed
-// rows here; the server re-validates and does the actual create/skip work.
+// Pipeline — Excel import (PRD §2.9). `PipelineImportDialog.tsx` sends the
+// chosen file to POST /opportunities/import/preview, which parses and
+// validates it on the server (the browser never parses a workbook,
+// docs/archive/plans/application-review-2026-10-22.md, B-18), then POSTs the
+// valid rows here; the server validates again and does the create/skip work.
 // `ImportOpportunityRow` mirrors `importRowSchema` in
 // backend/src/routes/opportunities.ts's POST /import field-for-field, plus
 // `activityLog`, which seeds the deal's first `OpportunityActivity` note the
@@ -5425,6 +5499,17 @@ export function useHandoffOpportunity(id: string) {
 // app/api/opportunities/import/route.ts, read-only reference) — Opportunity
 // itself has no activity-log column.
 // ─────────────────────────────────────────────────────────────────────────
+
+/** Parses an import file on the server. Nothing is written. */
+export function previewImportFile(file: Blob, signal?: AbortSignal) {
+  return apiRequest<{ rows: ParsedRow[] }>("/opportunities/import/preview", {
+    method: "POST",
+    body: file,
+    signal,
+    // Longer than the default: a 1 MB upload on a slow link takes a while.
+    timeoutMs: 120_000,
+  });
+}
 
 export interface ImportOpportunityRow {
   title: string;

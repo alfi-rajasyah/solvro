@@ -12,6 +12,7 @@ import {
   handoverErrorFrom,
   initialDraft,
   isHandoverComplete,
+  missingOwnerCustomerIds,
   missingTamProjectIds,
   type HandoverDraft,
   type HandoverError,
@@ -56,7 +57,7 @@ function mergeDraft(fresh: HandoverDraft, prev: HandoverDraft): HandoverDraft {
   return { projects, customers, dealsPicId: prev.dealsPicId };
 }
 
-function PersonSelect({
+export function PersonSelect({
   label,
   value,
   onChange,
@@ -143,6 +144,8 @@ export function HandoverModal({ open, user, preview, onClose, onDone, onStale }:
   const missingTams = new Set(missingTamProjectIds(preview, draft));
   const busy = offboard.isPending;
   const tamHintId = `${uid}-tam-hint`;
+  const missingOwners = new Set(missingOwnerCustomerIds(preview, draft));
+  const ownerHintId = `${uid}-owner-hint`;
 
   function patchProject(id: number, patch: Partial<ProjectDraft>) {
     setDraft((d) => ({ ...d, projects: { ...d.projects, [id]: { ...d.projects[id], ...patch } } }));
@@ -330,6 +333,11 @@ export function HandoverModal({ open, user, preview, onClose, onDone, onStale }:
             <h3 id={`${uid}-customers`} className="font-display text-sm font-semibold text-on-surface">
               Customers
             </h3>
+            <p className="text-sm text-on-surface-variant">
+              {user.username} owns{" "}
+              {preview.customers.length === 1 ? "1 customer" : `${preview.customers.length} customers`}. Choose a
+              new owner for each one. The new owner gets full access to the customer and its projects.
+            </p>
             {preview.customers.map((c) => {
               const errId = `${uid}-c${c.id}-err`;
               const err = error?.customerId === c.id ? error.message : undefined;
@@ -344,9 +352,13 @@ export function HandoverModal({ open, user, preview, onClose, onDone, onStale }:
                     value={draft.customers[c.id] ?? null}
                     onChange={(v) => setDraft((d) => ({ ...d, customers: { ...d.customers, [c.id]: v } }))}
                     users={receivers}
-                    emptyLabel="No owner"
+                    emptyLabel="Choose an owner"
+                    required
                     invalid={!!err}
-                    describedBy={err ? errId : undefined}
+                    describedBy={
+                      [err ? errId : null, missingOwners.has(c.id) ? ownerHintId : null].filter(Boolean).join(" ") ||
+                      undefined
+                    }
                     disabled={busy}
                     testId={`handover-owner-${c.id}`}
                   />
@@ -382,6 +394,11 @@ export function HandoverModal({ open, user, preview, onClose, onDone, onStale }:
         {!complete && missingTams.size > 0 && (
           <p id={tamHintId} className="text-sm text-on-surface-variant">
             Choose a new TAM for every project {user.username} leads to continue.
+          </p>
+        )}
+        {!complete && missingOwners.size > 0 && (
+          <p id={ownerHintId} className="text-sm text-on-surface-variant">
+            Choose a new owner for every customer {user.username} owns to continue.
           </p>
         )}
 

@@ -67,6 +67,7 @@ const VIEWS = [
   { key: "my-open", label: "My open" },
   { key: "overdue", label: "Overdue" },
   { key: "week", label: "This week" },
+  { key: "on-hold-past-due", label: "On hold, past due" },
   { key: "all", label: "All" },
 ] as const;
 type ViewKey = (typeof VIEWS)[number]["key"];
@@ -92,6 +93,9 @@ function viewFilter(view: ViewKey, todayDay: string, userId: number | undefined)
       // Same list as the Overview tile: on-hold projects' tasks are left out.
       return { open: true, dueFrom: todayDay, dueTo: sunday, excludeOnHold: true, sort: "due" };
     }
+    case "on-hold-past-due":
+      // The rows the Overdue view leaves out because their project is on hold.
+      return { onHoldPastDue: true, sort: "due" };
     case "all":
       return { sort: "due" };
   }

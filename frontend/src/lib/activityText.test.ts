@@ -532,6 +532,33 @@ describe("describeActivity - project links", () => {
   });
 });
 
+describe("describeActivity - task links", () => {
+  const link = (over: Partial<ActivityEvent> = {}) =>
+    ev({
+      entityType: "task_link",
+      entityId: null,
+      entityLabel: "Kickoff",
+      changes: { taskId: 7, linkId: "l1", label: "Runbook" },
+      ...over,
+    });
+
+  it("added / updated / removed name the link and the task", () => {
+    expect(text(link({ action: "added" }))).toBe("maya.putri added the link Runbook to the task Kickoff");
+    expect(text(link({ action: "updated" }))).toBe("maya.putri updated the link Runbook on the task Kickoff");
+    expect(text(link({ action: "removed" }))).toBe("maya.putri removed the link Runbook from the task Kickoff");
+  });
+
+  it("falls back to generic nouns when labels are missing", () => {
+    expect(text(link({ action: "added", entityLabel: null, changes: null }))).toBe(
+      "maya.putri added a link to a task",
+    );
+  });
+
+  it("links the row to the task", () => {
+    expect(describeActivity(link({ action: "added" })).taskId).toBe(7);
+  });
+});
+
 describe("describeActivity - guest links", () => {
   const link = (over: Partial<ActivityEvent> = {}) =>
     ev({ entityType: "share_link", entityLabel: "For Nusantara IT", ...over });

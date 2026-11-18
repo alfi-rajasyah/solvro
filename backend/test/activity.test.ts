@@ -323,7 +323,7 @@ describe("risks", () => {
 });
 
 describe("project notes", () => {
-  it("records id and visibility only — never the body — for INTERNAL and CUSTOMER_FACING", async () => {
+  it("records the id only — never the body — and flags an edit with { changed: true }", async () => {
     const { tam, project } = await fixture();
     const secret = uniq("INTERNAL-NOTE-BODY");
     const created = await request(app)
@@ -332,11 +332,7 @@ describe("project notes", () => {
       .send({ body: secret });
     expect(created.status).toBe(201);
     const noteId = created.body.id as number;
-    const customerFacing = await request(app)
-      .post(`/projects/${project.id}/notes`)
-      .set(auth(tam.token))
-      .send({ body: secret, visibility: "CUSTOMER_FACING" });
-    expect(customerFacing.status).toBe(201);
+    expect(created.body).not.toHaveProperty("visibility");
 
     const edited = await request(app)
       .patch(`/projects/${project.id}/notes/${noteId}`)
@@ -349,12 +345,11 @@ describe("project notes", () => {
     expect(removed.status).toBe(204);
 
     const events = await eventsOf(project.id);
-    expect(events.map((e) => e.action)).toEqual(["created", "created", "updated", "deleted"]);
+    expect(events.map((e) => e.action)).toEqual(["created", "updated", "deleted"]);
     expect(events.every((e) => e.entityType === "note" && e.entityLabel === null)).toBe(true);
-    expect(events[0]).toMatchObject({ entityId: noteId, changes: { visibility: "INTERNAL" } });
-    expect(events[1]!.changes).toEqual({ visibility: "CUSTOMER_FACING" });
-    expect(events[2]!.changes).toEqual({ visibility: "INTERNAL" });
-    expect(events[3]!.changes).toEqual({ visibility: "INTERNAL" });
+    expect(events[0]).toMatchObject({ entityId: noteId, changes: null });
+    expect(events[1]!.changes).toEqual({ body: { changed: true } });
+    expect(events[2]!.changes).toBeNull();
     expect(JSON.stringify(events)).not.toContain(secret);
   });
 });
@@ -692,19 +687,19 @@ describe("project TAM / SA changes", () => {
     expect(await notificationsOf(tam.userId)).toHaveLength(0);
   });
 
-  it("writes each seat change into the project's notes as INTERNAL, and nothing for an unrelated update", async () => {
+  it("writes each seat change into the project's notes, and nothing for an unrelated update", async () => {
     const { tam, other, project } = await fixture();
     const sa = await createUserWithRole("SA");
     const patch = (body: Record<string, unknown>) =>
       request(app).patch(`/projects/${project.id}`).set(auth(tam.token)).send(body);
     const bodies = async () =>
       (await prisma.projectNote.findMany({ where: { projectId: project.id }, orderBy: { id: "asc" } })).map(
-        (n) => ({ body: n.body, authorId: n.authorId, visibility: n.visibility }),
+        (n) => ({ body: n.body, authorId: n.authorId }),
       );
     const [tamRow, otherRow, saRow] = await Promise.all(
       [tam, other, sa].map((u) => prisma.user.findUniqueOrThrow({ where: { id: u.userId } })),
     );
-    const by = { authorId: tam.userId, visibility: "INTERNAL" };
+    const by = { authorId: tam.userId };
 
     expect((await patch({ name: "Just a rename", tamId: tam.userId })).status).toBe(200);
     expect(await bodies()).toEqual([]);

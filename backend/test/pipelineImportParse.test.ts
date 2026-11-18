@@ -1,3 +1,5 @@
+// Row parsing for the Pipeline import preview (src/lib/pipelineImport/parseRow.ts).
+// Moved with the parser from the frontend's importParse.test.ts.
 import { describe, expect, it } from "vitest";
 import {
   extractDataRows,
@@ -5,7 +7,7 @@ import {
   parseDealValueCell,
   parseExcelDate,
   parseImportRow,
-} from "./importParse";
+} from "../src/lib/pipelineImport/parseRow.js";
 
 describe("IMPORTABLE_STAGES", () => {
   it("is every PipelineStage — all 6 funnel stages, in board order (D9)", () => {

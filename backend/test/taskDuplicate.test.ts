@@ -10,7 +10,7 @@ import { duplicateTaskTree } from "../src/lib/duplicate.js";
 // Settled rules: title copied verbatim; status resets to TODO for the copy
 // AND every copied subtask; baselineStartDate/baselineDueDate reset to
 // null; no TaskDependency rows for the copy or its subtasks; comments never
-// copied; the copy lands at source.position + 1 in the same sibling list,
+// copied; document links copied as new rows; the copy lands at source.position + 1 in the same sibling list,
 // dense 0..n-1.
 
 const app = createApp();
@@ -227,6 +227,53 @@ describe("POST /tasks/:id/duplicate", () => {
       .set("Authorization", `Bearer ${admin.token}`);
     expect(commentsList.status).toBe(200);
     expect(commentsList.body).toEqual([]);
+  });
+
+  it("copies document links to the copy and its subtasks as new rows", async () => {
+    const projectId = await createProject(admin.userId);
+    const source = await createTask(projectId, admin.token, { title: "Has links" });
+    const child = await createTask(projectId, admin.token, {
+      title: "Child with link",
+      parentTaskId: source.id,
+    });
+    for (const [taskId, label, url] of [
+      [source.id, "Runbook draft", "https://example.com/runbook"],
+      [source.id, "Network diagram", "https://example.com/diagram.pdf"],
+      [child.id, "Checklist", "https://example.com/checklist"],
+    ] as const) {
+      const linkRes = await post(`/tasks/${taskId}/links`, admin.token, { label, url });
+      expect(linkRes.status).toBe(201);
+    }
+
+    const res = await duplicateTask(source.id, admin.token);
+    expect(res.status).toBe(201);
+    const copyId = res.body.id as number;
+
+    const copyLinks = await request(app)
+      .get(`/tasks/${copyId}/links`)
+      .set("Authorization", `Bearer ${admin.token}`);
+    expect(copyLinks.status).toBe(200);
+    expect(
+      (copyLinks.body as { label: string; url: string }[]).map((l) => [l.label, l.url]),
+    ).toEqual([
+      ["Runbook draft", "https://example.com/runbook"],
+      ["Network diagram", "https://example.com/diagram.pdf"],
+    ]);
+
+    const childCopy = await prisma.task.findFirstOrThrow({
+      where: { parentTaskId: copyId },
+      include: { links: true },
+    });
+    expect(childCopy.links.map((l) => [l.label, l.url])).toEqual([
+      ["Checklist", "https://example.com/checklist"],
+    ]);
+
+    // New rows, not shared ones: the source keeps its own links untouched.
+    const sourceLinks = await prisma.taskLink.findMany({ where: { taskId: source.id } });
+    expect(sourceLinks).toHaveLength(2);
+    const copyRows = await prisma.taskLink.findMany({ where: { taskId: copyId } });
+    const sourceIds = new Set(sourceLinks.map((l) => l.id));
+    expect(copyRows.every((l) => !sourceIds.has(l.id))).toBe(true);
   });
 
   it("copies subtasks in source order, under the new task, all TODO", async () => {

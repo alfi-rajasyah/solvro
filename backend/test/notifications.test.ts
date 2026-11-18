@@ -179,7 +179,6 @@ describe("admin project reassign (F-25)", () => {
     expect(projectNotes).toHaveLength(1);
     expect(projectNotes[0]).toMatchObject({
       authorId: admin.userId,
-      visibility: "INTERNAL",
       body: `Changed TAM from ${tamRow!.username} to ${otherRow!.username} (Project Override)`,
     });
 

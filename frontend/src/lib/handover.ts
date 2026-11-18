@@ -18,13 +18,13 @@ export interface ProjectDraft {
 
 export interface HandoverDraft {
   projects: Record<number, ProjectDraft>;
-  /** customerId -> new owner; null = no owner. */
+  /** customerId -> new owner; null = not chosen yet (an owner is required). */
   customers: Record<number, number | null>;
   /** Receiver of every open deal; null = unassigned. */
   dealsPicId: number | null;
 }
 
-/** Spec defaults: Unassigned / No SA / No owner / Unassigned; TAM is empty. */
+/** Defaults: Unassigned / No SA / Unassigned; TAM and customer owners are empty. */
 export function initialDraft(preview: HandoverPreview): HandoverDraft {
   const projects: Record<number, ProjectDraft> = {};
   for (const p of preview.projects) {
@@ -42,8 +42,18 @@ export function missingTamProjectIds(preview: HandoverPreview, draft: HandoverDr
     .map((p) => p.id);
 }
 
+/**
+ * The customer ids still without a new owner. Every owned customer needs one,
+ * because an unowned customer is claimable by any TAM
+ * (docs/archive/plans/offboard-customer-owner.md).
+ */
+export function missingOwnerCustomerIds(preview: HandoverPreview, draft: HandoverDraft): number[] {
+  return preview.customers.filter((c) => draft.customers[c.id] == null).map((c) => c.id);
+}
+
 export function isHandoverComplete(preview: HandoverPreview, draft: HandoverDraft): boolean {
   if (missingTamProjectIds(preview, draft).length > 0) return false;
+  if (missingOwnerCustomerIds(preview, draft).length > 0) return false;
   return preview.projects.every(
     (p) => (draft.projects[p.id]?.note.trim().length ?? 0) <= HANDOVER_NOTE_MAX,
   );
@@ -62,10 +72,11 @@ export function buildOffboardBody(preview: HandoverPreview, draft: HandoverDraft
         ...(note ? { note } : {}),
       };
     }),
-    customers: preview.customers.map((c) => ({
-      customerId: c.id,
-      newOwnerId: draft.customers[c.id] ?? null,
-    })),
+    // isHandoverComplete guarantees an owner for each customer before a submit.
+    customers: preview.customers.flatMap((c) => {
+      const newOwnerId = draft.customers[c.id];
+      return newOwnerId == null ? [] : [{ customerId: c.id, newOwnerId }];
+    }),
     ...(preview.openDeals > 0 ? { dealsPicId: draft.dealsPicId } : {}),
   };
 }

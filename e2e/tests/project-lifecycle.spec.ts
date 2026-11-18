@@ -175,6 +175,13 @@ test.describe("Project lifecycle", () => {
     await expect(page.getByRole("link", { name: "Overdue: 0 tasks" })).toBeVisible();
     await expect(page.getByText("1 in on-hold projects not counted")).toBeVisible();
 
+    // The "On hold, past due" link lists the task the Overdue tile leaves out.
+    const heldLink = page.getByRole("link", { name: "1 past-due task on hold" });
+    await expect(heldLink).toHaveAttribute("href", "/tasks?view=on-hold-past-due");
+    await heldLink.click();
+    await expect(page).toHaveURL(/\/tasks\?view=on-hold-past-due/);
+    await expect(page.getByRole("row").filter({ hasText: late.title })).toBeVisible();
+
     await page.goto(`/tasks?customerId=${w.customer.id}`, { waitUntil: "networkidle" });
     const heldRow = page.getByRole("row").filter({ hasText: late.title });
     await expect(heldRow).toBeVisible();

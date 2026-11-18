@@ -133,6 +133,13 @@ const tasksListQuerySchema = z
       .union([z.literal("true"), z.literal("false")])
       .transform((v) => v === "true")
       .optional(),
+    // onHoldPastDue=true lists open tasks due before `today` in ON_HOLD
+    // projects: the rows `overdue=true` leaves out by the on-hold rule (the
+    // Overview "On hold, past due" link). CANCELLED projects are not included.
+    onHoldPastDue: z
+      .union([z.literal("true"), z.literal("false")])
+      .transform((v) => v === "true")
+      .optional(),
     // Inclusive due-date day range ("yyyy-MM-dd"), see the handler.
     dueFrom: dayString.optional(),
     dueTo: dayString.optional(),
@@ -140,6 +147,7 @@ const tasksListQuerySchema = z
     // undated tasks last.
     sort: z.enum(["position", "due"]).optional(),
     // Caller's local calendar day ("yyyy-MM-dd"), used only when overdue=true
+    // or onHoldPastDue=true
     // — see lib/dateBoundary.ts for the full contract. Ignored otherwise.
     today: z
       .string()
@@ -234,6 +242,7 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
     overdue,
     open,
     excludeOnHold,
+    onHoldPastDue,
     topLevel,
     dueFrom,
     dueTo,
@@ -274,6 +283,15 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
       { dueDate: { lt: overdueBoundary(today) } },
       { status: OPEN_TASK_STATUS_FILTER },
       TASK_PROJECT_CAN_BE_OVERDUE,
+    );
+  }
+  if (onHoldPastDue) {
+    // Same date boundary and open-status rule as `overdue`, limited to
+    // ON_HOLD projects. AND-composed for the same reason as above.
+    and.push(
+      { dueDate: { lt: overdueBoundary(today) } },
+      { status: OPEN_TASK_STATUS_FILTER },
+      { project: { status: "ON_HOLD" } },
     );
   }
   if (dueFrom) and.push({ dueDate: { gte: utcMidnightOfDayString(dueFrom) } });

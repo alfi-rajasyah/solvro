@@ -8,8 +8,8 @@ import { utcMidnightOf } from "./dateBoundary.js";
 //
 // PRIVACY INVARIANT: `changes` holds short scalar diffs only. It must never
 // carry a note body, a comment body, or description text — a note event holds
-// only its id (entityId) and visibility, so an INTERNAL note can never leak
-// through the log. The diff helpers below encode this: a description is
+// only its id (entityId), plus `{ body: { changed: true } }` on an edit, so a
+// note can never leak through the log. The diff helpers below encode this: a description is
 // reported as `{ changed: true }` and nothing else.
 
 type Tx = Prisma.TransactionClient | PrismaClient;
@@ -26,7 +26,8 @@ export type ActivityEntityType =
   | "opportunity_note"
   | "opportunity_link"
   | "share_link"
-  | "project_link";
+  | "project_link"
+  | "task_link";
 export type ActivityAction =
   | "created"
   | "updated"

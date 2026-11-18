@@ -7,7 +7,7 @@
 // label changes, update its entry in the same change.
 //
 // Deliberately absent: the /tasks page (hidden from the sidebar by design),
-// note visibility (no UI control), backend-only operations, and the customer
+// backend-only operations, and the customer
 // page's placeholder tabs (Topology, Organization Structure, Documents).
 
 export interface HelpEntry {
@@ -133,7 +133,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
           "\"Recent notes\": project and operations notes from the last 7 days. Add notes on the Daily Review page.",
           "If you have Pipeline access, a \"Pipeline\" panel shows Pipeline Value, Active Deals, Won This Month, and On Hold, plus a bar of deals per stage. \"View pipeline\" opens the board.",
           "Projects marked \"Administrative project\" are left out of the counters, the timeline, and the attention list.",
-          "Tasks in projects whose Status is On hold or Cancelled never count as Overdue or Due this week. When on-hold tasks are left out, the Overdue tile says \"<n> in on-hold projects not counted\". They count again when the project is reactivated.",
+          "Tasks in projects whose Status is On hold or Cancelled never count as Overdue or Due this week. When on-hold tasks are left out, the Overdue tile says \"<n> in on-hold projects not counted\", and \"<n> past-due tasks on hold\" beside \"View all\" in \"Projects needing attention\" opens the Tasks view \"On hold, past due\" that lists them. They count again when the project is reactivated.",
         ],
       },
     ],
@@ -313,6 +313,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         points: [
           "Click \"New customer\". Name and Description are required. Account Manager is free text; pick the Solution Architect from the user list.",
           "The TAM owns the customer. A Solution Architect, on a customer or a project, is not an owner. If you hand a customer to another TAM, you can lose access to it unless one of its projects is yours.",
+          "Only the customer's TAM can delete it or hand it to another TAM. A customer with no TAM can be deleted or claimed by any TAM. Roles with \"See all projects\" can do this for any customer.",
           "Deleting a customer keeps its projects; they lose the customer link.",
         ],
       },
@@ -487,7 +488,7 @@ export const HELP_TOPICS: readonly HelpTopic[] = [
         points: [
           "\"New opportunity\" needs the \"Create opportunities\" permission. Title and Customer are required; Customer is plain text, not a link to a Customer record.",
           "Optional fields: \"Deal value (IDR)\", \"Win probability (%)\" (50 by default), PIC, \"Request date\", Deadline, \"Product / solution\", \"Lead source\", and Description. The form starts at the Assessment stage with you as the PIC; change either, or choose \"No PIC\".",
-          "\"Import\" (same permission) opens \"Import opportunities\": download the Excel template, upload an .xlsx or .csv file, check the preview, then \"Import N valid rows\". Only the six stage names are accepted, a file imports up to 500 rows at a time, and a row with the same title and customer as an existing deal is skipped.",
+          "\"Import\" (same permission) opens \"Import opportunities\": download the Excel template, upload an .xlsx or .csv file of up to 1 MB, check the preview, then \"Import N valid rows\". Only the six stage names are accepted, a file imports up to 500 rows at a time, and a row with the same title and customer as an existing deal is skipped.",
           "Admins can review every import run in Admin › Pipeline.",
         ],
       },
@@ -680,7 +681,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
         points: [
           "Read the tiles: Overdue, Due this week, and Open risks. Overdue and Due this week open the Tasks list for that view; Open risks opens the Daily Review.",
           "\"Projects needing attention\" lists the projects with overdue tasks or open risks first.",
-          "Tasks in on-hold and cancelled projects are not counted as overdue; the Overdue tile says how many on-hold tasks it left out.",
+          "Tasks in on-hold and cancelled projects are not counted as overdue; the Overdue tile says how many on-hold tasks it left out, and \"<n> past-due tasks on hold\" opens the list of them.",
         ],
       },
       {
@@ -935,7 +936,7 @@ export const HELP_GUIDES: readonly HelpGuide[] = [
       {
         title: "Customers and Pipeline",
         points: [
-          "Each customer they own gets an owner picker (\"No owner\" is allowed).",
+          "Each customer they own gets a required owner picker. The handover cannot finish until every customer has a new owner.",
           "If they are PIC of open deals, one picker, \"PIC for <n> open deals\", reassigns them all.",
         ],
       },

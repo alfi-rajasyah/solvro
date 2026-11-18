@@ -15,8 +15,10 @@ import { COUNTED_TASKS_COUNT } from "../lib/taskStatus.js";
 import {
   computeHandoverPreview,
   isHandoverEmpty,
+  lockOwnedCustomers,
   logCustomerOwnerChanges,
   offboardUser,
+  reassignOwnedCustomers,
   withDeadlockRetry,
 } from "../lib/offboarding.js";
 
@@ -283,7 +285,9 @@ const offboardSchema = z
       )
       .max(500),
     customers: z
-      .array(z.object({ customerId: userIdField, newOwnerId: userIdField.nullable() }))
+      // Every owned customer gets a new owner: an unowned customer is claimable
+      // by any TAM (docs/archive/plans/offboard-customer-owner.md).
+      .array(z.object({ customerId: userIdField, newOwnerId: userIdField }))
       .max(500),
     dealsPicId: userIdField.nullable().optional(),
   })
@@ -318,11 +322,31 @@ adminRouter.post(
   },
 );
 
+// A user who owns customers is deleted only together with a new owner for each
+// of them: `Customer.tamId` is `onDelete: SetNull`, and an unowned customer is
+// claimable by any TAM (docs/archive/plans/user-delete-customer-owner.md).
+const deleteUserSchema = z
+  .object({
+    customers: z
+      .array(z.object({ customerId: userIdField, newOwnerId: userIdField }))
+      .max(500)
+      .default([]),
+  })
+  .default({})
+  .superRefine((v, ctx) => {
+    if (new Set(v.customers.map((c) => c.customerId)).size !== v.customers.length) {
+      ctx.addIssue({ code: "custom", path: ["customers"], message: "Each customer may appear once" });
+    }
+  });
+
 adminRouter.delete(
   "/users/:id",
   validate("params", idParamSchema),
+  validate("body", deleteUserSchema),
   async (req, res) => {
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
+    const body = req.body as z.infer<typeof deleteUserSchema>;
+    const actorId = req.user!.sub;
 
     if (req.user!.sub === id) {
       throw new HttpError(400, "self_delete", "Admins cannot delete themselves");
@@ -335,7 +359,15 @@ adminRouter.delete(
     // as a 500
     // (docs/archive/plans/application-review-2026-10-22.md, F-20).
     let username = "this user";
-    await prisma.$transaction(async (tx) => {
+    let customerOwnerChanges: { customerId: number; from: number; to: number | null }[] = [];
+    await withDeadlockRetry(() => prisma.$transaction(async (tx) => {
+      // Lock the owned customers and the user row first, so no new customer
+      // can name this user as owner between the checks and the delete.
+      const owned = await lockOwnedCustomers(
+        tx,
+        id,
+        body.customers.map((c) => c.customerId),
+      );
       const target = await tx.user.findUnique({
         where: { id },
         include: {
@@ -386,8 +418,14 @@ adminRouter.delete(
         );
       }
 
+      customerOwnerChanges = await reassignOwnedCustomers(tx, {
+        leaverId: id,
+        owned,
+        choices: body.customers,
+      });
+
       await tx.user.delete({ where: { id } });
-    }).catch((err: unknown) => {
+    }, { timeout: 30_000 })).catch((err: unknown) => {
       if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2003") {
         throw new HttpError(
           400,
@@ -397,6 +435,7 @@ adminRouter.delete(
       }
       throw err;
     });
+    logCustomerOwnerChanges(actorId, customerOwnerChanges);
     res.status(204).end();
   },
 );
