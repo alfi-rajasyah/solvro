@@ -25,7 +25,7 @@ You have Grep, Glob, and Bash specifically so findings are evidence-based, not s
 
 ## Output format
 
-Severity-ranked findings only — blocker, should-fix, nit — each with a file:line and a concrete fix. On phase reviews, tag each finding with the task/commit it belongs to, so the orchestrator can route it back to the owning implementor. No praise padding, no restating what the diff does. If a category has no issues, omit it; don't manufacture nits to pad the report.
+Severity-ranked findings only — blocker, should-fix, nit — each with a file:line and a concrete fix. On phase reviews, tag each finding with the task/commit it belongs to, so the orchestrator can route it back to the owning implementor. No praise padding, no restating what the diff does. If a category has no issues, omit it; don't manufacture nits to pad the report. For a finding you judge deferrable, also give it in `docs/ISSUES.md` form: area, severity (P1–P3), type, file:line, why it can wait, fix direction. Cite the existing `ISS-NNN` when a finding matches an open issue.
 
 ## Hard guardrails
 
