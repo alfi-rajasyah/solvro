@@ -160,4 +160,21 @@ describe("DELETE /admin/users/:id — customer owners", () => {
     const res = await del(admin.token, 999_999_999);
     expect(res.status).toBe(404);
   });
+
+
+  it("accepts more than 500 customer owner choices", async () => {
+    const w = await world();
+    const names = Array.from({ length: 600 }, (_, i) => uniq(`Bulk${i}`));
+    await prisma.customer.createMany({
+      data: names.map((name) => ({ name, description: "", tamId: w.leaver.userId })),
+    });
+    const owned = await prisma.customer.findMany({ where: { tamId: w.leaver.userId }, select: { id: true } });
+    expect(owned.length).toBe(602);
+    const res = await del(w.admin.token, w.leaver.userId, {
+      customers: owned.map((c) => ({ customerId: c.id, newOwnerId: w.receiver.userId })),
+    });
+    expect(res.status).toBe(204);
+    expect(await prisma.user.findUnique({ where: { id: w.leaver.userId } })).toBeNull();
+    expect(await prisma.customer.count({ where: { tamId: w.receiver.userId } })).toBe(602);
+  }, 60_000);
 });

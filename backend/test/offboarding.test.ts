@@ -507,6 +507,26 @@ describe("POST /admin/users/:id/offboard", () => {
   });
 });
 
+describe("POST /admin/users/:id/offboard — many customers", () => {
+  it("accepts more than 500 customer owner choices", async () => {
+    const w = await world();
+    await prisma.customer.createMany({
+      data: Array.from({ length: 600 }, (_, i) => ({
+        name: uniq(`Bulk${i}`),
+        description: "",
+        tamId: w.leaver.userId,
+      })),
+    });
+    const owned = await prisma.customer.findMany({ where: { tamId: w.leaver.userId }, select: { id: true } });
+    const res = await offboard(w, {
+      projects: [],
+      customers: owned.map((c) => ({ customerId: c.id, newOwnerId: w.receiver.userId })),
+    });
+    expect(res.status).toBe(200);
+    expect(await prisma.customer.count({ where: { tamId: w.receiver.userId } })).toBe(600);
+  }, 60_000);
+});
+
 describe("POST /admin/users/:id/offboard — receiver rules and late failures", () => {
   it("rolls back project, customer and note writes when the deal step fails", async () => {
     const w = await world();

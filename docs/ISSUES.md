@@ -277,6 +277,21 @@ cited files; entries marked *code check* below carry the result).
 
 ## Tech debt / follow-ups from recent work
 
+- **A TAM with more than 500 projects cannot be offboarded** (2026-11-18,
+  deferred): `offboardSchema` in `backend/src/routes/admin.ts` still caps
+  `projects` at `.max(500)`. The customer list was raised to 2,000 in the
+  same change, but the project loop (`lib/offboarding.ts`, activity events and
+  notifications per project) is much heavier per row and shares the 30 s
+  transaction timeout, so raising it needs a measurement first. Fix direction:
+  time a large handover; batch the per-project writes before raising the cap.
+
+- **Offboarding and user delete update customers one at a time** (2026-11-18):
+  `reassignOwnedCustomers` and the offboard customer loop
+  (`lib/offboarding.ts`) run `assertActiveUser` and `customer.update` per
+  customer, about 3 ms each. That is what holds the cap at 2,000. Fix
+  direction: check each distinct `newOwnerId` once and use one `updateMany`
+  per new owner.
+
 - **Service-mapping mutations lack the optimistic-update pattern** (2026-07-15
   code review, deferred as inherited debt): `useUpdateProjectServices` and the
   pre-existing `useUpdateCustomerServices` (`frontend/src/lib/queries.ts`) use

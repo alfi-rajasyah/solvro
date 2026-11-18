@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-18 — An admin can delete or hand over a user who owns more than 500 customers
+
+- `backend/src/routes/admin.ts`: `DELETE /admin/users/:id` and `POST /admin/users/:id/offboard` accept up to 2,000 customer owner choices, shared in one constant (`MAX_CUSTOMER_OWNER_CHOICES`), instead of 500. A user with more customers than the old limit could not be deleted or handed over: the request failed validation. The new limit stays well under the 1 MB body limit, and keeps the per-customer loop inside the 30-second transaction timeout (about 3 ms per customer). Tests in `backend/test/userDeleteCustomerOwner.test.ts` and `backend/test/offboarding.test.ts` send 600 entries.
+
 ### Changed — 2026-11-18 — Agent instructions point at the code that exists
 
 - `CLAUDE.md`: the notes guardrail now names the Gantt exports (`frontend/src/lib/gantt/export*.ts`) as the export code to verify. It named `frontend/src/lib/export/`, which was deleted with the Reports export packet. Two dated notes in the Guardrails block (the old three-branch flow, a rewrite date) are removed. The rules themselves are unchanged.
