@@ -31,10 +31,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 - `frontend/src/lib/gantt/exportExcel.test.ts`, `exportPdf.test.ts`: the Gantt Excel and PDF builders emit no link label or URL, even when a task object carries links.
 - `backend/test/withDeadlockRetry.test.ts` (new): the retry policy of `withDeadlockRetry` — which errors it retries, that it stops after two attempts, and which errors it never retries.
 - `backend/test/userDeleteCustomerOwner.test.ts`: a user delete raced against a new customer for the same user ends in a consistent state, with no server error and no orphaned ownership.
+- `e2e/tests/project-lifecycle.spec.ts`: the on-hold project gets a past-due subtask, and the "On hold, past due" list shows as many rows as the Overview link counts.
 
 ### Changed — 2026-11-18 — Rollback note for releases that drop columns
 
 - `docs/CONFIGURATION.md` (production deployment): a new "Rolling back an upgrade" note. Releases with migrations that drop columns, such as the removal of note visibility, cannot be rolled back to an earlier image unless the database is restored from a backup taken before the upgrade.
+- `backend/prisma/schema.prisma`: the `TaskLink` comment now says links are copied as new rows when a task is duplicated. It said the opposite. Comment only, no migration.
 
 ### Changed — 2026-11-18 — Agent instructions point at the code that exists
 
