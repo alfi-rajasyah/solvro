@@ -187,7 +187,7 @@ missed most of them; each one broke something on first contact.
 - **`priority` is a code `"1".."4"`** (1 critical … 4 low). Store the code; map to a label in the UI (`ticketPresentation.ts#priorityLabel`).
 - **Case logs** (`public_log`, `private_log`) come as `{ entries: [{ date, user_login, user_id, message, message_html }] }`, possibly newest-first. Sort ascending before capping; older installs may send a plain string.
 - **Date-times are wall-clock strings `YYYY-MM-DD HH:MM:SS` in the iTop server's configured `timezone`** (iTop config file), with no offset. Convert on every read, every OQL cutoff (`last_update > '…'`, `start_date >= '…'`), and every write through `ItopConfig.timezone` (`lib/itop/timezone.ts`, DST-correct: fall-back overlap → earlier instant; spring-forward gap → shifted forward). Assuming UTC made every time 2 h wrong on a Europe/Paris install.
-- **Profiles limit reads.** A Support Agent token (app or personal) **cannot read `User` or `PersonalToken`.** Consequences: `User.itopUserId` never resolves (time logging says "not linked"), and personal-token expiry stays unknown. The token-ownership check therefore relies on the email → Person match.
+- **Profiles limit reads.** A Support Agent token (app or personal) **cannot read `User` or `PersonalToken`.** Consequence: such a token cannot prove it is the TAM's own, so `PUT /itop/me/token` refuses it (`itop_token_unverified`, fail closed since 2026-11-18). Grant the TAM profile read access to `User` and `PersonalToken`.
 - **One bad row must not stop a sync.** Wrap each row's upsert in try/catch, count skips, and show "Skipped N rows…" in Admin › iTop.
 
 ---
@@ -315,7 +315,7 @@ By customer; the last two need `report:executive`); `/work-logs` redirects to
 ### Phase 5 — Personal tokens and the write path
 
 - Schema `User.itopToken*`, log columns on `ItopTicket` → migration `itop_write_path`.
-- `routes/itopUser.ts` (`PUT/GET/DELETE /itop/me/token`): validate with that token (`core/get Person WHERE email = <user email>`, exactly one match, else `itop_token_not_yours`), seal, store the person name, try to read `PersonalToken.expiration_date` (best effort).
+- `routes/itopUser.ts` (`PUT/GET/DELETE /itop/me/token`): validate with that token (`core/get Person WHERE email = <user email>`, exactly one match, else `itop_token_not_yours`), seal, store the person name, then prove ownership: read the person's `User` rows (by `contactid`; one person may have several logins) and the token's own `PersonalToken` row among them (`user_id IN (…)`), which names the login stored as `itopUserId`; no `User` row is `itop_token_unverified`; an empty `PersonalToken` result is `itop_token_not_yours`, an unreadable class or failed read is `itop_token_unverified`. Nothing is stored unless both succeed. The `PersonalToken` row also gives the expiry.
 - `POST /itop/tickets/:id/actions` and `/log` per §4.2; iTop refusal → 409 `itop_refused`; no token → 403 `itop_token_missing`; `actionsEnabled` off → 404.
 - Frontend: Settings › iTop section; `TicketPanel.tsx` (facts, logs, buttons, "writes as <email>" footer, read-only banner without a token), `ActionSheet.tsx` (modes `resolve`, `team`, `pending`), `TicketLog.tsx`. Mutations have no `onMutate`; `onSuccess` sets the returned ticket; errors show iTop's message.
 

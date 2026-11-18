@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Security — 2026-11-18 — An iTop personal token is saved only when iTop proves it is yours
+
+- `backend/src/routes/itopUser.ts`: `PUT /itop/me/token` now fails closed. Besides matching your email to an iTop person, the token must read that person's iTop login records and its own personal-token record. If iTop does not let it read either one, or the person has no login the token can see, the token is refused with `400 itop_token_unverified` and nothing is stored. A person with several iTop logins (for example local plus LDAP) is accepted, and Solvro stores the login the token belongs to. Before, the token was saved on the email match alone, so a token that was not yours could be accepted on installs with limited read rights.
+- What to check on your iTop install: the TAM profile needs read access to the `User` and `PersonalToken` classes. iTop's stock `Support Agent` profile does not have it. Tokens saved before this change are not re-checked and keep working; a new or replaced token needs the read access.
+- Tests: `backend/test/itop/itopToken.test.ts` covers an unreadable `User` class, an unreadable `PersonalToken` class, a person with no login, a person with two logins, and a failed re-save that keeps the earlier token.
+- Docs: `docs/CONFIGURATION.md` and `docs/reference/itop-integration-guide.md` describe the new rule and the required read access.
+
 ### Fixed — 2026-11-18 — The smoke test no longer fails on Google sign-in errors on a local machine
 
 - `e2e/tests/smoke.spec.ts`: the "no console/page errors" check ignores console errors that come from Google's sign-in script (the `accounts.google.com` host, or a `[GSI_LOGGER]` message). Google logs them when a database has Google sign-in configured and the app runs on an origin not registered for that client ID, such as `localhost`. Every error from the app itself still fails the test.

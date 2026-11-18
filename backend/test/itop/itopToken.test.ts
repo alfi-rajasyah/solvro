@@ -232,15 +232,74 @@ describe("PUT /itop/me/token", () => {
     expect(user.itopTokenEnc).toBeNull();
   });
 
-  it("still accepts the token when the PersonalToken class isn't readable at all", async () => {
+  // Fail closed (docs/ISSUES.md ISS-004): ownership must be proven, so a token
+  // that cannot read its own User or PersonalToken row is refused and never
+  // stored, even though its Person-by-email lookup succeeded.
+  it("refuses the token when the PersonalToken class isn't readable at all", async () => {
     fakeState.disabledClasses.add("PersonalToken");
-    const { token } = await createUserWithEmail("rina.s@example.co.id");
+    const { userId, token } = await createUserWithEmail("rina.s@example.co.id");
+
+    const res = await call("put", "/itop/me/token", token, { token: FAKE_ITOP_TOKENS.rina });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("itop_token_unverified");
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    expect(user.itopTokenEnc).toBeNull();
+    expect(user.itopPersonId).toBeNull();
+  });
+
+  it("refuses the token when the User class isn't readable at all", async () => {
+    fakeState.disabledClasses.add("User");
+    const { userId, token } = await createUserWithEmail("rina.s@example.co.id");
+
+    const res = await call("put", "/itop/me/token", token, { token: FAKE_ITOP_TOKENS.rina });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("itop_token_unverified");
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    expect(user.itopTokenEnc).toBeNull();
+    expect(user.itopUserId).toBeNull();
+  });
+
+  it("refuses the token when the person has no iTop login the token can see", async () => {
+    fakeState.users.delete(1);
+    const { userId, token } = await createUserWithEmail("rina.s@example.co.id");
+
+    const res = await call("put", "/itop/me/token", token, { token: FAKE_ITOP_TOKENS.rina });
+
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("itop_token_unverified");
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    expect(user.itopTokenEnc).toBeNull();
+  });
+
+  it("accepts the token when the person has several iTop logins, and stores the one the token belongs to", async () => {
+    // A second login for the same person (e.g. LDAP beside the local one).
+    // The token belongs to login 1, which owns PersonalToken row 1.
+    fakeState.users.set(9, { id: 9, contactid: 1, contactid_friendlyname: "Rina S.", login: "rina.ldap" });
+    const { userId, token } = await createUserWithEmail("rina.s@example.co.id");
 
     const res = await call("put", "/itop/me/token", token, { token: FAKE_ITOP_TOKENS.rina });
 
     expect(res.status).toBe(200);
-    expect(res.body.set).toBe(true);
-    expect(res.body.expiresAt).toBeNull();
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    expect(user.itopTokenEnc).not.toBeNull();
+    expect(user.itopUserId).toBe(1);
+  });
+
+  it("keeps an earlier verified token when a later save cannot be verified", async () => {
+    const { userId, token } = await createUserWithEmail("rina.s@example.co.id");
+    const first = await call("put", "/itop/me/token", token, { token: FAKE_ITOP_TOKENS.rina });
+    expect(first.status).toBe(200);
+    const before = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+
+    fakeState.disabledClasses.add("PersonalToken");
+    const second = await call("put", "/itop/me/token", token, { token: FAKE_ITOP_TOKENS.rina });
+
+    expect(second.status).toBe(400);
+    expect(second.body.code).toBe("itop_token_unverified");
+    const after = await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    expect(after.itopTokenEnc).toBe(before.itopTokenEnc);
   });
 
   it("rate-limits repeated PUT calls to 10 per 10 minutes for the same user", async () => {
