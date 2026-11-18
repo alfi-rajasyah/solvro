@@ -34,7 +34,7 @@
 // (reui/kanban.tsx's `MOUSE_SENSOR_OPTIONS`) is what keeps a real drag from
 // ever registering as a click in the first place.
 //
-// 2026-09-25 flow redesign (docs/plans/opportunity-flow-redesign.md §4.4):
+// 2026-09-25 flow redesign (docs/archive/plans/opportunity-flow-redesign.md §4.4):
 // - This container no longer fetches its own opportunity list — Pipeline.tsx
 //   now owns the single `useOpportunities()` call and the Active/Closed
 //   switch (D11), passing this component the ACTIVE deals only (a closed

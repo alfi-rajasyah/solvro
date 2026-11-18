@@ -1,6 +1,6 @@
 # Agent pipeline v3: two lanes, less ceremony
 
-Status: draft (2026-11-18). The 3-lane flow (§2), D1, D2, D3 (as replaced), D4, D5 and G5 are settled by the user (2026-11-18). All decisions are made; ready to build. Nothing is built before they are settled. Archive path once shipped: `docs/archive/plans/pipeline-v3-simplify.md`.
+Status: in progress (2026-11-18). Tasks 1–5, 9 and 10 are built on `chore/pipeline-v3`; task 6 (GitHub rulesets and the history repair) and task 8 (smoke noise) remain. The 3-lane flow, D1–D5 and G1–G5 are settled by the user (2026-11-18). Archive path once shipped: `docs/archive/plans/pipeline-v3-simplify.md`.
 
 Prerequisite: the archive sweep on `chore/archive-shipped-plans` lands first (shipped plans and prompts moved into `docs/archive/`). This plan covers the recurring rule, not that backlog.
 
@@ -160,7 +160,7 @@ None of these touches the notes, iTop or secrets guardrails.
 > Feature PRs into `develop` are squash-merged; a PR from `develop` into `main` (and a hotfix merge-back) uses a merge commit, never a squash, so the two branches keep shared history. The rulesets' allowed merge methods enforce this. Head branches are deleted on merge (`deleteBranchOnMerge`); a branch pushed without a PR is deleted once its work has landed or been dropped, with the user's approval.
 
 **G4. No Claude/AI attribution** (approved 2026-11-18, decision D4). Append:
-> This includes hidden metadata such as the `<!-- claude-projects-attribution … -->` comment some harnesses insert into PR bodies. It is enforced two ways: `"attribution": { "commit": "", "pr": "" }` in `.claude/settings.json`, and a `ci.yml` check that fails a PR whose body or commits contain `Co-Authored-By: Claude`, `Generated with Claude`, or `claude-projects-attribution`.
+> This includes hidden metadata such as the `<!-- claude-projects-attribution … -->` comment some harnesses insert into PR bodies. It is enforced two ways: `"attribution": { "commit": "", "pr": "" }` in `.claude/settings.json`, and the `attribution` job in `.github/workflows/pr-hygiene.yml`, which fails a PR whose body or commits contain `Co-Authored-By: Claude`, `Generated with Claude`, or `claude-projects-attribution`.
 
 **G5. No agent commits on its own** (approved 2026-11-18). Replace the whole bullet "No agent or session ever commits or opens a PR on its own. …" with:
 > **Agents commit, push feature branches, and open PRs into `develop` without asking. No agent merges a PR or pushes to `develop` or `main`. The user's merge is the approval.** A PR into `main` still happens only on the user's explicit request.
@@ -183,7 +183,7 @@ The lane is D throughout, except T6 and T9. T2–T5 are one PR. T6 is a GitHub-s
    *Accept:*
    - `GATES_DIFF_OVERRIDE='frontend/src/lib/x.test.ts'` gives a `SKIP playwright-smoke` line, and typecheck and vitest still run.
    - A fake `docs/plans/foo.md` without a `Status:` line fails `docs-plans-status`.
-   - A cited `docs/archive/plans/nope.md` fails `docs-plan-citations`.
+   - A citation of an archive plan that does not exist fails `docs-plan-citations`.
    - On the current tree, all gates pass except `docs-plan-citations` on the code comments that T9 fixes, and the D5 file. Land T9 before turning the gate on, or start it in warn-only mode.
 3. **Root `CLAUDE.md` outside Guardrails** (lanes, roster trims, plan owner, merge-and-cleanup).
    *Accept:* the antislop rule appears in Guardrails plus `frontend/CLAUDE.md` only; the spine membership lives only in `gates.sh`; the docs-keeper triggers live only in its agent file.
@@ -204,7 +204,7 @@ The lane is D throughout, except T6 and T9. T2–T5 are one PR. T6 is a GitHub-s
    *Accept:* `git grep -nE 'docs/(plans|prompts)/' -- backend frontend e2e` lists only plans still in `docs/plans/`; one CHANGELOG line; `gates.sh` passes.
 
 10. **Attribution enforcement** (G4; CI is not a `.claude/` path, so it needs a CHANGELOG line).
-   Add `"attribution": { "commit": "", "pr": "" }` to `.claude/settings.json`, `Bash(gh pr merge *)` to `deny` in `.claude/settings.local.json`, and an `attribution-check` job to `.github/workflows/ci.yml` that reads the PR body and `git log --format=%B origin/develop..HEAD`.
+   Add `"attribution": { "commit": "", "pr": "" }` to `.claude/settings.json`; add `Bash(gh pr merge *)`, `Bash(gh api *merge*)` and `Bash(gh api *Merge*)` to `deny` in `.claude/settings.local.json`; add `.github/workflows/pr-hygiene.yml` with an `attribution` job that reads the PR body and the commits `base.sha..head.sha`. It is a separate workflow because `ci.yml` skips docs-only PRs and never runs on description edits. Built 2026-11-18. Task 6 makes `attribution` a required check on both rulesets.
    *Accept:* a test PR whose body holds `claude-projects-attribution` fails the job; a clean PR passes; `gh pr merge` from an agent session is refused.
 
 ## Risks

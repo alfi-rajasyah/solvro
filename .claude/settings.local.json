@@ -27,6 +27,12 @@
       "Bash(git checkout *)",
       "Read(//sys/devices/virtual/dmi/id/**)",
       "Bash(systemd-detect-virt)"
+    ],
+    "deny": [
+      "Bash(gh pr merge *)",
+      "Bash(gh pr merge)",
+      "Bash(gh api *merge*)",
+      "Bash(gh api *Merge*)"
     ]
   },
   "hooks": {
@@ -35,9 +41,9 @@
         "hooks": [
           {
             "type": "command",
-            "command": "git fetch --quiet origin develop main 2>/dev/null; for b in develop main; do behind=$(git rev-list --count \"$b..origin/$b\" 2>/dev/null); if [ -n \"$behind\" ] && [ \"$behind\" -gt 0 ]; then echo \"⚠ Local $b is $behind commit(s) behind origin/$b — pull/rebase before editing (hot files: schema.prisma, queries.ts)\"; fi; done; true",
+            "command": "git fetch --quiet --prune origin 2>/dev/null; for b in develop main; do behind=$(git rev-list --count \"$b..origin/$b\" 2>/dev/null); if [ -n \"$behind\" ] && [ \"$behind\" -gt 0 ]; then echo \"⚠ Local $b is $behind commit(s) behind origin/$b — pull/rebase before editing (hot files: schema.prisma, queries.ts)\"; fi; done; gone=$(git for-each-ref --format='%(refname:short) %(upstream:track)' refs/heads | awk '$2==\"[gone]\" {printf \"%s \", $1}'); [ -n \"$gone\" ] && echo \"⚠ Local branches whose remote branch is gone: ${gone}— check git log origin/develop..<branch> for unmerged work before git branch -D\"; extra=$(git for-each-ref --format='%(refname:lstrip=3)' refs/remotes/origin | grep -vxE 'HEAD|develop|main' | tr '\\n' ' '); [ -n \"$extra\" ] && echo \"ℹ Remote branches besides develop and main: ${extra}— delete each once its work has landed or been dropped, with the user's approval\"; true",
             "timeout": 15,
-            "statusMessage": "Checking origin for new commits"
+            "statusMessage": "Checking origin for new commits and stale branches"
           }
         ]
       },

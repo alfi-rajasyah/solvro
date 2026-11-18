@@ -606,7 +606,7 @@ test.describe("Pipeline assign PIC — desktop", () => {
 
     // Admin-created, no `picId` — the deal this SA will claim through the
     // dialog rather than through Edit (Edit stays gated off until it has a
-    // PIC — D1 in docs/plans/claim-unassigned-deals.md).
+    // PIC — D1 in docs/archive/plans/claim-unassigned-deals.md).
     const title = `${PREFIX} Assign ${stamp()}`;
     const created = await apiCreateOpportunity(ctx, {
       title,

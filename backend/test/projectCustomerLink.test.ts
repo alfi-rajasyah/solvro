@@ -7,7 +7,7 @@ import { signToken } from "../src/http/auth.js";
 import { seedRoles, createAdminAndToken, createUserWithRole } from "./testAuth.js";
 import { createWonOpportunity } from "./pipelineWonFixture.js";
 
-// Customer Visibility (docs/plans/customer-visibility-spec.md §5.5,
+// Customer Visibility (docs/archive/plans/customer-visibility-spec.md §5.5,
 // Decision 7): POST /projects, PATCH /projects/:id (when customerId is
 // present), and POST /opportunities/:id/handoff must all reject a
 // customerId the caller can't see with 400 customer_not_found, instead of

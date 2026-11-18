@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-11-18 — A pull request check that runs on every PR
+
+- `.github/workflows/pr-hygiene.yml` (new): runs on every pull request into `develop` or `main`, docs-only ones included, and again whenever the description is edited. Its `attribution` job fails the PR when the description or any commit message carries an AI attribution line or hidden attribution metadata. `ci.yml` skips docs-only changes and never sees description edits, so this check lives in its own workflow and can be required on both branches.
+
+### Changed — 2026-11-18 — Code comments cite archived plans by their archive path
+
+- 45 files under `backend/`, `frontend/` and `e2e/`: comments that cited a plan at `docs/plans/<name>` now cite `docs/archive/plans/<name>`, where each of those plans now lives. Comments only; no code changed.
+
 ### Security — 2026-11-18 — A crafted import file can no longer stall the API
 
 - `backend/src/lib/pipelineImport/offThread.ts`, `importWorker.ts` (new), `routes/opportunities.ts`: the pipeline import preview parses the uploaded workbook in a worker thread. A crafted `.xlsx` of about 40 KB could block the API's event loop for up to about a second; for that file the stall is now a few milliseconds. At most 2 parses run at once, each worker has a 256 MB memory cap, and a parse over 5 seconds is stopped. A request whose client has gone (nginx gives up after 60 seconds) leaves the queue, or has its worker stopped, so it no longer holds a slot. Each user may request 10 previews a minute; past that the route answers 429.

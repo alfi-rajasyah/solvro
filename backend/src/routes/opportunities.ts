@@ -32,7 +32,7 @@ import { createRateLimiter } from "../http/rateLimit.js";
 import { createProjectSchema } from "./projects.js";
 import { assertActiveUser } from "../lib/users.js";
 
-// Pipeline module (native port of Velora — docs/plans/pipeline-native-port-plan.md).
+// Pipeline module (native port of Velora — docs/archive/plans/pipeline-native-port-plan.md).
 // CRUD + the single stage-transition writer for Opportunity. Deal visibility
 // is global for any pipeline:view holder (PRD §5) — no per-user list
 // scoping, unlike projects/visibility.ts. Ownership (`picId`) gates writes
@@ -157,7 +157,7 @@ const OUTCOME_REASON_LABELS: Record<PipelineOutcomeReason, string> = {
 };
 
 // `.strict()`: the only writable field is the new PIC — this route exists
-// specifically to hand a PIC to an unassigned deal (docs/plans/
+// specifically to hand a PIC to an unassigned deal (docs/archive/plans/
 // claim-unassigned-deals.md D2), not as a partial PATCH.
 const assignOpportunitySchema = z.object({ picId: z.number().int().positive() }).strict();
 
@@ -393,7 +393,7 @@ export const opportunitiesRouter = Router();
 opportunitiesRouter.use(requireAuth);
 
 // Full list, no pagination (SA-team scale — client-side filtering per
-// docs/plans/pipeline-native-port-plan.md). Board column order: stage, then
+// docs/archive/plans/pipeline-native-port-plan.md). Board column order: stage, then
 // stageOrder within it.
 opportunitiesRouter.get("/", requirePermission("pipeline:view"), async (_req, res) => {
   // One `now` shared across every row's `idle` computation (§3.1) — so a
@@ -1157,7 +1157,7 @@ opportunitiesRouter.post("/:id/reopen", validate("params", idParamSchema), async
 });
 
 // The one writer of a PIC on an unassigned deal for `pipeline:edit_own`
-// holders (docs/plans/claim-unassigned-deals.md D1/D2/D4) — PATCH keeps
+// holders (docs/archive/plans/claim-unassigned-deals.md D1/D2/D4) — PATCH keeps
 // serving `edit_all` holders (any deal, any time) and a deal's own PIC
 // (their own deal only); an unassigned deal stays locked for every other
 // write (drag, edit, stage change, link, delete) until this route gives it
@@ -1317,7 +1317,7 @@ opportunitiesRouter.post(
     // caller becomes the project's TAM.
     const tamId = body.tamId ?? req.user!.sub;
 
-    // Customer Visibility (docs/plans/customer-visibility-spec.md §5.5,
+    // Customer Visibility (docs/archive/plans/customer-visibility-spec.md §5.5,
     // Decision 7): same rule routes/projects.ts applies on POST / and
     // PATCH /:id — a customerId the caller can't see 400s before the deal
     // or any project row is touched. Checked at the "own" level: attaching a

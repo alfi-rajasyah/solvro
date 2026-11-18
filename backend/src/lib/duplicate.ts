@@ -8,7 +8,7 @@ export interface DuplicateOverrides {
 }
 
 // Fields carried verbatim from source to copy — decisions 1, 3, 5, 6 and the
-// date half of decision 4 in docs/plans/duplicate-tasks-sections.md §3.
+// date half of decision 4 in docs/archive/plans/duplicate-tasks-sections.md §3.
 // status always resets to TODO (decision 2) and baseline*Date always resets
 // to null (decision 4) on every copy, top-level or subtask — never selected
 // here since the copy never reads them. No TaskDependency row is ever

@@ -8,7 +8,7 @@
 // No StageChip here by design (PRD §2.3: the column already says the
 // stage) — `dispatch brief point 2` confirms this explicitly.
 //
-// 2026-09-25 flow redesign (docs/plans/opportunity-flow-redesign.md §4.4):
+// 2026-09-25 flow redesign (docs/archive/plans/opportunity-flow-redesign.md §4.4):
 // a badges row (`OwnerChip`/`SubStatusChip`/`TagChip`/`IdleChip`,
 // `PipelineFlagChips.tsx`) renders below the product line — each chip
 // renders nothing when its condition doesn't hold, so the row can render

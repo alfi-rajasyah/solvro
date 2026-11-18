@@ -1,4 +1,4 @@
-// Pipeline "Closed" board (docs/plans/opportunity-flow-redesign.md §4.4,
+// Pipeline "Closed" board (docs/archive/plans/opportunity-flow-redesign.md §4.4,
 // D5/D11) — the Active/Closed switch's Closed side of the Kanban tab: three
 // fixed columns, Won / Lost / Cancelled, over deals with a non-null
 // `outcome`. A closed deal's stage is locked (D5) — this view shows it as a

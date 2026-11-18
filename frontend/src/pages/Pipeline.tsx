@@ -44,7 +44,7 @@ const VIEW_MODES: { id: ViewMode; label: string; icon: string }[] = [
   { id: "quarter", label: "Quarter", icon: "calendar_view_month" },
 ];
 
-// Active/Closed switch (docs/plans/opportunity-flow-redesign.md §4.4, D11)
+// Active/Closed switch (docs/archive/plans/opportunity-flow-redesign.md §4.4, D11)
 // — same `?deals=` functional setSearchParams pattern as `?view=` above.
 // "active" is the default and stays out of the URL.
 const DEALS_FILTERS: { id: DealsFilter; label: string }[] = [
