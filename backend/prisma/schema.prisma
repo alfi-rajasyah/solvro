@@ -772,7 +772,7 @@ model ProjectReview {
 }
 
 // Pipeline module (Solution Architect sales tracker) — native port of
-// Velora (docs/plans/pipeline-native-port-plan.md). UUID ids are preserved
+// Velora (docs/archive/plans/pipeline-native-port-plan.md). UUID ids are preserved
 // verbatim from the Velora source so the one-time data import
 // (backend/scripts/import-velora.ts) can copy rows and their foreign keys
 // without minting new identifiers.

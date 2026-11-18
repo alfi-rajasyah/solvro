@@ -1,4 +1,4 @@
-// Opportunity detail — `/pipeline/:id` (PRD §2.5, docs/plans/velora-integration-prd.md).
+// Opportunity detail — `/pipeline/:id` (PRD §2.5, docs/archive/plans/velora-integration-prd.md).
 // Full page, not a side panel (the PRD is explicit: Velora's detail has too
 // much content for a `TaskPanel`-style overlay) — structured like
 // `ProjectDetail.tsx`/`CustomerDetail.tsx`: params -> query hook ->
@@ -24,7 +24,7 @@
 // reassigns an already-assigned deal through Edit, not through this button.
 //
 // Flag toggles / Close / Reopen (2026-09-25 opportunity flow redesign,
-// docs/plans/opportunity-flow-redesign.md §4.5): `canEditDeal` (`canDragDeal`)
+// docs/archive/plans/opportunity-flow-redesign.md §4.5): `canEditDeal` (`canDragDeal`)
 // now doubles as "the deal is open AND I can edit it" (D5 — a closed deal is
 // locked, stage-wise, never reset), so it also gates the three flag toggles
 // — Waiting for Sales input/Input received (hidden on Waiting Response),

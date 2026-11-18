@@ -567,7 +567,7 @@ export interface ProjectsFilter {
 
 // ─────────────────────────────────────────────────────────────────────────
 // Daily Review v2 — mirrors backend/src/routes/dailyReview.ts's response
-// shape 1:1 (docs/plans/daily-review-v2-spec.md §5.1). Date fields
+// shape 1:1 (docs/archive/plans/daily-review-v2-spec.md §5.1). Date fields
 // (`noteDate`, `weekStart`, `dueDate`, `doneAt`, `updatedAt`, `createdAt`,
 // `reviewDate`) all arrive as ISO strings — the backend's `@db.Date` columns
 // serialise as `T00:00:00.000Z` instants; read the calendar day via
@@ -4850,7 +4850,7 @@ export function useExecutiveReport() {
 // ─────────────────────────────────────────────────────────────────────────
 // Pipeline (Solution Architect) — Opportunity CRUD, activities, links, and
 // the board's stage-move mutation. Mirrors backend/src/routes/opportunities.ts
-// and routes/opportunityItems.ts verbatim (docs/plans/pipeline-native-port-plan.md).
+// and routes/opportunityItems.ts verbatim (docs/archive/plans/pipeline-native-port-plan.md).
 // Own key namespace (`pipelineKeys`) — separate from `queryKeys`/`adminQueryKeys`
 // per frontend/CLAUDE.md.
 // ─────────────────────────────────────────────────────────────────────────

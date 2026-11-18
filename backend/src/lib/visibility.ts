@@ -137,7 +137,7 @@ export async function ensureTaskVisible(
   if (!task) throw new HttpError(404, "not_found", "Task not found");
 }
 
-// Customer-scoping (docs/plans/customer-visibility-spec.md §3, Decisions 1-2):
+// Customer-scoping (docs/archive/plans/customer-visibility-spec.md §3, Decisions 1-2):
 // `project:view-all` (or "*") sees every customer. Everyone else sees a
 // customer when they own it (`Customer.tamId`), when nobody owns it
 // (`tamId: null` — unowned customers stay visible to all, as before the

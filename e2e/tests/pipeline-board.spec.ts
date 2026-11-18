@@ -20,7 +20,7 @@ import { ADMIN_EMAIL, ADMIN_PASSWORD, center, expect, gripFor, loginViaUi, mouse
 // (G6/G9b) key off. Deal cards carry the SAME `KanbanItemHandle
 // aria-label="Drag to reorder"` grip `gripFor` already knows how to locate.
 //
-// 2026-09-25 opportunity flow redesign (docs/plans/opportunity-flow-redesign.md
+// 2026-09-25 opportunity flow redesign (docs/archive/plans/opportunity-flow-redesign.md
 // §5 Playwright, T7): Won/Lost/Cancelled/Hold left `PipelineStage` (D2) —
 // the board is 6 columns now, and a deal is closed via `POST
 // /:id/close` (Won/Lost/Cancelled, D5) or tagged via `PATCH /:id`
