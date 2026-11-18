@@ -15,6 +15,15 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — Security & auth
 
+### ISS-004 · P1 · Personal-token ownership check is best-effort, not fail-closed
+
+- **Type:** decision · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Where:** PUT /itop/me/token in backend/src/routes/itopUser.ts (lines ~182-225)
+- **Problem:** A broad-read token that is not the user's own can be saved and used for writes when the identity lookups fail. Question for the user: fail closed (rejecting every token on installs whose REST profile cannot read User) or re-word the iTop-writes guardrail to allow it?
+- **Why deferred / fix direction:** Kept at port time because failing closed breaks installs without User read rights; needs the user's ruling. Fix if closed: reject when resolvedItopUserId is null or the PersonalToken read fails.
+- **Severity note:** raised to P1 by the user on 2026-11-18: the gap weakens the iTop-writes guardrail in root `CLAUDE.md`. The fail-closed-or-reword question still needs the user's ruling.
+- **Source:** snapshot line 2296, section "Customer-edition port — deferred findings (2026-10-05)"; merged duplicates at snapshot lines 2338
+
 ### ISS-001 · P2 · Label-route permission asymmetry
 
 - **Type:** bug · **Found:** 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -38,14 +47,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Question for the user: scope services to the target customer's organisation (lnkCustomerContractToService), or accept and document org-wide visibility? Today any signed-in user can read every iTop organisation name via providerName.
 - **Why deferred / fix direction:** Filter by the target customer's org once a customerId is known, or document the accepted visibility before the endpoint is reused.
 - **Source:** snapshot line 2117, section "iTop integration (board, new tickets) — deferred findings (ported 2026-10-04)"
-
-### ISS-004 · P2 · Personal-token ownership check is best-effort, not fail-closed
-
-- **Type:** decision · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** PUT /itop/me/token in backend/src/routes/itopUser.ts (lines ~182-225)
-- **Problem:** A broad-read token that is not the user's own can be saved and used for writes when the identity lookups fail. Question for the user: fail closed (rejecting every token on installs whose REST profile cannot read User) or re-word the iTop-writes guardrail to allow it?
-- **Why deferred / fix direction:** Kept at port time because failing closed breaks installs without User read rights; needs the user's ruling. Fix if closed: reject when resolvedItopUserId is null or the PersonalToken read fails.
-- **Source:** snapshot line 2296, section "Customer-edition port — deferred findings (2026-10-05)"; merged duplicates at snapshot lines 2338
 
 ### ISS-005 · P2 · Product decisions: STAKEHOLDER/SA task comments; built-in role policy
 
