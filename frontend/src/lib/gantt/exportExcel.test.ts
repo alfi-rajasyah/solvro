@@ -183,3 +183,23 @@ describe("buildTasksSheet — Epic column", () => {
     expect(rows[0].epic).toBe("");
   });
 });
+
+// Guardrail: project and task document links (ProjectLink / TaskLink) are
+// internal and never reach an export. `Task` carries no `links` field today;
+// this pins that the builder emits only its explicit columns, so a task
+// object that did carry `links` could not leak one into the sheet.
+describe("buildTasksSheet — document links never exported", () => {
+  it("emits no link label or URL even when a task object carries links", () => {
+    const withLinks = {
+      ...taskFixture({ id: 1 }),
+      links: [{ id: "l1", label: "SECRET-TASK-LINK-LABEL", url: "https://docs.internal.example/SECRET-TASK-LINK-URL" }],
+    } as unknown as Task;
+    const row: Row = { ...taskRow("task-1"), taskId: 1, task: withLinks };
+    const sheet = buildTasksSheet([section, row]);
+    const raw = JSON.stringify(sheet);
+    expect(raw).not.toContain("SECRET");
+    expect(raw).not.toContain("docs.internal.example");
+    expect(sheet.columns.map((c) => c.header)).not.toContain("Links");
+    expect(Object.keys(sheet.rows[0])).not.toContain("links");
+  });
+});

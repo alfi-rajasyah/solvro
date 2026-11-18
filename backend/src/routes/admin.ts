@@ -271,6 +271,11 @@ adminRouter.get(
 );
 
 const userIdField = z.number().int().positive();
+// Each entry is two int ids (~51 bytes of JSON), so the 1 MB body limit would
+// allow ~20000; 2000 keeps the customer loop alone (~3 ms per customer measured)
+// well inside the 30 s transaction timeout. Offboard shares that timeout with
+// its project loop.
+const MAX_CUSTOMER_OWNER_CHOICES = 2_000;
 const offboardSchema = z
   .object({
     projects: z
@@ -288,7 +293,7 @@ const offboardSchema = z
       // Every owned customer gets a new owner: an unowned customer is claimable
       // by any TAM (docs/archive/plans/offboard-customer-owner.md).
       .array(z.object({ customerId: userIdField, newOwnerId: userIdField }))
-      .max(500),
+      .max(MAX_CUSTOMER_OWNER_CHOICES),
     dealsPicId: userIdField.nullable().optional(),
   })
   .superRefine((v, ctx) => {
@@ -329,7 +334,7 @@ const deleteUserSchema = z
   .object({
     customers: z
       .array(z.object({ customerId: userIdField, newOwnerId: userIdField }))
-      .max(500)
+      .max(MAX_CUSTOMER_OWNER_CHOICES)
       .default([]),
   })
   .default({})

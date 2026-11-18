@@ -100,4 +100,16 @@ describe("POST /opportunities/import/preview", () => {
     expect(res.status).toBe(413);
     expect(res.body.code).toBe("payload_too_large");
   });
+
+  it("answers 429 past 10 previews a minute for one user, and counts per user", async () => {
+    const { token } = await createUser(["pipeline:view", "pipeline:create"]);
+    const { token: other } = await createUser(["pipeline:view", "pipeline:create"]);
+    const csv = Buffer.from(`${HEADER}\n`);
+    for (let i = 0; i < 10; i++) expect((await preview(token, csv)).status).not.toBe(429);
+    const res = await preview(token, csv);
+    expect(res.status).toBe(429);
+    expect(res.body.code).toBe("rate_limited");
+    expect(Number(res.headers["retry-after"])).toBeGreaterThan(0);
+    expect((await preview(other, csv)).status).not.toBe(429);
+  });
 });

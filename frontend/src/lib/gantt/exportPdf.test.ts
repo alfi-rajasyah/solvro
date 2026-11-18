@@ -202,3 +202,26 @@ describe("buildTaskTable", () => {
     for (const line of body) expect(line).toHaveLength(6);
   });
 });
+
+// Guardrail: document links (ProjectLink / TaskLink) never reach an export.
+describe("buildTaskTable — document links never exported", () => {
+  it("emits no link label or URL even when a row's task carries links", () => {
+    const section: Row = {
+      id: "s1", kind: "section", depth: 0, name: "Phase 1",
+      start: START, end: START, parentRowId: null, sectionId: 1,
+    };
+    const task = {
+      id: 1,
+      links: [{ id: "l1", label: "SECRET-TASK-LINK-LABEL", url: "https://docs.internal.example/SECRET-TASK-LINK-URL" }],
+    } as unknown as NonNullable<Row["task"]>;
+    const row: Row = {
+      id: "t1", kind: "task", depth: 1, name: "Task t1",
+      start: START, end: START, parentRowId: "s1", taskId: 1, sectionId: 1, task,
+    };
+    const { head, body } = buildTaskTable([section, row]);
+    const raw = JSON.stringify({ head, body });
+    expect(raw).not.toContain("SECRET");
+    expect(raw).not.toContain("docs.internal.example");
+    expect(head).not.toContain("Links");
+  });
+});

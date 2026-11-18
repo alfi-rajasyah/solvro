@@ -15,6 +15,29 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Security — 2026-11-18 — A crafted import file can no longer stall the API
+
+- `backend/src/lib/pipelineImport/offThread.ts`, `importWorker.ts` (new), `routes/opportunities.ts`: the pipeline import preview parses the uploaded workbook in a worker thread. A crafted `.xlsx` of about 40 KB could block the API's event loop for up to about a second; for that file the stall is now a few milliseconds. At most 2 parses run at once, each worker has a 256 MB memory cap, and a parse over 5 seconds is stopped. A request whose client has gone (nginx gives up after 60 seconds) leaves the queue, or has its worker stopped, so it no longer holds a slot. Each user may request 10 previews a minute; past that the route answers 429.
+- `backend/src/lib/pipelineImport/xlsx.ts`, `zip.ts`: the shared strings part of a workbook may expand to at most 4 MiB (a realistic file needs about 1 MB), and the reader stops inflating it at that point. An over-limit file is rejected using about 100 MB of memory instead of up to 1.2 GB. A file that breaks any of these limits gets the existing "Could not read the file" error (400).
+- Tests: `backend/test/pipelineImportOffThread.test.ts` (new) covers the timeout, the out-of-memory mapping, the concurrency cap and requests whose client went away; `backend/test/opportunityImportPreview.test.ts` covers the per-user limit; `backend/test/pipelineImportReader.test.ts` covers the shared strings cap.
+
+### Fixed — 2026-11-18 — An admin can delete or hand over a user who owns more than 500 customers
+
+- `backend/src/routes/admin.ts`: `DELETE /admin/users/:id` and `POST /admin/users/:id/offboard` accept up to 2,000 customer owner choices, shared in one constant (`MAX_CUSTOMER_OWNER_CHOICES`), instead of 500. A user with more customers than the old limit could not be deleted or handed over: the request failed validation. The new limit stays well under the 1 MB body limit, and keeps the per-customer loop inside the 30-second transaction timeout (about 3 ms per customer). Tests in `backend/test/userDeleteCustomerOwner.test.ts` and `backend/test/offboarding.test.ts` send 600 entries.
+
+### Added — 2026-11-18 — Tests for links in guest and export output, the deadlock retry, and a racing user delete
+
+- `backend/test/shareLinks.test.ts`: a project link and two task links (one on a milestone) never appear in the guest payload, and the payload keeps its allow-listed shape.
+- `frontend/src/lib/gantt/exportExcel.test.ts`, `exportPdf.test.ts`: the Gantt Excel and PDF builders emit no link label or URL, even when a task object carries links.
+- `backend/test/withDeadlockRetry.test.ts` (new): the retry policy of `withDeadlockRetry` — which errors it retries, that it stops after two attempts, and which errors it never retries.
+- `backend/test/userDeleteCustomerOwner.test.ts`: a user delete raced against a new customer for the same user ends in a consistent state, with no server error and no orphaned ownership.
+- `e2e/tests/project-lifecycle.spec.ts`: the on-hold project gets a past-due subtask, and the "On hold, past due" list shows as many rows as the Overview link counts.
+
+### Changed — 2026-11-18 — Rollback note for releases that drop columns
+
+- `docs/CONFIGURATION.md` (production deployment): a new "Rolling back an upgrade" note. Releases with migrations that drop columns, such as the removal of note visibility, cannot be rolled back to an earlier image unless the database is restored from a backup taken before the upgrade.
+- `backend/prisma/schema.prisma`: the `TaskLink` comment now says links are copied as new rows when a task is duplicated. It said the opposite. Comment only, no migration.
+
 ### Changed — 2026-11-18 — Agent instructions point at the code that exists
 
 - `CLAUDE.md`: the notes guardrail now names the Gantt exports (`frontend/src/lib/gantt/export*.ts`) as the export code to verify. It named `frontend/src/lib/export/`, which was deleted with the Reports export packet. Two dated notes in the Guardrails block (the old three-branch flow, a rewrite date) are removed. The rules themselves are unchanged.

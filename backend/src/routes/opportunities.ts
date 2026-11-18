@@ -19,7 +19,9 @@ import {
 } from "../lib/opportunityActivity.js";
 import { notifyForEvent } from "../lib/notifications.js";
 import { logger } from "../logger.js";
-import { ImportFileError, parseImportFile } from "../lib/pipelineImport/index.js";
+import { ImportFileError } from "../lib/pipelineImport/index.js";
+import { ImportAbortedError, parseImportFileOffThread } from "../lib/pipelineImport/offThread.js";
+import { createRateLimiter } from "../http/rateLimit.js";
 // Anti-drift seam (finding S6): the handoff body is byte-for-byte the same
 // shape as a plain project create, so this reuses routes/projects.ts's own
 // `createProjectSchema` (which already composes `wipLimitsSchema`) instead
@@ -520,10 +522,25 @@ opportunitiesRouter.post(
 // reader's own limits (ZIP expansion, row and cell counts, 16 columns) bound
 // the work one request can cause.
 const IMPORT_FILE_LIMIT = "1mb";
+// Per user, not per address: the route needs a sign-in, and a user behind a
+// shared address must not starve colleagues. A person previews a file a few
+// times; 10 a minute leaves room for that and stops a loop from filling the
+// two parse slots (lib/pipelineImport/offThread.ts).
+export const importPreviewLimiter = createRateLimiter({ limit: 10, windowMs: 60_000 });
+// Before the body parser, so a refused request is not uploaded and buffered first.
+const limitImportPreview: express.RequestHandler = (req, res, next) => {
+  const limited = importPreviewLimiter.hit(`user:${req.user!.sub}`);
+  if (limited.blocked) {
+    res.setHeader("Retry-After", String(limited.retryAfterSec));
+    throw new HttpError(429, "rate_limited", "Too many requests");
+  }
+  next();
+};
 
 opportunitiesRouter.post(
   "/import/preview",
   requirePermission("pipeline:create"),
+  limitImportPreview,
   express.raw({ type: "application/octet-stream", limit: IMPORT_FILE_LIMIT }),
   async (req, res) => {
     if (!Buffer.isBuffer(req.body)) {
@@ -538,9 +555,17 @@ opportunitiesRouter.post(
     for (const u of users) {
       if (permissionsOf(u.role.permissions).length > 0) picByUsername.set(u.username.toLowerCase(), u.id);
     }
+    // `res` closes before it finishes only when the client went away (nginx
+    // gives up after 60 s). `req` "close" is no signal: it fires once the body
+    // has been read.
+    const gone = new AbortController();
+    res.once("close", () => {
+      if (!res.writableFinished) gone.abort();
+    });
     try {
-      res.json({ rows: parseImportFile(req.body, picByUsername) });
+      res.json({ rows: await parseImportFileOffThread(req.body, picByUsername, gone.signal) });
     } catch (err) {
+      if (err instanceof ImportAbortedError) return; // no one is waiting for an answer
       if (err instanceof ImportFileError) throw new HttpError(400, err.code, err.message);
       throw err;
     }

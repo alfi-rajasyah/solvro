@@ -154,6 +154,15 @@ test.describe("Project lifecycle", () => {
       startDate: isoDateOffset(-14),
       dueDate: isoDateOffset(-10),
     });
+    // A past-due subtask: the Overview hint counts top-level tasks only, and the
+    // list's default "Top-level only" filter must leave this row out too.
+    const lateSub = await task(base, w.owner, p.id, {
+      title: "Late subtask",
+      status: "TODO",
+      parentTaskId: late.id,
+      startDate: isoDateOffset(-14),
+      dueDate: isoDateOffset(-10),
+    });
 
     await loginViaUi(page, w.owner.email, w.owner.password);
 
@@ -181,6 +190,9 @@ test.describe("Project lifecycle", () => {
     await heldLink.click();
     await expect(page).toHaveURL(/\/tasks\?view=on-hold-past-due/);
     await expect(page.getByRole("row").filter({ hasText: late.title })).toBeVisible();
+    // The list row count equals the Overview link count (1), subtask excluded.
+    await expect(page.getByRole("row").filter({ hasText: lateSub.title })).toHaveCount(0);
+    await expect(page.getByRole("row").filter({ hasText: /Late (sub)?task/ })).toHaveCount(1);
 
     await page.goto(`/tasks?customerId=${w.customer.id}`, { waitUntil: "networkidle" });
     const heldRow = page.getByRole("row").filter({ hasText: late.title });

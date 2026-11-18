@@ -26,13 +26,18 @@ export interface SheetRows {
 // An import file is at most 1 MB on the wire; its XML may not expand past
 // this. A full 5000-row sheet with its shared strings is a few MB.
 const ZIP_LIMITS = { maxEntries: 2000, maxTotalBytes: 16 * 1024 * 1024 };
+// The shared strings part may expand to at most this much: a realistic file
+// needs about 1 MB, and entity decoding of a larger one is the costliest parse.
+// Inline-string cells (t="inlineStr") in the sheet part are decoded the same
+// way and are bounded only by the archive budget (ZIP_LIMITS.maxTotalBytes).
+export const MAX_SHARED_STRINGS_BYTES = 4 * 1024 * 1024;
 
 function unreadable(): ImportFileError {
   return new ImportFileError("unreadable_file", UNREADABLE_FILE_MESSAGE);
 }
 
-function readText(zip: ZipArchive, path: string): string | null {
-  const buf = zip.read(path);
+function readText(zip: ZipArchive, path: string, maxBytes?: number): string | null {
+  const buf = zip.read(path, maxBytes);
   return buf === null ? null : buf.toString("utf8");
 }
 
@@ -82,7 +87,7 @@ function textOf(xml: string, p: string): string {
 }
 
 function readSharedStrings(zip: ZipArchive, path: string): string[] {
-  const xml = readText(zip, path);
+  const xml = readText(zip, path, MAX_SHARED_STRINGS_BYTES);
   if (xml === null) return [];
   const p = rootPrefix(xml);
   const out: string[] = [];
