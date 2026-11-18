@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-18 — Agent instructions point at the code that exists
+
+- `CLAUDE.md`: the notes guardrail now names the Gantt exports (`frontend/src/lib/gantt/export*.ts`) as the export code to verify. It named `frontend/src/lib/export/`, which was deleted with the Reports export packet. Two dated notes in the Guardrails block (the old three-branch flow, a rewrite date) are removed. The rules themselves are unchanged.
+- `CLAUDE.md` and `.claude/scripts/gates.sh`: the spine list (paths whose changes get an immediate review) swaps the deleted `frontend/src/lib/export/` for `frontend/src/lib/gantt/export*`. The prose and the `SPINE` regex change together so they stay in step.
+- `.claude/agents/solvro-implementor.md`, `solvro-reviewer.md`, `solvro-docs-keeper.md`: the worked examples are removed from each `description`. They repeated rules the description, the agent body and `CLAUDE.md` already state, and loaded into every session. One of them described a task on the removed export packet. Dated history notes (Tailwind migration dates, "rule updated" stamps) are removed. The rules they carried are kept.
+- `.claude/reply-style.md`: the fixed limits (20 words per sentence, 5 list items) become "short sentences" and "as long as the content needs". Rule 1 now asks for the evidence after the answer instead of leaving it out until asked. Current models follow a fixed number literally, which cut useful content.
+
 ### Fixed — 2026-11-12 — Help deep links land on their topic; two flaky browser tests
 
 - `frontend/src/pages/Help.tsx`: a `/help#<topic>` link could open on the wrong topic. The page scrolled to the topic once, then the web fonts (the text font and the icon font) finished loading and changed the height of every section above it, so the topic moved out of view. The page now scrolls the topic back into view each time its height changes, until the reader scrolls, clicks or types, or for 5 seconds at most. This was the cause of the intermittent `e2e/tests/help.spec.ts` "a /help#<topic> link scrolls to that topic" failure.

@@ -4,9 +4,9 @@ Write every reply to the user in ASD-STE100 (Simplified Technical English) style
 
 ## The eight chat rules
 
-1. **Answer first.** Give the answer in one sentence. Add detail only when the user asks.
-2. **20 words per sentence, max.** Put one idea in one sentence.
-3. **Lists, not paragraphs.** Use a maximum of 5 items in a list.
+1. **Answer first.** Give the answer in the first sentence. Then give the evidence for it: file paths, line numbers, command output.
+2. **Short sentences.** Put one idea in one sentence.
+3. **Lists, not paragraphs.** Make a list as long as the content needs, and no longer.
 4. **Exact identifiers.** Do not paraphrase a file path, a command, a flag, or a symbol name. Copy it.
 5. **No hedges.** State the fact, or write `unknown`. Do not write "probably", "it seems", or "you might want to".
 6. **Numbers, not adjectives.** Write "17 commits behind", not "quite far behind".
