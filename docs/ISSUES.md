@@ -15,15 +15,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — Security & auth
 
-### ISS-004 · P1 · Personal-token ownership check is best-effort, not fail-closed
-
-- **Type:** decision · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** PUT /itop/me/token in backend/src/routes/itopUser.ts (lines ~182-225)
-- **Problem:** A broad-read token that is not the user's own can be saved and used for writes when the identity lookups fail. Question for the user: fail closed (rejecting every token on installs whose REST profile cannot read User) or re-word the iTop-writes guardrail to allow it?
-- **Why deferred / fix direction:** Kept at port time because failing closed breaks installs without User read rights; needs the user's ruling. Fix if closed: reject when resolvedItopUserId is null or the PersonalToken read fails.
-- **Severity note:** raised to P1 by the user on 2026-11-18: the gap weakens the iTop-writes guardrail in root `CLAUDE.md`. The fail-closed-or-reword question still needs the user's ruling.
-- **Source:** snapshot line 2296, section "Customer-edition port — deferred findings (2026-10-05)"; merged duplicates at snapshot lines 2338
-
 ### ISS-001 · P2 · Label-route permission asymmetry
 
 - **Type:** bug · **Found:** 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -35,9 +26,9 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 ### ISS-002 · P2 · Token-ownership check: residual risk on some iTop installs
 
 - **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** PUT /itop/me/token ownership check in backend/src/routes/itopUser.ts (line ~195)
-- **Problem:** On installs where PersonalToken is unreadable or over-readable, a foreign token that can read Persons passes the ownership check (impersonation with a stolen credential, not escalation).
-- **Why deferred / fix direction:** Grant PersonalToken read to the TAM profile or add an iTop-side whoami extension; verify the code-100 path against the real install and record it.
+- **Where:** PUT /itop/me/token ownership check in backend/src/routes/itopUser.ts (PersonalToken read, line ~215)
+- **Problem:** On installs where a profile can read other users' PersonalToken rows (over-readable), a foreign token that can read Persons still passes the ownership check (impersonation with a stolen credential, not escalation). An unreadable PersonalToken class is refused since ISS-004 closed (fail closed).
+- **Why deferred / fix direction:** Grant PersonalToken read to the TAM profile or add an iTop-side whoami extension; verify the code-100 path against the real install and record it. Also check there: a profile without read rights may get an empty PersonalToken result instead of an error, which shows `itop_token_not_yours` where `itop_token_unverified` would tell the admin what to fix (still fails closed).
 - **Source:** snapshot line 2048, section "iTop integration (personal tokens, ticket actions) — deferred findings (ported 2026-10-04)"; merged duplicates at snapshot lines 2233
 
 ### ISS-003 · P2 · GET /itop/services returns every organisation's services, unscoped
@@ -1498,4 +1489,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Closed
 
-No issue has been closed since the 2026-11-18 restructure. Entries closed during the restructure are in the ledger, not here.
+Entries closed during the 2026-11-18 restructure are in the ledger in `docs/archive/plans/issues-restructure.md`, not here.
+
+- ISS-004 · Resolved 2026-11-18 · CHANGELOG "An iTop personal token is saved only when iTop proves it is yours" · Personal-token ownership check is best-effort, not fail-closed
