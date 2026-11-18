@@ -1,6 +1,6 @@
 # Agent pipeline v3: two lanes, less ceremony
 
-Status: in progress (2026-11-18). Tasks 1–5, 9 and 10 are built on `chore/pipeline-v3`; task 6 (GitHub rulesets and the history repair) and task 8 (smoke noise) remain. The 3-lane flow, D1–D5 and G1–G5 are settled by the user (2026-11-18). Archive path once shipped: `docs/archive/plans/pipeline-v3-simplify.md`.
+Status: in progress (2026-11-18). Tasks 1–6, 9 and 10 are done; only task 8 (smoke noise from the Google sign-in origin in the dev DB) remains. The 3-lane flow, D1–D5 and G1–G5 are settled by the user (2026-11-18). Archive path once shipped: `docs/archive/plans/pipeline-v3-simplify.md`.
 
 Prerequisite: the archive sweep on `chore/archive-shipped-plans` lands first (shipped plans and prompts moved into `docs/archive/`). This plan covers the recurring rule, not that backlog.
 
@@ -206,6 +206,14 @@ The lane is D throughout, except T6 and T9. T2–T5 are one PR. T6 is a GitHub-s
 10. **Attribution enforcement** (G4; CI is not a `.claude/` path, so it needs a CHANGELOG line).
    Add `"attribution": { "commit": "", "pr": "" }` to `.claude/settings.json`; add `Bash(gh pr merge *)`, `Bash(gh api *merge*)` and `Bash(gh api *Merge*)` to `deny` in `.claude/settings.local.json`; add `.github/workflows/pr-hygiene.yml` with an `attribution` job that reads the PR body and the commits `base.sha..head.sha`. It is a separate workflow because `ci.yml` skips docs-only PRs and never runs on description edits. Built 2026-11-18. Task 6 makes `attribution` a required check on both rulesets.
    *Accept:* a test PR whose body holds `claude-projects-attribution` fails the job; a clean PR passes; `gh pr merge` from an agent session is refused.
+
+### Task 6 record (2026-11-18)
+
+- #241 merged `main` into `develop` with `git merge -s ours` (no file changed); `main` has 0 commits that `develop` lacks, and the merge-base is `main`'s tip `0426d3c`.
+- #242 made the `attribution` job skip commits already on `main`: 5 release commits from 2026-09-02 to 2026-09-09 carry an attribution footer from before the rule and cannot be rewritten.
+- Rulesets, applied by the user: `protect-develop` allows squash and merge (merge only for merge-backs of `main`) and requires `attribution`; `protect-main` allows merge only and requires `attribution` plus its 10 CI checks.
+- `develop` allows merge commits, so a feature PR can still be merge-committed by mistake (#239 and #240 were). A squash-only `develop` would block hotfix merge-backs, so this stays a convention.
+- The `deny` entry `Bash(gh api *merge*)` also blocks agent changes to rulesets, because their payloads contain `allowed_merge_methods`. That is accepted: branch protection is changed by the user.
 
 ## Risks
 
