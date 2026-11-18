@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-18 — The smoke test no longer fails on Google sign-in errors on a local machine
+
+- `e2e/tests/smoke.spec.ts`: the "no console/page errors" check ignores console errors that come from Google's sign-in script (the `accounts.google.com` host, or a `[GSI_LOGGER]` message). Google logs them when a database has Google sign-in configured and the app runs on an origin not registered for that client ID, such as `localhost`. Every error from the app itself still fails the test.
+
 ### Fixed — 2026-11-18 — The PR attribution check skips commits already released on main
 
 - `.github/workflows/pr-hygiene.yml`: the `attribution` job checks only the commits a pull request adds that are not already on `main`. A pull request that merges `main`'s history into `develop` brings in older release commits, from before the no-attribution rule existed; those are published history and can no longer be changed, so failing on them would block the merge for good.

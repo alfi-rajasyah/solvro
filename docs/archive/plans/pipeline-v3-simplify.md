@@ -1,6 +1,6 @@
 # Agent pipeline v3: two lanes, less ceremony
 
-Status: in progress (2026-11-18). Tasks 1–6, 9 and 10 are done; only task 8 (smoke noise from the Google sign-in origin in the dev DB) remains. The 3-lane flow, D1–D5 and G1–G5 are settled by the user (2026-11-18). Archive path once shipped: `docs/archive/plans/pipeline-v3-simplify.md`.
+Status: shipped 2026-11-18. All tasks are done; task 8 (the smoke check ignores Google sign-in console errors) was the last.
 
 Prerequisite: the archive sweep on `chore/archive-shipped-plans` lands first (shipped plans and prompts moved into `docs/archive/`). This plan covers the recurring rule, not that backlog.
 
