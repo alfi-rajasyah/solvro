@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-18 — Code comments cite known issues by ID
+
+- Code and test comments in `frontend/src`, `backend/test`, and `e2e/tests` that referred to known issues by title or line number now cite the issue's ID in `docs/ISSUES.md`, or the archived issue log `docs/archive/ISSUES-2026-11-18-phase-log.md` for entries closed before IDs existed. No behavior change.
+
 ### Security — 2026-11-18 — An iTop personal token is saved only when iTop proves it is yours
 
 - `backend/src/routes/itopUser.ts`: `PUT /itop/me/token` now fails closed. Besides matching your email to an iTop person, the token must read that person's iTop login records and its own personal-token record. If iTop does not let it read either one, or the person has no login the token can see, the token is refused with `400 itop_token_unverified` and nothing is stored. A person with several iTop logins (for example local plus LDAP) is accepted, and Solvro stores the login the token belongs to. Before, the token was saved on the email match alone, so a token that was not yours could be accepted on installs with limited read rights.

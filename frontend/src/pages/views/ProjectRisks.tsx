@@ -312,7 +312,8 @@ function RisksDataGrid({
                 // Prose-overflow sweep (GH #57 convention): the pre-DataGrid
                 // table's `max-w-md` cell had no wrap-hardening, so a long
                 // unbroken description could stretch the table past its
-                // `overflow-x-auto` bound (docs/ISSUES.md deferred finding).
+                // `overflow-x-auto` bound (docs/archive/ISSUES-2026-11-18-phase-log.md, "Unswept
+                // prose-overflow surfaces" entry).
                 // `whitespace-pre-wrap` preserves operator-entered line
                 // breaks (this text comes from a `<textarea>`); `wrap-
                 // break-word` is Tailwind v4's renamed `break-words` (see
