@@ -32,6 +32,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 - `backend/test/withDeadlockRetry.test.ts` (new): the retry policy of `withDeadlockRetry` — which errors it retries, that it stops after two attempts, and which errors it never retries.
 - `backend/test/userDeleteCustomerOwner.test.ts`: a user delete raced against a new customer for the same user ends in a consistent state, with no server error and no orphaned ownership.
 
+### Changed — 2026-11-18 — Rollback note for releases that drop columns
+
+- `docs/CONFIGURATION.md` (production deployment): a new "Rolling back an upgrade" note. Releases with migrations that drop columns, such as the removal of note visibility, cannot be rolled back to an earlier image unless the database is restored from a backup taken before the upgrade.
+
 ### Changed — 2026-11-18 — Agent instructions point at the code that exists
 
 - `CLAUDE.md`: the notes guardrail now names the Gantt exports (`frontend/src/lib/gantt/export*.ts`) as the export code to verify. It named `frontend/src/lib/export/`, which was deleted with the Reports export packet. Two dated notes in the Guardrails block (the old three-branch flow, a rewrite date) are removed. The rules themselves are unchanged.
