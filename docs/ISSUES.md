@@ -277,6 +277,15 @@ cited files; entries marked *code check* below carry the result).
 
 ## Tech debt / follow-ups from recent work
 
+- **The import preview queue has no length cap** (2026-11-18, deferred):
+  `createImportParser` (`backend/src/lib/pipelineImport/offThread.ts`) runs 2
+  parses at once and queues the rest without a limit. A per-user limit (10 a
+  minute, `importPreviewLimiter` in `routes/opportunities.ts`) and dropping
+  requests whose client went away bound it today, but many users at once can
+  still queue many requests, each holding its upload (up to 1 MB) in memory.
+  Fix direction: cap the queue (e.g. 8) and refuse past it with a 503; that
+  needs one new user-facing message.
+
 - **A TAM with more than 500 projects cannot be offboarded** (2026-11-18,
   deferred): `offboardSchema` in `backend/src/routes/admin.ts` still caps
   `projects` at `.max(500)`. The customer list was raised to 2,000 in the

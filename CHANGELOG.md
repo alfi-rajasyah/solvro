@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Security — 2026-11-18 — A crafted import file can no longer stall the API
+
+- `backend/src/lib/pipelineImport/offThread.ts`, `importWorker.ts` (new), `routes/opportunities.ts`: the pipeline import preview parses the uploaded workbook in a worker thread. A crafted `.xlsx` of about 40 KB could block the API's event loop for up to about a second; for that file the stall is now a few milliseconds. At most 2 parses run at once, each worker has a 256 MB memory cap, and a parse over 5 seconds is stopped. A request whose client has gone (nginx gives up after 60 seconds) leaves the queue, or has its worker stopped, so it no longer holds a slot. Each user may request 10 previews a minute; past that the route answers 429.
+- `backend/src/lib/pipelineImport/xlsx.ts`, `zip.ts`: the shared strings part of a workbook may expand to at most 4 MiB (a realistic file needs about 1 MB), and the reader stops inflating it at that point. An over-limit file is rejected using about 100 MB of memory instead of up to 1.2 GB. A file that breaks any of these limits gets the existing "Could not read the file" error (400).
+- Tests: `backend/test/pipelineImportOffThread.test.ts` (new) covers the timeout, the out-of-memory mapping, the concurrency cap and requests whose client went away; `backend/test/opportunityImportPreview.test.ts` covers the per-user limit; `backend/test/pipelineImportReader.test.ts` covers the shared strings cap.
+
 ### Fixed — 2026-11-18 — An admin can delete or hand over a user who owns more than 500 customers
 
 - `backend/src/routes/admin.ts`: `DELETE /admin/users/:id` and `POST /admin/users/:id/offboard` accept up to 2,000 customer owner choices, shared in one constant (`MAX_CUSTOMER_OWNER_CHOICES`), instead of 500. A user with more customers than the old limit could not be deleted or handed over: the request failed validation. The new limit stays well under the 1 MB body limit, and keeps the per-customer loop inside the 30-second transaction timeout (about 3 ms per customer). Tests in `backend/test/userDeleteCustomerOwner.test.ts` and `backend/test/offboarding.test.ts` send 600 entries.

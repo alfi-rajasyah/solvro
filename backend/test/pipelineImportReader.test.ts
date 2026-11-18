@@ -6,6 +6,7 @@ import { readImportFile, parseImportFile, ImportFileError } from "../src/lib/pip
 import { readCsv } from "../src/lib/pipelineImport/csv.js";
 import { MAX_FILE_ROWS, MAX_SHEET_ROW_ELEMENTS } from "../src/lib/pipelineImport/errors.js";
 import { decodeXmlText } from "../src/lib/pipelineImport/xml.js";
+import { openZip, ZipError } from "../src/lib/pipelineImport/zip.js";
 import { buildXlsx, buildZip } from "./xlsxFixture.js";
 
 const HEADER = [
@@ -68,6 +69,31 @@ describe("readImportFile: xlsx", () => {
     ]);
     expect(bomb.length).toBeLessThan(2 * 1024 * 1024);
     expect(codeOf(() => readImportFile(bomb))).toBe("unreadable_file");
+  });
+
+  it("caps the shared strings part at 4 MiB expanded", () => {
+    const CAP = 4 * 1024 * 1024;
+    // The part is the text plus about 100 bytes of XML around it.
+    const under = buildXlsx([["a".repeat(CAP - 1000)]]);
+    expect(readImportFile(under).rows[0][0]).toHaveLength(CAP - 1000);
+    const over = buildXlsx([["a".repeat(CAP + 1000)]]);
+    expect(over.length).toBeLessThan(100 * 1024);
+    expect(codeOf(() => readImportFile(over))).toBe("unreadable_file");
+  });
+
+  it("openZip enforces a per-entry cap on stored and deflated parts alike", () => {
+    const zip = openZip(
+      buildZip([
+        { name: "stored.xml", data: Buffer.alloc(101, 0x20), store: true },
+        { name: "deflated.xml", data: Buffer.alloc(101, 0x20) },
+        { name: "fits.xml", data: Buffer.alloc(100, 0x20) },
+      ]),
+      { maxEntries: 10, maxTotalBytes: 1000 },
+    );
+    expect(() => zip.read("stored.xml", 100)).toThrow(ZipError);
+    expect(() => zip.read("deflated.xml", 100)).toThrow(ZipError);
+    expect(zip.read("fits.xml", 100)?.length).toBe(100);
+    expect(zip.read("stored.xml")?.length).toBe(101); // no per-entry cap: only the budget
   });
 
   it("refuses a corrupt ZIP", () => {
