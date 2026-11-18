@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-18 — The PR attribution check skips commits already released on main
+
+- `.github/workflows/pr-hygiene.yml`: the `attribution` job checks only the commits a pull request adds that are not already on `main`. A pull request that merges `main`'s history into `develop` brings in older release commits, from before the no-attribution rule existed; those are published history and can no longer be changed, so failing on them would block the merge for good.
+
 ### Added — 2026-11-18 — A pull request check that runs on every PR
 
 - `.github/workflows/pr-hygiene.yml` (new): runs on every pull request into `develop` or `main`, docs-only ones included, and again whenever the description is edited. Its `attribution` job fails the PR when the description or any commit message carries an AI attribution line or hidden attribution metadata. `ci.yml` skips docs-only changes and never sees description edits, so this check lives in its own workflow and can be required on both branches.
