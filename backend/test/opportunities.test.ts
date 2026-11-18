@@ -464,7 +464,7 @@ describe("DELETE /opportunities/:id — closes the stage-order gap it leaves (S4
     // untouched — this describe block runs after several earlier tests in
     // this file that create/move rows into WAITING_RESPONSE (D3's owner/
     // subStatus coverage), so an absolute 0/1/2 assumption would be exactly
-    // the order-dependent trap docs/ISSUES.md:196 flagged for a different
+    // the order-dependent trap docs/archive/ISSUES-2026-11-18-phase-log.md ("opportunities.test.ts flakes in full gates run") flagged for a different
     // stage/test (fix direction generalized here too).
     const before = await prisma.opportunity.count({ where: { stage: "WAITING_RESPONSE" } });
     const first = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
@@ -743,13 +743,13 @@ describe("Permission gates on single-opportunity / create routes", () => {
 });
 
 describe("POST /opportunities/:id/move — cross-stage repacking", () => {
-  it("repacks the SOURCE stage densely after a cross-stage move (relative order — docs/ISSUES.md:196)", async () => {
+  it("repacks the SOURCE stage densely after a cross-stage move (relative order)", async () => {
     const sa = await createSaLikeUser();
     // Asserts RELATIVE order among this test's own three rows, not absolute
     // stageOrder — a full gates.sh run shares one `solvro_test` DB across
     // every test file, so DELIVER_PROPOSAL's absolute sibling count can be
-    // shifted by another file's rows landing in it first (docs/ISSUES.md
-    // line 196, opportunities.test.ts:439 in the pre-redesign file).
+    // shifted by another file's rows landing in it first (docs/archive/ISSUES-2026-11-18-phase-log.md,
+    // "opportunities.test.ts flakes in full gates run"; opportunities.test.ts:439 in the pre-redesign file).
     const before = await prisma.opportunity.count({ where: { stage: "DELIVER_PROPOSAL" } });
     const a = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });
     const b = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });

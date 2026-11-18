@@ -237,7 +237,7 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // Sub one seeds at position 0, Sub two at 1 → Sub two owns the second
     // "Reorder subtask" handle in the panel's subtask list. exact: true —
     // dnd-kit also puts role="button" on each row, whose accessible name
-    // CONTAINS the handle's label (docs/ISSUES.md, sortable deferred #4).
+    // CONTAINS the handle's label (docs/ISSUES.md ISS-077).
     const handles = panel.getByRole("button", { name: "Reorder subtask", exact: true });
     await expect(handles).toHaveCount(2);
     const subTwoHandle = handles.nth(1);

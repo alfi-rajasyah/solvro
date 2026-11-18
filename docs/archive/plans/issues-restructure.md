@@ -1,6 +1,6 @@
 # Restructure `docs/ISSUES.md` into a triaged ledger
 
-Status: in progress (2026-11-18), branch `docs/issues-restructure`. Archive path once shipped: `docs/archive/plans/issues-restructure.md`.
+Status: shipped 2026-11-18. Archive path: `docs/archive/plans/issues-restructure.md`.
 
 ## Goal
 
