@@ -1,6 +1,6 @@
 # Design Drift Fixes 01–13 — Spec
 
-Status: **approved 2026-11-02 (user)** — §11 decisions are settled; plan and tasks in `docs/plans/design-drift-fixes-plan.md`.
+Status: **approved 2026-11-02 (user)** — §11 decisions are settled; plan and tasks in `docs/archive/plans/design-drift-fixes-plan.md`.
 Branch: `fix/design-drift` off `origin/develop`.
 Visual source: Doop canvas `RRWCRKA9N7`, page **06 · Design fixes — before / after** (index frame + Fix 01–13). Each frame shows the current render, the proposed render and the class diff; this spec is the contract those frames illustrate.
 Code comments citing this work use `docs/archive/plans/design-drift-fixes-spec.md`.

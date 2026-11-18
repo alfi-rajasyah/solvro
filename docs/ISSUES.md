@@ -236,7 +236,7 @@ cited files; entries marked *code check* below carry the result).
   the UI. Still not built.
   *Resolved 2026-11-12 (decision D-13, "Links only")*: tasks get label + URL
   document links, the same as projects and customers
-  (`docs/plans/task-links.md`). File uploads stay out: no storage, no size
+  (`docs/archive/plans/task-links.md`). File uploads stay out: no storage, no size
   limit, nothing new to back up or to gate from exports.
 
 ---
@@ -1549,7 +1549,7 @@ blocking finding was fixed pre-PR — these are the consciously accepted leftove
 > **PIVOT 2026-08-14 (same day, later): the native-port decision supersedes most of this section** (see CLAUDE.md standing decisions; PR #146 reverted by #148). Item statuses: the `iss`/`aud` shared-verifier requirement is **moot** (no shared verifier exists in the native port); the cron-timezone decision (keep 23:00 UTC = 06:00 WIB) **carries over** into the native re-implementation of the auto-hold job; the GitLab-CI item **reframes** as: retire the standalone `/opt/velora` deploy once the native port ships and its data is migrated; the compose-profile note still describes the dev stack accurately (the Velora services remain as reference/data source).
 
 User-deferred findings from Phase 1 of the Velora (Pipeline) integration
-(`docs/plans/velora-integration-plan.md`, `docs/plans/velora-integration-prd.md`,
+(`docs/archive/plans/velora-integration-plan.md`, `docs/archive/plans/velora-integration-prd.md`,
 branch `velora-integration-phase-1`): `docker-compose.yml` gained `velora-app`
 + `velora-cron` services and a second logical Postgres database (`velora`);
 `frontend/nginx.conf` + `frontend/vite.config.ts` gained the same-origin
@@ -1566,7 +1566,7 @@ routed to a later phase, not outstanding review items.
   live gap yet (nothing but Solvro's backend holds the secret, and Phase 1
   ships no route that issues Velora-shaped tokens), but it becomes load-
   bearing the moment Phase 2's shared sign-in lands. Per
-  `docs/plans/velora-integration-plan.md`'s Phase 2 (`lib/solvro-token.ts`,
+  `docs/archive/plans/velora-integration-plan.md`'s Phase 2 (`lib/solvro-token.ts`,
   Velora repo), that verification step must add and check an `iss`/`aud`
   claim (or equivalent) so a Velora-internal token (if any ever exists) can't
   be replayed against Solvro, and vice versa. File as a Phase 2 acceptance
@@ -1591,7 +1591,7 @@ routed to a later phase, not outstanding review items.
   3001) while the standalone stack presumably uses its own ports. That
   GitLab CI pipeline must be stopped or repointed at cutover, or the two
   stacks will drift and confuse which one is authoritative. User decision
-  due by Phase 2 (tracked in `docs/plans/velora-integration-plan.md`).
+  due by Phase 2 (tracked in `docs/archive/plans/velora-integration-plan.md`).
   Related decision already made (2026-08-14): Velora-side *source* work
   happens on the GitHub repo (`FS3P/VeloraApp`, cloned at `../VeloraApp`),
   not GitLab. Open consequence: `setup.sh`'s `VELORA_IMAGE` default still
@@ -2335,21 +2335,21 @@ Findings collected while porting the customer edition's features (iTop, Utilizat
 - **Loading states without `SkeletonRegion`** (DESIGN.md §2: skeletons from `components/skeletons/`, 150 ms delay): `components/itop/TicketsTab.tsx`, `components/itop/TicketPanel.tsx`, `components/itop/board/TicketBoard.tsx`, `components/customer/AccountOverview.tsx` (two sites), `pages/Utilization.tsx` (bare `Skeleton` rows), `components/ProjectMembers.tsx` ("Loading members…" text). Deferred: presentation-only, found after the branch's full test run. `Overview.tsx`, `CustomerDetail.tsx` and `Executive.tsx` have the same pattern from before the port.
 - **The iTop ticket board is not wired into the drag guard.** `useCustomerTickets` refetches every 60 s and `TicketBoard.tsx` never calls `beginDrag`/`useDragActivityGuard` nor gates its interval on `shouldPauseRefresh`, unlike the task Kanban, the Pipeline board, the Gantt and the project list — a ticket change landing mid-drag re-renders the board under the cursor. Fix: register drag start/end with `beginDrag` and gate the interval; the comment in `lib/queries.ts` calling it "the first `refetchInterval` in the app" is stale.
 - **Arbitrary `text-[12px]` instead of the named roles** in the ported iTop UI (`components/itop/ActionSheet.tsx`, `NewTicketSheet.tsx` — `text-[12px] font-bold uppercase tracking-wider` should be `text-label-caps uppercase`; also `ItopTab.tsx`, `Settings.tsx`, `TicketTimer.tsx`, `TicketsTable.tsx`). No sub-12px sizes; deferred as presentation-only.
-- **`backend/src/routes/itop.ts` cites `docs/archive/plans/date-contract-utc-midnight.md`**, which does not exist (the plan is `docs/plans/date-contract-utc-midnight.md`, still active). Fix the comment when that plan is archived.
+- **`backend/src/routes/itop.ts` cites `docs/archive/plans/date-contract-utc-midnight.md`**, which does not exist (the plan is `docs/archive/plans/date-contract-utc-midnight.md`, still active). Fix the comment when that plan is archived.
 - The INTERNAL-notes guardrail in the root `CLAUDE.md` still points at `frontend/src/lib/export/`, which no longer exists (true on `develop` too). User-owned wording; not changed here.
 - ~~**The main frontend bundle is just over 2 MiB** (2,098,135 bytes minified after this release, about 1 KB past Workbox's 2 MiB default; the export libraries are already separate lazy chunks). `frontend/vite.config.ts` raises the precache ceiling to 3 MiB so the production build succeeds; the real fix is code-splitting — the Pipeline pages, the iTop ticket board and the Gantt are the obvious lazy-load boundaries (`React.lazy` routes or `build.rollupOptions.output.manualChunks`).~~ **Resolved 2026-10-26**: routes are code-split (see `CHANGELOG.md`, "Pages load on demand"); the precache ceiling is back to Workbox's 2 MiB default, the entry chunk is about 957 kB, and `npm run check:bundle-size` enforces a 1 MB entry budget in CI.
 
 ## Penetration-test remediation (September 2026 report) — follow-ups (2026-10-06)
 
-Plan: `docs/plans/pentest-remediation-2026-09.md` (D4, D12).
+Plan: `docs/archive/plans/pentest-remediation-2026-09.md` (D4, D12).
 
 - ~~**`DELETE /customers/:id` still accepts a TAM who merely owns one project under the customer.** `ensureCustomerOwnerAccess` re-checks with `customerVisibilityFilter(user, "own")`, whose third arm is "a project the caller is TAM of". The pentest's M1 fix narrowed only the owner-change path in `PATCH /customers/:id` (current owner, unowned, or `project:view-all`). Deleting a customer clears `Project.customerId` on every project under it (`onDelete: SetNull`) — a sibling of the M1 weakness class, not reported, not fixed in that phase. Follow-up: apply the same rule to the delete, or drop the project arm from the `"own"` level and give `isCustomerVisible(user, "own")` (attaching a project to a customer) its own rule.~~ **Resolved 2026-11-12**: the delete now uses the M1 rule (current owner, unowned customer, or `project:view-all`) in `ensureCustomerOwnerAccess`; the frontend's `canOwnCustomer` dropped its project-TAM arm to match (see `CHANGELOG.md`, "Only a customer's owner can delete it").
-- ~~**A customer becomes unowned when its owner is deleted, and any TAM can then claim it.** `Customer.tamId` is `onDelete: SetNull` (`schema.prisma`), `DELETE /admin/users/:id` does not count owned customers among its blockers, and an unowned customer is claimable by any TAM (plan D4). Deleting a TAM who owns customers therefore opens those customers — and every project under them — to the first TAM who sets `tamId`. Follow-up: block the delete while the user owns customers (like projects as TAM), or require reassignment first.~~ **Resolved 2026-11-12**: `DELETE /admin/users/:id` requires a new active owner for each owned customer (plan `docs/archive/plans/user-delete-customer-owner.md`, see `CHANGELOG.md`). The offboarding handover (`POST /admin/users/:id/offboard`) no longer has a "No owner" choice either: it requires a new active owner for each owned customer (plan `docs/plans/offboard-customer-owner.md`).
+- ~~**A customer becomes unowned when its owner is deleted, and any TAM can then claim it.** `Customer.tamId` is `onDelete: SetNull` (`schema.prisma`), `DELETE /admin/users/:id` does not count owned customers among its blockers, and an unowned customer is claimable by any TAM (plan D4). Deleting a TAM who owns customers therefore opens those customers — and every project under them — to the first TAM who sets `tamId`. Follow-up: block the delete while the user owns customers (like projects as TAM), or require reassignment first.~~ **Resolved 2026-11-12**: `DELETE /admin/users/:id` requires a new active owner for each owned customer (plan `docs/archive/plans/user-delete-customer-owner.md`, see `CHANGELOG.md`). The offboarding handover (`POST /admin/users/:id/offboard`) no longer has a "No owner" choice either: it requires a new active owner for each owned customer (plan `docs/archive/plans/offboard-customer-owner.md`).
 - **`GET /users` still returns `email` to every caller with `project:read` or `pipeline:view`.** The member, assignee and ticket pickers show it to disambiguate people. Minimising further means a picker-specific shape. Low priority; the PENDING exposure (finding M2) is closed by the gate.
 
 ## Project & customer document links — deferred findings (2026-10-12)
 
-Plan: `docs/plans/project-customer-links.md`.
+Plan: `docs/archive/plans/project-customer-links.md`.
 
 - **`frontend/src/components/LinksSection.tsx` departs from the DESIGN.md §4 focus treatment on all three surfaces it serves** (Pipeline deal page, project Context panel, customer Links tab). Two parts, both in the one shared component: (1) the text inputs (add form `:164`, `:170`; inline edit `:297`, `:302`) use `focus:border-primary focus:outline-hidden focus:ring-2 focus:ring-primary/30` instead of the app-wide `focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30` (no `border-primary`); (2) the text buttons (Add link `:132-142`, add-form Cancel/Save `:174-191`, inline-edit Cancel/Save `:306-320`) and the edit/delete icon buttons (`:344-359`) carry no `focus-visible` ring at all. Deferred because the extraction from `OpportunityDetail.tsx` was kept visually identical to the deal page, which already had this styling. Fix once in the shared component and all three surfaces follow.
 
@@ -2390,7 +2390,7 @@ Report and backlog: `docs/archive/plans/application-review-2026-10-22.md` (findi
 
 ## Project lifecycle and handover — deferred findings (2026-11-10)
 
-Plan: `docs/plans/feedback-round-lifecycle-plan.md`. Deferred at phase close; none blocks the feature.
+Plan: `docs/archive/plans/feedback-round-lifecycle-plan.md`. Deferred at phase close; none blocks the feature.
 
 - **The offboarding endpoint accepts a receiver whose custom role has zero permissions.** `POST /admin/users/:id/offboard` (`backend/src/lib/offboarding.ts`) checks only that a receiver is active (`assertActiveUser`), plus Pipeline access for a deal receiver. Only the client (`frontend/src/lib/handover.ts:77`) filters out PENDING accounts, so an API caller can hand work to an account that cannot sign in to anything useful.
 - **Ordinary edit routes still accept an inactive user** as task assignee, project TAM/SA or customer owner; only the offboarding path requires active receivers. Pre-existing and noted in `routes/projects.ts` (an inactive SA is tolerated on `PATCH /projects/:id`).

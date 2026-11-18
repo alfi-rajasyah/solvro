@@ -1,6 +1,6 @@
 # Migration Roadmap: ReUI Components Across Solvro
 
-**This is a program roadmap, not a phase plan.** Each phase below = one branch cut from up-to-date `origin/develop` (`git fetch origin` first) = one PR into `develop`. Each phase gets its own task-level plan doc at phase start, in the format of `docs/plans/vendored-reui-sortable.md` (waves, acceptance criteria, gates). No commit or PR without explicit user approval.
+**This is a program roadmap, not a phase plan.** Each phase below = one branch cut from up-to-date `origin/develop` (`git fetch origin` first) = one PR into `develop`. Each phase gets its own task-level plan doc at phase start, in the format of `docs/archive/plans/vendored-reui-sortable.md` (waves, acceptance criteria, gates). No commit or PR without explicit user approval.
 
 **Idea doc:** `docs/ideas/reui-component-migration.md` — component→surface map, decision gates, not-doing list. Settled there ≠ re-asked here.
 

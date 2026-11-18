@@ -217,7 +217,7 @@ Place `pipeline` + `deals` after `weekly-sync` (before `executive`), mirroring t
 
 **T-P6 Assigning a PIC / unassigned deals** (entry in `deals`)
 - An unassigned deal shows "Assign PIC" on its page (OpportunityDetail.tsx:305, 541-548; dialog "Assign PIC", components/AssignPicModal.tsx:80-126).
-- Who: `pipeline:edit_all` can assign any time; `pipeline:edit_own` only when the deal has no PIC (boardLogic.ts:73-80; backend lib/pipelineAccess.ts). Whether edit_own may pick someone other than themselves: UNVERIFIED (plan docs/plans/claim-unassigned-deals.md D1/D4 — read before writing).
+- Who: `pipeline:edit_all` can assign any time; `pipeline:edit_own` only when the deal has no PIC (boardLogic.ts:73-80; backend lib/pipelineAccess.ts). Whether edit_own may pick someone other than themselves: UNVERIFIED (plan docs/archive/plans/claim-unassigned-deals.md D1/D4 — read before writing).
 - Reassigning an already-assigned deal goes through Edit, not Assign PIC (OpportunityDetail.tsx:18-24, 304).
 - Unassigned deals show in the Swimlane's "Unassigned" lane.
 

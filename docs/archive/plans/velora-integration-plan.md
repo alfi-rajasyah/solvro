@@ -3,7 +3,7 @@
 > **PIVOT 2026-08-14 (after Phase 1) — this plan's architecture is SUPERSEDED. Do not implement phases 2–9 as written.** The user redefined the integration as a **native port**: Velora's features are re-implemented inside the Solvro repo (Prisma models, Express routes, React pages) — no separate backing service, no `/pipeline-api`, no Velora-repo phases. Phase 1's merged infra was reverted (PR #148; the develop→main promotion #147 was closed). The PRD's §2 UI/UX specs and §5 permissions mapping remain valid as feature specs; §3 (API contract) and §4 (topology) are void. A replacement port plan must be written before further implementation. The dev stack's Velora services remain as behavior reference + one-time data source.
 
 **Status:** approved 2026-08-14, ready for implementation. Written for a fresh session: read this file and the PRD, then start Phase 1.
-**Spec (binding):** `docs/plans/velora-integration-prd.md` — approved in full, every open question settled. This plan sequences it; the PRD defines it. On any conflict, the PRD wins.
+**Spec (binding):** `docs/archive/plans/velora-integration-prd.md` — approved in full, every open question settled. This plan sequences it; the PRD defines it. On any conflict, the PRD wins.
 **Artifacts:** PRD page https://claude.ai/code/artifact/738d8c58-3a7a-411e-9139-2cf43b70f5f3
 
 ## Settled decisions (do not re-litigate)

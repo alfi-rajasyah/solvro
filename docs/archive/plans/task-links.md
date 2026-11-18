@@ -6,7 +6,7 @@ Status: in progress (2026-11-12). Archive path once shipped: `docs/archive/plans
 
 Settle "task attachments" (`docs/ISSUES.md`, Pending features) with decision
 D-13, option "Links only": tasks reuse the label + URL document links that
-projects and customers already have (`docs/plans/project-customer-links.md`).
+projects and customers already have (`docs/archive/plans/project-customer-links.md`).
 No file storage.
 
 ## Decisions

@@ -2,7 +2,7 @@
 
 > **PIVOT 2026-08-14: the architecture half of this PRD is SUPERSEDED.** The user redefined the integration as a **native port** — Velora's features re-implemented inside the Solvro repo (Prisma/Express/React), no separate backing service. Still valid as feature spec: §0 (lifecycle), §2 (UI/UX), §5 (permissions mapping, minus the token-array mechanics), §6 guardrails 1–3/6–7. Void: §3 (API contract — no `/pipeline-api`, no two verifiers), §4 (topology — no second service/database), §7 (delivery mapping). Phase 1's infra was reverted (PR #148).
 
-**Status:** **APPROVED in full — 2026-08-14** (user review, section by section; every §8 question settled). Implementation plan: `docs/plans/velora-integration-plan.md`.
+**Status:** **APPROVED in full — 2026-08-14** (user review, section by section; every §8 question settled). Implementation plan: `docs/archive/plans/velora-integration-plan.md`.
 **Companion doc:** the file-level rewrite plan (artifact "Velora → Solvro: The Rewrite Plan"). That doc says *which files* die or get rewritten; this PRD says *what gets built* and *how it must behave*.
 **Source repos:** Solvro (this repo, GitHub) · VeloraApp (`FS3P/VeloraApp`, GitLab mirror on GitHub). All Velora facts below were extracted from Velora source, not from memory.
 
@@ -359,7 +359,7 @@ Role assignment: Solvro's built-in roles are `SA`, `TAM`, `ADMIN`, `STAKEHOLDER`
 
 ## 7. Delivery mapping
 
-> **APPROVED 2026-08-14.** Expanded into phases in `docs/plans/velora-integration-plan.md`.
+> **APPROVED 2026-08-14.** Expanded into phases in `docs/archive/plans/velora-integration-plan.md`.
 
 | Batch (rewrite plan) | Repo(s) | Solvro pipeline shape |
 |---|---|---|

@@ -1,7 +1,7 @@
 # Design Drift Fixes — Implementation Plan
 
 Status: **approved 2026-11-02 (user)** — run unattended end to end; one PR into `develop`.
-Spec: `docs/plans/design-drift-fixes-spec.md` (approved 2026-11-02). Branch: `fix/design-drift` off `origin/develop`.
+Spec: `docs/archive/plans/design-drift-fixes-spec.md` (approved 2026-11-02). Branch: `fix/design-drift` off `origin/develop`.
 Visual reference: Doop canvas `RRWCRKA9N7`, page **06 · Design fixes — before / after**.
 Phase = branch = one PR into `develop`; each task below = one commit. Every commit and the PR wait for explicit user approval (CLAUDE.md).
 

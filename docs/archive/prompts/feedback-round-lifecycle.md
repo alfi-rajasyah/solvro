@@ -1,6 +1,6 @@
 # Goal prompt — feedback round (lifecycle, hold, offboarding, help)
 
-Read `docs/plans/feedback-round-lifecycle-spec.md` and `docs/plans/feedback-round-lifecycle-plan.md` in full, then execute the plan as orchestrator. You write no feature code.
+Read `docs/archive/plans/feedback-round-lifecycle-spec.md` and `docs/archive/plans/feedback-round-lifecycle-plan.md` in full, then execute the plan as orchestrator. You write no feature code.
 
 **Setup.** `git fetch origin`; work on `feat/feedback-round-lifecycle`, rebased on `origin/develop`. Dev stack up (`docker compose up -d`).
 

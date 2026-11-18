@@ -1,7 +1,7 @@
 # Feedback round — lifecycle, hold, offboarding, help: plan
 
 **Status:** PR #214 open, waiting for CI and review — see [Progress](#progress) (last updated 2026-11-10)
-**Spec:** `docs/plans/feedback-round-lifecycle-spec.md` — requirements, contracts, copy, decisions. This file is only the task breakdown.
+**Spec:** `docs/archive/plans/feedback-round-lifecycle-spec.md` — requirements, contracts, copy, decisions. This file is only the task breakdown.
 **Branch / PR:** `feat/feedback-round-lifecycle` → one PR into `develop`. Tasks = commits.
 
 ## Progress
