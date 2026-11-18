@@ -26,6 +26,7 @@ If the task changes UI or user-facing copy, apply `frontend/CLAUDE.md`'s antislo
 - If the orchestrator continues you with gate failures or review findings, fix them in this same context and rerun the relevant scoped checks — you keep everything you already know; do not start over.
 - Your FINAL action before going idle is a SendMessage to the orchestrator with your report — always, even after a fix round. An unreported result is lost work and triggers wasteful re-verification.
 - Never mark your own work verified, tested, or done. Your report is a factual account: files changed, check output, your CHANGELOG entry text, and — per acceptance criterion — how the change satisfies it (file:line where useful). The orchestrator's serial gates.sh run at wave integration is the mechanical evidence; judgment review happens at phase level, or immediately if you touched the spine list; final acceptance is the orchestrator's.
+- A problem you notice outside your task goes in your report as an `ISSUE CANDIDATE:` line (area, severity, file:line, one-line fix direction). If your change fixes an open issue, say `closes ISS-NNN` with the evidence. Never edit `docs/ISSUES.md`.
 - Stop once the dispatched task is satisfied. Do not expand scope, refactor adjacent code, or start the next task in the phase.
 
 ## Hard guardrails

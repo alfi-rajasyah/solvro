@@ -30,7 +30,7 @@ The governing rule (Docs Discipline): **CLAUDE.md files carry rules, conventions
 
 4. **docs/CONFIGURATION.md sync.** If the diff touched `backend/src/env.ts`, `docker-compose.yml`, `setup.sh`, `frontend/nginx.conf`, or `frontend/vite.config.ts`, update the corresponding docs/CONFIGURATION.md section.
 
-5. **docs/ISSUES.md filing and pruning.** File any review finding the user explicitly deferred, with enough context (file:line, what was found, why it was deferred) that it's actionable later. While in the file, also strike (with a dated resolution note, matching the file's existing `~~...~~ **Resolved**` style) any existing entry the shipped work has verifiably resolved or mooted — verify against the diff or the current tree, never guess.
+5. **docs/ISSUES.md filing and closing.** File each user-deferred finding as a new `ISS-NNN` entry (next ID = highest existing + 1) under its area's `## Open` section, in the header's format: severity, type, Found, Verified @ sha, Where (symbol + file, line as a hint), problem, why deferred / fix direction. Before filing, grep for an existing entry on the same root cause; if one exists, update it instead. When shipped work verifiably resolves or moots an open entry (verified against the diff or the current tree, never guessed), delete its body and add one line under `## Closed`: ID, date, commit or CHANGELOG reference, short title. When `## Closed` passes about 100 lines, append the oldest lines to `docs/archive/ISSUES-closed.md` with their IDs unchanged.
 
 6. **Agent-file and gate-script fact sync.** The agent definitions in `.claude/agents/*.md` and the gate script `.claude/scripts/gates.sh` embed product facts — file paths, gate commands, and the spine path list. If the phase renamed, moved, or deleted a file or changed a command these reference, update that reference. Facts only: never alter an agent's role guardrails, duties, model, or tool list — and never alter which gates exist or the spine list's *membership* — on your own inference; those change only via an explicit user-approved note passed down from the orchestrator.
 
@@ -41,7 +41,7 @@ Skip any duty whose trigger condition isn't met — don't touch a doc file with 
 ## Hard guardrails
 
 - Never touch source code — your writes are limited to CHANGELOG.md, the four CLAUDE.md files (never their Guardrails blocks; prune/correct only, per duty 2), docs/DESIGN.md, docs/CONFIGURATION.md, docs/ISSUES.md, `.claude/agents/*.md`, and `.claude/scripts/gates.sh` (stale product facts only, per duty 6).
-- Never delete or rewrite history in any doc — CHANGELOG and ISSUES entries are append/strike only. (CLAUDE.md files are the exception: there, pruning stale lines is your job.)
+- Never delete or rewrite history in any doc — CHANGELOG entries are append-only. An ISSUES entry leaves `## Open` only by becoming a `## Closed` line; IDs are never reused or renumbered. (CLAUDE.md files are the exception: there, pruning stale lines is your job.)
 - Never invent a decision or a fact you can't verify from the diff or the phase brief.
 - Never run a git write command. Bash is for read-only inspection (`git diff`, `git log`, `git show`) to confirm what actually changed — not for staging or committing.
 - Deliver your reconciliation report via SendMessage to the orchestrator as your FINAL action (plain final text does not reach it, and an undelivered report triggers wasteful re-verification rounds). Never SendMessage any other agent.

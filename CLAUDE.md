@@ -40,13 +40,13 @@ MUST/NEVER invariants. User-owned — agents read this block; only the user edit
 | `docs/reference/` | Living reference: `paper-extraction/` (DESIGN.md's regeneration source), agent-architecture rationale, `antislop.md` (the UI and copy filter: an unmodified upstream file, updated only by replacing it whole) |
 | `docs/DESIGN.md` | Design system ("Technical Precision") — binding, docs-keeper-owned |
 | `docs/CONFIGURATION.md` | Env vars, ports, volumes, prod deploy (`setup.sh`) — docs-keeper-owned |
-| `docs/ISSUES.md` | Known issues & deferred findings — docs-keeper-owned |
+| `docs/ISSUES.md` | Open issues by area and severity (IDs `ISS-NNN`, never reused), closed one-liners at the end; format defined in its header — docs-keeper-owned |
 | `docs/archive/` | Superseded docs & dated snapshots |
 | `CHANGELOG.md` | What shipped — the public, release-facing record |
 
 Everything in this table is tracked in git — every `CLAUDE.md`, `.claude/`, and `docs/` included (decided by the user 2026-10-01; `gates.sh`'s `guardrail-local-only-tracked` fails if they stop being tracked). Docs ride in the same phase PR as the code they describe: the phase's plan in `docs/plans/`, its deferred findings in `docs/ISSUES.md`, and any `DESIGN.md` / `CONFIGURATION.md` sync. The repo can be public while a PR's CI runs, so these files must never hold secrets, tokens, or credentials.
 
-Specs and plans land in `docs/plans/` no matter which tool or skill writes them — never in tool-named folders (a past `docs/superpowers/` was archived for this reason). When a feature ships, its idea/plan/prompt files move to `docs/archive/`: the orchestrator `git mv`s them in the PR that completes the plan and sets `Status: shipped YYYY-MM-DD` (`gates.sh`'s `docs-plans-status` fails a shipped plan left in `docs/plans/`). Code comments that cite a plan use its eventual archive path (`docs/archive/plans/<name>.md`) from the start, never a bare `docs/plans/` path or a bare decision id — every plan ends up archived, so a live-path citation goes stale at archive time.
+Specs and plans land in `docs/plans/` no matter which tool or skill writes them — never in tool-named folders (a past `docs/superpowers/` was archived for this reason). When a feature ships, its idea/plan/prompt files move to `docs/archive/`: the orchestrator `git mv`s them in the PR that completes the plan and sets `Status: shipped YYYY-MM-DD` (`gates.sh`'s `docs-plans-status` fails a shipped plan left in `docs/plans/`). Code comments that cite a plan use its eventual archive path (`docs/archive/plans/<name>.md`) from the start, never a bare `docs/plans/` path or a bare decision id — every plan ends up archived, so a live-path citation goes stale at archive time. Code comments and plans cite a known issue by its ID (`docs/ISSUES.md` ISS-042), never by section heading or entry title.
 
 ## Traps (cross-cutting)
 
