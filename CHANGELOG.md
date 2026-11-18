@@ -25,6 +25,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 - `backend/src/routes/admin.ts`: `DELETE /admin/users/:id` and `POST /admin/users/:id/offboard` accept up to 2,000 customer owner choices, shared in one constant (`MAX_CUSTOMER_OWNER_CHOICES`), instead of 500. A user with more customers than the old limit could not be deleted or handed over: the request failed validation. The new limit stays well under the 1 MB body limit, and keeps the per-customer loop inside the 30-second transaction timeout (about 3 ms per customer). Tests in `backend/test/userDeleteCustomerOwner.test.ts` and `backend/test/offboarding.test.ts` send 600 entries.
 
+### Added — 2026-11-18 — Tests for links in guest and export output, the deadlock retry, and a racing user delete
+
+- `backend/test/shareLinks.test.ts`: a project link and two task links (one on a milestone) never appear in the guest payload, and the payload keeps its allow-listed shape.
+- `frontend/src/lib/gantt/exportExcel.test.ts`, `exportPdf.test.ts`: the Gantt Excel and PDF builders emit no link label or URL, even when a task object carries links.
+- `backend/test/withDeadlockRetry.test.ts` (new): the retry policy of `withDeadlockRetry` — which errors it retries, that it stops after two attempts, and which errors it never retries.
+- `backend/test/userDeleteCustomerOwner.test.ts`: a user delete raced against a new customer for the same user ends in a consistent state, with no server error and no orphaned ownership.
+
 ### Changed — 2026-11-18 — Agent instructions point at the code that exists
 
 - `CLAUDE.md`: the notes guardrail now names the Gantt exports (`frontend/src/lib/gantt/export*.ts`) as the export code to verify. It named `frontend/src/lib/export/`, which was deleted with the Reports export packet. Two dated notes in the Guardrails block (the old three-branch flow, a rewrite date) are removed. The rules themselves are unchanged.

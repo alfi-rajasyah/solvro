@@ -177,4 +177,50 @@ describe("DELETE /admin/users/:id — customer owners", () => {
     expect(await prisma.user.findUnique({ where: { id: w.leaver.userId } })).toBeNull();
     expect(await prisma.customer.count({ where: { tamId: w.receiver.userId } })).toBe(602);
   }, 60_000);
+
+  // The delete locks the user row and re-reads the owned customers under that
+  // lock, so a customer that names the user as owner either commits first (the
+  // delete then sees it and asks for a new owner) or fails on the foreign key.
+  // The race is timing-dependent, so it runs a few rounds; every round must end
+  // in one of the two consistent states and never in a 500.
+  it("a delete racing a new customer for the same owner ends consistent: no 500, no orphaned ownership", async () => {
+    const admin = await createAdminAndToken();
+    for (let round = 0; round < 8; round++) {
+      const target = await createUserWithRole("TAM");
+      const name = uniq("Racing customer");
+      const [delRes, createRes] = await Promise.all([
+        del(admin.token, target.userId),
+        request(app)
+          .post("/customers")
+          .set(auth(admin.token))
+          .send({ name, description: "", tamId: target.userId }),
+      ]);
+
+      expect(delRes.status, JSON.stringify(delRes.body)).toBeLessThan(500);
+      expect(createRes.status, JSON.stringify(createRes.body)).toBeLessThan(500);
+      expect([204, 409]).toContain(delRes.status);
+
+      const user = await prisma.user.findUnique({ where: { id: target.userId } });
+      const customers = await prisma.customer.findMany({ where: { name } });
+      // Nobody is left pointing at a user that no longer exists, and no
+      // customer was silently left unowned by the delete.
+      expect(await prisma.customer.count({ where: { tamId: target.userId } })).toBe(
+        user ? customers.length : 0,
+      );
+
+      if (delRes.status === 204) {
+        expect(user).toBeNull();
+        // Deleted: the racing create must have been refused, not left a customer behind.
+        expect(createRes.status).toBeGreaterThanOrEqual(400);
+        expect(customers).toHaveLength(0);
+      } else {
+        // Refused cleanly: the user and the new customer both stand, still linked.
+        expect(delRes.body.code).toBe("customer_owner_required");
+        expect(user).not.toBeNull();
+        expect(createRes.status).toBe(201);
+        expect(customers).toHaveLength(1);
+        expect(customers[0].tamId).toBe(target.userId);
+      }
+    }
+  });
 });
