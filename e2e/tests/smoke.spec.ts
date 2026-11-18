@@ -8,6 +8,16 @@ import { test, expect, loginViaUi, openKanban } from "../fixtures/test";
 // Everything else — login, kanban render, overflow, console/page errors —
 // is kept.
 
+// Exact host match, so a look-alike such as accounts.google.com.example.org
+// still counts as an app error.
+function isGoogleScriptUrl(url: string): boolean {
+  try {
+    return new URL(url).hostname === "accounts.google.com";
+  } catch {
+    return false;
+  }
+}
+
 test.describe("smoke", () => {
   test("login succeeds and lands off the login screen", async ({ page }) => {
     await loginViaUi(page);
@@ -46,7 +56,14 @@ test.describe("smoke", () => {
     const errors: string[] = [];
     page.on("pageerror", (e) => errors.push(e.message));
     page.on("console", (m) => {
-      if (m.type() === "error") errors.push(m.text());
+      if (m.type() !== "error") return;
+      // Google's sign-in script logs its own errors when the origin is not
+      // registered for the configured client ID (a dev database with Google
+      // sign-in set up, opened on localhost). Those are Google's, not the app's.
+      // The 403 carries Google's URL; the "[GSI_LOGGER]" line carries none,
+      // so it is matched by the prefix that only Google's library prints.
+      if (isGoogleScriptUrl(m.location().url) || m.text().startsWith("[GSI_LOGGER]")) return;
+      errors.push(m.text());
     });
 
     await loginViaUi(page);
