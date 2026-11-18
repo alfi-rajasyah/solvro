@@ -2,7 +2,7 @@
 
 **Status:** approved design, ready to build (2026-11-10)
 **Branch:** `feat/feedback-round-lifecycle` (off `origin/develop`) — one PR into `develop`
-**Plan:** `docs/plans/feedback-round-lifecycle-plan.md`
+**Plan:** `docs/archive/plans/feedback-round-lifecycle-plan.md`
 **Visual source:** Doop canvas `RRWCRKA9N7`, page "Feedback round — lifecycle, hold, offboarding, help" (frames: index `dYT7YSwFPx`, F2 `TuDZ9AkBm2`, F4 `Y0ch7rkgqK`, F1 `lMfRG5wSMW`, F7 `VjlsqsKuWi`, F3 `wSFv6w_7az`, F5 `VXyRaKS4ih`, F6 `RdIwK_3LIB`). Where a mockup and this spec disagree on behaviour or copy, this spec wins; `docs/DESIGN.md` wins on visuals.
 
 Code comments that cite this document use `docs/archive/plans/feedback-round-lifecycle-spec.md`.

@@ -1,6 +1,6 @@
 # antislop audit 001 (2026-11-10)
 
-Status: findings only. Nothing in the app was changed. Pick the numbers to fix; numbers not named stay untouched.
+Status: shipped 2026-11-10 in PR #220 (all 23 items plus owner-review items 24–28). Deferred findings: `docs/ISSUES.md`, section "Antislop audit 001 fixes — deferred findings".
 
 Scope: `frontend/src` app code (vendored `components/ui` and `components/reui` read only where app code depends on them), checked against antislop 3.2.27 rules R-01 to R-40 with `docs/DESIGN.md` as the design direction.
 

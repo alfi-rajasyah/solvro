@@ -4,7 +4,7 @@ Copy-paste the block below into a fresh session to execute the phase.
 
 ---
 
-Execute the phase planned in `/Users/alfirajasyah/Documents/Solvro/docs/plans/claim-unassigned-deals.md` (read it first, in full).
+Execute the phase planned in `/Users/alfirajasyah/Documents/Solvro/docs/archive/plans/claim-unassigned-deals.md` (read it first, in full).
 
 Context: on the Pipeline page an unassigned deal (`picId` null) is locked for every SA — the own-permission compares `picId` to the caller and null never matches — so nobody below `pipeline:edit_all` can give it a PIC. The fix adds one action: `POST /opportunities/:id/assign` behind a new gate (`edit_all` always; `edit_own` only on a deal with no PIC), an **Assign PIC** button + small dialog on the opportunity detail page, an "Assigned to <name>" activity note, and a New-opportunity default of PIC = creator. An unassigned deal stays locked for everything else — that is a settled decision, not a gap.
 

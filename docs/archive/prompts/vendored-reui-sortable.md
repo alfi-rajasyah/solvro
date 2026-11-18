@@ -4,7 +4,7 @@ Copy-paste the block below into a fresh session to execute the phase.
 
 ---
 
-Execute the phase planned in `/Users/alfirajasyah/Documents/Solvro/docs/plans/vendored-reui-sortable.md` (read it first, in full).
+Execute the phase planned in `docs/archive/plans/vendored-reui-sortable.md` (read it first, in full).
 
 Context: TaskPanel subtasks reorder only via up/down buttons, and sections have no reorder UI at all despite `Section.position` + `PATCH /sections/:id` already accepting `position`. The plan vendors ReUI's Sortable (Base-UI native, zero new deps — all four of its deps are already installed) into `frontend/src/components/reui/sortable.tsx` and wires two consumers: drag-only subtask reorder in TaskPanel, and a "Reorder sections" modal in the List view. ProjectList's existing task-drag `DndContext` is untouched by design — Sortable is single-list and must not be nested inside it.
 
