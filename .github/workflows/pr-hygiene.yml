@@ -45,7 +45,11 @@ jobs:
             printf '%s' "$PR_BODY" | grep -inE "$pattern"
             bad=1
           fi
-          log="$(git log --format='%h %B' "$BASE_SHA..$HEAD_SHA")"
+          # Commits already on main are published history (a merge of main into
+          # develop brings them in); only commits new to this PR are checked.
+          git rev-parse -q --verify refs/remotes/origin/main >/dev/null \
+            || git fetch -q --no-tags origin main:refs/remotes/origin/main
+          log="$(git log --format='%h %B' "$BASE_SHA..$HEAD_SHA" --not refs/remotes/origin/main)"
           hits="$(printf '%s\n' "$log" | grep -iE "$pattern" || [ $? -eq 1 ])"
           if [ -n "$hits" ]; then
             echo "::error::A commit message contains AI attribution:"
