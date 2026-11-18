@@ -1,7 +1,7 @@
 import { test, expect, loginViaUi } from "../fixtures/test";
 
 // Regression cover for the "duplicate-chip mouse race" (docs/archive/ISSUES-2026-11-18-phase-log.md, ReUI
-// Filters phase deferred findings): Base UI's `useMenuItemCommonProps` can
+// Filters phase deferred findings; open follow-up: docs/ISSUES.md ISS-156): Base UI's `useMenuItemCommonProps` can
 // fire a programmatic `itemRef.current.click()` on mouseup once
 // `allowMouseUpTriggerRef` is armed by a press held >=200ms, and
 // `MenuCheckboxItem` (the value-picker rows inside a field's submenu, e.g.
