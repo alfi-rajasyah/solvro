@@ -2587,7 +2587,8 @@ const GanttTreeRow = memo(function GanttTreeRow({
   heightRem: number
   bandRem: number
   columns: GanttColumn[]
-  nameWidth: number
+  // SOLVRO PATCH: number | string (CSS length), see GanttTreePanelConfig.nameColumnWidth
+  nameWidth: number | string
   dimmed: boolean
   selected: boolean
   onSelectedChange?: (id: string, checked: boolean) => void

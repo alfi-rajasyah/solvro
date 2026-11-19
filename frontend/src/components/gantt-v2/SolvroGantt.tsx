@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { parseISO } from "date-fns";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import {
@@ -248,6 +248,7 @@ const TREE_FIXED_COLUMNS_WIDTH =
   TREE_COLOR_COLUMN_WIDTH +
   TREE_STATUS_COLUMN_WIDTH;
 const TREE_NAME_COLUMN_MIN_WIDTH = 100;
+const NAME_COL_VAR = "--solvro-gantt-name-col";
 
 function clampTreeWidth(width: number): number {
   return Math.min(Math.max(width, TREE_PANEL_MIN_WIDTH), TREE_PANEL_MAX_WIDTH);
@@ -452,12 +453,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // The engine can render the pane narrower than `treeWidth` (container clamp
   // on narrow viewports, live splitter drag) without reporting it, so the
   // name column follows the MEASURED pane width, never the stored one
-  // (docs/ISSUES.md ISS-093, ISS-095). Null until the pane has mounted.
-  const [paneWidth, setPaneWidth] = useState<number | null>(null);
-  const nameColumnWidth = Math.max(
+  // (docs/ISSUES.md ISS-093, ISS-095). The measurement lands in a CSS
+  // variable on the pane (see the layout effect near `apiRef`), not React
+  // state, so a drag does not re-render every row per frame; the px fallback
+  // covers the frame before the first measure.
+  const nameColumnWidth = `var(${NAME_COL_VAR}, ${Math.max(
     TREE_NAME_COLUMN_MIN_WIDTH,
-    (paneWidth ?? treeWidth) - TREE_FIXED_COLUMNS_WIDTH,
-  );
+    treeWidth - TREE_FIXED_COLUMNS_WIDTH,
+  )}px)`;
   // Memoized: gantt.tsx:1623-1634 hands GanttViewConfigContext consumers the
   // PREVIOUS config object across renders unless a value actually changed
   // (shallowEqualRecord) — passing a fresh `treePanel` object literal every
@@ -636,6 +639,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
         nextRootOrder.splice(clamped, 0, resourceId);
 
         const patches = nextRootOrder
+          .filter((id) => id !== sectionNodeId(null))
           .map((nodeId, i) => ({ id: parseSectionId(nodeId), position: i }))
           .filter((p): p is { id: number; position: number } => typeof p.id === "number")
           .filter(({ id, position }) => sections.find((s) => s.id === id)?.position !== position);
@@ -991,13 +995,20 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // column follows its real width. ResizeObserver delivers at most once per
   // frame, which also throttles the live splitter drag.
   const ganttMounted = !isLoading && !isError && resources.length > 0;
-  useEffect(() => {
+  // Layout effect: a clamped pane must not paint one frame with the stale width.
+  useLayoutEffect(() => {
     if (!ganttMounted) return;
     const pane = ganttContainerRef.current?.querySelector<HTMLElement>(
       '[data-slot="gantt-tree-pane"]',
     );
     if (!pane) return;
-    const update = () => setPaneWidth(Math.round(pane.getBoundingClientRect().width));
+    const update = () => {
+      const w = Math.round(pane.getBoundingClientRect().width);
+      pane.style.setProperty(
+        NAME_COL_VAR,
+        `${Math.max(TREE_NAME_COLUMN_MIN_WIDTH, w - TREE_FIXED_COLUMNS_WIDTH)}px`,
+      );
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(pane);
