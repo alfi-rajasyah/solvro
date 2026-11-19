@@ -412,7 +412,7 @@ export function HandoverModal({ open, user, preview, onClose, onDone, onStale }:
 
         {isHandoverPreviewEmpty(preview) && (
           <p role="status" data-testid="handover-empty" className="text-sm text-on-surface-variant">
-            Nothing is left to hand over for {user.username}. Confirm to deactivate the account.
+            Nothing is left to hand over for {user.username}. Hand over and deactivate will only deactivate the account.
           </p>
         )}
         {!complete && missingTams.size > 0 && (

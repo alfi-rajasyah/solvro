@@ -21,14 +21,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 - `frontend/src/components/admin/HandoverModal.tsx`: the handover dialog reloads its list of work when the browser window regains focus. If nothing is left to hand over, it stays open with a short notice instead of closing, and a late reload can no longer reopen it after a successful handover.
 - `frontend/src/pages/Admin.tsx`: the Project Overrides reassign column uses a searchable TAM picker instead of a full user list in every row. After a pick the field clears and shows the current TAM.
 - `frontend/src/index.css`: icon size and display classes now apply. The Material Symbols stylesheet loads into a cascade layer below Tailwind's utilities, so icons render at the size their classes set (for example 20px in the sidebar) instead of always at 24px.
-- `frontend/src/components/InstallBanner.tsx`: install and dismiss are separate buttons instead of a button inside a button, and the dismiss target is 32px.
+- `frontend/src/components/InstallBanner.tsx`: install and dismiss are separate buttons instead of a button inside a button, and the dismiss button is 32px with a 44px touch area on phones.
 - `frontend/vite.config.ts`, `frontend/index.html`: a 192px maskable app icon and a favicon for dark browser themes.
 - `frontend/src/lib/queries.ts`: creating a task refreshes the Daily Review lists. Ticking a service on a customer or project, or editing its tools, updates at once and rolls back if the save fails. Changing a task's section, by drag or from the task panel, updates the section shown in an open task panel. After a failed section reorder, the sections reload from the server before later queued moves are sent.
 - `frontend/src/pages/CustomerDetail.tsx`: the customer page reads the iTop organisation name from the customer record.
 
 ### Added — 2026-11-19 — Component and hook tests
 
-- `frontend/package.json`: jsdom and Testing Library (`@testing-library/react`, `@testing-library/dom`, `@testing-library/user-event`) as development dependencies. Frontend tests named `*.test.tsx` run in a browser-like DOM, with new tests for the handover dialog, the reactivation dialog, the install banner and the query hooks.
+- `frontend/package.json`: jsdom and Testing Library (`@testing-library/react`, `@testing-library/dom`, `@testing-library/user-event`) as development dependencies. Frontend tests named `*.test.tsx` run in a browser-like DOM, with new tests for the handover dialog, the reactivation dialog, the TAM picker, the install banner and the query hooks.
 
 ### Fixed — 2026-11-19 — Fixes in project create locks, the iTop integration, and keyboard drag
 
