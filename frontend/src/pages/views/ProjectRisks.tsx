@@ -404,11 +404,9 @@ function RisksDataGrid({
         accessorKey: "probability",
         header: ({ column }) => <DataGridColumnHeader column={column} title="Prob" />,
         // A 1-5 scale-select control, not a magnitude column a user scans
-        // for ordering — left unsortable so its header can stay centered
-        // (the vendored DataGridColumnHeader's sortable path only supports
-        // left/right alignment, not center — see gantt/data-grid-column-
-        // header.tsx's `alignEnd`), matching the pre-DataGrid table's own
-        // `text-center` treatment exactly.
+        // for ordering — left unsortable, matching the pre-DataGrid table's
+        // own `text-center` treatment. (The vendored header can center a
+        // sortable column too, via `meta.headerClassName: "text-center"`.)
         enableSorting: false,
         cell: ({ row }) => {
           const risk = row.original;

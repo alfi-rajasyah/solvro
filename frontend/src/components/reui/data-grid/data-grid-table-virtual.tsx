@@ -56,6 +56,9 @@ import type {
 import { cn } from "@/lib/utils"
 import { Spinner } from "@/components/ui/spinner"
 
+// SOLVRO PATCH: shared empty list for the virtualization-off branch
+const NO_VIRTUAL_ITEMS: VirtualItem[] = []
+
 type DataGridTableVirtualScrollElements = {
   containerElement: HTMLDivElement | null
   scrollElement: HTMLElement | null
@@ -704,9 +707,11 @@ function DataGridTableVirtual<TData>({
     ...virtualizerOptionsRest,
   }) as DataGridTableVirtualizerInstance
 
+  // SOLVRO PATCH: a stable empty array when virtualization is off, so the
+  // fetch-more effect's dependency does not change on every render
   const virtualItems = isVirtualizationEnabled
     ? virtualizer.getVirtualItems()
-    : []
+    : NO_VIRTUAL_ITEMS
   const totalSize = isVirtualizationEnabled ? virtualizer.getTotalSize() : 0
   const measureRowRef =
     isVirtualizationEnabled && customMeasureElement

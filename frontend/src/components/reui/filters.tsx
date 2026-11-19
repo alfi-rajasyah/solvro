@@ -710,6 +710,8 @@ function useFieldOptions<T = unknown>(
     return () => {
       cancelled = true
     }
+  // SOLVRO PATCH: `field` is deliberately not a dependency; it is typically rebuilt each render, and the load must refire only on query/enabled changes (the loader is read from it at call time)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAsync, enabled, debouncedQuery])
 
   const resolveSelected = useCallback(
