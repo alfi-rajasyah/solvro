@@ -178,7 +178,7 @@ describe("createItopClient transport errors and request shape (mocked fetchImpl)
   });
 
   it("refuses a redirect (code 'redirect') and never follows it with the token", async () => {
-    let seenRedirect: RequestRedirect | undefined;
+    let seenRedirect: RequestInit["redirect"];
     let calls = 0;
     const fetchImpl = (async (_url: unknown, init?: RequestInit) => {
       calls += 1;
