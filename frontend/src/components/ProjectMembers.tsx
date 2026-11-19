@@ -22,6 +22,9 @@ import {
 
 const MAX_AVATARS = 3;
 
+const SA_BUTTON_NOTE = "The TAM and added members. The SA is not counted.";
+const SA_NOT_COUNTED = "The SA is listed below but not counted as a member.";
+
 export function ProjectMembersButton({
   project,
   canManage,
@@ -35,7 +38,7 @@ export function ProjectMembersButton({
   const count = (members?.length ?? 0) + 1;
   // The count and avatars are the TAM plus added members; the SA sees the
   // project through its own visibility arm and is never a member row.
-  const saNote = project.sa ? "The TAM and added members. The SA is not counted." : undefined;
+  const saNote = project.sa ? SA_BUTTON_NOTE : undefined;
 
   return (
     <>
@@ -151,6 +154,11 @@ function ProjectMembersDialog({
           Members can view and edit everything in this project, like its TAM. The project's SA
           can already see it and isn't added as a member.
         </p>
+        {project.sa && (
+          <p className="text-xs text-on-surface-variant" data-testid="project-members-sa-note">
+            {SA_NOT_COUNTED} The count on the button covers the TAM and added members.
+          </p>
+        )}
 
         {error && (
           <Alert variant="destructive">

@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ProjectMembersButton } from "@/components/ProjectMembers";
@@ -8,7 +9,7 @@ import type { ProjectDetail } from "@/lib/queries";
 
 vi.mock("@/lib/queries", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/queries")>();
-  return { ...actual, useProjectMembers: () => ({ data: [] }) };
+  return { ...actual, useProjectMembers: () => ({ data: [] }), useUsers: () => ({ data: [] }) };
 });
 vi.mock("@/lib/auth", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/auth")>();
@@ -33,6 +34,16 @@ describe("ProjectMembersButton", () => {
     const btn = screen.getByTestId("project-members-button");
     expect(btn.getAttribute("title")).toContain("The SA is not counted");
     expect(btn.getAttribute("aria-label")).toContain("The SA is not counted");
+  });
+  it("shows the SA sentence in the dialog, visible to touch and keyboard users", async () => {
+    mount({ id: 2, username: "sa", email: "s@x.test" });
+    await userEvent.setup().click(screen.getByTestId("project-members-button"));
+    expect(screen.getByTestId("project-members-sa-note").textContent).toContain("The SA is listed below but not counted");
+  });
+  it("omits the dialog sentence without an SA", async () => {
+    mount(null);
+    await userEvent.setup().click(screen.getByTestId("project-members-button"));
+    expect(screen.queryByTestId("project-members-sa-note")).toBeNull();
   });
   it("keeps the plain title without an SA", () => {
     mount(null);

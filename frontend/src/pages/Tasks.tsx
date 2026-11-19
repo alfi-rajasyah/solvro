@@ -53,13 +53,6 @@ const PRIORITY_ORDER: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2
 // every render that a `tasks ?? []` inline fallback would produce.
 const EMPTY_TASKS: TaskWithProject[] = [];
 
-// Only the affirmative "is" operator is offered on every filter field below —
-// the derivation in Tasks() reads just `.values[0]` per field, so a
-// select-type field's other vendored-default operators ("is not", "is
-// empty", "is not empty") would render a chip whose label lies about what's
-// actually being sent to useTasks (e.g. a "Status is not DONE" chip would
-// still filter as "Status is DONE"). Same fix as Projects.tsx's customer field.
-
 // Saved views, synced to `?view=`. "open" is the default and is written to the
 // URL as the absence of the param, so `/tasks` and `/tasks?view=open` agree.
 const VIEWS = [
