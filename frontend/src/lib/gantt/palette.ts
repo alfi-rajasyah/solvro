@@ -229,6 +229,7 @@ export const SECTION_COLOR_PRESETS = [
 // assigned deterministically by (position, id) order; explicit picks always
 // win — the sentinel is excluded from SECTION_COLOR_PRESETS so a user pick
 // can never collide with it.
+/** Returns a Map whose iteration order is board order (position, then id). */
 export function resolveSectionColors(
   sections: ReadonlyArray<Pick<Section, "id" | "position" | "color">>,
 ): Map<number, string> {
@@ -268,7 +269,8 @@ export function legendEntries(
   // Section mode: one entry per section in board order, resolved through the
   // same fallback cycling the bars use.
   const colors = resolveSectionColors(sections);
-  return [...sections]
-    .sort((a, b) => a.position - b.position || a.id - b.id)
-    .map((s): [string, string] => [s.name, colors.get(s.id) ?? DEFAULT_SECTION_COLOR]);
+  // The resolver's Map iterates in board order (position, then id), so no
+  // second sort is needed here.
+  const names = new Map(sections.map((s) => [s.id, s.name]));
+  return [...colors].map(([id, color]): [string, string] => [names.get(id) ?? "", color]);
 }

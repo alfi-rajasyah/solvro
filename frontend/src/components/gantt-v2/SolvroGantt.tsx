@@ -72,6 +72,7 @@ import {
   buildRollupEvents,
   eventPatch,
   parseTaskId,
+  parseSectionId,
   sectionNodeId,
   taskNodeId,
 } from "./adapter";
@@ -226,8 +227,9 @@ const TREE_PANEL_MAX_WIDTH = 774;
 // min and the fixed columns clip again (a deliberate user narrowing, not
 // the default — was 256px pre-T2), and on narrow desktop viewports the
 // engine renders the pane narrower than `treeWidth` without reporting it
-// (clampContainer, gantt-view.tsx:977-987), so a wide persisted width can
-// still clip the columns there — docs/ISSUES.md ISS-093, ISS-094.
+// (clampContainer in gantt-view.tsx); the name column therefore follows the
+// pane's measured width (ResizeObserver below), not `treeWidth`. The
+// remaining floor case is docs/ISSUES.md ISS-094.
 const TREE_DATES_COLUMN_WIDTH = 132;
 const TREE_COLOR_COLUMN_WIDTH = 24;
 // Height-style Status chip column. 100px comfortably fits the widest chip
@@ -294,13 +296,10 @@ function readStoredTreeWidth(): number {
 // ids onto geometry's shape; task ids pass through unchanged.
 function toGeometryCollapsedIds(resourceIds: string[]): Set<string> {
   return new Set(
-    resourceIds.map((id) =>
-      id === "section-none"
-        ? "sec-none"
-        : id.startsWith("section-")
-          ? `sec-${id.slice("section-".length)}`
-          : id,
-    ),
+    resourceIds.map((id) => {
+      const sectionId = parseSectionId(id);
+      return sectionId === undefined ? id : `sec-${sectionId ?? "none"}`;
+    }),
   );
 }
 
@@ -450,9 +449,14 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // (residuals in the constants block above), and every pixel of splitter
   // drag still goes to the name column 1:1, so dragging reveals more of a
   // truncated title without pushing the date range back out of view.
+  // The engine can render the pane narrower than `treeWidth` (container clamp
+  // on narrow viewports, live splitter drag) without reporting it, so the
+  // name column follows the MEASURED pane width, never the stored one
+  // (docs/ISSUES.md ISS-093, ISS-095). Null until the pane has mounted.
+  const [paneWidth, setPaneWidth] = useState<number | null>(null);
   const nameColumnWidth = Math.max(
     TREE_NAME_COLUMN_MIN_WIDTH,
-    treeWidth - TREE_FIXED_COLUMNS_WIDTH,
+    (paneWidth ?? treeWidth) - TREE_FIXED_COLUMNS_WIDTH,
   );
   // Memoized: gantt.tsx:1623-1634 hands GanttViewConfigContext consumers the
   // PREVIOUS config object across renders unless a value actually changed
@@ -608,7 +612,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
       const { resourceId, parentId, index } = proposal;
 
       // ---- Section-group reorder (root level only) ----
-      if (resourceId.startsWith("section-")) {
+      if (parseSectionId(resourceId) !== undefined) {
         // The "(No section)" pseudo-group has no backing Section row — old
         // engine only starts a section drag when `sectionId !== null`
         // (GanttFrame.tsx:539).
@@ -632,22 +636,22 @@ export function SolvroGantt(props: SolvroGanttProps) {
         nextRootOrder.splice(clamped, 0, resourceId);
 
         const patches = nextRootOrder
-          .filter((id) => id !== sectionNodeId(null))
-          .map((id, i) => ({ id: Number(id.slice("section-".length)), position: i }))
+          .map((nodeId, i) => ({ id: parseSectionId(nodeId), position: i }))
+          .filter((p): p is { id: number; position: number } => typeof p.id === "number")
           .filter(({ id, position }) => sections.find((s) => s.id === id)?.position !== position);
 
         if (patches.length === 0) return false; // no-op — nothing actually moved
         setActionError(null);
-        patches.forEach(({ id, position }) =>
-          updateSection.mutate(
-            { id, patch: { position } },
-            {
-              onError: (err) => {
-                setActionError(err instanceof ApiError ? err.message : "Could not reorder sections.");
-              },
-            },
+        // mutateAsync, not mutate + callbacks: TanStack fires mutate-level
+        // callbacks only for the latest call on a hook, and this fires
+        // several in a row (docs/ISSUES.md ISS-106).
+        void Promise.all(
+          patches.map(({ id, position }) =>
+            updateSection.mutateAsync({ id, patch: { position } }),
           ),
-        );
+        ).catch((err: unknown) => {
+          setActionError(err instanceof ApiError ? err.message : "Could not reorder sections.");
+        });
         return;
       }
 
@@ -678,8 +682,8 @@ export function SolvroGantt(props: SolvroGanttProps) {
       // top-level task into a subtask (or vice versa) via drag isn't
       // supported by the old engine's row-drag affordance.
       if (parentId === null || parseTaskId(parentId) !== null) return false;
-      const targetSectionId =
-        parentId === sectionNodeId(null) ? null : Number(parentId.slice("section-".length));
+      const targetSectionId = parseSectionId(parentId);
+      if (targetSectionId === undefined) return false;
 
       // `position` is one GLOBAL dense index across every top-level task in
       // the project (CLAUDE.md: "one canonical manual order"; backend's
@@ -852,11 +856,8 @@ export function SolvroGantt(props: SolvroGanttProps) {
         width: TREE_COLOR_COLUMN_WIDTH,
         align: "center",
         render: (ctx) => {
-          if (ctx.resource.id === sectionNodeId(null) || !ctx.resource.id.startsWith("section-")) {
-            return null;
-          }
-          const sectionId = Number(ctx.resource.id.slice("section-".length));
-          if (!sectionColors.has(sectionId)) return null;
+          const sectionId = parseSectionId(ctx.resource.id);
+          if (typeof sectionId !== "number" || !sectionColors.has(sectionId)) return null;
           return (
             <SectionColorCell
               sectionId={sectionId}
@@ -985,6 +986,23 @@ export function SolvroGantt(props: SolvroGanttProps) {
   );
 
   const apiRef = useRef<GanttApi<Task> | null>(null);
+
+  // Track the engine's tree pane (data-slot="gantt-tree-pane") so the name
+  // column follows its real width. ResizeObserver delivers at most once per
+  // frame, which also throttles the live splitter drag.
+  const ganttMounted = !isLoading && !isError && resources.length > 0;
+  useEffect(() => {
+    if (!ganttMounted) return;
+    const pane = ganttContainerRef.current?.querySelector<HTMLElement>(
+      '[data-slot="gantt-tree-pane"]',
+    );
+    if (!pane) return;
+    const update = () => setPaneWidth(Math.round(pane.getBoundingClientRect().width));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, [ganttMounted]);
 
   // Plan B Task 8 fix — Finding #1 (task-b8-report.md): the vendored engine
   // anchors its initial visible window on `new Date()` (gantt.tsx:342:
@@ -1636,23 +1654,21 @@ export function SolvroGantt(props: SolvroGanttProps) {
                           spread, §4). `canEdit` only — this menu already is. */}
                         <ContextMenuItem
                           className="text-xs"
-                          onClick={() =>
-                            updateTask.mutate(
-                              {
+                          onClick={() => {
+                            setActionError(null);
+                            void updateTask
+                              .mutateAsync({
                                 id: task.id,
                                 patch: { isCriticalPath: !task.isCriticalPath },
-                              },
-                              {
-                                onError: (err) => {
-                                  setActionError(
-                                    err instanceof ApiError
-                                      ? err.message
-                                      : "Could not update the Critical Path mark.",
-                                  );
-                                },
-                              },
-                            )
-                          }
+                              })
+                              .catch((err: unknown) => {
+                                setActionError(
+                                  err instanceof ApiError
+                                    ? err.message
+                                    : "Could not update the Critical Path mark.",
+                                );
+                              });
+                          }}
                         >
                           <span
                             className="material-symbols-outlined text-sm text-on-surface-variant"

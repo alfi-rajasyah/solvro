@@ -58,6 +58,9 @@ export interface GanttOverlayProps {
 
 interface Measurement {
   bars: Map<number, DOMRect>;
+  /** Milestone diamond rects; connector endpoints anchor here, not on the
+      day-box (docs/ISSUES.md ISS-098). `bars` stays the day-box for baselines. */
+  glyphs: Map<number, DOMRect>;
   contentWidth: number;
   contentHeight: number;
   scrollLeft: number;
@@ -95,6 +98,27 @@ function measureBars(scrollEl: HTMLElement): Map<number, DOMRect> {
     const bar = el.closest<HTMLElement>(BAR_SELECTOR);
     if (!bar) return;
     const r = bar.getBoundingClientRect();
+    out.set(
+      Number(el.dataset.taskId),
+      new DOMRect(
+        r.left - originRect.left + scrollEl.scrollLeft,
+        r.top - originRect.top + scrollEl.scrollTop,
+        r.width,
+        r.height,
+      ),
+    );
+  });
+  return out;
+}
+
+/** Rects of milestone diamonds (`data-milestone-glyph`), same origin as measureBars. */
+function measureGlyphs(scrollEl: HTMLElement): Map<number, DOMRect> {
+  const originRect = scrollEl.getBoundingClientRect();
+  const out = new Map<number, DOMRect>();
+  scrollEl.querySelectorAll<HTMLElement>("[data-milestone-glyph]").forEach((g) => {
+    const el = g.closest<HTMLElement>("[data-task-id]");
+    if (!el) return;
+    const r = g.getBoundingClientRect();
     out.set(
       Number(el.dataset.taskId),
       new DOMRect(
@@ -169,6 +193,7 @@ export function GanttOverlay({
       raf = 0;
       setMeasurement({
         bars: measureBars(viewport),
+        glyphs: measureGlyphs(viewport),
         contentWidth: viewport.scrollWidth,
         contentHeight: viewport.scrollHeight,
         scrollLeft: viewport.scrollLeft,
@@ -316,9 +341,11 @@ export function GanttOverlay({
     if (!measurement) return [];
     const out: Array<ConnectorRoute & { id: number; type: TaskDependency["type"] }> = [];
     for (const dep of dependencies) {
-      const predRect = measurement.bars.get(dep.predecessorTaskId);
-      const succRect = measurement.bars.get(dep.successorTaskId);
-      if (!predRect || !succRect) continue;
+      const predBar = measurement.bars.get(dep.predecessorTaskId);
+      const succBar = measurement.bars.get(dep.successorTaskId);
+      if (!predBar || !succBar) continue;
+      const predRect = measurement.glyphs.get(dep.predecessorTaskId) ?? predBar;
+      const succRect = measurement.glyphs.get(dep.successorTaskId) ?? succBar;
       out.push({ id: dep.id, type: dep.type, ...buildConnectorRoute(predRect, succRect) });
     }
     return out;
