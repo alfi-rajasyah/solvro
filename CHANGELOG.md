@@ -15,6 +15,21 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-19 — Fixes in the Gantt, the task panel and section dialog, and accessibility
+
+- `frontend/src/components/gantt-v2/`: the task name column follows the tree pane's real width, so the Dates and Status columns no longer clip on narrow windows or while dragging the pane splitter. Milestone dependency arrows meet the diamond. The Dates cell shows its range once while editing. A failed Critical Path toggle or section reorder shows an error instead of failing silently.
+- `frontend/src/components/reui/gantt/`: the drag clone uses the standard overlay shadow, and the unused go-to-date picker is removed (local patches to the vendored Gantt, marked `SOLVRO PATCH`).
+- `frontend/src/components/TaskPanel.tsx`: a failed Duplicate or Delete from the task menu shows its error at the top of the panel, not below a long subtask list. When the project's tasks fail to load, the panel shows "Could not load the task." with an inline "Try again" link instead of "Loading task…" forever.
+- `frontend/src/components/SectionReorderModal.tsx`: the Reorder sections dialog checks the project edit permission itself, its close button always works even after an interrupted drag, and after a failed save the list follows the saved order, with an error message, even when another drop follows at once. `Modal` gains an `onCloseButton` prop so a dialog can route its close button separately from Escape and backdrop clicks.
+- `frontend/src/pages/views/ProjectList.tsx`: section actions (Reorder sections, Add section, and each section's rename, duplicate and delete) show only to users with the project edit permission, which the server requires.
+- `frontend/src/hooks/useDialogFocus.ts`: dialogs keep Tab and Shift+Tab inside them when focus sits on a non-tabbable element such as a focused heading.
+- `frontend/src/components/LinksSection.tsx`: the buttons and links in the Links lists show a keyboard focus ring. The drag handles in the section dialog and the task panel's subtask list use the standard focus ring.
+- Modal and drawer titles, a Project List row, the Overview project id and the portfolio calendar year use the design system's type roles instead of off-scale sizes. The portfolio calendar bar uses the standard small radius. The epic colour picker uses larger swatches that do not overlap on touch screens.
+
+### Added — 2026-11-19 — Section reorder test
+
+- `e2e/tests/section-reorder.spec.ts`: a Playwright test that reorders sections by keyboard and checks the saved order. `e2e/tests/gantt-parity.spec.ts` gains a narrow-window check of the Gantt tree columns.
+
 ### Fixed — 2026-11-19 — Fixes in offboarding, icon sizing and the app shell, and query hooks
 
 - `backend/src/lib/offboarding.ts`: offboarding and user deletion refuse a new owner who has no access yet (a pending account or a role with no permissions) for tasks, the TAM and SA seats and customer ownership, with a clear error that the handover dialog shows. Customers move with one update per new owner instead of one per customer, and each new owner is checked once.

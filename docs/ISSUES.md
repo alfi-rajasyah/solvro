@@ -363,22 +363,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Add CriticalPathMark (glyph/chip) beside the priority indicator if either surface is revisited.
 - **Source:** snapshot line 1724, section "Critical Path mark — deferred findings (2026-09-02)"
 
-### ISS-061 · P3 · TaskPanel header-menu failure alert renders below the subtasks
-
-- **Type:** bug · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** error Alert in frontend/src/components/TaskPanel.tsx (line ~991)
-- **Problem:** A failed Delete/Duplicate from the header menu shows its error below a long subtasks list, off-screen with no feedback.
-- **Why deferred / fix direction:** Render the Alert at the top of the scroll container or scroll to top when a header-menu action sets the error.
-- **Source:** snapshot line 1761, section "Duplicate tasks, subtasks, and sections — deferred findings (2026-09-02)"
-
-### ISS-062 · P3 · ProjectList section-header actions gate on task:write; routes need project:write
-
-- **Type:** bug · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** canEdit in frontend/src/pages/views/ProjectList.tsx (line ~119); section routes in backend/src/routes/sections.ts
-- **Problem:** A custom role with task:write only sees Rename/Duplicate/Delete/Add section and gets a 403 in the action alert.
-- **Why deferred / fix direction:** Introduce `canEditSections = hasPermission(user,'project:write')` and apply to the whole header action group.
-- **Source:** snapshot line 1800, section "Duplicate tasks, subtasks, and sections — deferred findings (2026-09-02)"
-
 ### ISS-063 · P3 · Missing-title banner doesn't name the offending card
 
 - **Type:** bug · **Found:** 2026-09-10 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -402,14 +386,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Carried-over sites still use bare animate-pulse instead of components/skeletons/; the Gantt toolbar 11.5px labels and most text-[12px] sites have since been cleaned up.
 - **Why deferred / fix direction:** Sweep the remaining animate-pulse sites onto components/skeletons/; verify the DESIGN.md §2 'counts' wording.
 - **Source:** snapshot line 2240, section "Professional UI pass — deferred findings (2026-09-29, ported 2026-10-05)"
-
-### ISS-067 · P3 · TaskPanel shows 'Loading task…' forever when the tasks fetch fails
-
-- **Type:** bug · **Found:** 2026-09-29 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** TaskPanel (the `!task` branch) in frontend/src/components/TaskPanel.tsx (line ~218)
-- **Problem:** When the project-tasks query errors, tasks stays undefined and the panel spins on 'Loading task…' with no error state or retry.
-- **Why deferred / fix direction:** Minor; add an error branch driven by the tasks query's isError.
-- **Source:** snapshot line 2262, section "Collaboration & sharing — live refresh, copy links, deep links — deferred findings (2026-09-29, ported 2026-10-05)"
 
 ### ISS-068 · P3 · Filters popover keeps stealing focus after a filter is chosen
 
@@ -489,13 +465,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** The handover pickers drop PENDING users only, so a custom role with no permissions is offered and then refused by the server. The server's PENDING test is a role-name check (backend/CLAUDE.md: permission-based only). The Project Overrides reassign route and picker still accept a PENDING or zero-permission TAM.
 - **Why deferred / fix direction:** One receiver rule everywhere: add a `hasAccess` field (permissions not empty) to the /users payload, filter on it in both pickers, refuse in the reassign route, and drop the role-name test.
 
-### ISS-192 · P3 · Section reorder modal keeps its own order after a failed save
-
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `b4bb1df`
-- **Where:** local `order` seeding in frontend/src/components/SectionReorderModal.tsx (lines ~39-47)
-- **Problem:** The modal seeds its order once on open. After a failed PATCH the sections cache re-seeds from the server (ISS-112), but the open modal still shows its diverged order until reopened.
-- **Why deferred / fix direction:** Re-seed the local order when a section mutation fails.
-
 ### ISS-193 · P3 · The icon stylesheet now loads after the app stylesheet
 
 - **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `be6a448`
@@ -529,22 +498,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Use the full text-on-surface-variant token.
 - **Source:** snapshot line 2419, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
-### ISS-083 · P3 · Overview.tsx off-token styling (remaining: raw font-mono P- id)
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** project id span in frontend/src/pages/Overview.tsx (line ~167)
-- **Problem:** Most of the listed off-token styling is gone; the P- id still uses raw font-mono instead of the data-mono token.
-- **Why deferred / fix direction:** Narrowed to one line; fold into the next token pass.
-- **Source:** snapshot line 348, section "Tech debt / follow-ups from recent work"
-
-### ISS-084 · P3 · PortfolioCalendar: rounded-full bar and raw font-mono year switcher
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** PortfolioCalendar timeline bar and year switcher in frontend/src/components/portfolio/PortfolioCalendar.tsx (lines ~263, ~118)
-- **Problem:** The timeline bar uses rounded-full (reserved for pills/avatars) and the year display uses raw font-mono, carried over verbatim from an extraction.
-- **Why deferred / fix direction:** Fix once in the shared component; benefits Executive and Overview.
-- **Source:** snapshot line 378, section "Tech debt / follow-ups from recent work"
-
 ### ISS-085 · P3 · IconTile outline variant invisible by default in dark theme on lowest surface
 
 - **Type:** debt · **Found:** 2026-07-31 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -569,22 +522,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Align opportunistically when each file is next touched, with SOLVRO PATCH markers.
 - **Source:** snapshot line 1652, section "Daily Review v2 — deferred findings (2026-08-29)"
 
-### ISS-088 · P3 · Shared dialog focus trap only wraps from the last focusable element
-
-- **Type:** bug · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** onKeyDown in useDialogFocus (frontend/src/hooks/useDialogFocus.ts, line ~62)
-- **Problem:** Focus sitting on a non-tabbable element (e.g. a programmatically focused heading) can Tab out of the dialog when nothing tabbable follows it; ProjectShare works around it locally.
-- **Why deferred / fix direction:** Fix once in the shared hook: wrap when focus is not on a tabbable item and Tab would leave the dialog.
-- **Source:** snapshot line 2287, section "Collaboration & sharing — guest links — deferred findings (2026-09-30, ported 2026-10-05)"
-
-### ISS-089 · P3 · LinksSection departs from the DESIGN.md §4 focus treatment (buttons lack focus-v
-
-- **Type:** bug · **Found:** 2026-10-12 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** buttons in frontend/src/components/LinksSection.tsx (lines ~134-190, ~331-377)
-- **Problem:** The Add link, Cancel/Save and edit/delete icon buttons show no keyboard focus ring on the deal page, project Context panel and customer Links tab (the input half of this finding is fixed).
-- **Why deferred / fix direction:** Add the shared focus-visible ring classes once in the component.
-- **Source:** snapshot line 2358, section "Project & customer document links — deferred findings (2026-10-12)"
-
 ### ISS-090 · P3 · Dark primary on dark surface-container-high is 4.4986:1
 
 - **Type:** decision · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -593,31 +530,7 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Brand value deliberately untouched; needs a user ruling.
 - **Source:** snapshot line 2420, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
-### ISS-091 · P3 · Two text sizes have no matching type role
-
-- **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** Modal.tsx (line 58), Drawer.tsx (line 119), pages/views/ProjectList.tsx (line 1077)
-- **Problem:** Off-scale arbitrary font sizes bypass the type roles in DESIGN.md.
-- **Why deferred / fix direction:** Add a role or move them onto an existing one.
-- **Source:** snapshot line 2421, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
-
-### ISS-092 · P3 · Epic colour swatches are 16px targets 4px apart
-
-- **Type:** bug · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** color picker in frontend/src/pages/views/ProjectEpics.tsx (line ~419)
-- **Problem:** Swatches are too small and tightly spaced for touch; tap-target would make their 44px areas overlap.
-- **Why deferred / fix direction:** Use a larger swatch or a different picker on touch.
-- **Source:** snapshot line 2423, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
-
 ## Open — Gantt
-
-### ISS-093 · P3 · Gantt tree pane: engine container clamp can re-clip fixed columns
-
-- **Type:** bug · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** clampContainer in frontend/src/components/reui/gantt/gantt-view.tsx (line ~976); nameColumnWidth in gantt-v2/SolvroGantt.tsx (line ~453)
-- **Problem:** On roughly 768-850px viewports a wide persisted tree width makes the engine render the pane narrower than treeWidth without reporting it, so the Dates/Status columns clip past the pane edge (the #118 symptom).
-- **Why deferred / fix direction:** Deferred as rare on a desktop-first Gantt. Fix: clamp nameColumnWidth by the measured pane width (ResizeObserver) or patch the engine to surface the clamped width with a SOLVRO PATCH marker.
-- **Source:** snapshot line 19, section "Known bugs / inconsistencies"; merged duplicates at snapshot lines 59
 
 ### ISS-094 · P3 · Gantt tree pane narrowed below 356px clips fixed columns (accepted)
 
@@ -627,14 +540,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Accepted behavior, no fix planned; revisit only if users report it.
 - **Source:** snapshot line 31, section "Known bugs / inconsistencies"
 
-### ISS-095 · P3 · Gantt splitter drag: fixed columns clip until pointerup
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** splitter drag handler in frontend/src/components/reui/gantt/gantt-view.tsx (line ~1055-1082)
-- **Problem:** During a narrowing drag the engine updates the pane width in the DOM but notifies the consumer only on pointerup, so the name column does not follow and the fixed columns clip, then snap back on release.
-- **Why deferred / fix direction:** Pre-existing engine behavior; fix would need a live width callback (a SOLVRO PATCH) or throttled onWidthChange.
-- **Source:** snapshot line 35, section "Known bugs / inconsistencies"
-
 ### ISS-096 · P3 · #94a3b8 section-color sentinel duplicated between schema and frontend
 
 - **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -642,22 +547,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** The frontend constants are now one, but the Prisma default must still match it byte-for-byte or legacy uncustomized sections stop being recognized as unset and render the new default.
 - **Why deferred / fix direction:** Narrowed to frontend/backend duplication. Fix: migrate to an isCustom boolean on Section or share the constant via an API field.
 - **Source:** snapshot line 392, section "Tech debt / follow-ups from recent work"
-
-### ISS-097 · P3 · Redundant double-sort in legendEntries section branch
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** legendEntries in frontend/src/lib/gantt/palette.ts (line ~270)
-- **Problem:** The Section branch re-sorts an array that resolveSectionColors already sorted; negligible cost.
-- **Why deferred / fix direction:** Flagged for awareness only; fix by returning the sorted order from the resolver.
-- **Source:** snapshot line 459, section "Tech debt / follow-ups from recent work"
-
-### ISS-098 · P3 · Milestone connector endpoints anchor at day-box edge
-
-- **Type:** bug · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** milestone branch in frontend/src/components/gantt-v2/SolvroBar.tsx (line ~295); measureBars in GanttOverlay.tsx
-- **Problem:** Dependency arrows for milestone tasks end at the day-box edge, leaving a visible gap (30-40px at Week zoom) from the diamond.
-- **Why deferred / fix direction:** Cosmetic. Anchor connector rects to the diamond glyph for milestone bars.
-- **Source:** snapshot line 516, section "Plan B Task 9 deferred findings — ReUI Gantt swap (2026-07-25)"
 
 ### ISS-099 · P3 · Per-bar ResizeObserver in SolvroBar
 
@@ -667,14 +556,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Trigger: a project rendering low hundreds of bars at once. Then share a single observer.
 - **Source:** snapshot line 519, section "Plan B Task 9 deferred findings — ReUI Gantt swap (2026-07-25)"
 
-### ISS-100 · P3 · Section-id parse/format logic split across files
-
-- **Type:** debt · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** section-id parsing in frontend/src/components/gantt-v2/SolvroGantt.tsx (lines ~300, ~611, ~855)
-- **Problem:** Section id parsing lives in SolvroGantt instead of next to sectionNodeId in adapter.ts.
-- **Why deferred / fix direction:** Add parseSectionId to adapter.ts. Coupling hygiene, no defect.
-- **Source:** snapshot line 529, section "Final whole-branch review additions (2026-07-25)"
-
 ### ISS-101 · P3 · handleResourceReorder is ~130 lines
 
 - **Type:** debt · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -683,30 +564,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Split into named helpers in a readability pass.
 - **Source:** snapshot line 530, section "Final whole-branch review additions (2026-07-25)"
 
-### ISS-102 · P3 · GanttDatePicker uses shadow-md and may be dead code
-
-- **Type:** debt · **Found:** 2026-07-28 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** GanttDatePicker in frontend/src/components/reui/gantt/gantt-nav.tsx (line ~358)
-- **Problem:** Probably unused vendored component with an off-token shadow.
-- **Why deferred / fix direction:** Confirm dead and remove, or align to shadow-overlay when mounted.
-- **Source:** snapshot line 804, section "ReUI DateField swap — deferred findings (2026-07-28)"
-
-### ISS-103 · P3 · Gantt tree Dates cell shows range text twice while editing
-
-- **Type:** bug · **Found:** 2026-07-28 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** TaskDatesCell in frontend/src/components/gantt-v2/TreeCells.tsx (line ~49)
-- **Problem:** While editing, the same date range text appears twice.
-- **Why deferred / fix direction:** Hide the cell button while editing, or render only the editor's trigger.
-- **Source:** snapshot line 939, section "DateRangeField — deferred findings (2026-07-28, Task 3.5)"
-
-### ISS-104 · P3 · Gantt drag-clone keeps shadow-lg without a SOLVRO PATCH marker
-
-- **Type:** debt · **Found:** 2026-08-03 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** drag clone in frontend/src/components/reui/gantt/gantt-dnd.tsx (line ~310)
-- **Problem:** The vendored drag clone uses a shadow outside the DESIGN.md elevation whitelist. The other holdout (toast shadow-md) is gone.
-- **Why deferred / fix direction:** Drop the shadow with a SOLVRO PATCH marker; vendored reui/ is a spine file.
-- **Source:** snapshot line 1470, section "Gantt visual refresh — deferred findings (2026-08-03)"
-
 ### ISS-105 · P3 · Dark-theme Gantt bar ring contrast for the Critical Path mark
 
 - **Type:** decision · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -714,14 +571,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Question for the user: keep `chip-violet-text` (near-white `#ddd6fe` in dark mode, close to the selection outline) or use a fixed violet in both themes for the Gantt ring only?
 - **Why deferred / fix direction:** Awaiting the user's call; option (b) mirrors CRITICAL_PATH_HEX used by the exports.
 - **Source:** snapshot line 1738, section "Critical Path mark — deferred findings (2026-09-02)"
-
-### ISS-106 · P3 · Per-call mutate onError callbacks can be lost in SolvroGantt.tsx
-
-- **Type:** bug · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** SolvroGantt.tsx critical-path ContextMenuItem (line ~1640) and section reorder (line ~642)
-- **Problem:** TanStack Query v5 fires per-call callbacks only for the latest mutate on a hook, so a failure is silently swallowed when another update follows; the section reorder fires several in a row.
-- **Why deferred / fix direction:** Convert the remaining sites to mutateAsync(...).catch(...), as the other Gantt paths already do.
-- **Source:** snapshot line 2271, section "Collaboration & sharing — stale-edit warning — deferred findings (2026-09-30, ported 2026-10-05)"
 
 ## Open — Boards & drag
 
@@ -740,22 +589,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Subtask list is derived from the tasks query, so the DOM keeps the pre-drop order until the optimistic update lands. A snap-back flicker is possible in that window.
 - **Why deferred / fix direction:** Only act if the flicker is seen in practice; direction is a local order mirror like SectionReorderModal.
 - **Source:** snapshot line 1064, section "Sortable reorder (sections + subtasks) — deferred findings (2026-07-30)"
-
-### ISS-111 · P3 · SectionReorderModal has no permission check of its own
-
-- **Type:** debt · **Found:** 2026-07-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** SectionReorderModal in components/SectionReorderModal.tsx (whole file)
-- **Problem:** The modal relies wholly on ProjectList's canEdit gate on the button that opens it. A second entry point would inherit no protection.
-- **Why deferred / fix direction:** Add a canEdit/permission guard inside the modal or accept the single gated mount; low risk today.
-- **Source:** snapshot line 1076, section "Sortable reorder (sections + subtasks) — deferred findings (2026-07-30)"
-
-### ISS-113 · P3 · SectionReorderModal drag guard can strand the modal
-
-- **Type:** bug · **Found:** 2026-07-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** handleModalClose in components/SectionReorderModal.tsx (line ~69)
-- **Problem:** If a drag never fires end/cancel (lost pointerup), every close route stays blocked, and the reset effect cannot rerun while the modal is open.
-- **Why deferred / fix direction:** Exempt the header X from the guard so one exit always works.
-- **Source:** snapshot line 1112, section "Sortable reorder (sections + subtasks) — deferred findings (2026-07-30)"
 
 ### ISS-114 · P3 · data-grid-column-header hasControls branch ignores right-align
 
@@ -786,13 +619,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Where:** handles in frontend/src/components/itop/board/TicketCard.tsx, pipeline/OpportunityCard.tsx, kanban-v2/cards.tsx
 - **Problem:** The grip has no padding to enlarge its hit area (antislop R-03); on touch it is hard to hit.
 - **Why deferred / fix direction:** Pad the handle to a 24px or larger target without changing the icon size.
-
-### ISS-189 · P3 · Two drag-handle buttons use a different focus style from FIELD_FOCUS
-
-- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `65a6c77`
-- **Where:** handle buttons in frontend/src/components/SectionReorderModal.tsx and TaskPanel.tsx (`focus-visible:outline-ring`)
-- **Problem:** The Kanban handles now use FIELD_FOCUS (DESIGN.md §4); these two do not.
-- **Why deferred / fix direction:** Switch both to FIELD_FOCUS.
 
 ## Open — Pipeline
 
@@ -1046,14 +872,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Four minor spec issues, the main one a missing listener-ready guard behind a flake seen once under CI load.
 - **Why deferred / fix direction:** Assert the TopBar trigger is visible before pressing the shortcut; check res.ok; anchor the regex; fix the comment pointer.
 - **Source:** snapshot line 759, section "Global search & ⌘K command palette — deferred findings (2026-07-27)"
-
-### ISS-155 · P3 · No e2e spec for the Reorder sections modal drag
-
-- **Type:** test-gap · **Found:** 2026-07-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** e2e/tests (no spec for SectionReorderModal)
-- **Problem:** The Reorder sections modal has no Playwright drag spec. The subtask half of the original entry has since been covered.
-- **Why deferred / fix direction:** Add a section-reorder case alongside kanban-dnd/list-dnd specs.
-- **Source:** snapshot line 1125, section "Sortable reorder (sections + subtasks) — deferred findings (2026-07-30)"
 
 ### ISS-156 · P3 · filters-duplicate-chip e2e spec is an invariant net, not a discriminating test
 
@@ -1309,3 +1127,27 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-112 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · useUpdateSection scope can diverge from server after a failed PATCH
 - ISS-148 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · No component tests for ProjectStatusChangeDialogs and HandoverModal
 - ISS-190 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · No DOM test environment for focus and keyboard behaviour
+- ISS-061 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · TaskPanel header-menu failure alert renders below the subtasks
+- ISS-062 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · ProjectList section-header actions gate on task:write; routes need project:write
+- ISS-067 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · TaskPanel shows 'Loading task…' forever when the tasks fetch fails
+- ISS-083 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Overview.tsx off-token styling (remaining: raw font-mono P- id)
+- ISS-084 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · PortfolioCalendar: rounded-full bar and raw font-mono year switcher
+- ISS-088 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Shared dialog focus trap only wraps from the last focusable element
+- ISS-089 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · LinksSection departs from the DESIGN.md §4 focus treatment (buttons lack focus-v
+- ISS-091 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Two text sizes have no matching type role
+- ISS-092 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Epic colour swatches are 16px targets 4px apart
+- ISS-093 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Gantt tree pane: engine container clamp can re-clip fixed columns
+- ISS-095 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Gantt splitter drag: fixed columns clip until pointerup
+- ISS-097 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Redundant double-sort in legendEntries section branch
+- ISS-098 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Milestone connector endpoints anchor at day-box edge
+- ISS-100 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Section-id parse/format logic split across files
+- ISS-102 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · GanttDatePicker uses shadow-md and may be dead code
+- ISS-103 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Gantt tree Dates cell shows range text twice while editing
+- ISS-104 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Gantt drag-clone keeps shadow-lg without a SOLVRO PATCH marker
+- ISS-106 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Per-call mutate onError callbacks can be lost in SolvroGantt.tsx
+- ISS-111 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · SectionReorderModal has no permission check of its own
+- ISS-113 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · SectionReorderModal drag guard can strand the modal
+- ISS-155 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · No e2e spec for the Reorder sections modal drag
+- ISS-189 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Two drag-handle buttons use a different focus style from FIELD_FOCUS
+- ISS-192 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Section reorder modal keeps its own order after a failed save
+- ISS-194 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Modal cannot tell its close button from Escape or a backdrop click (filed and fixed in the same change)
