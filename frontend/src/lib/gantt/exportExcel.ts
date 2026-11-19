@@ -9,6 +9,7 @@ import {
   HATCH_CANVAS_HEX_LIGHT,
   type ColorByMode,
 } from "./palette";
+import { downloadBlob } from "@/lib/download";
 import { PRIORITY_LABEL, TASK_STATUS_LABEL } from "@/lib/labels";
 import type { Epic, Holiday } from "@/lib/queries";
 
@@ -378,12 +379,5 @@ export async function exportGanttToExcel(opts: ExportExcelOpts): Promise<void> {
   const blob = new Blob([buffer], {
     type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `${slugify(projectName)}_gantt_${fmtIsoDate(new Date())}.xlsx`;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
+  downloadBlob(blob, `${slugify(projectName)}_gantt_${fmtIsoDate(new Date())}.xlsx`);
 }

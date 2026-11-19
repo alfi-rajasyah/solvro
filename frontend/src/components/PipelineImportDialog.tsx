@@ -33,6 +33,7 @@ import {
   type ImportOpportunitiesResult,
   type ImportOpportunityRow,
 } from "@/lib/queries";
+import { downloadBlob } from "@/lib/download";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 
 interface Props {
@@ -89,16 +90,10 @@ async function downloadTemplate(onLoadError: (message: string) => void) {
   ws.addRows([[...TEMPLATE_HEADERS], example, note]);
 
   const buffer = await wb.xlsx.writeBuffer();
-  const url = URL.createObjectURL(
+  downloadBlob(
     new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" }),
+    "solvro-pipeline-import-template.xlsx",
   );
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "solvro-pipeline-import-template.xlsx";
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
 }
 
 const IMPORT_FILE_MAX_MB = IMPORT_FILE_MAX_BYTES / (1024 * 1024);

@@ -15,6 +15,28 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Security — 2026-11-19 — Log redaction, secret tags, and receivers without access
+
+- `backend/src/logger.ts`: the shared logger masks token, Auth-Token, personal iTop token, password, `Authorization`, cookie and webhook-secret fields at the top level of a logged object, in request and response bodies, and in headers.
+- `backend/src/lib/secretBox.ts`: stored integration secrets require a full 16-byte authentication tag when decrypted. Values saved earlier still open.
+- `backend/src/routes/admin.ts`: reassigning a project's TAM from Admin > Project Overrides is refused when the chosen user's role grants no access.
+
+### Fixed — 2026-11-19 — Fixes in exports, users and access, and small UI
+
+- `frontend/src/lib/gantt/exportPdf.ts`: the Gantt PDF export draws bars like the screen: the unfinished part of a bar is hatched, and section summary bars have square end caps.
+- `frontend/src/lib/download.ts`: spreadsheet downloads (the Gantt Excel export and the Pipeline import template) share one helper that releases the temporary link after the download has started.
+- `backend/src/routes/users.ts`, `frontend/src/lib/handover.ts`, `frontend/src/pages/Admin.tsx`: the handover and project-reassign pickers list only active people whose role grants at least one permission, and the server applies the same rule. The user directory returns a `hasAccess` flag for this, and the offboarding check no longer depends on the role name.
+- `frontend/src/pages/Admin.tsx`: the Custom roles count on the Admin > Users tab counts only roles you created; the seeded roles (ADMIN, SA, SALES, TAM, STAKEHOLDER, PENDING) are not counted, and the roles list reports a `seeded` flag.
+- `frontend/src/lib/auth.tsx`: signing out in one browser tab signs out the other open tabs. Signing in as a different account in one tab switches the others to it, on the home page, and clears their cached data. A password change in one tab only updates the session token in the others, with no reload.
+- `frontend/src/pages/Tasks.tsx`, `kanban-v2/cards.tsx`: the Tasks grid and Kanban subtask rows show the Critical Path mark.
+- `frontend/src/components/daily-review/`: a blocked Mid-week or Reflection sync save marks and focuses the card missing its title.
+- `frontend/src/components/ProjectMembers.tsx`: the Members dialog and the button's tooltip explain that the SA is not counted as a member.
+- `frontend/src/pages/Projects.tsx`, `Tasks.tsx`: the Projects and Tasks filters share one set of operator labels.
+
+### Changed — 2026-11-19 — Project status in the task list
+
+- `backend/src/routes/tasks.ts`: `GET /tasks` includes each task's project status, so the Tasks page no longer fetches the full project list to find on-hold projects.
+
 ### Fixed — 2026-11-19 — Fixes in the Gantt, the task panel and section dialog, and accessibility
 
 - `frontend/src/components/gantt-v2/`: the task name column follows the tree pane's real width, so the Dates and Status columns no longer clip on narrow windows or while dragging the pane splitter. Milestone dependency arrows meet the diamond. The Dates cell shows its range once while editing. A failed Critical Path toggle or section reorder shows an error instead of failing silently.

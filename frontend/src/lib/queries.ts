@@ -49,6 +49,8 @@ export interface UserSummary {
   role: Role;
   /** Can open the Pipeline (`pipeline:view` or `*`) — the one permission fact the directory exposes. */
   pipelineAccess: boolean;
+  /** The role grants at least one permission: the one receiver rule for handover and reassign pickers. */
+  hasAccess: boolean;
   /** Inactive accounts stay in the list; pickers filter them out. */
   active: boolean;
   avatarUrl: string | null;
@@ -378,6 +380,7 @@ export interface TaskWithProject extends Task {
   project: {
     id: number;
     name: string;
+    status: ProjectStatus;
     customer: { id: number; name: string } | null;
   };
 }
@@ -4217,6 +4220,8 @@ export interface AdminUser {
   email: string;
   active: boolean;
   role: Role;
+  /** The role grants at least one permission (project-reassign receiver rule). */
+  hasAccess: boolean;
   createdAt: string;
   provider: "google" | "password";
   avatarUrl: string | null;
@@ -4272,6 +4277,8 @@ export interface AdminRole {
   permissions: string[];
   userCount: number;
   builtIn: boolean;
+  /** Created by the seed; a role without this is a custom one. */
+  seeded: boolean;
 }
 
 export function useAdminRoles() {

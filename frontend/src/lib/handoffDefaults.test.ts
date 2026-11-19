@@ -20,6 +20,7 @@ function makeUser(overrides: Partial<UserSummary> & Pick<UserSummary, "id" | "us
   return {
     email: "user@example.com",
     role: "SA",
+    hasAccess: true,
     pipelineAccess: true,
     active: true,
     avatarUrl: null,

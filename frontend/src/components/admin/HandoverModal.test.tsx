@@ -21,6 +21,7 @@ const user = (id: number, username: string, over: Partial<UserSummary> = {}): Us
   email: `${username}@example.com`,
   role: "TAM",
   pipelineAccess: false,
+  hasAccess: true,
   active: true,
   avatarUrl: null,
   ...over,
@@ -31,7 +32,7 @@ const DIRECTORY: UserSummary[] = [
   user(LEAVER, "leaver"),
   user(2, "ada", { pipelineAccess: true }),
   user(3, "bob"),
-  user(4, "pending-pat", { role: "PENDING" }),
+  user(4, "pending-pat", { role: "PENDING", hasAccess: false }),
   user(5, "gone-gail", { active: false }),
 ];
 

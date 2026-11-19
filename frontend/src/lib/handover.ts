@@ -81,11 +81,15 @@ export function buildOffboardBody(preview: HandoverPreview, draft: HandoverDraft
   };
 }
 
-/** Who can receive handed-over work: active, not the leaver, not a PENDING account. */
+/**
+ * Who can receive handed-over work: active, not the leaver, and holding a role
+ * that grants at least one permission (`hasAccess` from GET /users). The same
+ * rule the server enforces on offboarding and on project reassign.
+ */
 export function handoverReceivers<
-  U extends { id: number; active: boolean; role: string; pipelineAccess?: boolean },
+  U extends { id: number; active: boolean; hasAccess: boolean },
 >(users: readonly U[], leaverId: number): U[] {
-  return users.filter((u) => u.active && u.id !== leaverId && u.role !== "PENDING");
+  return users.filter((u) => u.active && u.id !== leaverId && u.hasAccess);
 }
 
 /** Applies one assignee to every project row ("Apply to all"). */

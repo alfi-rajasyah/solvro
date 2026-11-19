@@ -4,11 +4,12 @@ import bcrypt from "bcrypt";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { requireAuth, requireAdmin } from "../http/auth.js";
+import { requireAuth, requireAdmin, permissionsOf } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { bustAuthConfigCache } from "../authConfig.js";
 import { normalizeUsername, USERNAME_MAX } from "../lib/username.js";
+import { SEEDED_ROLE_NAMES } from "../lib/seededRoles.js";
 import { permissionsSchema } from "../lib/permissions.js";
 import { diffProjectSeats, projectSeatsSelect, recordProjectUpdate } from "../lib/projectSeats.js";
 import { COUNTED_TASKS_COUNT } from "../lib/taskStatus.js";
@@ -68,7 +69,7 @@ adminRouter.get("/users", async (_req, res) => {
       createdAt: true,
       googleSub: true,
       avatarUrl: true,
-      role: { select: { roleName: true } },
+      role: { select: { roleName: true, permissions: true } },
       _count: { select: { projectsAsTAM: true, projectsAsSA: true } },
     },
   });
@@ -79,6 +80,8 @@ adminRouter.get("/users", async (_req, res) => {
       email: u.email,
       active: u.active,
       role: u.role.roleName,
+      /** The role grants at least one permission: the receiver rule the reassign picker uses. */
+      hasAccess: permissionsOf(u.role.permissions).length > 0,
       createdAt: u.createdAt,
       provider: u.googleSub ? "google" : "password",
       avatarUrl: u.avatarUrl,
@@ -483,6 +486,8 @@ adminRouter.get("/roles", async (_req, res) => {
       permissions: r.permissions,
       userCount: r._count.users,
       builtIn: PROTECTED_ROLES.has(r.roleName),
+      /** Created by the seed (as opposed to an admin-made custom role). */
+      seeded: SEEDED_ROLE_NAMES.has(r.roleName),
     })),
   );
 });
@@ -748,8 +753,12 @@ adminRouter.put(
     if (!tam.active) {
       throw new HttpError(400, "tam_inactive", "Target user is deactivated");
     }
-    // No role-name requirement: any active user can be a project's TAM
-    // (admin's choice). Role names no longer gate this.
+    // Permission-based, not role-name-based: a receiver whose role grants
+    // nothing (PENDING or a custom empty role) could hold the project but
+    // not open it. Same rule as the offboarding receivers (ISS-191).
+    if (permissionsOf(tam.role.permissions).length === 0) {
+      throw new HttpError(400, "tam_has_no_access", "Target user has no access yet. Give them a role first.");
+    }
 
     // Same lock / diff / activity / notification path as PATCH /projects/:id:
     // the handover shows in the project feed and the new TAM is notified

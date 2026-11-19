@@ -142,12 +142,12 @@ function assertNotLeaver(id: number, leaverId: number, field: string): void {
 async function assertReceiver(tx: Tx, id: number, field: string): Promise<void> {
   const user = await tx.user.findUnique({
     where: { id },
-    select: { active: true, role: { select: { roleName: true, permissions: true } } },
+    select: { active: true, role: { select: { permissions: true } } },
   });
   if (!user || !user.active) {
     throw new HttpError(400, `${field}_not_found`, `The selected ${field} does not exist or is inactive`);
   }
-  if (user.role.roleName === "PENDING" || permissionsOf(user.role.permissions).length === 0) {
+  if (permissionsOf(user.role.permissions).length === 0) {
     throw new HttpError(
       400,
       `${field}_cannot_receive`,

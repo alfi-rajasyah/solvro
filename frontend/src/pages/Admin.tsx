@@ -501,7 +501,7 @@ function UsersTab() {
   const adminCount = rows.filter((u) => u.role === "ADMIN").length;
   const pendingCount = rows.filter((u) => u.role === "PENDING").length;
   const customRoleCount = (roles ?? []).filter(
-    (r) => !["ADMIN", "TAM", "SA", "STAKEHOLDER", "PENDING"].includes(r.roleName),
+    (r) => !r.seeded,
   ).length;
 
   return (
@@ -1571,10 +1571,10 @@ function ProjectsTab() {
   // No default sort — same rationale as the Users/Roles-tab pilots.
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  // Any active user can be a project's TAM — no role-name gate (role names
-  // no longer drive who's eligible). Admin's choice.
+  // Any active user whose role grants access can be a project's TAM; the
+  // server refuses a receiver without access (`tam_has_no_access`).
   const tamCandidates = useMemo(
-    () => (users ?? []).filter((u) => u.active),
+    () => (users ?? []).filter((u) => u.active && u.hasAccess),
     [users],
   );
 

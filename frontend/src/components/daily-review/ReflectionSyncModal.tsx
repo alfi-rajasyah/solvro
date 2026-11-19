@@ -18,6 +18,7 @@ import { Modal } from "@/components/Modal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { weekNumberLabel } from "@/lib/dailyReviewStats";
 import { type DailyReviewCustomer, type WeeklyHealth, type WeeklyStatus, useSaveWeeklyUpdate } from "@/lib/queries";
 import { draftWeeklyAchievements } from "@/lib/weeklyDraft";
@@ -128,6 +129,8 @@ export function ReflectionSyncModal({ customer, week, onClose }: ReflectionSyncM
   const [confirmRedraft, setConfirmRedraft] = useState(false);
   const [confirmReopen, setConfirmReopen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cards whose title blocked the last save; cleared per card as it is typed into.
+  const [invalidKeys, setInvalidKeys] = useState<string[]>([]);
   const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
   const titleRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
 
@@ -197,9 +200,14 @@ export function ReflectionSyncModal({ customer, week, onClose }: ReflectionSyncM
 
   function submit(status: WeeklyStatus) {
     setError(null);
+    setInvalidKeys([]);
     const rows = keptAchievements(state.achievements);
-    if (rows.some((a) => a.title.trim() === "")) {
+    const untitled = rows.filter((a) => a.title.trim() === "");
+    if (untitled.length > 0) {
       setError("Every achievement needs a title.");
+      setInvalidKeys(untitled.map((a) => a.key));
+      // Focusing the field also scrolls its card into view.
+      titleRefs.current.get(untitled[0].key)?.focus();
       return;
     }
     if (rows.length > MAX_ACHIEVEMENTS) {
@@ -360,7 +368,10 @@ export function ReflectionSyncModal({ customer, week, onClose }: ReflectionSyncM
                 <div
                   key={a.key}
                   data-testid={`reflection-achievement-${n}`}
-                  className="space-y-2.5 rounded-sm border border-outline-variant bg-surface-container-low p-3"
+                  className={cn(
+                    "space-y-2.5 rounded-sm border bg-surface-container-low p-3",
+                    invalidKeys.includes(a.key) ? "border-error" : "border-outline-variant",
+                  )}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-display text-label-caps uppercase text-on-surface-variant">
@@ -383,7 +394,11 @@ export function ReflectionSyncModal({ customer, week, onClose }: ReflectionSyncM
                         titleRefs.current.set(a.key, el);
                       }}
                       value={a.title}
-                      onChange={(e) => patchAchievement(a.key, { title: e.target.value })}
+                      onChange={(e) => {
+                        patchAchievement(a.key, { title: e.target.value });
+                        setInvalidKeys((keys) => keys.filter((k) => k !== a.key));
+                      }}
+                      aria-invalid={invalidKeys.includes(a.key) || undefined}
                       maxLength={200}
                       aria-label={`Achievement ${n} title for ${customer.name}`}
                     />

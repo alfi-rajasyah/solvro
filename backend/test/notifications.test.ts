@@ -190,6 +190,32 @@ describe("admin project reassign (F-25)", () => {
   });
 });
 
+describe("admin project reassign receiver rule (ISS-191)", () => {
+  it("refuses a PENDING or zero-permission receiver with 400 tam_has_no_access, and an inactive one", async () => {
+    const { project } = await fixture();
+    const admin = await createUserWithRole("ADMIN");
+    await prisma.role.upsert({ where: { roleName: "EMPTY" }, update: { permissions: [] }, create: { roleName: "EMPTY", permissions: [] } });
+    const reassign = (newTamId: number) =>
+      request(app).put("/admin/projects/reassign").set(auth(admin.token)).send({ projectId: project.id, newTamId });
+    for (const role of ["PENDING", "EMPTY"]) {
+      const u = await createUserWithRole(role);
+      const res = await reassign(u.userId);
+      expect(res.status).toBe(400);
+      expect(res.body.code).toBe("tam_has_no_access");
+    }
+    const gone = await createUserWithRole("TAM");
+    await prisma.user.update({ where: { id: gone.userId }, data: { active: false } });
+    expect((await reassign(gone.userId)).body.code).toBe("tam_inactive");
+
+    // The Admin users payload carries the same flag the picker filters on.
+    const pendingUser = await createUserWithRole("PENDING");
+    const rows2 = (await request(app).get("/admin/users").set(auth(admin.token))).body as Array<{ id: number; hasAccess: boolean }>;
+    expect(rows2.find((r) => r.id === pendingUser.userId)?.hasAccess).toBe(false);
+    expect(rows2.find((r) => r.id === admin.userId)?.hasAccess).toBe(true);
+    expect((await prisma.project.findUniqueOrThrow({ where: { id: project.id } })).tamId).not.toBe(gone.userId);
+  });
+});
+
 describe("commented", () => {
   it("a comment by someone else notifies the task's assignee once", async () => {
     const { tam, other, project } = await fixture();

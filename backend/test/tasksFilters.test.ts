@@ -192,3 +192,15 @@ describe("GET /tasks — X-Total-Count", () => {
     expect(res.headers["x-total-count"]).toBe("0");
   });
 });
+
+describe("GET /tasks project payload", () => {
+  it("carries the project's status so the client needs no project list", async () => {
+    await createTask({ title: "Carries status" });
+    const active = await get("");
+    expect(active.body[0].project.status).toBe("ACTIVE");
+
+    await prisma.project.update({ where: { id: projectId }, data: { status: "ON_HOLD" } });
+    const held = await get("");
+    expect(held.body[0].project.status).toBe("ON_HOLD");
+  });
+});

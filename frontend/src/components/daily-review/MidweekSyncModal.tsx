@@ -18,6 +18,7 @@ import { Modal } from "@/components/Modal";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { weekNumberLabel } from "@/lib/dailyReviewStats";
 import { dayFromIso } from "@/lib/dateField";
 import { weekKeyOf } from "@/lib/isoWeek";
@@ -97,6 +98,8 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
   const [state, setState] = useState<DraftState>(() => initialState(customer, nextHighlightKey));
   const [confirmRedraft, setConfirmRedraft] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Cards whose title blocked the last save; cleared per card as it is typed into.
+  const [invalidKeys, setInvalidKeys] = useState<string[]>([]);
   const [pendingFocusKey, setPendingFocusKey] = useState<string | null>(null);
   const titleRefs = useRef<Map<string, HTMLInputElement | null>>(new Map());
 
@@ -162,13 +165,18 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
 
   function submit() {
     setError(null);
+    setInvalidKeys([]);
     const kept = state.highlights.filter((h) => {
       const titleEmpty = h.title.trim() === "";
       const restEmpty = h.detail.trim() === "" && h.risk.trim() === "" && h.action.trim() === "";
       return !(titleEmpty && restEmpty);
     });
-    if (kept.some((h) => h.title.trim() === "")) {
+    const untitled = kept.filter((h) => h.title.trim() === "");
+    if (untitled.length > 0) {
       setError("Every highlight needs a title.");
+      setInvalidKeys(untitled.map((h) => h.key));
+      // Focusing the field also scrolls its card into view.
+      titleRefs.current.get(untitled[0].key)?.focus();
       return;
     }
     if (kept.length > MAX_HIGHLIGHTS) {
@@ -333,7 +341,10 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
                 <div
                   key={h.key}
                   data-testid={`midweek-highlight-${n}`}
-                  className="space-y-2.5 rounded-sm border border-outline-variant bg-surface-container-low p-3"
+                  className={cn(
+                    "space-y-2.5 rounded-sm border bg-surface-container-low p-3",
+                    invalidKeys.includes(h.key) ? "border-error" : "border-outline-variant",
+                  )}
                 >
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-display text-label-caps uppercase text-on-surface-variant">
@@ -356,7 +367,11 @@ export function MidweekSyncModal({ customer, week, onClose }: MidweekSyncModalPr
                         titleRefs.current.set(h.key, el);
                       }}
                       value={h.title}
-                      onChange={(e) => patchHighlight(h.key, { title: e.target.value })}
+                      onChange={(e) => {
+                        patchHighlight(h.key, { title: e.target.value });
+                        setInvalidKeys((keys) => keys.filter((k) => k !== h.key));
+                      }}
+                      aria-invalid={invalidKeys.includes(h.key) || undefined}
                       maxLength={200}
                       aria-label={`Highlight ${n} title for ${customer.name}`}
                     />

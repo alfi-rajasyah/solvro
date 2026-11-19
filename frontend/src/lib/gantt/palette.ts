@@ -35,14 +35,7 @@ export const DEFAULT_SECTION_COLOR = "#94a3b8"; // slate-400
 // The completed portion of a bar renders solid in its resolved Color-by
 // color; the incomplete remainder renders hatched (see
 // `progressHatchBackground` below, Gantt visual refresh Task 3).
-// `PROGRESS_OVERLAY_ALPHA` is the exports' (exportPdf.ts) own progress
-// treatment — a darker overlay (black at this opacity) anchored to the left
-// edge, covering the completed portion of the bar. The live UI no longer
-// uses it: exports draw their own shapes independently and are out of scope
-// for the visual refresh, so this constant stays for exportPdf.ts's import
-// to keep working — screen (hatch) and PDF/Excel (overlay) now render
-// progress with two different treatments, an accepted divergence for T3.
-export const PROGRESS_OVERLAY_ALPHA = 0.28;
+// The PDF export draws the same hatch (exportPdf.ts's drawHatchedBar).
 
 // ---- Bar hatch treatment (Gantt visual refresh, Task 3) ----
 // The live bar's INCOMPLETE portion (progress% to 100%) renders as a 135°
@@ -184,9 +177,9 @@ export type ColorByMode = "status" | "section" | "priority";
 
 // Single fill-COLOR resolver for live bars AND both exports — keeps the
 // resolved hex in agreement across screen and generated documents whichever
-// colorBy mode is active. (The PROGRESS treatment built on top of that hex
-// diverges between the live UI's hatch and the exports' overlay — see
-// PROGRESS_OVERLAY_ALPHA above; this resolver itself is unaffected.)
+// colorBy mode is active. (The progress hatch built on top of that hex is
+// drawn by SolvroBar.tsx on screen and exportPdf.ts's drawHatchedBar in the
+// PDF; this resolver itself only picks the colour.)
 // TaskStatus and Priority are already imported at the top of this file, and
 // the two Records are strictly keyed — hence the enum-typed opts (not string).
 export function barFillHex(
