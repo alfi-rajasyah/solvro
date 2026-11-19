@@ -33,6 +33,13 @@
 #                   comma list of loopback/linklocal/uniquelocal/IPs/CIDRs
 #                   when a CDN with public addresses fronts nginx. Validated
 #                   and saved to .env when set — on install and on update.
+#   PUBLIC_BASE_URL optional. The address guests open, e.g.
+#                   "https://solvro.example.com" (http or https, no trailing
+#                   slash). Guest links are built from it. Blank (default): the
+#                   link uses the address the owner is browsing from, which a
+#                   guest cannot open when the owner signs in through an SSH
+#                   tunnel or localhost. Validated and saved to .env when set,
+#                   on install and on update.
 # To change BIND_ADDR / frontend / backend later, edit ~/solvro/.env and
 # `docker compose up -d`. Changing whether/where Postgres is published
 # requires re-running this script.
@@ -88,6 +95,12 @@ is_ipv4() {
     (( 10#$octet >= 0 && 10#$octet <= 255 )) || return 1
   done
   return 0
+}
+
+# PUBLIC_BASE_URL: an absolute http(s) URL with no trailing slash, query or
+# fragment (the backend, src/env.ts, refuses anything else at startup).
+is_public_base_url() {
+  [[ "$1" =~ ^https?://[^[:space:]/?#]+(/[^[:space:]?#]*[^[:space:]/?#])?$ ]]
 }
 
 # Light check of TRUST_PROXY: a hop count 0-10, or a comma list of
@@ -187,6 +200,7 @@ COMPOSE_HEAD
       CORS_ORIGIN: "*"
       LOG_LEVEL: info
       TRUST_PROXY: "${TRUST_PROXY:-loopback, uniquelocal}"
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-}"
     ports:
       - "${BIND_ADDR:-127.0.0.1}:${BACKEND_PORT:-3000}:3000"
     command: >
@@ -215,6 +229,7 @@ if [[ -f "$ENV_FILE" ]]; then
   # A TRUST_PROXY passed to this run wins over the saved one; capture it
   # before sourcing .env (which would otherwise silently override it).
   TRUST_PROXY_ARG="${TRUST_PROXY:-}"
+  PUBLIC_BASE_URL_ARG="${PUBLIC_BASE_URL:-}"
   # Reuse the ports persisted at first install. Older installs predate the
   # port vars — the compose ${VAR:-default} fallbacks keep them on 80/3000
   # and Postgres unpublished, exactly as before (now bound to 127.0.0.1).
@@ -242,6 +257,18 @@ if [[ -f "$ENV_FILE" ]]; then
       sed -i "s|^TRUST_PROXY=.*|TRUST_PROXY=\"$TRUST_PROXY\"|" "$ENV_FILE"
     else
       echo "TRUST_PROXY=\"$TRUST_PROXY\"" >> "$ENV_FILE"
+    fi
+  fi
+  if [[ -n "$PUBLIC_BASE_URL_ARG" ]]; then
+    is_public_base_url "$PUBLIC_BASE_URL_ARG" || {
+      echo "ERROR: PUBLIC_BASE_URL must be an absolute http(s) URL without a trailing slash (got '$PUBLIC_BASE_URL_ARG')."
+      exit 1
+    }
+    PUBLIC_BASE_URL="$PUBLIC_BASE_URL_ARG"
+    if grep -q '^PUBLIC_BASE_URL=' "$ENV_FILE"; then
+      sed -i "s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=\"$PUBLIC_BASE_URL\"|" "$ENV_FILE"
+    else
+      echo "PUBLIC_BASE_URL=\"$PUBLIC_BASE_URL\"" >> "$ENV_FILE"
     fi
   fi
   write_compose_file
@@ -311,6 +338,7 @@ BACKEND_PORT="${BACKEND_PORT:-}"
 POSTGRES_PORT="${POSTGRES_PORT:-}"
 BIND_ADDR="${BIND_ADDR:-}"
 TRUST_PROXY="${TRUST_PROXY:-}"
+PUBLIC_BASE_URL="${PUBLIC_BASE_URL:-}"
 
 if have_tty; then
   [[ -z "$FRONTEND_PORT" ]] && \
@@ -321,6 +349,8 @@ if have_tty; then
     read -r -p "Postgres host port (blank = keep private) []: " POSTGRES_PORT </dev/tty
   [[ -z "$BIND_ADDR" ]] && \
     read -r -p "Bind address [127.0.0.1] (0.0.0.0 = all interfaces): " BIND_ADDR </dev/tty
+  [[ -z "$PUBLIC_BASE_URL" ]] && \
+    read -r -p "Public address guests open, e.g. https://solvro.example.com (blank = the owner's browser address) []: " PUBLIC_BASE_URL </dev/tty
 fi
 
 FRONTEND_PORT="${FRONTEND_PORT:-80}"
@@ -357,6 +387,13 @@ is_ipv4 "$BIND_ADDR" || {
 if [[ -n "$TRUST_PROXY" ]]; then
   is_trust_proxy "$TRUST_PROXY" || {
     echo "ERROR: TRUST_PROXY must be a hop count 0-10 or a comma list of loopback, linklocal, uniquelocal, IP addresses or CIDRs (got '$TRUST_PROXY')."
+    exit 1
+  }
+fi
+
+if [[ -n "$PUBLIC_BASE_URL" ]]; then
+  is_public_base_url "$PUBLIC_BASE_URL" || {
+    echo "ERROR: PUBLIC_BASE_URL must be an absolute http(s) URL without a trailing slash (got '$PUBLIC_BASE_URL')."
     exit 1
   }
 fi
@@ -405,6 +442,7 @@ EOF
 [[ -n "$POSTGRES_PORT" ]] && echo "POSTGRES_PORT=$POSTGRES_PORT" >> "$ENV_FILE"
 # Quoted: the value may hold spaces ("loopback, uniquelocal") and .env is sourced by bash on update.
 [[ -n "$TRUST_PROXY" ]] && echo "TRUST_PROXY=\"$TRUST_PROXY\"" >> "$ENV_FILE"
+[[ -n "$PUBLIC_BASE_URL" ]] && echo "PUBLIC_BASE_URL=\"$PUBLIC_BASE_URL\"" >> "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 
 write_compose_file

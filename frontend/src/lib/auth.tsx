@@ -183,6 +183,23 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     apiRequest<AuthUser>("/auth/me", { timeoutMs: 15_000 })
       .then((fresh) => {
         if (cancelled) return;
+        const previous = userRef.current;
+        if (previous && previous.id !== fresh.id) {
+          // This reply can beat the other tab's user-key storage event (the
+          // token event came first and looked like the same account), after
+          // which that event sees the same id and never adopts (ISS-195). An
+          // id change here is the account switch: drop the previous
+          // account's data and open pages. The verified user is persisted so
+          // the reload below does not see a stale cached one and switch again.
+          queryClient.clear();
+          persistUser(fresh);
+          userRef.current = fresh;
+          setUser(fresh);
+          setUserVerified(true);
+          setStatus("authenticated");
+          window.location.assign("/");
+          return;
+        }
         setUser(fresh);
         setUserVerified(true);
         setStatus("authenticated");
@@ -215,7 +232,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => {
       cancelled = true;
     };
-  }, [token, bootAttempt]);
+  }, [token, bootAttempt, queryClient]);
 
   const retryBoot = useCallback(() => setBootAttempt((n) => n + 1), []);
 
