@@ -193,6 +193,43 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     expect(order.indexOf("Gamma")).toBeLessThan(order.indexOf("Alpha"));
   });
 
+  test("keyboard drag via the handle: Beta -> next column with Space, ArrowRight, Space", async ({
+    page,
+    seededProject,
+  }) => {
+    await openKanban(page, seededProject.projectId);
+
+    // The handle is the focusable activator (role=button, tabindex 0); the
+    // card row itself is not in the tab order.
+    const card = page
+      .locator('[data-slot="kanban-item"]')
+      .filter({ has: page.getByText("Beta", { exact: true }) })
+      .first();
+    await expect(card).not.toHaveAttribute("tabindex", /.*/);
+    const handle = card.getByRole("button", { name: "Drag to reorder", exact: true });
+    await handle.focus();
+    await expect(handle).toBeFocused();
+
+    // Wait for the sensor to attach before moving (see the subtask keyboard
+    // test below): dnd-kit's live region turns non-empty on pick-up.
+    const status = page.locator('[id^="DndLiveRegion"]').first();
+    await page.keyboard.press("Space");
+    await expect(status).not.toBeEmpty();
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(300);
+    await page.keyboard.press("Space");
+
+    await expect
+      .poll(
+        async () => {
+          const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
+          return byTitle(tasks, "Beta")?.status;
+        },
+        { timeout: 10_000 },
+      )
+      .toBe("IN_PROGRESS");
+  });
+
   test("cross-column drag: Beta -> In Progress column", async ({ page, seededProject }) => {
     await openKanban(page, seededProject.projectId);
 

@@ -3389,6 +3389,7 @@ export interface ItopStatus {
   baseUrl: string | null;
   lastSyncAt: string | null;
   lastSyncOk: boolean | null;
+  lastSyncFailed: boolean;
   // `lastSyncError` is deliberately NOT part of this response — the raw
   // iTop error text is admin-only (see the Admin "iTop" tab / GET
   // /admin/itop/settings for that). Non-admin callers only learn
@@ -4474,6 +4475,8 @@ export interface ItopProbeResult {
   name: string;
   ok: boolean;
   message: string;
+  /** An optional probe: a failure is shown but does not fail the connection test. */
+  informational?: boolean;
 }
 
 export interface ItopSettings {

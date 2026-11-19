@@ -155,8 +155,10 @@ function ConnectionCard() {
   const patch = buildItopSettingsPatch(form, settings);
   const dirty = Object.keys(patch).length > 0;
   const testData = testConnection.data;
-  const totalProbes = testData?.probes.length ?? 0;
-  const passedProbes = testData?.probes.filter((p) => p.ok).length ?? 0;
+  // Optional (informational) probes are listed but never counted.
+  const requiredProbes = testData?.probes.filter((p) => !p.informational) ?? [];
+  const totalProbes = requiredProbes.length;
+  const passedProbes = requiredProbes.filter((p) => p.ok).length;
 
   const connectionStatus = !settings.baseUrl || !settings.appTokenSet
     ? { label: "Not connected", tone: "gray" as const }
@@ -476,6 +478,9 @@ function ProbeList({ probes }: { probes: ItopProbeResult[] }) {
           </span>
           <span className="sr-only">{p.ok ? "Passed" : "Failed"}</span>
           <span className="shrink-0 font-medium text-on-surface">{p.name}</span>
+          {p.informational && (
+            <span className="shrink-0 text-meta text-on-surface-variant">(optional)</span>
+          )}
           {p.name === "TimeSpent" ? (
             <span
               className="min-w-0 flex-1 truncate font-mono text-meta text-on-surface-variant"
