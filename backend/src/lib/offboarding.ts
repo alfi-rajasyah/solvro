@@ -132,6 +132,57 @@ function assertNotLeaver(id: number, leaverId: number, field: string): void {
   }
 }
 
+/**
+ * A receiver of handed-over work must be an active account whose role grants
+ * at least one permission: a PENDING account (or any role with none) could
+ * hold the work but not open it. Mirrors `handoverReceivers` in the frontend
+ * (frontend/src/lib/handover.ts). A missing or inactive account keeps the
+ * `<field>_not_found` code of `assertActiveUser`.
+ */
+async function assertReceiver(tx: Tx, id: number, field: string): Promise<void> {
+  const user = await tx.user.findUnique({
+    where: { id },
+    select: { active: true, role: { select: { roleName: true, permissions: true } } },
+  });
+  if (!user || !user.active) {
+    throw new HttpError(400, `${field}_not_found`, `The selected ${field} does not exist or is inactive`);
+  }
+  if (user.role.roleName === "PENDING" || permissionsOf(user.role.permissions).length === 0) {
+    throw new HttpError(
+      400,
+      `${field}_cannot_receive`,
+      `The selected ${field} has no access yet, so cannot take over work. Give them a role first.`,
+    );
+  }
+}
+
+/**
+ * Validates each distinct new owner once (not once per customer) and groups
+ * the customers by the owner they move to, in ascending customer order. A
+ * rejected owner is blamed on the first customer that named them.
+ */
+async function groupCustomersByNewOwner(
+  tx: Tx,
+  leaverId: number,
+  rows: { customerId: number; newOwnerId: number }[],
+): Promise<Map<number, number[]>> {
+  const byOwner = new Map<number, number[]>();
+  for (const { customerId, newOwnerId } of rows) {
+    const group = byOwner.get(newOwnerId);
+    if (group) {
+      group.push(customerId);
+      continue;
+    }
+    await withRow({ customerId }, async () => {
+      assertNotLeaver(newOwnerId, leaverId, "owner");
+      // Active, unlike PATCH /customers/:id (see the SA seat in `offboardUser`).
+      await assertReceiver(tx, newOwnerId, "owner");
+    });
+    byOwner.set(newOwnerId, [customerId]);
+  }
+  return byOwner;
+}
+
 /** Runs `fn`; a 400 it throws without details gets `details` (the row the failure belongs to). */
 async function withRow<T>(details: Record<string, number>, fn: () => Promise<T> | T): Promise<T> {
   try {
@@ -233,7 +284,7 @@ export async function offboardUser(
     if (receiverId !== null) {
       await withRow(rowDetails, async () => {
         assertNotLeaver(receiverId, leaverId, "assignee");
-        await assertActiveUser(tx, receiverId, "assignee");
+        await assertReceiver(tx, receiverId, "assignee");
       });
     }
 
@@ -253,7 +304,7 @@ export async function offboardUser(
       const newTamId = choice.newTamId;
       await withRow(rowDetails, async () => {
         assertNotLeaver(newTamId, leaverId, "tam");
-        await assertActiveUser(tx, newTamId, "tam");
+        await assertReceiver(tx, newTamId, "tam");
       });
       seatData.tam = { connect: { id: choice.newTamId } };
     }
@@ -266,7 +317,7 @@ export async function offboardUser(
           assertNotLeaver(newSaId, leaverId, "sa");
           // Active, unlike PATCH /projects/:id: a handover must not hand a
           // seat to another inactive account.
-          await assertActiveUser(tx, newSaId, "sa");
+          await assertReceiver(tx, newSaId, "sa");
         });
         seatData.sa = { connect: { id: newSaId } };
       }
@@ -346,15 +397,16 @@ export async function offboardUser(
 
   // ---- Customers ---------------------------------------------------------
   const customerOwnerChanges: { customerId: number; from: number; to: number }[] = [];
-  for (const c of preview.customers) {
-    const { newOwnerId } = byCustomer.get(c.id)!;
-    await withRow({ customerId: c.id }, async () => {
-      assertNotLeaver(newOwnerId, leaverId, "owner");
-      // Active, unlike PATCH /customers/:id (see the SA seat above).
-      await assertActiveUser(tx, newOwnerId, "owner");
-    });
-    await tx.customer.update({ where: { id: c.id }, data: { tam: { connect: { id: newOwnerId } } } });
-    customerOwnerChanges.push({ customerId: c.id, from: leaverId, to: newOwnerId });
+  const ownerGroups = await groupCustomersByNewOwner(
+    tx,
+    leaverId,
+    preview.customers.map((c) => ({ customerId: c.id, newOwnerId: byCustomer.get(c.id)!.newOwnerId })),
+  );
+  for (const [newOwnerId, customerIds] of ownerGroups) {
+    await tx.customer.updateMany({ where: { id: { in: customerIds } }, data: { tamId: newOwnerId } });
+    for (const customerId of customerIds) {
+      customerOwnerChanges.push({ customerId, from: leaverId, to: newOwnerId });
+    }
   }
 
   // ---- Pipeline deals ----------------------------------------------------
@@ -480,24 +532,24 @@ export async function reassignOwnedCustomers(
     );
   }
   const changes: { customerId: number; from: number; to: number | null }[] = [];
-  for (const c of owned) {
-    const newOwnerId = byCustomer.get(c.id)!;
-    await withRow({ customerId: c.id }, async () => {
-      assertNotLeaver(newOwnerId, leaverId, "owner");
-      await assertActiveUser(tx, newOwnerId, "owner");
-    });
+  const ownerGroups = await groupCustomersByNewOwner(
+    tx,
+    leaverId,
+    owned.map((c) => ({ customerId: c.id, newOwnerId: byCustomer.get(c.id)! })),
+  );
+  for (const [newOwnerId, customerIds] of ownerGroups) {
     try {
-      await tx.customer.update({ where: { id: c.id }, data: { tam: { connect: { id: newOwnerId } } } });
+      await tx.customer.updateMany({ where: { id: { in: customerIds } }, data: { tamId: newOwnerId } });
     } catch (err) {
       // The new owner was deleted after the check above: blame the owner, not the leaver.
       if (err instanceof Prisma.PrismaClientKnownRequestError && (err.code === "P2003" || err.code === "P2025")) {
         throw new HttpError(400, "owner_not_found", "The selected owner does not exist or is inactive", {
-          customerId: c.id,
+          customerId: customerIds[0],
         });
       }
       throw err;
     }
-    changes.push({ customerId: c.id, from: leaverId, to: newOwnerId });
+    for (const customerId of customerIds) changes.push({ customerId, from: leaverId, to: newOwnerId });
   }
   return changes;
 }

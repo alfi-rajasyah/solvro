@@ -42,6 +42,7 @@ import {
 } from "@/lib/queries";
 import type { Role } from "@/lib/auth";
 import { TempPasswordNotice } from "@/components/admin/TempPasswordNotice";
+import { TamPicker } from "@/components/admin/TamPicker";
 import { PermissionPicker } from "@/components/admin/PermissionPicker";
 import { roleSaveErrorMessage } from "@/components/admin/roleErrors";
 import { useAuth } from "@/lib/auth";
@@ -1678,28 +1679,19 @@ function ProjectsTab() {
       header: ({ column }) => (
         <DataGridColumnHeader column={column} title="Current TAM → Reassign" />
       ),
-      // An interactive <select>, not a single sortable value — same
+      // An interactive picker, not a single sortable value — same
       // exemption as UsersTab's "role"/"actions" columns.
       enableSorting: false,
       cell: ({ row }) => {
         const p = row.original;
         return (
-          <select
-            value={p.tamId}
-            aria-label={`Reassign TAM for ${p.name}`}
-            onChange={(e) => handleReassign(p, Number(e.target.value))}
-            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-xs text-on-surface ${FIELD_FOCUS}`}
-          >
-            {tamCandidates.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.username} ({u.role})
-              </option>
-            ))}
-            {/* If the current TAM isn't in the candidate list (inactive or wrong role), show them anyway */}
-            {!tamCandidates.some((u) => u.id === p.tamId) && (
-              <option value={p.tamId}>{p.tam.username} (current)</option>
-            )}
-          </select>
+          <TamPicker
+            label={p.name}
+            currentId={p.tamId}
+            currentName={p.tam.username}
+            candidates={tamCandidates}
+            onPick={(id) => void handleReassign(p, id)}
+          />
         );
       },
       meta: { skeleton: <Skeleton className="h-7 w-40" /> },

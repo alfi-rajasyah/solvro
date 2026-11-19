@@ -122,6 +122,22 @@ describe("DELETE /admin/users/:id — customer owners", () => {
     expect(await prisma.user.findUnique({ where: { id: w.leaver.userId } })).not.toBeNull();
   });
 
+  it("rejects a PENDING new owner and leaves every customer with the leaver", async () => {
+    const w = await world();
+    const pending = await createUserWithRole("PENDING");
+    const res = await del(w.admin.token, w.leaver.userId, {
+      customers: [
+        { customerId: w.c1.id, newOwnerId: w.receiver.userId },
+        { customerId: w.c2.id, newOwnerId: pending.userId },
+      ],
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("owner_cannot_receive");
+    expect(res.body.details).toEqual({ customerId: w.c2.id });
+    const after = await prisma.customer.findMany({ where: { id: { in: [w.c1.id, w.c2.id] } } });
+    expect(after.every((c) => c.tamId === w.leaver.userId)).toBe(true);
+  });
+
   it("ignores a choice for a customer the user does not own", async () => {
     const w = await world();
     const other = await prisma.customer.create({ data: { name: uniq("Other"), description: "", tamId: w.receiver.userId } });
