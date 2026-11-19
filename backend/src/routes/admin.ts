@@ -9,6 +9,7 @@ import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { bustAuthConfigCache } from "../authConfig.js";
 import { normalizeUsername, USERNAME_MAX } from "../lib/username.js";
+import { SEEDED_ROLE_NAMES } from "../lib/seededRoles.js";
 import { permissionsSchema } from "../lib/permissions.js";
 import { diffProjectSeats, projectSeatsSelect, recordProjectUpdate } from "../lib/projectSeats.js";
 import { COUNTED_TASKS_COUNT } from "../lib/taskStatus.js";
@@ -485,6 +486,8 @@ adminRouter.get("/roles", async (_req, res) => {
       permissions: r.permissions,
       userCount: r._count.users,
       builtIn: PROTECTED_ROLES.has(r.roleName),
+      /** Created by the seed (as opposed to an admin-made custom role). */
+      seeded: SEEDED_ROLE_NAMES.has(r.roleName),
     })),
   );
 });

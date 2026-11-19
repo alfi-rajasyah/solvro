@@ -47,14 +47,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** No fix unless a custom-role split becomes real; revisit if the user wants duplicate to require project:write.
 - **Source:** snapshot line 1789, section "Duplicate tasks, subtasks, and sections — deferred findings (2026-09-02)"
 
-### ISS-007 · P3 · No pino redact configuration for the iTop token
-
-- **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** pino() call in backend/src/logger.ts (line ~4)
-- **Problem:** The shared logger has no redact paths for token / Auth-Token; no current code path logs the token, so it is defence in depth only.
-- **Why deferred / fix direction:** Add a redact array (token, Auth-Token, personal-token fields) to the pino() options.
-- **Source:** snapshot line 1927, section "iTop integration (connection, snapshot, Tickets tab) — deferred findings (ported 2026-10-04)"
-
 ### ISS-008 · P3 · Rate limiter is in-process only
 
 - **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -63,14 +55,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Fine for the single-instance deployment; needs a shared store if the backend is ever scaled out.
 - **Source:** snapshot line 2285, section "Collaboration & sharing — guest links — deferred findings (2026-09-30, ported 2026-10-05)"
 
-### ISS-009 · P3 · Secrets at rest: no tag-length check, no AAD, no key rotation
+### ISS-009 · P3 · Secrets at rest: no AAD, no key rotation
 
-- **Type:** debt · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** seal/open in backend/src/lib/secretBox.ts (lines ~27-60)
-- **Problem:** Node accepts truncated GCM tags; no additional data binds a sealed value to its column; rotating SECRETS_KEY makes every sealed value unreadable until re-entered. All need DB write access.
-- **Why deferred / fix direction:** Pass authTagLength: 16, bind AAD per column, and add a key id for rotation.
-- **Source:** snapshot line 2298, section "Customer-edition port — deferred findings (2026-10-05)"
-
+- **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-19 @ `bfae8f7`
+- **Where:** seal/open in backend/src/lib/secretBox.ts
+- **Problem:** No additional data binds a sealed value to its column, and rotating SECRETS_KEY makes every sealed value unreadable until re-entered. Both need DB write access to exploit. The tag-length half was fixed on 2026-11-19 (16-byte tags required).
+- **Why deferred / fix direction:** Bind AAD per column and add a key id for rotation; both need a read-old/write-new migration of stored secrets.
 ### ISS-010 · P3 · GET /users still returns email to every project:read / pipeline:view caller
 
 - **Type:** debt · **Found:** 2026-10-06 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -86,14 +76,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Behind a CDN with public edge addresses and a hop-count TRUST_PROXY that does not cover it, all users share one address bucket, so 50 failures from anyone block password sign-in for everyone for up to 15 minutes.
 - **Why deferred / fix direction:** Only matters if that topology is used (documented in docs/CONFIGURATION.md 2.13). Fix then: per-account-only fallback when the address is a known proxy.
 - **Source:** snapshot line 2380, section "Application review 2026-10-22 — remaining open items"
-
-### ISS-012 · P3 · Cross-tab sign-out leaves the other tab on cached pages
-
-- **Type:** bug · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** 401 guard in frontend/src/lib/api.ts (line ~158); frontend/src/lib/auth.tsx
-- **Problem:** After tab A signs out, tab B sends requests with no Authorization, the 401 guard never fires UNAUTHENTICATED_EVENT, and tab B shows cached pages over failing requests until reload.
-- **Why deferred / fix direction:** Add a window 'storage' listener in AuthProvider that signs the tab out when the token key is cleared.
-- **Source:** snapshot line 2382, section "Application review 2026-10-22 — remaining open items"
 
 ## Open — Data & performance
 
@@ -355,22 +337,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** If Chip's markup changes, grep `[&>span]:px-1.5` and move the override to the new root.
 - **Source:** snapshot line 1709, section "Critical Path mark — deferred findings (2026-09-02)"
 
-### ISS-060 · P3 · Tasks.tsx grid and kanban-v2 SubtaskRow show no Critical Path mark
-
-- **Type:** debt · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** PriorityBadge cell in frontend/src/pages/Tasks.tsx (line ~294); SubtaskRow in frontend/src/components/kanban-v2/cards.tsx (line ~224)
-- **Problem:** Two task surfaces outside the mark's per-surface table do not show the Critical Path flag, unlike every other surface.
-- **Why deferred / fix direction:** Add CriticalPathMark (glyph/chip) beside the priority indicator if either surface is revisited.
-- **Source:** snapshot line 1724, section "Critical Path mark — deferred findings (2026-09-02)"
-
-### ISS-063 · P3 · Missing-title banner doesn't name the offending card
-
-- **Type:** bug · **Found:** 2026-09-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** setError in frontend/src/components/daily-review/MidweekSyncModal.tsx (line ~171) and ReflectionSyncModal.tsx (line ~202)
-- **Problem:** A blocked save shows one banner at the top, with no marker on the achievement/highlight card missing its title.
-- **Why deferred / fix direction:** Mark the offending card (error-tone border) or scroll/focus it when save is blocked.
-- **Source:** snapshot line 1863, section "Weekly Sync achievement rows — deferred findings (2026-09-10)"
-
 ### ISS-065 · P3 · useItopTicket utcOffsetMinutes isn't part of its query key
 
 - **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -403,22 +369,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Fine for history; add a tooltip or muted style for inactive users.
 - **Source:** snapshot line 2276, section "Collaboration & sharing — activity log, notifications, @mentions — deferred findings (2026-09-30, ported 2026-10-05)"
 
-### ISS-070 · P3 · Members button count and avatars exclude the SA
-
-- **Type:** debt · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** ProjectMembersButton in frontend/src/components/ProjectMembers.tsx (line ~35)
-- **Problem:** By design the SA is not a member, but the Members count and avatars read as a mismatch against the dialog.
-- **Why deferred / fix direction:** Cosmetic; add a label or tooltip, or leave as is.
-- **Source:** snapshot line 2320, section "Customer-edition port — deferred findings (2026-10-05)"
-
-### ISS-071 · P3 · Frontend built-in role list omits SALES
-
-- **Type:** bug · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** BUILTIN_ROLES in frontend/src/lib/auth.tsx (line 17); custom-role filter in frontend/src/pages/Admin.tsx (line ~514)
-- **Problem:** SALES is treated as a custom role in Admin > Roles (shown as editable and deletable) although it is seeded as built-in.
-- **Why deferred / fix direction:** Add SALES to both lists, or derive them from the server's builtIn flag (admin.ts already sends it).
-- **Source:** snapshot line 2325, section "Customer-edition port — deferred findings (2026-10-05)"
-
 ### ISS-072 · P3 · Loading states without SkeletonRegion in ported iTop/customer/utilization UI
 
 - **Type:** debt · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -435,35 +385,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Accepted limitation; a fix would remount with a fresh lazy() per retry.
 - **Source:** snapshot line 2383, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-074 · P3 · Tasks page makes an extra GET /projects request per visit
-
-- **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** useProjects in frontend/src/pages/Tasks.tsx (line ~122)
-- **Problem:** The page fetches the whole project list only to know which projects are on hold.
-- **Why deferred / fix direction:** Return an on-hold flag with the task or reuse a cached list.
-- **Source:** snapshot line 2404, section "Project lifecycle and handover — deferred findings (2026-11-10)"
-
-### ISS-075 · P3 · Inline 'is'/'is any of' operator strings in Projects.tsx
-
-- **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** filter fields in frontend/src/pages/Projects.tsx (lines ~94, ~101)
-- **Problem:** Operator labels are inline strings instead of a shared constant.
-- **Why deferred / fix direction:** Extract a shared constant.
-- **Source:** snapshot line 2406, section "Project lifecycle and handover — deferred findings (2026-11-10)"
-
 ### ISS-185 · P2 · Task form scrolls sideways at 375px when the label creator opens
 
 - **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `1fd2bd1`
 - **Where:** the creating row (input, Add, Cancel, colour swatches) in frontend/src/components/LabelPicker.tsx (line ~98) inside the TaskFormModal body (`flex-1 overflow-y-auto px-5 py-4`)
 - **Problem:** At 375px the modal body's scrollWidth is 458 against a clientWidth of 374; the autofocused label input scrolls the body 38px sideways, cutting off the field labels on the left. Seen during the wave 1 Delivery Gate; not caused by its changes.
 - **Why deferred / fix direction:** Let the creating row wrap (flex-wrap, min-w-0 on the input) and check the Assignee row, whose chevron also sits past the panel edge.
-
-### ISS-191 · P3 · Handover pickers still list receivers with zero permissions
-
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `7e6547f`
-- **Where:** handoverReceivers in frontend/src/lib/handover.ts (line ~84); assertReceiver in backend/src/lib/offboarding.ts (line ~150); PUT /admin/projects/reassign in backend/src/routes/admin.ts (line ~742) and tamCandidates in frontend/src/pages/Admin.tsx (line ~1587)
-- **Problem:** The handover pickers drop PENDING users only, so a custom role with no permissions is offered and then refused by the server. The server's PENDING test is a role-name check (backend/CLAUDE.md: permission-based only). The Project Overrides reassign route and picker still accept a PENDING or zero-permission TAM.
-- **Why deferred / fix direction:** One receiver rule everywhere: add a `hasAccess` field (permissions not empty) to the /users payload, filter on it in both pickers, refuse in the reassign route, and drop the role-name test.
 
 ### ISS-193 · P3 · The icon stylesheet now loads after the app stylesheet
 
@@ -742,22 +669,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Chromium-family browsers show 'blocked this download' for files from a non-secure origin; the user can keep the file from the download overflow menu, so it is friction not data loss.
 - **Why deferred / fix direction:** Not fixable by changing format. Options: reach app via localhost forward/reverse proxy, HTTPS with internal CA (declined), or PDF View -> Save as PDF. Last observed 2026-07-31.
 - **Source:** snapshot line 70, section "Known bugs / inconsistencies"; merged duplicates at snapshot lines 77, 86, 92
-
-### ISS-138 · P3 · Download helpers revoke object URL synchronously after click
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** downloadWorkbook tail in frontend/src/lib/gantt/exportExcel.ts (line ~388); template download in components/PipelineImportDialog.tsx (line ~101)
-- **Problem:** The object URL is revoked in the same tick as a.click(); strictly the revoke belongs on a later task. Not the cause of the blocked-download bug.
-- **Why deferred / fix direction:** Hygiene only; works in practice. Defer the revoke with setTimeout and share one download helper.
-- **Source:** snapshot line 101, section "Known bugs / inconsistencies"
-
-### ISS-139 · P3 · Screen and PDF Gantt export diverge on bar treatments
-
-- **Type:** debt · **Found:** 2026-08-03 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** progress overlay and rollup drawing in frontend/src/lib/gantt/exportPdf.ts (lines ~729, 843)
-- **Problem:** The live Gantt hatches the incomplete portion and squares rollup caps; the PDF export still uses the old flat overlay and rounded pill. Documented as accepted, unscheduled.
-- **Why deferred / fix direction:** Port both treatments to exportPdf.ts if parity matters; export builder is on the spine.
-- **Source:** snapshot line 1445, section "Gantt visual refresh — deferred findings (2026-08-03)"
 
 ### ISS-140 · P3 · Gantt Excel export has no iTop ticket column
 
@@ -1151,3 +1062,14 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-189 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Two drag-handle buttons use a different focus style from FIELD_FOCUS
 - ISS-192 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Section reorder modal keeps its own order after a failed save
 - ISS-194 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Modal cannot tell its close button from Escape or a backdrop click (filed and fixed in the same change)
+- ISS-007 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · No pino redact configuration for the iTop token
+- ISS-012 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Cross-tab sign-out leaves the other tab on cached pages
+- ISS-060 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Tasks.tsx grid and kanban-v2 SubtaskRow show no Critical Path mark
+- ISS-063 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Missing-title banner doesn't name the offending card
+- ISS-070 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Members button count and avatars exclude the SA
+- ISS-071 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Frontend built-in role list omits SALES
+- ISS-074 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Tasks page makes an extra GET /projects request per visit
+- ISS-075 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Inline 'is'/'is any of' operator strings in Projects.tsx
+- ISS-138 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Download helpers revoke object URL synchronously after click
+- ISS-139 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Screen and PDF Gantt export diverge on bar treatments
+- ISS-191 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Handover pickers still list receivers with zero permissions

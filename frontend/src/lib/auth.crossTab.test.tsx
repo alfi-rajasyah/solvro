@@ -96,6 +96,23 @@ describe("AuthProvider cross-tab sync", () => {
     expect(assign).toHaveBeenCalledWith("/");
   });
 
+  it("handles the token event arriving before the user key: no stale write-back, user re-read on the later event", async () => {
+    const { result } = setup();
+    await act(async () => {});
+    const other = { ...ME, id: 2, username: "bob" };
+
+    // Token first: storage still holds the previous account's user.
+    act(() => otherTabWrites(TOKEN_STORAGE_KEY, "tok-b"));
+    // The other tab now writes its user; this tab must not overwrite it from state.
+    localStorage.setItem("solvro.user", JSON.stringify(other));
+    await act(async () => {});
+    expect(JSON.parse(localStorage.getItem("solvro.user")!).id).toBe(2);
+
+    act(() => otherTabWrites("solvro.user", JSON.stringify(other)));
+    expect(result.current.user?.id).toBe(2);
+    expect(JSON.parse(localStorage.getItem("solvro.user")!).id).toBe(2);
+  });
+
   it("does not navigate on a sign-out from another tab", async () => {
     setup();
     await act(async () => {});

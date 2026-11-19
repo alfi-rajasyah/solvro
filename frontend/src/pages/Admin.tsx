@@ -501,7 +501,7 @@ function UsersTab() {
   const adminCount = rows.filter((u) => u.role === "ADMIN").length;
   const pendingCount = rows.filter((u) => u.role === "PENDING").length;
   const customRoleCount = (roles ?? []).filter(
-    (r) => !r.builtIn,
+    (r) => !r.seeded,
   ).length;
 
   return (

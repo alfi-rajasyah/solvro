@@ -42,6 +42,16 @@ describe("logger redaction", () => {
     expect(line).toContain(REDACT_CENSOR);
   });
 
+  it("masks secret-bearing request headers logged as a whole header object", () => {
+    const { log, out } = capture();
+    const headers = { authorization: "Bearer jwt-abc", "x-solvro-webhook-secret": "whsec-1", cookie: "sid=ck-1", "set-cookie": "sid=ck-2", host: "example.test" };
+    log.info({ headers });
+    log.info({ req: { headers } });
+    const line = out();
+    for (const secret of ["jwt-abc", "whsec-1", "ck-1", "ck-2"]) expect(line).not.toContain(secret);
+    expect(line).toContain("example.test");
+  });
+
   it("leaves ordinary fields alone", () => {
     const { log, out } = capture();
     log.info({ projectId: 7, body: { title: "Plan" } });

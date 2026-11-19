@@ -4277,6 +4277,8 @@ export interface AdminRole {
   permissions: string[];
   userCount: number;
   builtIn: boolean;
+  /** Created by the seed; a role without this is a custom one. */
+  seeded: boolean;
 }
 
 export function useAdminRoles() {

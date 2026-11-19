@@ -41,9 +41,9 @@ usersRouter.get("/", async (req, res) => {
         active: u.active,
         avatarUrl: u.avatarUrl,
         role: u.role.roleName,
-        /** Can open the Pipeline — the only permission fact the UI needs (deal @mentions). */
         /** The role grants at least one permission: the one receiver rule for handover and reassign pickers. */
         hasAccess: permissions.length > 0,
+        /** Can open the Pipeline — the only permission fact the UI needs (deal @mentions). */
         pipelineAccess: permissions.includes("*") || permissions.includes("pipeline:view"),
       };
     }),

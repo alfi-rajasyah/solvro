@@ -158,7 +158,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // never refetched at all.
   const queryClient = useQueryClient();
 
+  // Latest user for callbacks that must not close over a stale one (login,
+  // the storage handler), and the flag that stops an adopted-session user
+  // from being written back over another tab's login (see the storage effect).
+  const userRef = useRef(user);
+  userRef.current = user;
+  const adoptedRef = useRef(false);
+
   useEffect(() => {
+    if (adoptedRef.current) return;
     persistUser(user);
   }, [user]);
 
@@ -222,7 +230,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // A different account than the one whose data may still sit in the
       // cache (a sign-out does clear it, but a 401-driven sign-out followed
       // by another person's login on the same tab must not show stale rows).
-      if (user && user.id !== res.user.id) queryClient.clear();
+      if (userRef.current?.id !== res.user.id) queryClient.clear();
+      adoptedRef.current = false;
       setToken(res.token);
       persistUser(res.user);
       setTokenState(res.token);
@@ -233,7 +242,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus("unauthenticated");
       throw err;
     }
-  }, [queryClient, user]);
+  }, [queryClient]);
 
   const loginWithGoogle = useCallback(async (idToken: string) => {
     setStatus("loading");
@@ -243,7 +252,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         body: { idToken },
         auth: false,
       });
-      if (user && user.id !== res.user.id) queryClient.clear();
+      if (userRef.current?.id !== res.user.id) queryClient.clear();
+      adoptedRef.current = false;
       setToken(res.token);
       persistUser(res.user);
       setTokenState(res.token);
@@ -254,7 +264,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setStatus("unauthenticated");
       throw err;
     }
-  }, [queryClient, user]);
+  }, [queryClient]);
 
   const replaceToken = useCallback((next: string) => {
     setToken(next);
@@ -300,33 +310,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Cross-tab sign-out and account switch (ISS-012). Another tab clearing the
   // token key (its sign-out, or `localStorage.clear()`) ends this session; a
   // different token written by another tab's login means another account may
-  // now own this browser, so this tab adopts it and drops the cached data. The
-  // adopt path writes nothing to storage: removing the key here would wipe the
-  // other tab's fresh login.
+  // now own this browser, so this tab adopts it and drops the cached data.
+  // Storage is the other tab's to write: removing the token here would wipe
+  // its fresh login, and the persist effect is switched off (`adoptedRef`) so
+  // this tab's stale user never overwrites the user key that tab writes. The
+  // user is read from storage only (never written back), and may arrive after
+  // the token event, so a later user-key event re-reads it. /auth/me
+  // re-verifies the adopted token either way.
   const tokenRef = useRef(token);
   useEffect(() => {
     tokenRef.current = token;
   }, [token]);
   useEffect(() => {
+    function readStoredUser(): AuthUser | null {
+      try {
+        const raw = localStorage.getItem(USER_STORAGE_KEY);
+        return raw ? (JSON.parse(raw) as AuthUser) : null;
+      } catch {
+        return null;
+      }
+    }
     function onStorage(e: StorageEvent) {
-      if (e.key !== null && e.key !== TOKEN_STORAGE_KEY) return;
+      if (e.key !== null && e.key !== TOKEN_STORAGE_KEY && e.key !== USER_STORAGE_KEY) return;
       const next = getToken();
+      if (e.key === USER_STORAGE_KEY) {
+        // Only meaningful once the token was adopted: re-read, never write back.
+        if (adoptedRef.current && next === tokenRef.current) setUser(readStoredUser());
+        return;
+      }
       if (next === tokenRef.current) return;
       if (!next) {
+        adoptedRef.current = false;
         endSession();
         return;
       }
+      adoptedRef.current = true;
       queryClient.clear();
       tokenRef.current = next;
       setTokenState(next);
-      setUser(() => {
-        try {
-          const raw = localStorage.getItem(USER_STORAGE_KEY);
-          return raw ? (JSON.parse(raw) as AuthUser) : null;
-        } catch {
-          return null;
-        }
-      });
+      userRef.current = null;
+      setUser(readStoredUser());
       setUserVerified(false);
       setBootError(null);
       setStatus("authenticated");
