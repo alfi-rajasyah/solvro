@@ -191,9 +191,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
     if (parentTaskId !== "") setEpicId("");
   }, [parentTaskId]);
 
-  const possibleParents = (projectTasks ?? []).filter(
-    (t) => !editingTask || (t.id !== editingTask.id && t.parentTaskId === null),
-  );
+  const possibleParents = filterPossibleParents(projectTasks ?? [], editingTask?.id);
   const subtasks = editingTask
     ? (projectTasks ?? [])
         .filter((t) => t.parentTaskId === editingTask.id)
@@ -715,6 +713,17 @@ export function TaskFormModal(props: TaskFormModalProps) {
   );
 }
 
+/**
+ * Tasks that may become a parent: top-level only (the server's max-depth guard
+ * rejects a subtask as parent), and never the task being edited.
+ */
+export function filterPossibleParents<T extends Pick<Task, "id" | "parentTaskId">>(
+  tasks: T[],
+  editingTaskId?: number,
+): T[] {
+  return tasks.filter((t) => t.parentTaskId === null && t.id !== editingTaskId);
+}
+
 /** One subtask line of the edit form: done checkbox, title, reorder buttons. */
 export function SubtaskRow({
   subtask: s,
@@ -736,7 +745,7 @@ export function SubtaskRow({
       <input
         type="checkbox"
         checked={s.status === "DONE"}
-        disabled={s.status === "CANCELLED"}
+        disabled={!canEdit || s.status === "CANCELLED"}
         title={s.status === "CANCELLED" ? "Cancelled. Change its status to reopen" : undefined}
         // A checkbox with no label has no accessible name
         // (docs/archive/plans/application-review-2026-10-22.md, F-37).
