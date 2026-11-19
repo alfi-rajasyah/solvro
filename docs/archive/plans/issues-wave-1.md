@@ -1,6 +1,6 @@
 # Issues wave 1: tasks API, Pipeline ordering, task form
 
-Status: in progress (2026-11-19), branch `fix/issues-wave-1`. Archive path once shipped: `docs/archive/plans/issues-wave-1.md`.
+Status: shipped 2026-11-19, branch `fix/issues-wave-1`. Archive path: `docs/archive/plans/issues-wave-1.md`.
 
 Lane P (several defects in one phase). One PR into `develop`; each group is one task and one commit.
 
@@ -27,4 +27,8 @@ A, E and F share no files, so all three run in one parallel wave in the main wor
 
 ## Records
 
-(Filled in at integration.)
+- Commits: F `653c1eb`, A `39af8f6`, E `de9ae4a`, docs `d9feb6c`, review fixes `f075bf7`, test fix `1fd2bd1`.
+- Phase review (opus): 0 blockers, 2 should-fix (Pipeline move/delete stale stage; create and import without the stage lock), 6 nits. All fixed except one nit filed as ISS-184; a re-check confirmed the fixes and found a timer-based test, fixed in `1fd2bd1`.
+- New issues: ISS-183 (task create accepts due before start), ISS-184 (re-pack vs offboarding lock order), ISS-185 (task form side-scroll at 375px).
+- `gates.sh --performed-review=opus`: all gates pass at `f075bf7`.
+- Delivery Gate (F): PASS. Light and dark, 375px and 1280px: a duplicate label shows "A label with this name already exists."; the create-mode parent picker lists top-level tasks only (subtask T-1197 absent). The subtask checkbox gate is a `disabled` attribute with no visual change, covered by a unit test. ISS-185 seen, pre-existing.

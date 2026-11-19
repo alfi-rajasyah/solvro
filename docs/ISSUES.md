@@ -579,6 +579,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Refetch the preview when the dialog regains focus, or accept.
 - **Source:** snapshot line 2407, section "Project lifecycle and handover — deferred findings (2026-11-10)"
 
+### ISS-185 · P2 · Task form scrolls sideways at 375px when the label creator opens
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `1fd2bd1`
+- **Where:** the creating row (input, Add, Cancel, colour swatches) in frontend/src/components/LabelPicker.tsx (line ~98) inside the TaskFormModal body (`flex-1 overflow-y-auto px-5 py-4`)
+- **Problem:** At 375px the modal body's scrollWidth is 458 against a clientWidth of 374; the autofocused label input scrolls the body 38px sideways, cutting off the field labels on the left. Seen during the wave 1 Delivery Gate; not caused by its changes.
+- **Why deferred / fix direction:** Let the creating row wrap (flex-wrap, min-w-0 on the input) and check the Assignee row, whose chevron also sits past the panel edge.
+
 ## Open — Accessibility & tokens
 
 ### ISS-077 · P2 · Every SortableItem is in the tab order, even for read-only viewers
