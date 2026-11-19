@@ -92,10 +92,9 @@ function withoutComments(source: string): string {
     .replace(/^[ \t]*\/\/.*$/gm, blank);
 }
 
-/** Opening `<input>` / `<textarea>` / `<select>` / `<Input>` / `<Textarea>` tags of a JSX source, braces and quotes respected. */
-function controlTags(source: string): { index: number; tag: string }[] {
+/** Opening tags whose name matches `re` (a global regex ending at the tag name), braces and quotes respected. */
+function openingTagsOf(source: string, re: RegExp): { index: number; tag: string }[] {
   const found: { index: number; tag: string }[] = [];
-  const re = /<(input|textarea|select|Input|Textarea)(?=[\s/>])/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(source))) {
     let depth = 0;
@@ -115,6 +114,33 @@ function controlTags(source: string): { index: number; tag: string }[] {
     found.push({ index: m.index, tag: source.slice(m.index, i + 1) });
   }
   return found;
+}
+
+/** Opening `<input>` / `<textarea>` / `<select>` / `<Input>` / `<Textarea>` tags of a JSX source. */
+const controlTags = (source: string) =>
+  openingTagsOf(source, /<(input|textarea|select|Input|Textarea)(?=[\s/>])/g);
+
+/**
+ * Every `<label>` / `<Label>` element with its `htmlFor` target and whether it
+ * holds text (or a `{expression}`, which is trusted to render text). A label
+ * that is empty, or whose `htmlFor` points at another control, names nothing.
+ */
+function labelsOf(source: string): { target: string; hasText: boolean }[] {
+  const labels: { target: string; hasText: boolean }[] = [];
+  for (const { index, tag } of openingTagsOf(source, /<(label|Label)(?=[\s/>])/g)) {
+    const name = /^<(\w+)/.exec(tag)![1];
+    const target =
+      /\bhtmlFor="([^"]+)"/.exec(tag)?.[1] ??
+      (() => {
+        const expr = braceExpression(tag, /\bhtmlFor=\{/);
+        return expr === null ? null : `{${expr}}`;
+      })();
+    if (target === null) continue;
+    const end = tag.endsWith("/>") ? -1 : source.indexOf(`</${name}>`, index + tag.length);
+    const content = end === -1 ? "" : source.slice(index + tag.length, end);
+    labels.push({ target, hasText: /[A-Za-z{]/.test(content.replace(/<[^>]*>/g, " ")) });
+  }
+  return labels;
 }
 
 /** The brace-balanced JSX expression after `prefix` (which ends in `{`), quotes respected; null if absent. */
@@ -167,14 +193,21 @@ describe("source guard: no unlabelled input, textarea or select", () => {
       const rel = relative(SRC, file).replace(/\\/g, "/");
       if (PENDING.has(rel)) continue;
       const source = withoutComments(readFileSync(file, "utf8"));
+      // A control is named by a label only when that label element targets its
+      // id and carries text; a matching htmlFor elsewhere in the file is not enough.
+      const namedTargets = new Set(
+        labelsOf(source)
+          .filter((l) => l.hasText)
+          .map((l) => l.target),
+      );
       for (const { index, tag } of controlTags(source)) {
         // type="hidden" and `display: none` controls are not in the accessibility tree.
         if (/type="hidden"/.test(tag) || /className="hidden"/.test(tag)) continue;
         const id = /\bid="([^"]+)"/.exec(tag)?.[1];
-        if (id && source.includes(`htmlFor="${id}"`)) continue;
+        if (id && namedTargets.has(id)) continue;
         // `id={`${uid}-x`}` paired with `htmlFor={`${uid}-x`}` (useId).
         const idExpr = braceExpression(tag, /\bid=\{/);
-        if (idExpr && source.includes(`htmlFor={${idExpr}}`)) continue;
+        if (idExpr && namedTargets.has(`{${idExpr}}`)) continue;
         // A non-empty aria-label / aria-labelledby. A `{...spread}` is trusted to
         // supply the name (CommentMentions builds its aria-label that way): the
         // guard cannot see inside it.

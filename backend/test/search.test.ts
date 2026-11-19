@@ -231,6 +231,101 @@ describe("GET /search", () => {
     expect(wildcardRes.body.customers).toEqual([]);
   });
 
+  it("treats a literal underscore as a character, not a single-character wildcard", async () => {
+    const { token, userId } = await createAdminAndToken();
+    const n = needle();
+
+    await prisma.project.create({ data: { name: `${n} a_b`, tamId: userId } });
+    // "a_b" as an unescaped LIKE pattern would also match "axb".
+    await prisma.project.create({ data: { name: `${n} axb`, tamId: userId } });
+
+    const res = await request(app)
+      .get("/search")
+      .query({ q: `${n} a_b` })
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.projects.map((p: { name: string }) => p.name)).toEqual([`${n} a_b`]);
+
+    // A bare "__" must not match every two-character-or-longer name.
+    const wildcardRes = await request(app)
+      .get("/search")
+      .query({ q: "__" })
+      .set("Authorization", `Bearer ${token}`);
+    expect(wildcardRes.status).toBe(200);
+    expect(wildcardRes.body.projects).toEqual([]);
+    expect(wildcardRes.body.tasks).toEqual([]);
+    expect(wildcardRes.body.customers).toEqual([]);
+  });
+
+  it("rejects q longer than 100 chars with 400 and accepts exactly 100", async () => {
+    const { token } = await createAdminAndToken();
+    const over = await request(app)
+      .get("/search")
+      .query({ q: "x".repeat(101) })
+      .set("Authorization", `Bearer ${token}`);
+    expect(over.status).toBe(400);
+
+    const edge = await request(app)
+      .get("/search")
+      .query({ q: "x".repeat(100) })
+      .set("Authorization", `Bearer ${token}`);
+    expect(edge.status).toBe(200);
+  });
+
+  it("orders each group by name or title ascending", async () => {
+    const { token, userId } = await createAdminAndToken();
+    const n = needle();
+    const project = await prisma.project.create({
+      data: { name: `${n} B project`, tamId: userId },
+    });
+    await prisma.project.create({ data: { name: `${n} A project`, tamId: userId } });
+    for (const t of ["C", "A", "B"]) {
+      await prisma.task.create({
+        data: { title: `${n} ${t} task`, projectId: project.id, position: 0 },
+      });
+    }
+    for (const c of ["B", "A"]) {
+      await prisma.customer.create({ data: { name: `${n} ${c} customer`, description: "d" } });
+    }
+
+    const res = await request(app)
+      .get("/search")
+      .query({ q: n })
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body.projects.map((p: { name: string }) => p.name)).toEqual([
+      `${n} A project`,
+      `${n} B project`,
+    ]);
+    expect(res.body.tasks.map((t: { title: string }) => t.title)).toEqual([
+      `${n} A task`,
+      `${n} B task`,
+      `${n} C task`,
+    ]);
+    expect(res.body.customers.map((c: { name: string }) => c.name)).toEqual([
+      `${n} A customer`,
+      `${n} B customer`,
+    ]);
+  });
+
+  it("never searches project note bodies", async () => {
+    const { token, userId } = await createAdminAndToken();
+    const n = needle();
+    const project = await prisma.project.create({
+      data: { name: `Quiet ${needle()}`, tamId: userId },
+    });
+    await prisma.projectNote.create({
+      data: { projectId: project.id, authorId: userId, body: `internal ${n}`, noteDate: new Date() },
+    });
+
+    const res = await request(app)
+      .get("/search")
+      .query({ q: n })
+      .set("Authorization", `Bearer ${token}`);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ projects: [], tasks: [], customers: [], deals: [] });
+  });
+
   it("excludes subtasks from task results", async () => {
     const { token, userId } = await createAdminAndToken();
     const n = needle();

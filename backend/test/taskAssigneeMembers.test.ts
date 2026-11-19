@@ -2,6 +2,7 @@
 // user who is neither the project's TAM nor a member adds them as a member in
 // the same transaction as the task write.
 import "./env.js";
+import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
@@ -231,8 +232,8 @@ describe("PATCH /tasks/:id — assignee becomes a member", () => {
 });
 
 // Port decision M-4 (docs/archive/plans/solvro-cust-port-plan.md §10): the migration backfills ProjectMember rows for assignees of
-// OPEN tasks who cannot otherwise see their project. This runs the migration's
-// SELECT (scoped to one project) to pin the filter it uses.
+// OPEN tasks who cannot otherwise see their project. This runs the SELECT read
+// out of the migration file (scoped to one project) to pin the filter it uses.
 describe("migration backfill — which task assignees would be made members", () => {
   it("returns an active assignee of an open task who is not attached; skips DONE tasks, the TAM, the SA, the customer owner and inactive users", async () => {
     const tam = await createUserWithRole("TAM");
@@ -265,20 +266,21 @@ describe("migration backfill — which task assignees would be made members", ()
     await assign(customerOwner.userId, "TODO");
     await assign(inactive.userId, "TODO");
 
-    // Same SELECT as prisma/migrations/20261004120700_project_members, plus a
-    // project filter so other tests' rows do not leak in.
-    const rows = await prisma.$queryRaw<{ project_id: number; assigned_to: number }[]>`
-      SELECT DISTINCT t."project_id", t."assigned_to"
-      FROM "tasks" t
-      JOIN "projects" p ON p."id" = t."project_id"
-      JOIN "users" u ON u."id" = t."assigned_to" AND u."active" = true
-      LEFT JOIN "customers" c ON c."id" = p."customer_id"
-      WHERE t."assigned_to" IS NOT NULL
-        AND t."status" <> 'DONE'
-        AND t."assigned_to" <> p."tam_id"
-        AND t."assigned_to" IS DISTINCT FROM p."sa_id"
-        AND t."assigned_to" IS DISTINCT FROM c."tam_id"
-        AND t."project_id" = ${project.id}`;
+    // The SELECT is read out of the migration file itself, so the test cannot
+    // drift from it; only a project filter is appended so other tests' rows do
+    // not leak in.
+    const sql = readFileSync(
+      new URL("../prisma/migrations/20261004120700_project_members/migration.sql", import.meta.url),
+      "utf8",
+    );
+    const match = /(SELECT DISTINCT t\."project_id"[\s\S]*?)\s*ON CONFLICT DO NOTHING;/.exec(sql);
+    if (!match) throw new Error("backfill SELECT not found in the migration");
+    const selected = await prisma.$queryRawUnsafe<{ project_id: number; assigned_to: number }[]>(
+      `${match[1]}\n  AND t."project_id" = $1`,
+      project.id,
+    );
+    // The migration also selects added_by_id and created_at for its INSERT.
+    const rows = selected.map((r) => ({ project_id: r.project_id, assigned_to: r.assigned_to }));
     expect(rows).toEqual([{ project_id: project.id, assigned_to: outsider.userId }]);
   });
 });

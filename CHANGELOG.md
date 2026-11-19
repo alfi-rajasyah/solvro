@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-11-19 — Dark pin spec and tighter tests
+
+- An end-to-end spec confirms the login page and the sidebar stay dark under the light theme.
+- The `/search` tests now cover a literal `_`, the query length limit, result ordering, and that project notes are never searched.
+- The task-assignee backfill test now runs the SELECT read from the migration file instead of a copy.
+- The accessible-name guard now requires a label with text that targets each control's own id.
+
 ### Fixed — 2026-11-19 — Task form at phone width, inactive mention chips, autocomplete
 
 - The task form no longer scrolls sideways on narrow screens when the label creator is open; the label row wraps and the Assignee field stays inside the panel.
