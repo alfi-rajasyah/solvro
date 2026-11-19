@@ -19,6 +19,7 @@ import {
   type ProjectDraft,
 } from "@/lib/handover";
 import {
+  isHandoverPreviewEmpty,
   useAdminOffboardUser,
   useUsers,
   type AdminUser,
@@ -141,7 +142,8 @@ export function HandoverModal({ open, user, preview, onClose, onDone, onStale }:
   // The preview is a one-off fetch, so work reassigned elsewhere while this
   // tab was in the background would leave rows that no longer apply. Refetch
   // quietly when the window regains focus; a failed refetch keeps the list on
-  // screen and a submit still reports a stale handover.
+  // screen and a submit still reports a stale handover. An emptied preview
+  // stays open with a notice rather than closing under a half-made draft.
   const refreshOnFocus = useRef(onStale);
   refreshOnFocus.current = onStale;
   const busyRef = useRef(false);
@@ -408,6 +410,11 @@ export function HandoverModal({ open, user, preview, onClose, onDone, onStale }:
           </section>
         )}
 
+        {isHandoverPreviewEmpty(preview) && (
+          <p role="status" data-testid="handover-empty" className="text-sm text-on-surface-variant">
+            Nothing is left to hand over for {user.username}. Confirm to deactivate the account.
+          </p>
+        )}
         {!complete && missingTams.size > 0 && (
           <p id={tamHintId} className="text-sm text-on-surface-variant">
             Choose a new TAM for every project {user.username} leads to continue.

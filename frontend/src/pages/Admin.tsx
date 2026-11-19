@@ -15,6 +15,7 @@ import { Chip, ProjectStatusChip } from "@/components/StatusChip";
 import { Tabs } from "@/components/Tabs";
 import { ItopTab } from "@/components/admin/ItopTab";
 import { HandoverModal } from "@/components/admin/HandoverModal";
+import { useHandoverSession } from "@/components/admin/useHandoverSession";
 import { DeleteUserModal } from "@/components/admin/DeleteUserModal";
 import { ApiError } from "@/lib/api";
 import {
@@ -128,7 +129,8 @@ function UsersTab() {
   const updateRole = useAdminUpdateRole();
   const setActive = useAdminSetActive();
   const fetchHandoverPreview = useAdminFetchHandoverPreview();
-  const [handover, setHandover] = useState<{ user: AdminUser; preview: HandoverPreview } | null>(null);
+  const { session: handover, open: openHandover, close: closeHandover, reload: reloadHandoverPreview } =
+    useHandoverSession(fetchHandoverPreview);
   const resetPassword = useAdminResetPassword();
   const [deletingUser, setDeletingUser] = useState<
     { user: AdminUser; customers: HandoverPreview["customers"] } | null
@@ -428,7 +430,7 @@ function UsersTab() {
         // -> the plain deactivate below; otherwise the handover modal.
         const preview = await fetchHandoverPreview(u.id);
         if (!isHandoverPreviewEmpty(preview)) {
-          setHandover({ user: u, preview });
+          openHandover(u, preview);
           return;
         }
       }
@@ -440,7 +442,7 @@ function UsersTab() {
         try {
           const preview = await fetchHandoverPreview(u.id);
           if (!isHandoverPreviewEmpty(preview)) {
-            setHandover({ user: u, preview });
+            openHandover(u, preview);
             return;
           }
           // Nothing left to hand over any more: the plain deactivate now works.
@@ -452,19 +454,6 @@ function UsersTab() {
         }
       }
       setError(err instanceof ApiError ? err.message : "Failed to update status.");
-    }
-  }
-
-  // Resolves true once the modal has a fresh preview; false when the reload failed.
-  async function reloadHandoverPreview(): Promise<boolean> {
-    if (!handover) return false;
-    try {
-      const preview = await fetchHandoverPreview(handover.user.id);
-      if (isHandoverPreviewEmpty(preview)) setHandover(null);
-      else setHandover({ user: handover.user, preview });
-      return true;
-    } catch {
-      return false;
     }
   }
 
@@ -658,8 +647,8 @@ function UsersTab() {
           open
           user={handover.user}
           preview={handover.preview}
-          onClose={() => setHandover(null)}
-          onDone={() => setHandover(null)}
+          onClose={closeHandover}
+          onDone={closeHandover}
           onStale={reloadHandoverPreview}
         />
       )}

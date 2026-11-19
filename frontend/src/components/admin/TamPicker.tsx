@@ -34,7 +34,14 @@ export function TamPicker({ label, currentId, currentName, candidates, onPick }:
     <Autocomplete
       items={candidates}
       value={query}
-      onValueChange={setQuery}
+      // Base UI also reports a pressed item's name here (it fills the input);
+      // this picker is an action list, so only typing may change the query.
+      onValueChange={(v, details) => {
+        if (details.reason !== "item-press") setQuery(v);
+      }}
+      onOpenChange={(isOpen) => {
+        if (!isOpen) setQuery("");
+      }}
       itemToStringValue={(u: TamCandidate) => u.username}
       openOnInputClick
     >
@@ -44,7 +51,7 @@ export function TamPicker({ label, currentId, currentName, candidates, onPick }:
         aria-label={`Reassign TAM for ${label}, currently ${currentName}`}
         className={`rounded-sm border-outline-variant bg-surface text-xs text-on-surface placeholder:text-on-surface ${FIELD_FOCUS}`}
       />
-      <AutocompleteContent className="min-w-56">
+      <AutocompleteContent className="min-w-56 shadow-overlay! rounded-sm">
         <AutocompleteEmpty>No user matches.</AutocompleteEmpty>
         <AutocompleteList>
           {(u: TamCandidate) => (

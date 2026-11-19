@@ -18,8 +18,8 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 ### Fixed — 2026-11-19 — Fixes in offboarding, icon sizing and the app shell, and query hooks
 
 - `backend/src/lib/offboarding.ts`: offboarding and user deletion refuse a new owner who has no access yet (a pending account or a role with no permissions) for tasks, the TAM and SA seats and customer ownership, with a clear error that the handover dialog shows. Customers move with one update per new owner instead of one per customer, and each new owner is checked once.
-- `frontend/src/components/admin/HandoverModal.tsx`: the handover dialog reloads its list of work when the browser window regains focus.
-- `frontend/src/pages/Admin.tsx`: the Project Overrides reassign column uses a searchable TAM picker instead of a full user list in every row.
+- `frontend/src/components/admin/HandoverModal.tsx`: the handover dialog reloads its list of work when the browser window regains focus. If nothing is left to hand over, it stays open with a short notice instead of closing, and a late reload can no longer reopen it after a successful handover.
+- `frontend/src/pages/Admin.tsx`: the Project Overrides reassign column uses a searchable TAM picker instead of a full user list in every row. After a pick the field clears and shows the current TAM.
 - `frontend/src/index.css`: icon size and display classes now apply. The Material Symbols stylesheet loads into a cascade layer below Tailwind's utilities, so icons render at the size their classes set (for example 20px in the sidebar) instead of always at 24px.
 - `frontend/src/components/InstallBanner.tsx`: install and dismiss are separate buttons instead of a button inside a button, and the dismiss target is 32px.
 - `frontend/vite.config.ts`, `frontend/index.html`: a 192px maskable app icon and a favicon for dark browser themes.

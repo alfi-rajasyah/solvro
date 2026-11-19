@@ -145,4 +145,10 @@ describe("HandoverModal", () => {
     });
     expect(onStale).toHaveBeenCalledTimes(1);
   });
+
+  it("shows a notice instead of closing when the preview has emptied", async () => {
+    renderModal({ projects: [], customers: [], openDeals: 0 });
+    expect(await screen.findByTestId("handover-empty")).toBeTruthy();
+    expect(screen.getByTestId("handover-modal")).toBeTruthy();
+  });
 });
