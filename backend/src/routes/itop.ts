@@ -686,7 +686,7 @@ async function loadWritableTicket(userSub: number, ticketId: number, user: JwtPa
       throw new HttpError(
         403,
         "itop_token_unreadable",
-        "Your saved iTop token could not be decrypted (SECRETS_KEY changed?) — enter it again in Settings.",
+        "Your saved iTop token could not be decrypted (SECRETS_KEY changed?). Enter it again in Settings.",
       );
     }
     throw err;
@@ -801,7 +801,7 @@ itopRouter.post(
         throw new HttpError(
           403,
           "itop_person_unmatched",
-          "Your Solvro account isn't matched to an iTop person yet — save your personal token in Settings first.",
+          "Your Solvro account isn't matched to an iTop person yet. Save your personal token in Settings first.",
         );
       }
 
@@ -834,7 +834,7 @@ itopRouter.post(
           throw new HttpError(
             409,
             "itop_team_required",
-            "That team isn't one of your iTop teams — pick one of your own.",
+            "That team isn't one of your iTop teams. Pick one of your own.",
             { teams: teamOptions() },
           );
         }
@@ -948,7 +948,7 @@ async function getItopAppClientOr409(): Promise<ItopClient> {
       throw new HttpError(
         409,
         "itop_token_unreadable",
-        "The stored iTop token could not be decrypted (SECRETS_KEY changed?) — an admin must enter it again.",
+        "The stored iTop token could not be decrypted (SECRETS_KEY changed?). An admin must enter it again.",
       );
     }
     throw err;
@@ -1105,7 +1105,7 @@ async function loadWritableCustomerContext(
       throw new HttpError(
         403,
         "itop_token_unreadable",
-        "Your saved iTop token could not be decrypted (SECRETS_KEY changed?) — enter it again in Settings.",
+        "Your saved iTop token could not be decrypted (SECRETS_KEY changed?). Enter it again in Settings.",
       );
     }
     throw err;
@@ -1303,7 +1303,7 @@ itopRouter.post(
       throw new HttpError(
         403,
         "itop_user_unmatched",
-        "Your iTop user account is not linked yet — ask an admin to run Match users",
+        "Your iTop user account is not linked yet. Ask an admin to run Match users",
       );
     }
 

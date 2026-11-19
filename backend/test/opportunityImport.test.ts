@@ -213,7 +213,7 @@ describe("POST /opportunities/import — invalid rows", () => {
       expect(result.status).toBe("invalid");
       // The message lists exactly the 6 stages IMPORT_STAGE_MAP now has.
       expect(result.reason).toMatch(
-        /Invalid stage ".*" — must be one of: assessment, rfp, poc, technical_clarification, deliver_proposal, waiting_response/,
+        /Invalid stage ".*"\. It must be one of: assessment, rfp, poc, technical_clarification, deliver_proposal, waiting_response/,
       );
     }
   });

@@ -426,7 +426,7 @@ customersRouter.post(
       }
       tamId = null;
     } else {
-      await assertActiveUser(prisma, body.tamId, "tam", { requireActive: false });
+      await assertActiveUser(prisma, body.tamId, "tam");
       tamId = body.tamId;
     }
     const data: Prisma.CustomerCreateInput = {
@@ -507,7 +507,7 @@ customersRouter.patch(
         }
         data.tam = { disconnect: true };
       } else {
-        await assertActiveUser(prisma, body.tamId, "tam", { requireActive: false });
+        if (body.tamId !== existing.tamId) await assertActiveUser(prisma, body.tamId, "tam");
         data.tam = { connect: { id: body.tamId } };
       }
     }

@@ -502,6 +502,15 @@ tasksRouter.patch(
       // current assignee on every save, and that must not re-add a member who
       // was removed.
       if (body.assignedToId != null && body.assignedToId !== cur.assignedToId) {
+        // A changed assignee must not be deactivated. An unknown id is left to
+        // the relation connect below, which keeps answering 404.
+        const assignee = await tx.user.findUnique({
+          where: { id: body.assignedToId },
+          select: { active: true },
+        });
+        if (assignee && !assignee.active) {
+          throw new HttpError(400, "assignee_not_found", "The selected assignee does not exist or is inactive");
+        }
         const added = await ensureAssigneeIsMember(
           tx,
           cur.projectId,

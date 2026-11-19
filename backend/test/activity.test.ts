@@ -732,23 +732,38 @@ describe("project TAM / SA changes", () => {
     expect(await prisma.notification.count({ where: { activityEvent: { projectId: project.id } } })).toBe(0);
   });
 
-  it("does not notify an inactive new SA, and a re-save of the same seats records nothing", async () => {
+  it("refuses a newly set inactive SA; a re-save of an SA who was deactivated since passes and records nothing", async () => {
     const { tam, project } = await fixture();
     const sa = await createUserWithRole("SA");
-    await prisma.user.update({ where: { id: sa.userId }, data: { active: false } });
-    const res = await request(app)
+    const set = await request(app)
       .patch(`/projects/${project.id}`)
       .set(auth(tam.token))
       .send({ saId: sa.userId });
-    expect(res.status).toBe(200);
+    expect(set.status).toBe(200);
     expect(await eventsOf(project.id)).toHaveLength(1);
-    expect(await notificationsOf(sa.userId)).toHaveLength(0);
 
+    await prisma.user.update({ where: { id: sa.userId }, data: { active: false } });
     const again = await request(app)
       .patch(`/projects/${project.id}`)
       .set(auth(tam.token))
       .send({ tamId: tam.userId, saId: sa.userId });
     expect(again.status).toBe(200);
+    expect(await eventsOf(project.id)).toHaveLength(1);
+
+    const gone = await createUserWithRole("SA");
+    await prisma.user.update({ where: { id: gone.userId }, data: { active: false } });
+    const refused = await request(app)
+      .patch(`/projects/${project.id}`)
+      .set(auth(tam.token))
+      .send({ saId: gone.userId });
+    expect(refused.status).toBe(400);
+    expect(refused.body.code).toBe("sa_not_found");
+    const refusedTam = await request(app)
+      .patch(`/projects/${project.id}`)
+      .set(auth(tam.token))
+      .send({ tamId: gone.userId });
+    expect(refusedTam.status).toBe(400);
+    expect(refusedTam.body.code).toBe("tam_not_found");
     expect(await eventsOf(project.id)).toHaveLength(1);
   });
 });
@@ -756,6 +771,7 @@ describe("project TAM / SA changes", () => {
 describe("epics", () => {
   it("create, update and delete each record one event; a no-op PATCH records nothing", async () => {
     const { tam, other, project } = await fixture();
+    await prisma.projectMember.create({ data: { projectId: project.id, userId: other.userId } });
     const created = await request(app)
       .post(`/projects/${project.id}/epics`)
       .set(auth(tam.token))

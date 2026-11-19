@@ -49,53 +49,80 @@ const TASK_SELECT = {
 
 type SourceTask = Prisma.TaskGetPayload<{ select: typeof TASK_SELECT }>;
 
-async function copyOne(
-  tx: Tx,
-  source: SourceTask,
-  newParentTaskId: number | null,
-  newSectionId: number | null,
-  position: number,
-): Promise<number> {
+interface PendingCopy {
+  source: SourceTask;
+  parentTaskId: number | null;
+  sectionId: number | null;
+  position: number;
+}
+
+// Inserts every pending copy in one INSERT and returns the new ids in the
+// same order as `pending`. A multi-row INSERT's RETURNING order is not a
+// documented guarantee, so the rows are matched back by (parent, position),
+// which is unique within a sibling list.
+async function insertCopies(tx: Tx, pending: PendingCopy[]): Promise<number[]> {
+  if (pending.length === 0) return [];
+  const created = await tx.task.createManyAndReturn({
+    data: pending.map((p) => ({
+      projectId: p.source.projectId,
+      title: p.source.title,
+      description: p.source.description,
+      status: "TODO" as const,
+      priority: p.source.priority,
+      startDate: p.source.startDate,
+      dueDate: p.source.dueDate,
+      isMilestone: p.source.isMilestone,
+      isCriticalPath: p.source.isCriticalPath,
+      baselineStartDate: null,
+      baselineDueDate: null,
+      assignedToId: p.source.assignedToId,
+      parentTaskId: p.parentTaskId,
+      sectionId: p.sectionId,
+      epicId: p.source.epicId,
+      position: p.position,
+    })),
+    select: { id: true, parentTaskId: true, position: true },
+  });
+  const idByKey = new Map(created.map((c) => [`${c.parentTaskId ?? "top"}:${c.position}`, c.id]));
+  const ids: number[] = [];
+  for (const p of pending) {
+    const id = idByKey.get(`${p.parentTaskId ?? "top"}:${p.position}`);
+    if (id === undefined) throw new Error("duplicateTaskTree: a copied task was not returned");
+    ids.push(id);
+  }
+  return ids;
+}
+
+// Labels and links of a whole batch of copies: one INSERT each.
+async function copyLabelsAndLinks(tx: Tx, pending: PendingCopy[], newIds: number[]): Promise<void> {
   // Links inserted in one transaction would all get the same now(), and
   // TaskLink ids are UUIDs, so the list order (createdAt, then id) would come
   // out random. One millisecond apart per link keeps the source's order.
   const linkBase = Date.now();
-  const copy = await tx.task.create({
-    data: {
-      projectId: source.projectId,
-      title: source.title,
-      description: source.description,
-      status: "TODO",
-      priority: source.priority,
-      startDate: source.startDate,
-      dueDate: source.dueDate,
-      isMilestone: source.isMilestone,
-      isCriticalPath: source.isCriticalPath,
-      baselineStartDate: null,
-      baselineDueDate: null,
-      assignedToId: source.assignedToId,
-      parentTaskId: newParentTaskId,
-      sectionId: newSectionId,
-      epicId: source.epicId,
-      position,
-      labels:
-        source.labels.length > 0
-          ? { connect: source.labels.map((l) => ({ id: l.id })) }
-          : undefined,
-      links:
-        source.links.length > 0
-          ? {
-              create: source.links.map((l, i) => ({
-                label: l.label,
-                url: l.url,
-                createdAt: new Date(linkBase + i),
-              })),
-            }
-          : undefined,
-    },
-    select: { id: true },
+  const links: Prisma.TaskLinkCreateManyInput[] = [];
+  const labelTaskIds: number[] = [];
+  const labelIds: number[] = [];
+  pending.forEach((p, idx) => {
+    p.source.links.forEach((l, i) => {
+      links.push({
+        taskId: newIds[idx]!,
+        label: l.label,
+        url: l.url,
+        createdAt: new Date(linkBase + i),
+      });
+    });
+    for (const label of p.source.labels) {
+      labelTaskIds.push(newIds[idx]!);
+      labelIds.push(label.id);
+    }
   });
-  return copy.id;
+  if (links.length > 0) await tx.taskLink.createMany({ data: links });
+  if (labelIds.length > 0) {
+    // Implicit many-to-many join table (A = Label, B = Task).
+    await tx.$executeRaw`
+      INSERT INTO "_LabelToTask" ("A", "B")
+      SELECT * FROM unnest(${labelIds}::int[], ${labelTaskIds}::int[])`;
+  }
 }
 
 /**
@@ -131,10 +158,11 @@ async function copyOne(
  * for every subtask of those sources), the append position is counted ONCE
  * per destination sibling list (`countSiblings`) and then incremented in
  * memory — a brand-new parent's subtask list starts at 0 with no count at
- * all — and each copy costs one INSERT, plus one per document link it
- * carries. So a section duplicate with N top-level tasks and M subtasks each
- * runs 2 + 1 + N + N·M statements plus the link rows, not
- * a COUNT before every row. Throws if any id in `sourceIds` doesn't resolve
+ * all — and the copies go in as one batched INSERT per level (top-level
+ * tasks, then all their subtasks), followed by one INSERT for every document
+ * link and one for every label connection. So a section duplicate runs a
+ * constant handful of statements however many tasks it holds, not one INSERT
+ * per task and not a COUNT before every row. Throws if any id in `sourceIds` doesn't resolve
  * to an existing task.
  *
  * Must run inside a `prisma.$transaction`. Returns a Map from every copied
@@ -186,38 +214,46 @@ export async function duplicateTaskTree(
     return next;
   }
 
+  // Level 1: every top-level copy in one INSERT, positions taken in order.
+  const topPending: PendingCopy[] = [];
   for (const sourceId of sourceIds) {
     const source = sourceById.get(sourceId)!;
-
-    const newSectionId =
-      overrides?.sectionId !== undefined ? overrides.sectionId : source.sectionId;
-
-    const position = await takePosition({
-      projectId: source.projectId,
+    topPending.push({
+      source,
       parentTaskId: source.parentTaskId,
+      sectionId: overrides?.sectionId !== undefined ? overrides.sectionId : source.sectionId,
+      position: await takePosition({
+        projectId: source.projectId,
+        parentTaskId: source.parentTaskId,
+      }),
     });
-    const newTaskId = await copyOne(tx, source, source.parentTaskId, newSectionId, position);
-    result.set(sourceId, newTaskId);
-
-    // The new parent was created one statement ago and has no children yet,
-    // so its subtask list starts at 0 — no COUNT needed.
-    let subtaskPosition = 0;
-    const subtasks = subtasksByParent.get(sourceId) ?? [];
-    for (const subtask of subtasks) {
-      const newSubtaskSectionId =
-        overrides?.sectionId !== undefined && subtask.sectionId === source.sectionId
-          ? overrides.sectionId
-          : subtask.sectionId;
-      const newSubtaskId = await copyOne(
-        tx,
-        subtask,
-        newTaskId,
-        newSubtaskSectionId,
-        subtaskPosition++,
-      );
-      result.set(subtask.id, newSubtaskId);
-    }
   }
+  const topIds = await insertCopies(tx, topPending);
+  topPending.forEach((p, i) => result.set(sourceIds[i]!, topIds[i]!));
+
+  // Level 2: every subtask of every copy in one INSERT. The new parents were
+  // created in this transaction and have no children, so each subtask list
+  // starts at 0 — no COUNT needed.
+  const subPending: PendingCopy[] = [];
+  sourceIds.forEach((sourceId, i) => {
+    const source = sourceById.get(sourceId)!;
+    let subtaskPosition = 0;
+    for (const subtask of subtasksByParent.get(sourceId) ?? []) {
+      subPending.push({
+        source: subtask,
+        parentTaskId: topIds[i]!,
+        sectionId:
+          overrides?.sectionId !== undefined && subtask.sectionId === source.sectionId
+            ? overrides.sectionId
+            : subtask.sectionId,
+        position: subtaskPosition++,
+      });
+    }
+  });
+  const subIds = await insertCopies(tx, subPending);
+  subPending.forEach((p, i) => result.set(p.source.id, subIds[i]!));
+
+  await copyLabelsAndLinks(tx, [...topPending, ...subPending], [...topIds, ...subIds]);
 
   return result;
 }

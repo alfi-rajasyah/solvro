@@ -111,7 +111,7 @@ function checkPutTokenRateLimit(userId: number): void {
   const now = Date.now();
   const recent = (putTokenAttempts.get(userId) ?? []).filter((t) => now - t < PUT_TOKEN_RATE_WINDOW_MS);
   if (recent.length >= PUT_TOKEN_RATE_LIMIT) {
-    throw new HttpError(429, "rate_limited", "Too many personal token save attempts — wait a few minutes and try again.");
+    throw new HttpError(429, "rate_limited", "Too many personal token save attempts. Wait a few minutes and try again.");
   }
   recent.push(now);
   putTokenAttempts.set(userId, recent);

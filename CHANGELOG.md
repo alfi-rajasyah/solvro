@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-19 — Section duplicate speed, epic owners, deactivated users, backend messages
+
+- Duplicating a large section now copies its tasks, subtasks, labels, links and activity entries in a few batched writes instead of one write per task, so the project lock is held for much less time.
+- An epic's owner must now be the project's TAM, its SA, or a project member; any other user is refused with `owner_not_in_project`. An epic whose owner is left unchanged can still be edited.
+- Assigning a deactivated user as a project TAM or SA, a customer owner, a task assignee (on create or edit) or an epic owner is now refused with a 400 error. Saving a record with its current, since-deactivated holder still works.
+- Error messages from the iTop integration and the Pipeline import no longer use em dashes, and the Daily Review phase for a project without sections now reads "No sections".
+
 ### Changed — 2026-11-19 — Vendored component record and palette input check
 
 - A new `frontend/src/components/reui/VENDOR.md` lists each vendored ReUI file with its registry source, and records the 5 local patches and the upstream source hash of the autocomplete component.

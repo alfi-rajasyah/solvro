@@ -116,10 +116,10 @@ export interface PhaseTask {
 }
 
 // Earliest section (by position) that still has a still-open task (cancelled tasks do not count). Mirrors
-// currentPhase() in the frontend exactly, including the two terminal
-// strings ("All phases complete" when every section is done, "—" when the
+// currentPhase() in the frontend, including the two terminal
+// strings ("All phases complete" when every section is done, null when the
 // project has no sections at all).
-export function currentPhase(tasks: PhaseTask[]): string {
+export function currentPhase(tasks: PhaseTask[]): string | null {
   const bySection = new Map<
     number,
     { name: string; pos: number; total: number; done: number }
@@ -140,7 +140,7 @@ export function currentPhase(tasks: PhaseTask[]): string {
   const ordered = [...bySection.values()].sort((a, b) => a.pos - b.pos);
   const cur = ordered.find((s) => s.done < s.total);
   if (cur) return cur.name;
-  return ordered.length > 0 ? "All phases complete" : "—";
+  return ordered.length > 0 ? "All phases complete" : null;
 }
 
 export interface SlipTask {

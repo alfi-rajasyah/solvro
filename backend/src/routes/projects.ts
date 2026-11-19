@@ -35,7 +35,7 @@ import { assertEpicNotOnSubtask, assertValidEpic } from "../lib/epics.js";
 import { computeProjectHealth, computeSlipDays } from "../lib/projectHealth.js";
 import { COUNTED_TASKS_COUNT, COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
-import { assertActiveUser } from "../lib/users.js";
+import { assertActiveUser, assertEpicOwnerInProject } from "../lib/users.js";
 import {
   diffProjectChanges,
   recordActivity,
@@ -498,15 +498,14 @@ projectsRouter.patch(
       });
       // A changed TAM or SA must exist (400 instead of a missing-row 404 /
       // foreign-key 500; docs/archive/plans/application-review-2026-10-22.md,
-      // F-23). An inactive account is still accepted here — activity.test.ts
-      // pins that an inactive new SA can be set and is simply not notified —
-      // unlike POST /projects, which requires an active one. Re-saving the
-      // current seat holder is not a change.
+      // F-23). Like POST /projects, a NEW holder must be active; re-saving the
+      // current seat holder is not a change and passes even if they have been
+      // deactivated since.
       if (body.tamId !== undefined && body.tamId !== before.tam.id) {
-        await assertActiveUser(tx, body.tamId, "tam", { requireActive: false });
+        await assertActiveUser(tx, body.tamId, "tam");
       }
       if (body.saId != null && body.saId !== before.sa?.id) {
-        await assertActiveUser(tx, body.saId, "sa", { requireActive: false });
+        await assertActiveUser(tx, body.saId, "sa");
       }
       // Lifecycle side effects ride the same transaction as the status write
       // (docs/archive/plans/feedback-round-lifecycle-spec.md F1, F7).
@@ -630,7 +629,7 @@ projectsRouter.post(
       // Assigning someone who cannot see the project adds them as a member
       // (same transaction as the task write).
       if (body.assignedToId != null) {
-        await assertActiveUser(tx, body.assignedToId, "assignee", { requireActive: false });
+        await assertActiveUser(tx, body.assignedToId, "assignee");
         const added = await ensureAssigneeIsMember(tx, id, body.assignedToId, req.user!.sub);
         if (added) {
           await recordActivity(tx, {
@@ -808,7 +807,8 @@ projectsRouter.post(
       });
       const position = (max._max.position ?? -1) + 1;
       if (body.ownerId != null) {
-        await assertActiveUser(tx, body.ownerId, "owner", { requireActive: false });
+        await assertActiveUser(tx, body.ownerId, "owner");
+        await assertEpicOwnerInProject(tx, id, body.ownerId);
       }
       const created = await tx.epic.create({
         data: {

@@ -215,7 +215,7 @@ describe("PATCH /tasks/:id — assignee becomes a member", () => {
     expect(await memberRows(project.id)).toHaveLength(0);
   });
 
-  it("does not add an inactive assignee as a member", async () => {
+  it("refuses a newly set inactive assignee with 400 and adds no membership", async () => {
     const { tam, assignee, project } = await fixture();
     await prisma.user.update({ where: { id: assignee.userId }, data: { active: false } });
     const task = await newTask(project.id);
@@ -223,8 +223,10 @@ describe("PATCH /tasks/:id — assignee becomes a member", () => {
       .patch(`/tasks/${task.id}`)
       .set(auth(tam.token))
       .send({ assignedToId: assignee.userId });
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("assignee_not_found");
     expect(await memberRows(project.id)).toHaveLength(0);
+    expect((await prisma.task.findUniqueOrThrow({ where: { id: task.id } })).assignedToId).toBeNull();
   });
 });
 

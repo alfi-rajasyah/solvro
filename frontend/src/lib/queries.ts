@@ -694,7 +694,7 @@ export interface DailyReviewProject {
   status: ProjectStatus;
   customerId: number | null;
   baselineLockedAt: string | null;
-  phase: string;
+  phase: string | null;
   progress: { done: number; total: number };
   slipDays: number | null;
   // The backend filters to `dueDate !== null` before building this list
