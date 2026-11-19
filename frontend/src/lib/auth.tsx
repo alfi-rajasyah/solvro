@@ -330,12 +330,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return null;
       }
     }
+    /** Another account now owns this browser: drop this tab's data and start over at the root. */
+    function adoptAccount(storedUser: AuthUser | null) {
+      adoptedRef.current = true;
+      queryClient.clear();
+      userRef.current = null;
+      setUser(storedUser);
+      setUserVerified(false);
+      setBootError(null);
+      setStatus("authenticated");
+      // The visible page, open modals and panels belong to the previous
+      // account. AuthProvider is router-agnostic, so a full navigation to the
+      // root is what resets them; the boot effect re-verifies the new token.
+      window.location.assign("/");
+    }
     function onStorage(e: StorageEvent) {
       if (e.key !== null && e.key !== TOKEN_STORAGE_KEY && e.key !== USER_STORAGE_KEY) return;
       const next = getToken();
       if (e.key === USER_STORAGE_KEY) {
-        // Only meaningful once the token was adopted: re-read, never write back.
-        if (adoptedRef.current && next === tokenRef.current) setUser(readStoredUser());
+        if (next !== tokenRef.current) return;
+        const stored = readStoredUser();
+        if (adoptedRef.current) {
+          // Already adopted: re-read, never write back.
+          setUser(stored);
+        } else if (stored && userRef.current && stored.id !== userRef.current.id) {
+          // The token event came first (same-looking user); the key now names another account.
+          adoptAccount(stored);
+        }
         return;
       }
       if (next === tokenRef.current) return;
@@ -344,19 +365,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         endSession();
         return;
       }
-      adoptedRef.current = true;
-      queryClient.clear();
       tokenRef.current = next;
       setTokenState(next);
-      userRef.current = null;
-      setUser(readStoredUser());
-      setUserVerified(false);
-      setBootError(null);
-      setStatus("authenticated");
-      // The visible page, open modals and panels belong to the previous
-      // account. AuthProvider is router-agnostic, so a full navigation to the
-      // root is what resets them; the boot effect re-verifies the new token.
-      window.location.assign("/");
+      const stored = readStoredUser();
+      // Same account, new token (a password change in another tab): swap it in
+      // place, keeping cached data and open panels. If the user key has not
+      // caught up yet, its own event settles it above.
+      if (stored && userRef.current && stored.id === userRef.current.id) return;
+      adoptAccount(stored);
     }
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);

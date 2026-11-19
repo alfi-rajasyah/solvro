@@ -80,6 +80,20 @@ describe("AuthProvider cross-tab sync", () => {
     expect(result.current.token).toBe("tok-a");
   });
 
+  it("swaps a same-account token in place: cache kept, no navigation (password change in another tab)", async () => {
+    const { result, qc } = setup();
+    await act(async () => {});
+    qc.setQueryData(["cached"], 1);
+
+    act(() => otherTabWrites(TOKEN_STORAGE_KEY, "tok-a2"));
+
+    expect(result.current.token).toBe("tok-a2");
+    expect(result.current.user?.id).toBe(1);
+    expect(result.current.status).toBe("authenticated");
+    expect(qc.getQueryData(["cached"])).toBe(1);
+    expect(assign).not.toHaveBeenCalled();
+  });
+
   it("adopts a different token written by another tab, drops cached data and leaves the new login in storage", async () => {
     const { result, qc } = setup();
     await act(async () => {});
@@ -96,6 +110,16 @@ describe("AuthProvider cross-tab sync", () => {
     expect(assign).toHaveBeenCalledWith("/");
   });
 
+  it("clears the cache when the late user key names a different account", async () => {
+    const { qc } = setup();
+    await act(async () => {});
+    qc.setQueryData(["cached"], 1);
+    act(() => otherTabWrites(TOKEN_STORAGE_KEY, "tok-b"));
+    expect(qc.getQueryData(["cached"])).toBe(1);
+    act(() => otherTabWrites("solvro.user", JSON.stringify({ ...ME, id: 2 })));
+    expect(qc.getQueryData(["cached"])).toBeUndefined();
+  });
+
   it("handles the token event arriving before the user key: no stale write-back, user re-read on the later event", async () => {
     const { result } = setup();
     await act(async () => {});
@@ -108,7 +132,9 @@ describe("AuthProvider cross-tab sync", () => {
     await act(async () => {});
     expect(JSON.parse(localStorage.getItem("solvro.user")!).id).toBe(2);
 
+    expect(assign).not.toHaveBeenCalled();
     act(() => otherTabWrites("solvro.user", JSON.stringify(other)));
+    expect(assign).toHaveBeenCalledWith("/");
     expect(result.current.user?.id).toBe(2);
     expect(JSON.parse(localStorage.getItem("solvro.user")!).id).toBe(2);
   });
