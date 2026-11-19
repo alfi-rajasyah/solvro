@@ -1,6 +1,6 @@
 const BASE_URL = "/api";
 
-const TOKEN_STORAGE_KEY = "solvro.token";
+export const TOKEN_STORAGE_KEY = "solvro.token";
 
 /** Fired on `window` when an authenticated request is answered with 401. */
 export const UNAUTHENTICATED_EVENT = "solvro:unauthenticated";

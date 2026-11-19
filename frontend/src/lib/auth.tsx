@@ -4,18 +4,16 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { ApiError, apiRequest, getToken, setToken, UNAUTHENTICATED_EVENT } from "./api";
+import { ApiError, apiRequest, getToken, setToken, TOKEN_STORAGE_KEY, UNAUTHENTICATED_EVENT } from "./api";
 
-// Built-in role names referenced structurally by backend (project visibility,
-// requireAdmin gate). Custom roles created via Admin > Roles tab use other
-// strings; the type is `string` to allow them.
+// Role names are free strings: admins create custom roles in Admin > Roles.
+// Which roles are built-in comes from the server's `builtIn` flag, not a list here.
 export type Role = string;
-export const BUILTIN_ROLES = ["SA", "TAM", "ADMIN", "STAKEHOLDER", "PENDING"] as const;
-export type BuiltinRole = (typeof BUILTIN_ROLES)[number];
 
 export interface AuthUser {
   id: number;
@@ -298,6 +296,44 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     window.addEventListener(UNAUTHENTICATED_EVENT, endSession);
     return () => window.removeEventListener(UNAUTHENTICATED_EVENT, endSession);
   }, [endSession]);
+
+  // Cross-tab sign-out and account switch (ISS-012). Another tab clearing the
+  // token key (its sign-out, or `localStorage.clear()`) ends this session; a
+  // different token written by another tab's login means another account may
+  // now own this browser, so this tab adopts it and drops the cached data. The
+  // adopt path writes nothing to storage: removing the key here would wipe the
+  // other tab's fresh login.
+  const tokenRef = useRef(token);
+  useEffect(() => {
+    tokenRef.current = token;
+  }, [token]);
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (e.key !== null && e.key !== TOKEN_STORAGE_KEY) return;
+      const next = getToken();
+      if (next === tokenRef.current) return;
+      if (!next) {
+        endSession();
+        return;
+      }
+      queryClient.clear();
+      tokenRef.current = next;
+      setTokenState(next);
+      setUser(() => {
+        try {
+          const raw = localStorage.getItem(USER_STORAGE_KEY);
+          return raw ? (JSON.parse(raw) as AuthUser) : null;
+        } catch {
+          return null;
+        }
+      });
+      setUserVerified(false);
+      setBootError(null);
+      setStatus("authenticated");
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [endSession, queryClient]);
 
   const value = useMemo(
     () => ({
