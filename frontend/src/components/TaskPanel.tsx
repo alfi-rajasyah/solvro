@@ -227,8 +227,10 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
         className="fixed right-0 top-14 bottom-0 z-40 flex w-full flex-col border-l border-outline-variant bg-surface-container px-5 py-4 md:w-[380px]"
       >
         <div className="flex items-center justify-between">
-          <span role="status" className="flex items-center gap-3 text-sm text-on-surface-variant">
-            {notFound ? "Task not found." : loadFailed ? "Could not load the task." : "Loading task…"}
+          <span className="flex items-center gap-3 text-sm text-on-surface-variant">
+            <span role="status">
+              {notFound ? "Task not found." : loadFailed ? "Could not load the task." : "Loading task…"}
+            </span>
             {loadFailed && (
               <button
                 type="button"

@@ -74,7 +74,8 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
   // write (and the re-fetch after each settle) is then reflected here instead
   // of leaving the modal on a stale local order.
   useEffect(() => {
-    if (!saveError || !sections) return;
+    // Skip while a drag is in progress, so a refetch cannot move the dragged row.
+    if (!saveError || !sections || isDraggingRef.current) return;
     setOrder([...sections].sort((a, b) => a.position - b.position || a.id - b.id));
   }, [saveError, sections]);
 
