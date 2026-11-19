@@ -87,7 +87,7 @@ export function InstallBanner() {
           type="button"
           aria-label="Dismiss install banner"
           onClick={handleDismiss}
-          className="flex size-8 shrink-0 items-center justify-center"
+          className="tap-target flex size-8 shrink-0 items-center justify-center"
         >
           <span aria-hidden="true" className="material-symbols-outlined text-[16px]">close</span>
         </button>
@@ -97,14 +97,14 @@ export function InstallBanner() {
 
   if (showIosHint) {
     return (
-      <div className="flex w-full items-center gap-1.5 bg-primary px-3 py-1.5 text-meta font-semibold text-on-primary md:hidden">
+      <div className="flex w-full items-center bg-primary pl-3 text-meta font-semibold text-on-primary md:hidden">
         <span aria-hidden="true" className="material-symbols-outlined text-[14px]">ios_share</span>
-        <span className="flex-1">Add to Home Screen from the share menu</span>
+        <span className="ml-1.5 flex-1 py-1.5">Add to Home Screen from the share menu</span>
         <button
           type="button"
           aria-label="Dismiss install hint"
           onClick={handleDismiss}
-          className="flex size-8 shrink-0 items-center justify-center"
+          className="tap-target flex size-8 shrink-0 items-center justify-center"
         >
           <span aria-hidden="true" className="material-symbols-outlined text-[16px]">close</span>
         </button>
