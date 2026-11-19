@@ -8,7 +8,7 @@ describe("downloadBlob", () => {
     vi.restoreAllMocks();
   });
 
-  it("clicks a named anchor and revokes the object URL only on a later task", () => {
+  it("clicks a named anchor and revokes the object URL only after a delay", () => {
     vi.useFakeTimers();
     const create = vi.fn(() => "blob:test");
     const revoke = vi.fn();
@@ -26,7 +26,9 @@ describe("downloadBlob", () => {
     expect(clicked!.href).toBe("blob:test");
     expect(document.body.contains(clicked)).toBe(false);
     expect(revoke).not.toHaveBeenCalled();
-    vi.runAllTimers();
+    vi.advanceTimersByTime(4999);
+    expect(revoke).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(1);
     expect(revoke).toHaveBeenCalledWith("blob:test");
   });
 });

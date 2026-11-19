@@ -197,6 +197,25 @@ function fillRoundedRect(
   }
 }
 
+/** Solid (completed) width of a task bar on one page. Progress is measured
+ *  against the bar's true start and duration, then reduced by the part of the
+ *  bar that sits on earlier pages, and clamped to the bar's visible width. */
+export function doneWidthOnPage(a: {
+  progress: number;
+  startMs: number;
+  endMs: number;
+  clampedStartMs: number;
+  pageFromMs: number;
+  colW: number;
+  visibleW: number;
+}): number {
+  const trueStartIdx = (a.startMs - a.pageFromMs) / DAY_MS;
+  const trueEndIdx = (a.endMs - a.pageFromMs) / DAY_MS;
+  const fullW = (trueEndIdx - trueStartIdx + 1) * a.colW - 2;
+  const onEarlierPagesW = ((a.clampedStartMs - a.startMs) / DAY_MS) * a.colW;
+  return Math.min(a.visibleW, Math.max(0, (fullW * a.progress) / 100 - onEarlierPagesW));
+}
+
 /** Hatch geometry in PDF points: the live bar's 135deg stripe, 4-wide bands
  *  alternating (palette.ts HATCH_BAND_PX). */
 const HATCH_BAND_PT = 4;
@@ -858,21 +877,26 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
           const [fr, fg, fb] = hexToRgb(
             status === "CANCELLED" ? cancelledBarHex(fillHex, HATCH_CANVAS_HEX_LIGHT) : fillHex,
           );
-          // Completed fraction, only on the page where the bar STARTS (a
-          // multi-page-spanning bar is a rare edge case for the tight
-          // ±7-day export window); computed against the bar's FULL, not
-          // page-clamped, duration so a right-clipped bar still shows the
-          // correct fraction. An absent progress value draws solid, as the
-          // live bar does. Cancelled bars stay flat and translucent.
+          // Completed fraction, measured from the bar's TRUE start and
+          // duration (not the page-clamped ones), then offset by how much of
+          // the bar sits on earlier pages — so a bar spanning pages shows the
+          // right solid/hatched split on each. An absent progress value draws
+          // solid, as the live bar does. Cancelled bars stay flat and
+          // translucent.
           const progress = row.progressPct;
           // Inside-label contrast is judged against what is actually painted:
           // a fully hatched bar reads as the composite, not the pure colour.
           let labelBgHex = fillHex;
           if (status !== "CANCELLED" && typeof progress === "number" && progress < 100) {
-            const trueEndIdx = (endMs - pageFromMs) / DAY_MS;
-            const fullBw = (trueEndIdx - startIdx + 1) * colW - 2;
-            const doneW =
-              startsOnPage && progress > 0 ? Math.max(0, fullBw * (progress / 100)) : 0;
+            const doneW = doneWidthOnPage({
+              progress,
+              startMs,
+              endMs,
+              clampedStartMs,
+              pageFromMs,
+              colW,
+              visibleW: bw,
+            });
             drawHatchedBar(pdf, bx, by, bw, bh, 1.5, fillHex, doneW);
             if (progress === 0) labelBgHex = hatchCompositeHex(fillHex, HATCH_CANVAS_HEX_LIGHT);
           } else {

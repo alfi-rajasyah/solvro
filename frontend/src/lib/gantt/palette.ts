@@ -177,9 +177,9 @@ export type ColorByMode = "status" | "section" | "priority";
 
 // Single fill-COLOR resolver for live bars AND both exports — keeps the
 // resolved hex in agreement across screen and generated documents whichever
-// colorBy mode is active. (The PROGRESS treatment built on top of that hex
-// diverges between the live UI's hatch and the exports' overlay — see
-// PROGRESS_OVERLAY_ALPHA above; this resolver itself is unaffected.)
+// colorBy mode is active. (The progress hatch built on top of that hex is
+// drawn by SolvroBar.tsx on screen and exportPdf.ts's drawHatchedBar in the
+// PDF; this resolver itself only picks the colour.)
 // TaskStatus and Priority are already imported at the top of this file, and
 // the two Records are strictly keyed — hence the enum-typed opts (not string).
 export function barFillHex(
