@@ -6,6 +6,7 @@ import { recordActivity, shortLabel, type ActivityChanges } from "./activity.js"
 import { utcMidnightOf } from "./dateBoundary.js";
 import { canUserSeePipeline, notifyForEvent } from "./notifications.js";
 import { recordOpportunityChange } from "./opportunityActivity.js";
+import { ALL_PIPELINE_STAGES, lockStages } from "./pipelineStageLock.js";
 import { lockProject } from "./positionRepack.js";
 import { ensureAssigneeIsMember } from "./projectMembers.js";
 import { diffProjectSeats, projectSeatsSelect, recordSeatChangeNotes } from "./projectSeats.js";
@@ -429,6 +430,10 @@ export async function offboardUser(
     }
   }
   if (preview.openDeals > 0) {
+    // Stage advisory locks first (sorted, all stages), then the deal row locks
+    // in id order: this serialises with every stage re-pack (create, move,
+    // delete), which takes the same locks before touching a row.
+    await lockStages(tx, ...ALL_PIPELINE_STAGES);
     const dealIds = (
       await tx.opportunity.findMany({
         where: { picId: leaverId, outcome: null },

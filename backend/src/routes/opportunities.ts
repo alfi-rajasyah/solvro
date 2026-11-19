@@ -8,6 +8,7 @@ import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { isValidDayString, utcMidnightOfDayString } from "../lib/dateBoundary.js";
 import { isCustomerVisible } from "../lib/visibility.js";
+import { lockStages } from "../lib/pipelineStageLock.js";
 import { assertCanAssignOpportunity, assertCanWriteOpportunity, PIC_SELECT } from "../lib/pipelineAccess.js";
 import { computeIdle } from "../lib/pipelineSla.js";
 import { recordActivity, shortLabel } from "../lib/activity.js";
@@ -337,23 +338,14 @@ async function findOpportunityOr404(id: string): Promise<Opportunity> {
 
 type Tx = Prisma.TransactionClient;
 
-/**
- * Serialise stage re-packs: a transaction that re-packs a stage's stageOrder
- * (move, delete) takes a transaction-scoped advisory lock per stage it
- * touches, BEFORE it writes any opportunity row. Locks are taken in sorted
- * stage order, so two moves that cross the same two stages in opposite
- * directions cannot wait on each other. Without it, two same-stage deletes
- * each hold their own deleted row and then update the other's, which Postgres
- * reports as a deadlock (40P01; docs/ISSUES.md ISS-116).
+/*
+ * Stage re-packs take `lockStages` (lib/pipelineStageLock.ts) before any
+ * opportunity row lock. Without it, two same-stage deletes each hold their own
+ * deleted row and then update the other's, which Postgres reports as a
+ * deadlock (40P01; docs/ISSUES.md ISS-116).
  */
 // Raw SQL sees the enum's @map'd labels (the lowercase name), not the Prisma name.
 const dbStage = (stage: PipelineStage): string => stage.toLowerCase();
-
-async function lockStages(tx: Tx, ...stages: PipelineStage[]): Promise<void> {
-  for (const stage of [...new Set(stages)].sort()) {
-    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pipeline_stage:${stage}`}))`;
-  }
-}
 
 /**
  * After `lockStages`, re-reads the deal under a row lock and refuses when it
@@ -372,7 +364,12 @@ async function assertStillInStage(tx: Tx, oppId: string, lockedStage: PipelineSt
   }
 }
 
-/** Locks every deal of `stage` ORDER BY id, the order offboarding locks deals in. */
+/**
+ * Locks every deal of `stage` ORDER BY id, the order offboarding locks deals
+ * in. Runs under the stage advisory lock (`lib/pipelineStageLock.ts`), which is
+ * what serialises against offboarding; this keeps the re-pack's row locks
+ * id-ordered too, instead of scan-ordered.
+ */
 async function lockStageRows(tx: Tx, stage: PipelineStage): Promise<void> {
   await tx.$queryRaw`
     SELECT id FROM opportunities

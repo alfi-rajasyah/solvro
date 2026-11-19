@@ -1,3 +1,4 @@
+import { selectableUsers } from "@/lib/selectableUsers";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useSearchParams } from "react-router-dom";
 import { InlineDateRangeEditor } from "./InlineDateRangeEditor";
@@ -157,16 +158,15 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
   // TAM, SA or a member), so only those are offered, plus a current owner who
   // has since left the project so the select still shows them. Deactivated
   // people are dropped (the backend refuses them) unless they already own it.
-  const ownerOptions: { id: number; username: string }[] = [];
-  const addOwnerOption = (u: { id: number; username: string; active?: boolean } | null | undefined) => {
-    if (!u || ownerOptions.some((o) => o.id === u.id)) return;
-    if (u.active === false && u.id !== epic?.owner?.id) return;
-    ownerOptions.push(u);
+  const candidates: { id: number; username: string; active?: boolean }[] = [];
+  const addCandidate = (u: { id: number; username: string; active?: boolean } | null | undefined) => {
+    if (u && !candidates.some((o) => o.id === u.id)) candidates.push(u);
   };
-  addOwnerOption(project?.tam);
-  addOwnerOption(project?.sa);
-  for (const m of members ?? []) addOwnerOption({ id: m.userId, username: m.username, active: m.active });
-  addOwnerOption(epic?.owner);
+  addCandidate(project?.tam);
+  addCandidate(project?.sa);
+  for (const m of members ?? []) addCandidate({ id: m.userId, username: m.username, active: m.active });
+  addCandidate(epic?.owner);
+  const ownerOptions = selectableUsers(candidates, [epic?.owner?.id]);
 
   if (isError) {
     return (

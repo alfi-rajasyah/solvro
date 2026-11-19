@@ -312,6 +312,7 @@ export function ServiceMappingList({
                     const assignment = assignmentByServiceId.get(s.id);
                     const subscribed = subscribedServiceIds?.has(s.id) ?? false;
                     const checkboxId = `${idPrefix}-service-${s.id}`;
+                    const locked = !s.active && !assignment;
                     return (
                       <li
                         key={s.id}
@@ -326,13 +327,13 @@ export function ServiceMappingList({
                           id={checkboxId}
                           type="checkbox"
                           checked={Boolean(assignment)}
-                          disabled={!canMutate || saving || (!s.active && !assignment)}
+                          disabled={!canMutate || saving || locked}
                           onChange={() => toggle(s.id)}
-                          className={`mt-0.5 h-4 w-4 rounded-xs accent-primary ${FIELD_FOCUS} ${canMutate ? "cursor-pointer" : ""}`}
+                          className={`mt-0.5 h-4 w-4 rounded-xs accent-primary ${FIELD_FOCUS} ${canMutate && !saving && !locked ? "cursor-pointer" : ""} ${locked ? "cursor-not-allowed" : ""}`}
                         />
                         <label
                           htmlFor={checkboxId}
-                          className={`min-w-0 ${!s.active ? "opacity-70" : ""} ${canMutate ? "" : "cursor-default"}`}
+                          className={`min-w-0 ${!s.active ? "opacity-70" : ""} ${locked ? "cursor-not-allowed" : canMutate ? "" : "cursor-default"}`}
                         >
                           <span className="flex flex-wrap items-center gap-2 text-sm font-medium text-on-surface">
                             {s.name}

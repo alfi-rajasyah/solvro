@@ -410,8 +410,20 @@ describe("GET /projects/:id — detail payload", () => {
   });
 
   it("carries the active flag on tam and sa (ISS-198)", async () => {
-    const { tam, project } = await fixture();
+    const { tam, member, project } = await fixture();
+    await prisma.project.update({ where: { id: project.id }, data: { saId: member.userId } });
+    await prisma.user.update({ where: { id: member.userId }, data: { active: false } });
     const res = await request(app).get(`/projects/${project.id}`).set(auth(tam.token));
     expect(res.body.tam.active).toBe(true);
+    expect(res.body.sa.active).toBe(false);
+  });
+
+  it("flags a deactivated member as active: false in the member list (ISS-198)", async () => {
+    const { tam, member, project } = await fixture();
+    await addMember(project.id, member.userId, tam.userId);
+    await prisma.user.update({ where: { id: member.userId }, data: { active: false } });
+    const res = await request(app).get(`/projects/${project.id}/members`).set(auth(tam.token));
+    expect(res.status).toBe(200);
+    expect(res.body.find((r: { userId: number }) => r.userId === member.userId).active).toBe(false);
   });
 });
