@@ -721,17 +721,22 @@ projectsRouter.post(
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const body = req.body as z.infer<typeof createSectionSchema>;
     await ensureProjectVisible(req.user!, id);
-    const max = await prisma.section.aggregate({
-      where: { projectId: id },
-      _max: { position: true },
-    });
-    const section = await prisma.section.create({
-      data: {
-        projectId: id,
-        name: body.name,
-        position: body.position ?? (max._max.position ?? -1) + 1,
-        ...(body.color !== undefined && { color: body.color }),
-      },
+    // max(position) + 1 is read under the project lock so concurrent creates
+    // get distinct positions (docs/ISSUES.md ISS-029).
+    const section = await prisma.$transaction(async (tx) => {
+      await lockProject(tx, id);
+      const max = await tx.section.aggregate({
+        where: { projectId: id },
+        _max: { position: true },
+      });
+      return tx.section.create({
+        data: {
+          projectId: id,
+          name: body.name,
+          position: body.position ?? (max._max.position ?? -1) + 1,
+          ...(body.color !== undefined && { color: body.color }),
+        },
+      });
     });
     res.status(201).json(section);
   },
@@ -795,12 +800,13 @@ projectsRouter.post(
     // step), so a plain count would collide with — or land before — an existing epic
     // once any earlier epic has been deleted (count != max position + 1).
     // max(position) + 1 mirrors the sections POST /:id/sections above.
-    const max = await prisma.epic.aggregate({
-      where: { projectId: id },
-      _max: { position: true },
-    });
-    const position = (max._max.position ?? -1) + 1;
     const epic = await prisma.$transaction(async (tx) => {
+      await lockProject(tx, id);
+      const max = await tx.epic.aggregate({
+        where: { projectId: id },
+        _max: { position: true },
+      });
+      const position = (max._max.position ?? -1) + 1;
       if (body.ownerId != null) {
         await assertActiveUser(tx, body.ownerId, "owner", { requireActive: false });
       }
@@ -1273,7 +1279,7 @@ projectsRouter.get(
 
 projectsRouter.post(
   "/:id/labels",
-  requirePermission("project:write"),
+  requirePermission("task:write"),
   validate("params", idParamSchema),
   validate("body", createLabelSchema),
   async (req, res) => {
