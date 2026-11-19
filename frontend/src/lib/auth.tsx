@@ -330,6 +330,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUserVerified(false);
       setBootError(null);
       setStatus("authenticated");
+      // The visible page, open modals and panels belong to the previous
+      // account. AuthProvider is router-agnostic, so a full navigation to the
+      // root is what resets them; the boot effect re-verifies the new token.
+      window.location.assign("/");
     }
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);

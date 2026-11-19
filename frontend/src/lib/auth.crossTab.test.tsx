@@ -34,14 +34,21 @@ function otherTabWrites(key: string, value: string | null) {
   window.dispatchEvent(new StorageEvent("storage", { key, newValue: value }));
 }
 
+const assign = vi.fn();
+
 beforeEach(() => {
+  assign.mockReset();
+  vi.stubGlobal("location", { ...window.location, assign });
   localStorage.clear();
   localStorage.setItem(TOKEN_STORAGE_KEY, "tok-a");
   localStorage.setItem("solvro.user", JSON.stringify(ME));
   api.mockReset();
   api.mockResolvedValue(ME);
 });
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("AuthProvider cross-tab sync", () => {
   it("signs this tab out and clears cached data when another tab removes the token", async () => {
@@ -86,5 +93,13 @@ describe("AuthProvider cross-tab sync", () => {
     expect(result.current.user?.id).toBe(2);
     expect(qc.getQueryData(["cached"])).toBeUndefined();
     expect(localStorage.getItem(TOKEN_STORAGE_KEY)).toBe("tok-b");
+    expect(assign).toHaveBeenCalledWith("/");
+  });
+
+  it("does not navigate on a sign-out from another tab", async () => {
+    setup();
+    await act(async () => {});
+    act(() => otherTabWrites(TOKEN_STORAGE_KEY, null));
+    expect(assign).not.toHaveBeenCalled();
   });
 });
