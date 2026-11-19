@@ -326,7 +326,7 @@ export function ServiceMappingList({
                           id={checkboxId}
                           type="checkbox"
                           checked={Boolean(assignment)}
-                          disabled={!canMutate || saving}
+                          disabled={!canMutate || saving || (!s.active && !assignment)}
                           onChange={() => toggle(s.id)}
                           className={`mt-0.5 h-4 w-4 rounded-xs accent-primary ${FIELD_FOCUS} ${canMutate ? "cursor-pointer" : ""}`}
                         />

@@ -372,6 +372,14 @@ async function assertStillInStage(tx: Tx, oppId: string, lockedStage: PipelineSt
   }
 }
 
+/** Locks every deal of `stage` ORDER BY id, the order offboarding locks deals in. */
+async function lockStageRows(tx: Tx, stage: PipelineStage): Promise<void> {
+  await tx.$queryRaw`
+    SELECT id FROM opportunities
+    WHERE stage = ${dbStage(stage)}::"PipelineStage"
+    ORDER BY id FOR NO KEY UPDATE`;
+}
+
 /**
  * Inserts `oppId` into `stage`'s sibling list at `requestedPosition`
  * (clamped to [0, siblings.length]) by shifting the siblings from that slot
@@ -388,6 +396,9 @@ async function insertAtStage(
 ): Promise<number> {
   const siblings = await tx.opportunity.count({ where: { stage, id: { not: oppId } } });
   const clamped = Math.max(0, Math.min(requestedPosition, siblings));
+  // Deterministic lock order (same as offboarding's deal reassignment): take the
+  // stage's row locks by id before the re-pack so the two cannot deadlock.
+  await lockStageRows(tx, stage);
   await tx.$executeRaw`
     UPDATE opportunities AS o
     SET stage_order = r.pos + CASE WHEN r.pos >= ${clamped} THEN 1 ELSE 0 END
@@ -408,6 +419,9 @@ async function insertAtStage(
  * holds `lockStages` for `stage`.
  */
 async function closeGapInStage(tx: Tx, stage: PipelineStage, oppId: string): Promise<void> {
+  // Deterministic lock order (same as offboarding's deal reassignment): take the
+  // stage's row locks by id before the re-pack so the two cannot deadlock.
+  await lockStageRows(tx, stage);
   await tx.$executeRaw`
     UPDATE opportunities AS o
     SET stage_order = r.pos

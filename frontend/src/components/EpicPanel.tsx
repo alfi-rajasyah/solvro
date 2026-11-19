@@ -155,14 +155,17 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
   // branch and showed "Loading epic…" forever.
   // The backend accepts an epic owner only from the project's own people (its
   // TAM, SA or a member), so only those are offered, plus a current owner who
-  // has since left the project so the select still shows them.
+  // has since left the project so the select still shows them. Deactivated
+  // people are dropped (the backend refuses them) unless they already own it.
   const ownerOptions: { id: number; username: string }[] = [];
-  const addOwnerOption = (u: { id: number; username: string } | null | undefined) => {
-    if (u && !ownerOptions.some((o) => o.id === u.id)) ownerOptions.push(u);
+  const addOwnerOption = (u: { id: number; username: string; active?: boolean } | null | undefined) => {
+    if (!u || ownerOptions.some((o) => o.id === u.id)) return;
+    if (u.active === false && u.id !== epic?.owner?.id) return;
+    ownerOptions.push(u);
   };
   addOwnerOption(project?.tam);
   addOwnerOption(project?.sa);
-  for (const m of members ?? []) addOwnerOption({ id: m.userId, username: m.username });
+  for (const m of members ?? []) addOwnerOption({ id: m.userId, username: m.username, active: m.active });
   addOwnerOption(epic?.owner);
 
   if (isError) {

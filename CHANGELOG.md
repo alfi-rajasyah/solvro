@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-19 — Task dates on create, stage locks, epic owners, inactive services
+
+- Creating a task with a due date before its start date is now refused with `invalid_date_range`, matching the edit rule.
+- Pipeline stage re-packs lock the stage's deals in id order first, so a re-pack and a deal reassignment on the same deals can no longer deadlock.
+- The epic owner picker no longer offers deactivated members, TAMs or SAs (the current owner stays listed). Project members and a project's TAM and SA now carry an `active` flag.
+- Inactive services can no longer be newly linked to a project or customer: the service picker disables them, "Add customer's services" skips them, and the services PUT routes refuse them with `service_inactive`. Services already linked stay in place.
+
 ### Changed — 2026-11-19 — Section duplicate speed, epic owners, deactivated users, backend messages
 
 - Duplicating a large section now copies its tasks, subtasks, labels, links and activity entries in a few batched writes instead of one write per task, so the project lock is held for much less time.

@@ -218,3 +218,55 @@ describe("PUT /projects/:id/services", () => {
     expect(goodRes.body.services).toHaveLength(1);
   });
 });
+
+describe("inactive services (ISS-032)", () => {
+  async function deactivate(serviceId: number) {
+    const res = await request(app)
+      .patch(`/services/${serviceId}`)
+      .set("Authorization", `Bearer ${token}`)
+      .send({ active: false });
+    expect(res.status).toBe(200);
+  }
+
+  it("refuses to newly link an inactive service to a project, but keeps an existing link", async () => {
+    const projectId = await createProject(await createCustomer());
+    const service = await createService();
+    const put = (assignments: object[]) =>
+      request(app)
+        .put(`/projects/${projectId}/services`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ assignments });
+
+    expect((await put([{ serviceId: service, tools: [] }])).status).toBe(200);
+    await deactivate(service);
+    const keep = await put([{ serviceId: service, tools: ["Veeam"] }]);
+    expect(keep.status).toBe(200);
+    expect(keep.body.services).toHaveLength(1);
+
+    const other = await createService();
+    await deactivate(other);
+    const add = await put([{ serviceId: service, tools: [] }, { serviceId: other, tools: [] }]);
+    expect(add.status).toBe(400);
+    expect(add.body.code).toBe("service_inactive");
+  });
+
+  it("refuses to newly link an inactive service to a customer, but keeps an existing link", async () => {
+    const customerId = await createCustomer();
+    const service = await createService();
+    const put = (assignments: object[]) =>
+      request(app)
+        .put(`/customers/${customerId}/services`)
+        .set("Authorization", `Bearer ${token}`)
+        .send({ assignments });
+
+    expect((await put([{ serviceId: service, tools: [] }])).status).toBe(200);
+    await deactivate(service);
+    expect((await put([{ serviceId: service, tools: [] }])).status).toBe(200);
+
+    const other = await createService();
+    await deactivate(other);
+    const add = await put([{ serviceId: other, tools: [] }]);
+    expect(add.status).toBe(400);
+    expect(add.body.code).toBe("service_inactive");
+  });
+});
