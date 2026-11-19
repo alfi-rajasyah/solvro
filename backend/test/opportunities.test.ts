@@ -1097,7 +1097,18 @@ describe("stage re-pack under concurrency (ISS-116)", () => {
     await holding;
     // supertest sends lazily; .then starts the request now.
     const del = deleteOpportunity(sa.token, a).then((r) => r);
-    await new Promise((r) => setTimeout(r, 200));
+    // Wait until the DELETE's backend is queued on the stage lock, i.e. it
+    // has done its pre-transaction read of the deal (still in ASSESSMENT).
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      const waiting = await prisma.$queryRaw<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM pg_locks
+        WHERE locktype = 'advisory' AND NOT granted
+          AND objid = (hashtext('pipeline_stage:ASSESSMENT')::bigint & 4294967295)`;
+      if (waiting[0].n > 0) break;
+      if (Date.now() > deadline) throw new Error("DELETE never queued on the stage lock");
+      await new Promise((r) => setTimeout(r, 20));
+    }
     release();
     await holder;
     const res = await del;
