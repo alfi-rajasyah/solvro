@@ -239,10 +239,14 @@ export async function offboardUser(
   });
   if (!leaver) throw new HttpError(404, "user_not_found", "User not found");
 
-  // Lock order: projects (ascending id) -> customers (ascending id) -> the
-  // leaver's user row -> authoritative recompute -> deals (ascending id). The
-  // project lock always precedes any row lock
-  // (backend/CLAUDE.md, "Position re-packs take the project lock").
+  // Lock order: projects (ascending id) -> customers (ascending id) -> every
+  // pipeline stage's advisory lock (sorted) -> the leaver's user row ->
+  // authoritative recompute -> deals (ascending id). The project lock always
+  // precedes any row lock (backend/CLAUDE.md, "Position re-packs take the
+  // project lock"). The stage locks precede the user row because a deal write
+  // holds its stage lock and then takes FOR KEY SHARE on the user row it
+  // points at (PIC, activity actor); taking them the other way round would
+  // deadlock against this FOR UPDATE.
   const firstLook = await computeHandoverPreview(tx, leaverId);
   const lockIds = [
     ...new Set([...firstLook.projects.map((p) => p.id), ...body.projects.map((p) => p.projectId)]),
@@ -254,6 +258,7 @@ export async function offboardUser(
   if (customerLockIds.length > 0) {
     await tx.$queryRaw`SELECT id FROM customers WHERE id IN (${Prisma.join(customerLockIds)}) ORDER BY id FOR NO KEY UPDATE`;
   }
+  await lockStages(tx, ...ALL_PIPELINE_STAGES);
   // Any write that sets a foreign key to this user (a task assignment, a seat,
   // a customer owner, a deal PIC) takes FOR KEY SHARE on the row, so it either
   // commits before the recompute below (and is seen) or waits until after the
@@ -430,10 +435,6 @@ export async function offboardUser(
     }
   }
   if (preview.openDeals > 0) {
-    // Stage advisory locks first (sorted, all stages), then the deal row locks
-    // in id order: this serialises with every stage re-pack (create, move,
-    // delete), which takes the same locks before touching a row.
-    await lockStages(tx, ...ALL_PIPELINE_STAGES);
     const dealIds = (
       await tx.opportunity.findMany({
         where: { picId: leaverId, outcome: null },

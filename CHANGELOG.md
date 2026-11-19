@@ -33,6 +33,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 - Creating a task with a due date before its start date is now refused with `invalid_date_range`, matching the edit rule.
 - Pipeline stage re-packs lock the stage's deals in id order first, so a re-pack and a deal reassignment on the same deals can no longer deadlock.
 - The offboarding handover of a leaver's open deals now takes the same pipeline stage locks before it locks any deal row, so it queues behind a stage re-pack instead of crossing it.
+- Offboarding takes those stage locks before it locks the leaver's account, so a deal create, import, move or delete that refers to the leaver cannot deadlock with it.
 - In the service picker, an inactive service that cannot be linked shows a not-allowed cursor.
 - The epic owner picker no longer offers deactivated members, TAMs or SAs (the current owner stays listed). Project members and a project's TAM and SA now carry an `active` flag.
 - Inactive services can no longer be newly linked to a project or customer: the service picker disables them, "Add customer's services" skips them, and the services PUT routes refuse them with `service_inactive`. Services already linked stay in place.

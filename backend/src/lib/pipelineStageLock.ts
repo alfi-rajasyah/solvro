@@ -11,7 +11,14 @@ type Tx = Prisma.TransactionClient;
  * import row, move, delete) or reassigns open deals in bulk (offboarding)
  * calls this BEFORE taking any opportunity row lock, and always in sorted
  * order. A holder of a stage lock therefore never waits for a row lock that
- * another stage-lock holder owns. Single-row writes that take no stage lock
+ * another stage-lock holder owns.
+ *
+ * Offboarding takes the stage locks (all stages) after its project and
+ * customer locks but BEFORE the leaver's user row lock: a deal write holds its
+ * stage lock and then takes FOR KEY SHARE on the user row it references (PIC,
+ * activity actor), which would otherwise wait on offboarding's FOR UPDATE
+ * while offboarding waits on the stage lock. No stage-lock holder takes a
+ * project lock. Single-row writes that take no stage lock
  * (PIC or field edits) lock one row at a time and cannot form a cycle.
  */
 export async function lockStages(tx: Tx, ...stages: PipelineStage[]): Promise<void> {
