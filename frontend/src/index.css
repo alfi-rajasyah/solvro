@@ -1,3 +1,12 @@
+/* Material Symbols is loaded into its own cascade layer (declared between
+   base and components) instead of an unlayered <link>: an unlayered rule
+   beats every layered Tailwind utility, so `hidden`, `sm:inline`, `text-base`
+   and `text-[20px]` on an icon element were silently ignored. Declared before
+   the Tailwind import so this order wins; `base` stays below so the preflight
+   `button { font: inherit }` cannot strip the icon font from a <button>. */
+@layer theme, base, icons, components, utilities;
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap")
+  layer(icons);
 @import "tailwindcss";
 @import "tw-animate-css";
 
