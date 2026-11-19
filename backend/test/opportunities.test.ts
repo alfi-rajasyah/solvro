@@ -1044,3 +1044,63 @@ describe("POST /opportunities/:id/assign — concurrent claims", () => {
     expect(res.body.pic.id).toBe(manager.userId);
   });
 });
+
+describe("stage re-pack under concurrency (ISS-116)", () => {
+  // Earlier tests in this file leave deals in these stages; the dense-position
+  // checks below look at whole stages, so start from an empty board.
+  beforeAll(async () => {
+    await prisma.opportunity.deleteMany();
+  });
+
+  it("two parallel deletes in one stage both succeed and leave dense positions", async () => {
+    const sa = await createSaLikeUser();
+    const ids: string[] = [];
+    for (let i = 0; i < 6; i++) {
+      const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });
+      expect(created.status).toBe(201);
+      ids.push(created.body.id as string);
+    }
+
+    // Several rounds: the deadlock needed an unlucky interleave to show.
+    const doomed = [ids[1], ids[4], ids[2], ids[3]];
+    const statuses = await Promise.all(doomed.map((id) => deleteOpportunity(sa.token, id).then((r) => r.status)));
+    expect(statuses).toEqual([204, 204, 204, 204]);
+
+    const left = await prisma.opportunity.findMany({
+      where: { id: { in: ids } },
+      orderBy: { stageOrder: "asc" },
+      select: { id: true, stageOrder: true },
+    });
+    expect(left.map((o) => o.id)).toEqual([ids[0], ids[5]]);
+    expect(left.map((o) => o.stageOrder)).toEqual([0, 1]);
+  });
+
+  it("opposite cross-stage moves at the same time do not deadlock and keep both stages dense", async () => {
+    const sa = await createSaLikeUser();
+    const make = async (stage: string) => {
+      const r = await createOpportunity(sa.token, { picId: sa.userId, stage });
+      return r.body.id as string;
+    };
+    const rfp = [await make("RFP"), await make("RFP"), await make("RFP")];
+    const poc = [await make("POC"), await make("POC"), await make("POC")];
+
+    const [a, b] = await Promise.all([
+      moveOpportunity(sa.token, rfp[0], { stage: "POC", stageOrder: 1 }),
+      moveOpportunity(sa.token, poc[0], { stage: "RFP", stageOrder: 1 }),
+    ]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+
+    const rows = await prisma.opportunity.findMany({
+      where: { id: { in: [...rfp, ...poc] } },
+      select: { id: true, stage: true, stageOrder: true },
+    });
+    for (const stage of ["RFP", "POC"] as const) {
+      const orders = rows
+        .filter((o) => o.stage === stage)
+        .map((o) => o.stageOrder)
+        .sort((x, y) => x - y);
+      expect(orders).toEqual([0, 1, 2]);
+    }
+  });
+});

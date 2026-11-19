@@ -254,6 +254,14 @@ describe("parseImportRow", () => {
     expect(row.status).toBe("valid");
   });
 
+  it("flags a filled but unreadable win probability as invalid instead of defaulting it", () => {
+    const cells = [...validCells];
+    cells[7] = "high";
+    const row = parseImportRow(cells, 0, noPics);
+    expect(row.status).toBe("invalid");
+    expect(row.errors.some((e) => e.includes("Win Probability"))).toBe(true);
+  });
+
   it("flags a win probability outside 0-100 as invalid", () => {
     const cells = [...validCells];
     cells[7] = "150";

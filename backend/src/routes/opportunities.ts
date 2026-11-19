@@ -20,7 +20,7 @@ import {
 import { notifyForEvent } from "../lib/notifications.js";
 import { logger } from "../logger.js";
 import { ImportFileError } from "../lib/pipelineImport/index.js";
-import { ImportAbortedError, parseImportFileOffThread } from "../lib/pipelineImport/offThread.js";
+import { ImportAbortedError, ImportQueueFullError, parseImportFileOffThread } from "../lib/pipelineImport/offThread.js";
 import { createRateLimiter } from "../http/rateLimit.js";
 // Anti-drift seam (finding S6): the handoff body is byte-for-byte the same
 // shape as a plain project create, so this reuses routes/projects.ts's own
@@ -337,21 +337,31 @@ async function findOpportunityOr404(id: string): Promise<Opportunity> {
 
 type Tx = Prisma.TransactionClient;
 
-async function stageSiblingIds(tx: Tx, stage: PipelineStage, excludeId: string): Promise<string[]> {
-  const rows = await tx.opportunity.findMany({
-    where: { stage, id: { not: excludeId } },
-    orderBy: [{ stageOrder: "asc" }, { id: "asc" }],
-    select: { id: true },
-  });
-  return rows.map((r) => r.id);
+/**
+ * Serialise stage re-packs: a transaction that re-packs a stage's stageOrder
+ * (move, delete) takes a transaction-scoped advisory lock per stage it
+ * touches, BEFORE it writes any opportunity row. Locks are taken in sorted
+ * stage order, so two moves that cross the same two stages in opposite
+ * directions cannot wait on each other. Without it, two same-stage deletes
+ * each hold their own deleted row and then update the other's, which Postgres
+ * reports as a deadlock (40P01; docs/ISSUES.md ISS-116).
+ */
+// Raw SQL sees the enum's @map'd labels (the lowercase name), not the Prisma name.
+const dbStage = (stage: PipelineStage): string => stage.toLowerCase();
+
+async function lockStages(tx: Tx, ...stages: PipelineStage[]): Promise<void> {
+  for (const stage of [...new Set(stages)].sort()) {
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`pipeline_stage:${stage}`}))`;
+  }
 }
 
 /**
  * Inserts `oppId` into `stage`'s sibling list at `requestedPosition`
- * (clamped to [0, siblings.length]), then re-packs the whole list to dense
- * 0..n-1 — mirrors `lib/taskOrdering.ts`'s `insertAt`, scoped to `stage`
- * instead of (projectId, parentTaskId). Must run inside a
- * `prisma.$transaction`. Returns the final stageOrder assigned to `oppId`.
+ * (clamped to [0, siblings.length]) by shifting the siblings from that slot
+ * on up by one, in one set-based UPDATE (the siblings are first re-packed
+ * dense 0..n-1 around the gap). The caller then writes the returned stageOrder
+ * to `oppId` itself. Must run inside a `prisma.$transaction` that holds
+ * `lockStages` for `stage`. Returns the final stageOrder assigned to `oppId`.
  */
 async function insertAtStage(
   tx: Tx,
@@ -359,25 +369,37 @@ async function insertAtStage(
   oppId: string,
   requestedPosition: number,
 ): Promise<number> {
-  const others = await stageSiblingIds(tx, stage, oppId);
-  const clamped = Math.max(0, Math.min(requestedPosition, others.length));
-  const ordered = [...others];
-  ordered.splice(clamped, 0, oppId);
-  for (let i = 0; i < ordered.length; i++) {
-    await tx.opportunity.update({ where: { id: ordered[i] }, data: { stageOrder: i } });
-  }
+  const siblings = await tx.opportunity.count({ where: { stage, id: { not: oppId } } });
+  const clamped = Math.max(0, Math.min(requestedPosition, siblings));
+  await tx.$executeRaw`
+    UPDATE opportunities AS o
+    SET stage_order = r.pos + CASE WHEN r.pos >= ${clamped} THEN 1 ELSE 0 END
+    FROM (
+      SELECT id, (ROW_NUMBER() OVER (ORDER BY stage_order, id) - 1)::int AS pos
+      FROM opportunities
+      WHERE stage = ${dbStage(stage)}::"PipelineStage" AND id <> ${oppId}
+    ) AS r
+    WHERE o.id = r.id
+      AND o.stage_order <> r.pos + CASE WHEN r.pos >= ${clamped} THEN 1 ELSE 0 END`;
   return clamped;
 }
 
 /**
  * Re-packs `stage`'s remaining siblings to dense 0..n-1 after `oppId` leaves
- * it on a cross-stage move — mirrors `lib/taskOrdering.ts`'s `closeGap`.
+ * it (a cross-stage move or a delete), in one set-based UPDATE that touches
+ * only the rows whose position changes. Must run inside a transaction that
+ * holds `lockStages` for `stage`.
  */
 async function closeGapInStage(tx: Tx, stage: PipelineStage, oppId: string): Promise<void> {
-  const remaining = await stageSiblingIds(tx, stage, oppId);
-  for (let i = 0; i < remaining.length; i++) {
-    await tx.opportunity.update({ where: { id: remaining[i] }, data: { stageOrder: i } });
-  }
+  await tx.$executeRaw`
+    UPDATE opportunities AS o
+    SET stage_order = r.pos
+    FROM (
+      SELECT id, (ROW_NUMBER() OVER (ORDER BY stage_order, id) - 1)::int AS pos
+      FROM opportunities
+      WHERE stage = ${dbStage(stage)}::"PipelineStage" AND id <> ${oppId}
+    ) AS r
+    WHERE o.id = r.id AND o.stage_order <> r.pos`;
 }
 
 export const opportunitiesRouter = Router();
@@ -566,6 +588,10 @@ opportunitiesRouter.post(
       res.json({ rows: await parseImportFileOffThread(req.body, picByUsername, gone.signal) });
     } catch (err) {
       if (err instanceof ImportAbortedError) return; // no one is waiting for an answer
+      if (err instanceof ImportQueueFullError) {
+        res.setHeader("Retry-After", "30");
+        throw new HttpError(503, "import_busy", err.message);
+      }
       if (err instanceof ImportFileError) throw new HttpError(400, err.code, err.message);
       throw err;
     }
@@ -940,6 +966,7 @@ opportunitiesRouter.post(
     const sameStage = current.stage === body.stage;
 
     const updated = await prisma.$transaction(async (tx) => {
+      await lockStages(tx, current.stage, body.stage);
       if (!sameStage) {
         await closeGapInStage(tx, current.stage, id);
       }
@@ -1262,6 +1289,7 @@ opportunitiesRouter.delete("/:id", validate("params", idParamSchema), async (req
   const current = await findOpportunityOr404(id);
   assertCanWriteOpportunity(req.user!, "delete", current);
   await prisma.$transaction(async (tx) => {
+    await lockStages(tx, current.stage);
     await tx.opportunity.delete({ where: { id } });
     await closeGapInStage(tx, current.stage, id);
   });
