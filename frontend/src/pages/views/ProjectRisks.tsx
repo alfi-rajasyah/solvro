@@ -70,7 +70,9 @@ const STATUS_OPTIONS = (Object.keys(RISK_STATUS_LABEL) as RiskStatus[]).map((s) 
 }));
 
 // Inline-edit cell select on the vendored ui/select (replaces a native <select>);
-// the trigger stays the compact `sm` height so grid rows keep their density.
+// className overrides the trigger to a 28px height (h-7, near the old native select) so
+// grid rows keep their density, and drops the border change on focus (DESIGN.md §4:
+// ring only).
 function InlineSelect({
   value,
   items,
@@ -86,7 +88,7 @@ function InlineSelect({
 }) {
   return (
     <Select items={items} value={value} onValueChange={(v) => v != null && onChange(String(v))}>
-      <SelectTrigger size="sm" aria-label={ariaLabel} className={`px-2 ${className ?? ""}`}>
+      <SelectTrigger size="sm" aria-label={ariaLabel} className={`px-2 data-[size=sm]:h-7 focus-visible:border-input ${className ?? ""}`}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -416,7 +418,7 @@ function RisksDataGrid({
               items={SCALE_OPTIONS}
               ariaLabel={`Probability of risk: ${risk.description}`}
               onChange={(v) => onChange(risk.id, { probability: Number(v) })}
-              className="font-mono text-xs"
+              className="mx-auto font-mono text-xs"
             />
           ) : (
             <span className="font-mono text-xs">{risk.probability}</span>
@@ -442,7 +444,7 @@ function RisksDataGrid({
               items={SCALE_OPTIONS}
               ariaLabel={`Impact of risk: ${risk.description}`}
               onChange={(v) => onChange(risk.id, { impact: Number(v) })}
-              className="font-mono text-xs"
+              className="mx-auto font-mono text-xs"
             />
           ) : (
             <span className="font-mono text-xs">{risk.impact}</span>
