@@ -12,6 +12,16 @@ import type { Section, Task } from "@/lib/queries";
 export const taskNodeId = (taskId: number) => `task-${taskId}`;
 export const sectionNodeId = (sectionId: number | null) =>
   sectionId === null ? "section-none" : `section-${sectionId}`;
+/**
+ * Inverse of `sectionNodeId`: a section id for `section-<n>`, `null` for the
+ * "(No section)" pseudo-group (`section-none`), `undefined` for any id that
+ * is not a section node (a task node, a rollup, garbage).
+ */
+export function parseSectionId(id: string): number | null | undefined {
+  if (id === "section-none") return null;
+  const m = /^section-(\d+)$/.exec(id);
+  return m ? Number(m[1]) : undefined;
+}
 export function parseTaskId(id: string): number | null {
   const m = /^task-(\d+)$/.exec(id);
   return m ? Number(m[1]) : null;

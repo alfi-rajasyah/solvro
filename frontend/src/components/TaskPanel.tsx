@@ -107,7 +107,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
   // this panel needs for that field.
   const { data: project } = useProject(projectId);
 
-  const { data: tasks } = useProjectTasks(projectId);
+  const { data: tasks, isError: tasksFailed, refetch: refetchTasks } = useProjectTasks(projectId);
   const { data: sections } = useProjectSections(projectId);
   const { data: epics, isLoading: epicsLoading } = useProjectEpics(projectId);
   const { data: users } = useUsers();
@@ -220,14 +220,26 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
     // `tasks` undefined = still loading; once it has loaded, a missing task was
     // deleted (or is not visible to this user) — say so instead of spinning.
     const notFound = tasks !== undefined;
+    const loadFailed = tasks === undefined && tasksFailed;
     return (
       <aside
         ref={panelRef}
         className="fixed right-0 top-14 bottom-0 z-40 flex w-full flex-col border-l border-outline-variant bg-surface-container px-5 py-4 md:w-[380px]"
       >
         <div className="flex items-center justify-between">
-          <span className="text-sm text-on-surface-variant">
-            {notFound ? "Task not found" : "Loading task…"}
+          <span className="flex items-center gap-3 text-sm text-on-surface-variant">
+            <span role="status">
+              {notFound ? "Task not found." : loadFailed ? "Could not load the task." : "Loading task…"}
+            </span>
+            {loadFailed && (
+              <button
+                type="button"
+                onClick={() => void refetchTasks()}
+                className={`rounded-sm font-semibold text-primary hover:underline ${FIELD_FOCUS}`}
+              >
+                Try again
+              </button>
+            )}
           </span>
           <button
             type="button"
@@ -499,6 +511,14 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
             <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
           </button>
         </div>
+
+        {/* Outside the scroll area so a failed header-menu action is visible
+            however far the subtasks list has scrolled. */}
+        {error && (
+          <Alert variant="destructive" className="mx-4 mt-3 w-auto shrink-0">
+            <AlertDescription className="text-xs">{error}</AlertDescription>
+          </Alert>
+        )}
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {/* Parent breadcrumb — the only way back out of a subtask. */}
@@ -957,7 +977,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                           <button
                             type="button"
                             aria-label="Reorder subtask"
-                            className="material-symbols-outlined shrink-0 touch-none rounded-sm text-sm text-on-surface-variant/60 cursor-grab active:cursor-grabbing outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring"
+                            className={`material-symbols-outlined shrink-0 touch-none rounded-sm text-sm text-on-surface-variant/60 cursor-grab active:cursor-grabbing ${FIELD_FOCUS}`}
                           />
                         }
                       >
@@ -988,12 +1008,6 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
           <div className="mt-4">
             <PanelLinks taskId={task.id} projectId={projectId} canEdit={canEdit} />
           </div>
-
-          {error && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertDescription className="text-xs">{error}</AlertDescription>
-            </Alert>
-          )}
 
           {/* Comments */}
           <div className="mt-5 border-t border-outline-variant pt-4">

@@ -54,8 +54,7 @@ const variantClasses = {
 
 /**
  * Shared calendar-popover date field replacing native `<input type="date">`
- * sites. Composes ui/calendar.tsx inside ui/popover.tsx, the same pattern as
- * `reui/gantt/gantt-nav.tsx`'s `GanttDatePicker` (validated to render
+ * sites. Composes ui/calendar.tsx inside ui/popover.tsx (validated to render
  * correctly in dark mode without edits to ui/calendar.tsx).
  *
  * Traffics in plain calendar days (`"yyyy-MM-dd"`), not ISO instants — see

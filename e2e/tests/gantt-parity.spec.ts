@@ -886,6 +886,39 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     expect(stored.legacy, "legacy key should be left in place").toBe("400");
   });
 
+  // ISS-093: on a ~800px viewport a wide persisted tree width makes the engine
+  // render the pane narrower than the stored width; the name column must
+  // follow the real pane so the Dates column still ends inside it.
+  test("(n) wide persisted tree width on a narrow viewport keeps the Dates column inside the pane", async ({
+    page,
+    seededProject,
+  }) => {
+    const { token, projectId } = seededProject;
+    const base = apiBase(test.info());
+    const task = await createTask(base, token, projectId, {
+      title: `Narrow viewport ${stamp()}`,
+      status: "TODO",
+      startDate: isoDateOffset(0),
+      dueDate: isoDateOffset(3),
+    });
+    await page.setViewportSize({ width: 800, height: 900 });
+    await page.addInitScript(() => {
+      localStorage.setItem("solvro.gantt.treeWidth.v4", "700");
+    });
+    await gotoSeededGantt(page, projectId);
+
+    const pane = page.locator('[data-slot="gantt-tree-pane"]');
+    const paneBox = await pane.boundingBox();
+    expect(paneBox, "tree pane not found").toBeTruthy();
+    expect(paneBox!.width, "engine should clamp the pane below the stored 700px").toBeLessThan(700);
+    const row = pane.locator(`[data-gantt-row-id="task-${task.id}"]`);
+    const datesBox = await row.locator('[data-column="dates"]').boundingBox();
+    expect(datesBox, "dates cell not found").toBeTruthy();
+    expect(datesBox!.x + datesBox!.width, "dates cell should end inside the pane").toBeLessThanOrEqual(
+      paneBox!.x + paneBox!.width + 1,
+    );
+  });
+
   // T5 (gantt visual refresh) — row menu (Edit / Add subtask / Delete),
   // wired via the vendored engine's `renderResourceMenu` (gantt-view.tsx's
   // `data-slot="gantt-resource-menu"` marks the open ContextMenuContent).

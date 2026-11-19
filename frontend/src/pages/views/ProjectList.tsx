@@ -117,6 +117,9 @@ export function ProjectList() {
   const { project } = useProjectContext();
   const { user } = useAuth();
   const canEdit = hasPermission(user, "task:write");
+  // Section routes (create, rename, reorder, duplicate, delete) require
+  // project:write, a different permission from the task rows' task:write.
+  const canEditSections = hasPermission(user, "project:write");
   const [, setSearchParams] = useSearchParams();
 
   const { data: tasks, isLoading: tasksLoading, isError, error } = useProjectTasks(project.id);
@@ -484,7 +487,7 @@ export function ProjectList() {
             </>
           )}
         </div>
-        {canEdit && (sections?.length ?? 0) >= 2 && (
+        {canEditSections && (sections?.length ?? 0) >= 2 && (
           <button
             type="button"
             onClick={() => setReorderingSections(true)}
@@ -494,7 +497,7 @@ export function ProjectList() {
             Reorder sections
           </button>
         )}
-        {canEdit && (
+        {canEditSections && (
           <button
             type="button"
             onClick={() => setAddingSection(true)}
@@ -547,6 +550,7 @@ export function ProjectList() {
               nodes={g.tasks}
               collapsed={collapsed.has(groupKeyOf(g.section?.id ?? null))}
               canEdit={canEdit}
+              canEditSections={canEditSections}
               users={users ?? []}
               epicMap={epicMap}
               onToggle={() => toggleGroup(groupKeyOf(g.section?.id ?? null))}
@@ -652,6 +656,7 @@ interface SectionGroupProps {
   nodes: TaskNode[];
   collapsed: boolean;
   canEdit: boolean;
+  canEditSections: boolean;
   users: { id: number; username: string }[];
   epicMap: Map<number, Epic>;
   onToggle: () => void;
@@ -679,6 +684,7 @@ function SectionGroup({
   nodes,
   collapsed,
   canEdit,
+  canEditSections,
   users,
   epicMap,
   onToggle,
@@ -760,7 +766,7 @@ function SectionGroup({
         <span className="rounded-full bg-surface-container-high px-1.5 py-0 font-mono text-meta text-on-surface-variant">
           {nodes.length}
         </span>
-        {canEdit && !isRenaming && (
+        {canEditSections && !isRenaming && (
           <div className="ml-auto flex items-center gap-1">
             <button
               type="button"
@@ -1074,7 +1080,7 @@ function SubtaskRow({
       style={style}
       onClick={() => onOpenTask(task.id)}
       className={[
-        "flex cursor-pointer items-center gap-2 border-t border-outline-variant bg-surface-container-low/40 py-1 pl-[34px] pr-3 text-[12.5px] hover:bg-surface-container-low",
+        "flex cursor-pointer items-center gap-2 border-t border-outline-variant bg-surface-container-low/40 py-1 pl-[34px] pr-3 text-meta hover:bg-surface-container-low",
         isDragging ? "opacity-40" : "",
       ].join(" ")}
     >
@@ -1109,7 +1115,7 @@ function SubtaskRow({
         {done && <span aria-hidden="true" className="material-symbols-outlined text-meta leading-none">check</span>}
       </button>
       <span className="flex min-w-0 items-center gap-1">
-        <span className={["truncate", done || task.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
+        <span className={["truncate font-[450]", done || task.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
           {task.title}
         </span>
         {task.isCriticalPath && <CriticalPathMark variant="glyph" className="shrink-0" />}

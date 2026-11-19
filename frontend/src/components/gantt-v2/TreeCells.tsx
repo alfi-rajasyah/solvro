@@ -60,6 +60,9 @@ export function TaskDatesCell({ task, canEdit, onSave, todayDay, projectStatus }
         }}
         className={cn(
           "w-full truncate text-right text-meta",
+          // The editor's own trigger shows the same range; hide this one
+          // (kept for layout) so the text is not rendered twice (ISS-103).
+          editing && canEdit && "invisible",
           overdue ? "font-semibold text-error" : "text-on-surface-variant",
           // Overdue red must survive hover — hover:text-primary would flip
           // the signal to green exactly while the TAM points at it.

@@ -6,7 +6,15 @@ import {
   SortableItemHandle,
   type SortableCommitMeta,
 } from "@/components/reui/sortable";
-import { type Section, useProjectSections, useUpdateSection } from "@/lib/queries";
+import { useQueryClient } from "@tanstack/react-query";
+import { hasPermission, useAuth } from "@/lib/auth";
+import {
+  type Section,
+  queryKeys,
+  useProjectSections,
+  useUpdateSection,
+} from "@/lib/queries";
+import { FIELD_FOCUS } from "@/lib/utils";
 
 interface SectionReorderModalProps {
   projectId: number;
@@ -24,7 +32,13 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
   // the "No sections to reorder" state.
   const { data: sections } = useProjectSections(projectId);
   const updateSection = useUpdateSection(projectId);
+  const qc = useQueryClient();
+  const { user } = useAuth();
+  // The section PATCH route requires project:write (backend/src/routes/sections.ts);
+  // the modal checks it itself so a second entry point cannot skip the opener's gate.
+  const canReorder = hasPermission(user, "project:write");
   const [order, setOrder] = useState<Section[]>([]);
+  const [saveError, setSaveError] = useState(false);
   // True for the duration of an active drag (pointer or keyboard), reset on
   // drop/cancel. Escape-to-cancel-drag vs Escape-to-close-modal can't be
   // told apart by racing Modal.tsx's own `document` keydown listener
@@ -42,6 +56,7 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
     // the viewport — a known dnd-kit sensor gap), a stale `true` here would
     // otherwise block every close route and strand the modal.
     isDraggingRef.current = false;
+    setSaveError(false);
     if (!open || !sections) return;
     setOrder([...sections].sort((a, b) => a.position - b.position || a.id - b.id));
     // `sections` is intentionally excluded: its reference changes on every
@@ -55,6 +70,15 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // After a failed save, follow the sections cache: a later drop's optimistic
+  // write (and the re-fetch after each settle) is then reflected here instead
+  // of leaving the modal on a stale local order.
+  useEffect(() => {
+    // Skip while a drag is in progress, so a refetch cannot move the dragged row.
+    if (!saveError || !sections || isDraggingRef.current) return;
+    setOrder([...sections].sort((a, b) => a.position - b.position || a.id - b.id));
+  }, [saveError, sections]);
+
   function handleValueCommit(_value: Section[], meta: SortableCommitMeta<Section>) {
     const moved = meta.previousValue[meta.activeIndex];
     if (!moved) return;
@@ -63,16 +87,50 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
     // (backend/src/routes/sections.ts), so the frontend never fans out N
     // PATCHes. useUpdateSection's onSettled invalidates projectSections,
     // which refetches the re-packed order for the List view.
-    updateSection.mutate({ id: moved.id, patch: { position: meta.overIndex } });
+    // mutateAsync, not mutate(…, { onError }): mutate-level callbacks only fire
+    // for the latest call on this hook. The hook's own onError/onSettled have
+    // restored and re-fetched the sections cache before this rejects, so the
+    // cache read below is the server's order; the modal's local order follows it.
+    updateSection
+      .mutateAsync({ id: moved.id, patch: { position: meta.overIndex } })
+      .then(() => setSaveError(false))
+      .catch(() => {
+        const fresh = qc.getQueryData<Section[]>(queryKeys.projectSections(projectId));
+        if (fresh) {
+          setOrder([...fresh].sort((a, b) => a.position - b.position || a.id - b.id));
+        }
+        setSaveError(true);
+      });
   }
 
+  // Escape and a backdrop click stay blocked mid-drag (Escape cancels the drag
+  // first). The header X always closes and clears the guard, so a drag that
+  // never fired its end/cancel callback cannot strand the modal.
   function handleModalClose() {
     if (isDraggingRef.current) return;
     onClose();
   }
 
+  function handleCloseButton() {
+    isDraggingRef.current = false;
+    onClose();
+  }
+
+  if (!canReorder) return null;
+
   return (
-    <Modal open={open} onClose={handleModalClose} title="Reorder sections" widthClass="max-w-md">
+    <Modal
+      open={open}
+      onClose={handleModalClose}
+      title="Reorder sections"
+      widthClass="max-w-md"
+      onCloseButton={handleCloseButton}
+    >
+      {saveError && (
+        <p role="alert" className="mb-3 text-sm text-error">
+          Could not save the new order. The list shows the saved order.
+        </p>
+      )}
       {order.length === 0 ? (
         <p className="text-sm text-on-surface-variant">No sections to reorder.</p>
       ) : (
@@ -109,7 +167,7 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
                   <button
                     type="button"
                     aria-label="Reorder section"
-                    className="material-symbols-outlined touch-none rounded-sm p-1 text-[17px] text-on-surface-variant/60 outline-none transition-colors hover:bg-surface-container hover:text-on-surface focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring"
+                    className={`material-symbols-outlined touch-none rounded-sm p-1 text-[17px] text-on-surface-variant/60 transition-colors hover:bg-surface-container hover:text-on-surface ${FIELD_FOCUS}`}
                   />
                 }
               >
