@@ -206,7 +206,7 @@ if [ -n "$(git ls-files -- .claude CLAUDE.md backend/CLAUDE.md frontend/CLAUDE.m
 else fail guardrail-local-only-tracked "the agent workflow files (.claude/, CLAUDE.md, docs/) must stay tracked in this repository, and .superpowers must not be"; fi
 
 # Update EXPECTED_KANBAN_PATCHES together with the CHANGELOG when a sanctioned patch lands.
-EXPECTED_KANBAN_PATCHES=5
+EXPECTED_KANBAN_PATCHES=8
 if [ -f frontend/src/components/reui/kanban.tsx ]; then
   N="$(grep -c 'SOLVRO PATCH' frontend/src/components/reui/kanban.tsx)"
   if [ "$N" -eq "$EXPECTED_KANBAN_PATCHES" ]; then pass guardrail-kanban-vendor
@@ -214,7 +214,7 @@ if [ -f frontend/src/components/reui/kanban.tsx ]; then
 else fail guardrail-kanban-vendor "frontend/src/components/reui/kanban.tsx missing"; fi
 
 # Same drift guard for the vendored Sortable (vendored 2026-07-30).
-EXPECTED_SORTABLE_PATCHES=6
+EXPECTED_SORTABLE_PATCHES=9
 if [ -f frontend/src/components/reui/sortable.tsx ]; then
   N="$(grep -c 'SOLVRO PATCH' frontend/src/components/reui/sortable.tsx)"
   if [ "$N" -eq "$EXPECTED_SORTABLE_PATCHES" ]; then pass guardrail-sortable-vendor
@@ -231,7 +231,7 @@ else fail guardrail-sortable-vendor "frontend/src/components/reui/sortable.tsx m
 # — since only the last three are reachable for this app's actual filter
 # fields (all `type: "select"` with populated options, so `addFilter` itself
 # is a fallback path, not the one users hit in practice)).
-EXPECTED_FILTERS_PATCHES=18
+EXPECTED_FILTERS_PATCHES=19
 if [ -f frontend/src/components/reui/filters.tsx ]; then
   N="$(grep -c 'SOLVRO PATCH' frontend/src/components/reui/filters.tsx)"
   if [ "$N" -eq "$EXPECTED_FILTERS_PATCHES" ]; then pass guardrail-filters-vendor
@@ -240,7 +240,7 @@ else fail guardrail-filters-vendor "frontend/src/components/reui/filters.tsx mis
 
 # Same drift guards for the vendored Data Grid family (dir-total) and Badge
 # (vendored 2026-08-01; counts include comment-only markers).
-EXPECTED_DATAGRID_PATCHES=40
+EXPECTED_DATAGRID_PATCHES=43
 if [ -d frontend/src/components/reui/data-grid ]; then
   N="$(grep -rc 'SOLVRO PATCH' frontend/src/components/reui/data-grid/ | awk -F: '{s+=$2} END {print s}')"
   if [ "$N" -eq "$EXPECTED_DATAGRID_PATCHES" ]; then pass guardrail-datagrid-vendor
