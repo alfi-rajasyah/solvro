@@ -14,6 +14,7 @@ import {
   queryKeys,
   reorderTasksLocally,
   useCreateTask,
+  useUpdateTask,
   useUpdateCustomerServices,
   useUpdateProjectServices,
   useUpdateSection,
@@ -158,6 +159,42 @@ describe("reorderTasksLocally (ISS-046)", () => {
   });
 });
 
+describe("useUpdateTask section chip", () => {
+  it("updates the nested section on a sectionId-only patch", async () => {
+    const { qc, wrapper } = setup();
+    const secs = [
+      { id: 1, projectId: 7, name: "Alpha", position: 0, color: "#111111", createdAt: "x" },
+      { id: 2, projectId: 7, name: "Beta", position: 1, color: "#222222", createdAt: "x" },
+    ];
+    qc.setQueryData(queryKeys.projectSections(7), secs);
+    qc.setQueryData(queryKeys.projectTasks(7), [
+      {
+        id: 1,
+        parentTaskId: null,
+        status: "TODO",
+        position: 0,
+        epicId: null,
+        labels: [],
+        sectionId: 1,
+        section: { id: 1, name: "Alpha", position: 0, color: "#111111" },
+      },
+    ] as unknown as Task[]);
+    const gate = deferred<unknown>();
+    api.mockReturnValue(gate.promise as never);
+    const { result } = renderHook(() => useUpdateTask(7), { wrapper });
+    act(() => {
+      void result.current.mutateAsync({ id: 1, patch: { sectionId: 2 } }).catch(() => undefined);
+    });
+    await waitFor(() => {
+      const t = qc.getQueryData<Task[]>(queryKeys.projectTasks(7))![0];
+      expect(t.sectionId).toBe(2);
+      expect(t.section).toEqual({ id: 2, name: "Beta", position: 1, color: "#222222" });
+    });
+    gate.resolve({ id: 1 });
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  });
+});
+
 describe("useUpdateSection (ISS-112)", () => {
   const sec = (id: number, position: number): Section => ({
     id,
@@ -195,8 +232,15 @@ describe("useUpdateSection (ISS-112)", () => {
       both = Promise.all([first, second]);
     });
     await waitFor(() => expect(calls).toContain("GET /projects/7/sections"));
-    // While the re-seed is still in flight the queued second drop must not go out.
-    await new Promise((r) => setTimeout(r, 30));
+    // While the re-seed is still in flight the queued second drop must not go
+    // out: the first mutation has settled (its PATCH rejected) but is held.
+    // The GET is only issued from the settled callback, so the rejection has
+    // already been processed; flush microtasks so a missing hold would show.
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await Promise.resolve();
+      });
+    }
     expect(calls).not.toContain("PATCH /sections/2");
     gate.resolve();
     await act(() => both);

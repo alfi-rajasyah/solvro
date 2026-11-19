@@ -1794,7 +1794,11 @@ function optimisticAssignments<A extends { serviceId: number; service: Service; 
     const service = catalogue?.find((s) => s.id === input.serviceId);
     if (service) out.push(build(service, input.tools));
   }
-  return out.sort((a, b) => a.service.name.localeCompare(b.service.name));
+  // Codepoint compare, not localeCompare: closer to the server's ordering and
+  // independent of the host locale (same choice as the pipeline helpers below).
+  return out.sort((a, b) =>
+    a.service.name < b.service.name ? -1 : a.service.name > b.service.name ? 1 : 0,
+  );
 }
 
 export function useUpdateCustomerServices(customerId: number) {
@@ -1925,6 +1929,22 @@ function siblingListId(t: Pick<Task, "parentTaskId" | "status">): string {
   return t.parentTaskId === null ? "top" : `sub:${t.parentTaskId}`;
 }
 
+// The nested `section` is what TaskPanel's chip reads: on a section change
+// take it from the sections cache (null when unassigned). Without the cache
+// entry the old object is kept and the settle refetch corrects it.
+function nestedSectionFor(
+  current: Pick<Task, "sectionId" | "section">,
+  nextSectionId: number | null,
+  sections: Pick<Section, "id" | "name" | "position" | "color">[] | undefined,
+): Task["section"] {
+  if (nextSectionId === current.sectionId) return current.section;
+  if (nextSectionId === null) return null;
+  const found = sections?.find((s) => s.id === nextSectionId);
+  return found
+    ? { id: found.id, name: found.name, position: found.position, color: found.color }
+    : current.section;
+}
+
 /**
  * Reorders/re-parents `id` inside a locally-cached task list exactly the way
  * the backend's moveTaskWithinSiblings does: remove from the old sibling
@@ -1957,15 +1977,7 @@ export function reorderTasksLocally(
     status: nextStatus,
     parentTaskId: nextParentTaskId,
     sectionId: nextSectionId,
-    // The nested `section` is what TaskPanel's chip reads: on a section
-    // change take it from the sections cache (null when unassigned). Without
-    // the cache it is left as is and the settle refetch corrects it.
-    section:
-      nextSectionId === current.sectionId
-        ? current.section
-        : nextSectionId === null
-          ? null
-          : (sections?.find((s) => s.id === nextSectionId) ?? current.section),
+    section: nestedSectionFor(current, nextSectionId, sections),
     // Mirror the backend: re-parenting under a parent clears epicId in the
     // same transaction (§4) — a subtask never carries its own epic link.
     epicId: nextParentTaskId !== null ? null : current.epicId,
@@ -2095,13 +2107,9 @@ export function useUpdateTask(projectId: number) {
               status: patch.status ?? current.status,
             });
         const touchesOrdering = patch.position !== undefined || listChanged;
+        const sectionsCache = qc.getQueryData<Section[]>(queryKeys.projectSections(projectId));
         const next = touchesOrdering
-          ? reorderTasksLocally(
-              prev,
-              id,
-              patch,
-              qc.getQueryData<Section[]>(queryKeys.projectSections(projectId)),
-            )
+          ? reorderTasksLocally(prev, id, patch, sectionsCache)
           : prev.map((t) =>
               t.id === id
                 ? ({
@@ -2110,6 +2118,9 @@ export function useUpdateTask(projectId: number) {
                     // Same server mirror as reorderTasksLocally above, for
                     // whichever plain-merge patch also touches parentTaskId.
                     ...(patch.parentTaskId != null ? { epicId: null } : {}),
+                    ...(patch.sectionId !== undefined
+                      ? { section: nestedSectionFor(t, patch.sectionId, sectionsCache) }
+                      : {}),
                   } as Task)
                 : t,
             );
@@ -2434,17 +2445,16 @@ export function useUpdateSection(projectId: number) {
     onError: (_err, _vars, ctx) => {
       if (ctx?.prev)
         qc.setQueryData(queryKeys.projectSections(projectId), ctx.prev);
-      // The snapshot predates this mutation's queued successors, so restoring
-      // it can drop their optimistic writes while their PATCHes still run
-      // against a server that never applied this one. Re-seed from the server
-      // and wait for it: returning the promise holds the scope's queue until
-      // the cache is authoritative again.
-      return qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
       // Tasks carry `section: { color }`; invalidate so the diagram repaints.
       qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
+      // The snapshot restored on error predates this mutation's queued
+      // successors, so after a failure their PATCHes would run against a
+      // server that never applied this one. Re-seed from the server and
+      // return the promise: it holds the scope's queue until the cache is
+      // authoritative again.
+      return qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
     },
   });
 }
