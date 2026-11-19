@@ -225,3 +225,50 @@ describe("buildTaskTable — document links never exported", () => {
     expect(head).not.toContain("Links");
   });
 });
+
+async function pdfText(rows: Row[], spanDays: number): Promise<string> {
+  let url = "";
+  const win = {
+    location: {
+      set href(v: string) {
+        url = v;
+      },
+      get href() {
+        return url;
+      },
+    },
+  };
+  await exportGanttToPdf({
+    projectName: "Probe",
+    rows,
+    exportStart: START,
+    exportEnd: new Date(2026, 7, 1 + spanDays),
+    holidays: [],
+    colorBy: "status",
+    tabWindow: win as unknown as Window,
+  });
+  const blob = resolveObjectURL(url);
+  if (!blob) throw new Error(`could not resolve blob url: ${url}`);
+  return Buffer.from(await blob.arrayBuffer()).toString("latin1");
+}
+
+describe("exportGanttToPdf bar treatments", () => {
+  const withProgress = (progressPct: number | undefined, status = "TODO"): Row[] => {
+    const rows = mkRows(1, 10);
+    rows[1] = { ...rows[1], status: status as Row["status"], progressPct };
+    return rows;
+  };
+
+  it("clips a hatch to an incomplete bar and leaves a complete one flat", async () => {
+    const hatched = await pdfText(withProgress(0), 10);
+    const flat = await pdfText(withProgress(100), 10);
+    // Hatched bars paint inside a clip path (`W n`); flat ones need none.
+    expect(hatched).toMatch(/\nW\nn\n/);
+    expect(flat).not.toMatch(/\nW\nn\n/);
+  });
+
+  it("keeps cancelled and progress-less bars flat", async () => {
+    expect(await pdfText(withProgress(0, "CANCELLED"), 10)).not.toMatch(/\nW\nn\n/);
+    expect(await pdfText(withProgress(undefined), 10)).not.toMatch(/\nW\nn\n/);
+  });
+});

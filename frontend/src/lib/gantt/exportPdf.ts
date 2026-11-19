@@ -8,7 +8,9 @@ import {
 import {
   CRITICAL_PATH_HEX,
   HOLIDAY_HEX,
-  PROGRESS_OVERLAY_ALPHA,
+  HATCH_BASE_ALPHA,
+  hatchCompositeHex,
+  HATCH_STRIPE_ALPHA,
   WEEKEND_HEX,
   barFillHex,
   cancelledBarHex,
@@ -185,7 +187,7 @@ function fillRoundedRect(
   w: number,
   h: number,
   r: number,
-  mode: "F" | "S" = "F",
+  mode: "F" | "S" | null = "F",
 ): void {
   const rr = Math.max(0, Math.min(r, w / 2, h / 2));
   if (rr <= 0) {
@@ -193,6 +195,55 @@ function fillRoundedRect(
   } else {
     pdf.roundedRect(x, y, w, h, rr, rr, mode);
   }
+}
+
+/** Hatch geometry in PDF points: the live bar's 135deg stripe, 4-wide bands
+ *  alternating (palette.ts HATCH_BAND_PX). */
+const HATCH_BAND_PT = 4;
+
+/** Paints a bar's fill the way SolvroBar.tsx does: the incomplete portion as
+ *  a diagonal hatch of the bar colour (jsPDF has no pattern fill, so the
+ *  stripes are drawn lines clipped to the rounded bar), with a solid head
+ *  over the completed `doneW` points. `doneW` of 0 leaves the bar fully
+ *  hatched; the live bar does the same for every non-DONE leaf task. */
+function drawHatchedBar(
+  pdf: JsPDFInstance,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  r: number,
+  fillHex: string,
+  doneW: number,
+): void {
+  const [cr, cg, cb] = hexToRgb(HATCH_CANVAS_HEX_LIGHT);
+  const [fr, fg, fb] = hexToRgb(fillHex);
+  pdf.saveGraphicsState();
+  fillRoundedRect(pdf, x, y, w, h, r, null);
+  pdf.clip();
+  pdf.discardPath();
+  // Opaque canvas backing so the page's grid lines don't read through the gaps.
+  pdf.setFillColor(cr, cg, cb);
+  pdf.rect(x, y, w, h, "F");
+  withOpacity(pdf, HATCH_BASE_ALPHA, () => {
+    pdf.setFillColor(fr, fg, fb);
+    pdf.rect(x, y, w, h, "F");
+  });
+  // "/" stripes: line width is the band's perpendicular width, the horizontal
+  // period is 2 bands / sin(45deg).
+  const period = HATCH_BAND_PT * 2 * Math.SQRT2;
+  withOpacity(pdf, HATCH_STRIPE_ALPHA, () => {
+    pdf.setDrawColor(fr, fg, fb);
+    pdf.setLineWidth(HATCH_BAND_PT);
+    for (let k = -h; k < w + h; k += period) {
+      pdf.line(x + k - 2, y + h + 2, x + k + h + 2, y - 2);
+    }
+  });
+  if (doneW > 0) {
+    pdf.setFillColor(fr, fg, fb);
+    pdf.rect(x, y, Math.min(w, doneW), h, "F");
+  }
+  pdf.restoreGraphicsState();
 }
 
 /** Runs `draw` with a temporary fill/stroke opacity, matching the CSS
@@ -707,13 +758,10 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
       pdf.line(chartLeft, ry, chartLeft, ry + rh);
 
       if (row.kind === "section") {
-        // Slim rollup pill (~3pt), spanning the section's children date
-        // range in the section color, drawn on the section's own resource
-        // row (same placement as the live UI's rollup). SolvroBar.tsx's
-        // on-screen `data-rollup` was restyled from a pill to a thin bar
-        // with squared end caps in the Gantt visual refresh (Task 3); this
-        // export still draws the rounded pill below — an accepted,
-        // unsynced screen/PDF divergence, not a bug.
+        // Thin summary bar with squared end caps, matching SolvroBar.tsx's
+        // `data-rollup`: a 3pt cap at each end of the section's children
+        // date range, joined by a thinner line through the middle, all in
+        // the section colour and drawn on the section's own resource row.
         if (row.start && row.end) {
           const startMs = startOfDay(row.start).getTime();
           const endMs = startOfDay(row.end).getTime();
@@ -726,7 +774,10 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
             const pw = Math.max(1, (endIdx - startIdx + 1) * colW - 2);
             const [pr, pg, pb] = hexToRgb(row.sectionColor ?? THEME_HEX.outline);
             pdf.setFillColor(pr, pg, pb);
-            fillRoundedRect(pdf, px, ry + rh / 2 - 1.5, pw, 3, 1.5);
+            const capW = Math.min(3, pw / 2);
+            pdf.rect(px, ry + rh / 2 - barH / 2, capW, barH, "F");
+            pdf.rect(px + pw - capW, ry + rh / 2 - barH / 2, capW, barH, "F");
+            pdf.rect(px, ry + rh / 2 - 1.5, pw, 3, "F");
           }
         }
         continue;
@@ -807,8 +858,27 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
           const [fr, fg, fb] = hexToRgb(
             status === "CANCELLED" ? cancelledBarHex(fillHex, HATCH_CANVAS_HEX_LIGHT) : fillHex,
           );
-          pdf.setFillColor(fr, fg, fb);
-          fillRoundedRect(pdf, bx, by, bw, bh, 1.5);
+          // Completed fraction, only on the page where the bar STARTS (a
+          // multi-page-spanning bar is a rare edge case for the tight
+          // ±7-day export window); computed against the bar's FULL, not
+          // page-clamped, duration so a right-clipped bar still shows the
+          // correct fraction. An absent progress value draws solid, as the
+          // live bar does. Cancelled bars stay flat and translucent.
+          const progress = row.progressPct;
+          // Inside-label contrast is judged against what is actually painted:
+          // a fully hatched bar reads as the composite, not the pure colour.
+          let labelBgHex = fillHex;
+          if (status !== "CANCELLED" && typeof progress === "number" && progress < 100) {
+            const trueEndIdx = (endMs - pageFromMs) / DAY_MS;
+            const fullBw = (trueEndIdx - startIdx + 1) * colW - 2;
+            const doneW =
+              startsOnPage && progress > 0 ? Math.max(0, fullBw * (progress / 100)) : 0;
+            drawHatchedBar(pdf, bx, by, bw, bh, 1.5, fillHex, doneW);
+            if (progress === 0) labelBgHex = hatchCompositeHex(fillHex, HATCH_CANVAS_HEX_LIGHT);
+          } else {
+            pdf.setFillColor(fr, fg, fb);
+            fillRoundedRect(pdf, bx, by, bw, bh, 1.5);
+          }
 
           // Critical Path mark (plan §3): a violet stroke on the same
           // rounded rect, right after the fill — the PDF analogue of the
@@ -823,30 +893,6 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
             fillRoundedRect(pdf, bx, by, bw, bh, 1.5, "S");
           }
 
-          // Progress overlay — darker fill on the completed fraction, only
-          // for 0%<p<100%, and only on the page where the bar STARTS (a
-          // multi-page-spanning bar is a rare edge case for the tight
-          // ±7-day export window; the % is computed against the bar's
-          // FULL — not page-clamped — duration so a right-clipped bar on a
-          // very wide export still shows the correct fraction).
-          const progress = row.progressPct;
-          if (
-            startsOnPage &&
-            typeof progress === "number" &&
-            progress > 0 &&
-            progress < 100
-          ) {
-            const trueEndIdx = (endMs - pageFromMs) / DAY_MS;
-            const fullBw = (trueEndIdx - startIdx + 1) * colW - 2;
-            const progressW = Math.min(bw, Math.max(0, fullBw * (progress / 100)));
-            if (progressW > 0) {
-              withOpacity(pdf, PROGRESS_OVERLAY_ALPHA, () => {
-                pdf.setFillColor(0, 0, 0);
-                fillRoundedRect(pdf, bx, by, progressW, bh, 1.5);
-              });
-            }
-          }
-
           // Label: inside if it fits (GH #58-style measured fit), else
           // immediately right of the bar in on-surface-variant gray. Only
           // on the page where the bar starts, matching the pre-F4 file's
@@ -858,7 +904,7 @@ export async function exportGanttToPdf(opts: ExportPdfOpts): Promise<void> {
             const insidePad = 6;
             const fitsInside = pdf.getTextWidth(row.name) + insidePad <= bw;
             if (fitsInside) {
-              const [tr, tg, tb] = insideLabelRgb(fillHex);
+              const [tr, tg, tb] = insideLabelRgb(labelBgHex);
               pdf.setTextColor(tr, tg, tb);
               pdf.text(row.name, bx + insidePad / 2, by + bh / 2 + 2);
             } else {

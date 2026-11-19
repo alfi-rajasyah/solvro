@@ -35,14 +35,7 @@ export const DEFAULT_SECTION_COLOR = "#94a3b8"; // slate-400
 // The completed portion of a bar renders solid in its resolved Color-by
 // color; the incomplete remainder renders hatched (see
 // `progressHatchBackground` below, Gantt visual refresh Task 3).
-// `PROGRESS_OVERLAY_ALPHA` is the exports' (exportPdf.ts) own progress
-// treatment — a darker overlay (black at this opacity) anchored to the left
-// edge, covering the completed portion of the bar. The live UI no longer
-// uses it: exports draw their own shapes independently and are out of scope
-// for the visual refresh, so this constant stays for exportPdf.ts's import
-// to keep working — screen (hatch) and PDF/Excel (overlay) now render
-// progress with two different treatments, an accepted divergence for T3.
-export const PROGRESS_OVERLAY_ALPHA = 0.28;
+// The PDF export draws the same hatch (exportPdf.ts's drawHatchedBar).
 
 // ---- Bar hatch treatment (Gantt visual refresh, Task 3) ----
 // The live bar's INCOMPLETE portion (progress% to 100%) renders as a 135°
