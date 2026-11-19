@@ -77,6 +77,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Only matters if that topology is used (documented in docs/CONFIGURATION.md 2.13). Fix then: per-account-only fallback when the address is a known proxy.
 - **Source:** snapshot line 2380, section "Application review 2026-10-22 — remaining open items"
 
+### ISS-195 · P3 · A fast /auth/me reply can hide a cross-tab account switch
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `d779d7e`
+- **Where:** the boot /auth/me `.then` in frontend/src/lib/auth.tsx
+- **Problem:** When another tab signs in as a different account, the token event arrives first and this tab re-checks it with /auth/me. If that reply (user B) lands before B's user-key storage event, the later event sees the same id and never adopts, so the tab runs as B on A's cached data.
+- **Why deferred / fix direction:** Needs a network reply to beat a local storage event. Treat an id change in the /auth/me reply as an account switch: clear the cache (and navigate) when the previous user was not null.
+
 ## Open — Data & performance
 
 ### ISS-013 · P2 · GET /users is unpaginated
