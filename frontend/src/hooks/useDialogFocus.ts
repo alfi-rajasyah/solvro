@@ -58,12 +58,34 @@ export function useDialogFocus(open: boolean): {
     const first = items[0];
     const last = items[items.length - 1];
     const active = document.activeElement;
-    if (e.shiftKey && (active === first || active === dialog)) {
-      e.preventDefault();
-      last.focus();
-    } else if (!e.shiftKey && active === last) {
-      e.preventDefault();
-      first.focus();
+    // Focus on a non-tabbable element (a programmatically focused heading, the
+    // dialog container itself) leaves through the dialog edge as soon as no
+    // tabbable item lies ahead of it in the Tab direction, so wrap then too.
+    const onItem = active instanceof HTMLElement && items.includes(active);
+    const FOLLOWING = Node.DOCUMENT_POSITION_FOLLOWING;
+    const PRECEDING = Node.DOCUMENT_POSITION_PRECEDING;
+    if (e.shiftKey) {
+      const leaves =
+        active === first ||
+        active === dialog ||
+        (!onItem &&
+          active instanceof Node &&
+          !items.some((el) => active.compareDocumentPosition(el) & PRECEDING));
+      if (leaves) {
+        e.preventDefault();
+        last.focus();
+      }
+    } else {
+      const leaves =
+        active === last ||
+        (!onItem &&
+          active !== dialog &&
+          active instanceof Node &&
+          !items.some((el) => active.compareDocumentPosition(el) & FOLLOWING));
+      if (leaves) {
+        e.preventDefault();
+        first.focus();
+      }
     }
   }
 

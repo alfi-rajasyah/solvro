@@ -1074,7 +1074,7 @@ function SubtaskRow({
       style={style}
       onClick={() => onOpenTask(task.id)}
       className={[
-        "flex cursor-pointer items-center gap-2 border-t border-outline-variant bg-surface-container-low/40 py-1 pl-[34px] pr-3 text-[12.5px] hover:bg-surface-container-low",
+        "flex cursor-pointer items-center gap-2 border-t border-outline-variant bg-surface-container-low/40 py-1 pl-[34px] pr-3 text-meta hover:bg-surface-container-low",
         isDragging ? "opacity-40" : "",
       ].join(" ")}
     >

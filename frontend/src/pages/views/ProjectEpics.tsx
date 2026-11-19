@@ -411,12 +411,12 @@ function ColorDot({
             }}
             aria-label="Close color picker"
           />
-          <div className="absolute left-0 top-4 z-50 flex gap-1 rounded-sm border border-outline-variant bg-surface-container-lowest p-1.5 shadow-overlay">
+          <div className="absolute left-0 top-4 z-50 flex gap-1 rounded-sm border border-outline-variant bg-surface-container-lowest p-1.5 pointer-coarse:grid pointer-coarse:grid-cols-4 pointer-coarse:gap-1 pointer-coarse:p-2 shadow-overlay">
             {SECTION_COLOR_PRESETS.map((hex) => (
               <button
                 key={hex}
                 type="button"
-                className="h-4 w-4 rounded-full hover:ring-2 hover:ring-primary"
+                className="h-4 w-4 rounded-full hover:ring-2 hover:ring-primary pointer-coarse:h-11 pointer-coarse:w-11"
                 style={{ backgroundColor: hex }}
                 onClick={(e) => {
                   e.stopPropagation();

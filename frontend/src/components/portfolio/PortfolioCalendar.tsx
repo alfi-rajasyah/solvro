@@ -115,7 +115,7 @@ export function PortfolioCalendar({
               chevron_left
             </span>
           </button>
-          <span className="min-w-[4ch] text-center font-mono text-xs font-semibold text-on-surface">
+          <span className="min-w-[4ch] text-center font-mono text-data-mono font-semibold text-on-surface">
             {year}
           </span>
           <button
@@ -260,7 +260,7 @@ export function PortfolioCalendar({
                       </div>
                       <div
                         title={`${fmtRange(p.start, p.end)} · ${p.progressPct}%`}
-                        className={`absolute top-1/2 flex h-2.5 -translate-y-1/2 items-center rounded-full ${barTone(p)}`}
+                        className={`absolute top-1/2 flex h-2.5 -translate-y-1/2 items-center rounded-sm ${barTone(p)}`}
                         style={{
                           left: `${leftFrac * 100}%`,
                           width: `${widthPct}%`,

@@ -55,7 +55,7 @@ export function Modal({
           customHeader
         ) : (
           <header className="flex items-center justify-between border-b border-outline-variant px-5 py-3.5">
-            <span className="font-display text-[14px] font-semibold text-on-surface">
+            <span className="font-display text-sm font-semibold text-on-surface">
               {title}
             </span>
             <button

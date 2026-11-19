@@ -164,7 +164,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
                       to={`/projects/${p.id}`}
                       className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 transition-colors hover:border-primary md:flex-nowrap"
                     >
-                      <span className="font-mono text-meta text-on-surface-variant">P-{String(p.id).padStart(3, "0")}</span>
+                      <span className="font-mono text-data-mono text-on-surface-variant">P-{String(p.id).padStart(3, "0")}</span>
                       <span className="min-w-0 flex-1 basis-[70%] text-sm font-semibold text-on-surface md:basis-auto md:truncate">{p.name}</span>
                       {overdueTasks > 0 && (
                         <span
