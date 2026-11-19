@@ -41,7 +41,6 @@ import {
   type TaskWithProject,
   type TasksFilter,
   useCustomers,
-  useProjects,
   useTasksWithTotal,
   useUsers,
 } from "@/lib/queries";
@@ -118,13 +117,6 @@ export function Tasks() {
 
   const { data: users } = useUsers();
   const { data: customers } = useCustomers();
-  // The task list does not carry project status; the (cached) project list
-  // does. A task of an on-hold project is never painted overdue.
-  const { data: projectList, isLoading: projectsLoading } = useProjects();
-  const projectStatusById = useMemo(
-    () => new Map((projectList ?? []).map((p) => [p.id, p.status] as const)),
-    [projectList],
-  );
 
   const filterFields = useMemo<FilterFieldConfig<string>[]>(
     () => [
@@ -317,9 +309,9 @@ export function Tasks() {
           // Compare calendar days, not instants — lexicographic "yyyy-MM-dd"
           // comparison is calendar-correct (dateField.ts). `todayDay` is
           // hoisted above (once per render, not once per cell).
-          // Until the project list loads we cannot rule out an on-hold project,
-          // so nothing is painted overdue (no flash of red that then clears).
-          const projectStatus = projectsLoading ? "ON_HOLD" : projectStatusById.get(task.projectId);
+          // The list payload carries the project's status; a task of an
+          // on-hold project is never painted overdue.
+          const projectStatus = task.project.status;
           const isOverdue = isTaskShownOverdue(task.status, task.dueDate, todayDay, projectStatus);
           return (
             <span
@@ -343,7 +335,7 @@ export function Tasks() {
         meta: { skeleton: <Skeleton className="h-4 w-16 rounded-full" /> },
       },
     ],
-    [todayDay, projectStatusById, projectsLoading],
+    [todayDay],
   );
 
   const table = useReactTable({

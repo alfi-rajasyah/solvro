@@ -322,6 +322,7 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
           select: {
             id: true,
             name: true,
+            status: true,
             customer: { select: { id: true, name: true } },
           },
         },

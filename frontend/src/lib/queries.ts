@@ -380,6 +380,7 @@ export interface TaskWithProject extends Task {
   project: {
     id: number;
     name: string;
+    status: ProjectStatus;
     customer: { id: number; name: string } | null;
   };
 }
