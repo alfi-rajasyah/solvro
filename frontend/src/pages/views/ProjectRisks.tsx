@@ -17,6 +17,7 @@ import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
 import { RiskFormModal } from "@/components/RiskFormModal";
 import { RiskScoreChip } from "@/components/RiskScoreChip";
 import { Chip, type Tone } from "@/components/StatusChip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { RISK_CATEGORY_LABEL, RISK_STATUS_LABEL } from "@/lib/labels";
@@ -62,6 +63,42 @@ const CATEGORIES: (RiskCategory | "ALL")[] = [
 const STATUSES: (RiskStatus | "ALL")[] = ["ALL", "OPEN", "MITIGATED", "CLOSED"];
 
 const SCALE = [1, 2, 3, 4, 5];
+const SCALE_OPTIONS = SCALE.map((n) => ({ value: String(n), label: String(n) }));
+const STATUS_OPTIONS = (Object.keys(RISK_STATUS_LABEL) as RiskStatus[]).map((s) => ({
+  value: s,
+  label: RISK_STATUS_LABEL[s],
+}));
+
+// Inline-edit cell select on the vendored ui/select (replaces a native <select>);
+// the trigger stays the compact `sm` height so grid rows keep their density.
+function InlineSelect({
+  value,
+  items,
+  ariaLabel,
+  onChange,
+  className,
+}: {
+  value: string;
+  items: { value: string; label: string }[];
+  ariaLabel: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <Select items={items} value={value} onValueChange={(v) => v != null && onChange(String(v))}>
+      <SelectTrigger size="sm" aria-label={ariaLabel} className={`px-2 ${className ?? ""}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 export function ProjectRisks() {
   const { project } = useProjectContext();
@@ -151,7 +188,7 @@ export function ProjectRisks() {
           aria-label="Search risks"
           className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant ${FIELD_FOCUS} sm:w-72`}
         />
-        <Select
+        <FilterSelect
           label="Category"
           value={categoryFilter}
           onChange={(v) => setCategoryFilter(v as RiskCategory | "ALL")}
@@ -160,7 +197,7 @@ export function ProjectRisks() {
             label: c === "ALL" ? "All categories" : RISK_CATEGORY_LABEL[c],
           }))}
         />
-        <Select
+        <FilterSelect
           label="Status"
           value={statusFilter}
           onChange={(v) => setStatusFilter(v as RiskStatus | "ALL")}
@@ -376,18 +413,13 @@ function RisksDataGrid({
         cell: ({ row }) => {
           const risk = row.original;
           return canEdit ? (
-            <select
-              value={risk.probability}
-              aria-label={`Probability of risk: ${risk.description}`}
-              onChange={(e) => onChange(risk.id, { probability: Number(e.target.value) })}
-              className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
-            >
-              {SCALE.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+            <InlineSelect
+              value={String(risk.probability)}
+              items={SCALE_OPTIONS}
+              ariaLabel={`Probability of risk: ${risk.description}`}
+              onChange={(v) => onChange(risk.id, { probability: Number(v) })}
+              className="font-mono text-xs"
+            />
           ) : (
             <span className="font-mono text-xs">{risk.probability}</span>
           );
@@ -407,18 +439,13 @@ function RisksDataGrid({
         cell: ({ row }) => {
           const risk = row.original;
           return canEdit ? (
-            <select
-              value={risk.impact}
-              aria-label={`Impact of risk: ${risk.description}`}
-              onChange={(e) => onChange(risk.id, { impact: Number(e.target.value) })}
-              className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
-            >
-              {SCALE.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+            <InlineSelect
+              value={String(risk.impact)}
+              items={SCALE_OPTIONS}
+              ariaLabel={`Impact of risk: ${risk.description}`}
+              onChange={(v) => onChange(risk.id, { impact: Number(v) })}
+              className="font-mono text-xs"
+            />
           ) : (
             <span className="font-mono text-xs">{risk.impact}</span>
           );
@@ -455,18 +482,13 @@ function RisksDataGrid({
         cell: ({ row }) => {
           const risk = row.original;
           return canEdit ? (
-            <select
+            <InlineSelect
               value={risk.status}
-              aria-label={`Status of risk: ${risk.description}`}
-              onChange={(e) => onChange(risk.id, { status: e.target.value as RiskStatus })}
-              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-meta font-semibold ${STATUS_TEXT[risk.status]} ${FIELD_FOCUS}`}
-            >
-              {(Object.keys(RISK_STATUS_LABEL) as RiskStatus[]).map((s) => (
-                <option key={s} value={s}>
-                  {RISK_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
+              items={STATUS_OPTIONS}
+              ariaLabel={`Status of risk: ${risk.description}`}
+              onChange={(v) => onChange(risk.id, { status: v as RiskStatus })}
+              className={`w-full font-display text-meta font-semibold ${STATUS_TEXT[risk.status]}`}
+            />
           ) : (
             <Chip tone={STATUS_TONE[risk.status]}>{RISK_STATUS_LABEL[risk.status]}</Chip>
           );
@@ -613,7 +635,7 @@ function RiskCard({
   );
 }
 
-function Select({
+function FilterSelect({
   label,
   value,
   onChange,

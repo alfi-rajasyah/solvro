@@ -22,7 +22,7 @@ Not listed by the vendoring header (no registry source recorded): `alert.tsx`, `
 1. `import * as React from "react"` added (registry source omits it).
 2. `cn` import path: registry `"cn"` becomes `"@/lib/utils"`.
 3. `IconPlaceholder` replaced by lucide-react `XIcon` and `ChevronsUpDownIcon`.
-4. Input focus treatment: `focus-visible:border-ring ring-ring/50 ring-3` becomes the DESIGN.md §4 primary ring.
+4. Input focus treatment: `focus-visible:border-ring ring-ring/50 ring-3` becomes the DESIGN.md §4 reduced focus form: the primary ring only (`ring-2 ring-primary/30`), no border change on focus.
 5. `scrollFade` / `scrollbarGutter` destructured and discarded in the list scroll-area wrapper.
 
 The two drifts found on 2026-11-19 are closed: the list scroll area carries upstream's

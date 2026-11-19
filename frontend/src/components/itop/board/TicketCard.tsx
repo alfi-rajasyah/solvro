@@ -60,7 +60,7 @@ export function TicketCard({
         {canDrag && (
           <KanbanItemHandle
             aria-label="Drag ticket"
-            className={`inline-flex shrink-0 touch-none items-center rounded-sm text-on-surface-variant/60 ${FIELD_FOCUS}`}
+            className={`-m-1 inline-flex shrink-0 touch-none items-center rounded-sm p-1 text-on-surface-variant/60 ${FIELD_FOCUS}`}
           >
             <span aria-hidden="true" className="material-symbols-outlined text-[16px]">drag_indicator</span>
           </KanbanItemHandle>

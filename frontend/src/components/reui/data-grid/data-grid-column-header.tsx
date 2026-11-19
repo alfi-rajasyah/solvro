@@ -106,6 +106,10 @@ function DataGridColumnHeaderInner<TData, TValue>({
   const headerClassNameMeta = column.columnDef.meta?.headerClassName
   const alignEnd =
     typeof headerClassNameMeta === "string" && headerClassNameMeta.includes("text-right")
+  // SOLVRO PATCH (ISS-115): `text-center` centers the sortable header too, so a
+  // sortable numeric/scale column can stay centered like its cells.
+  const alignCenter =
+    typeof headerClassNameMeta === "string" && headerClassNameMeta.includes("text-center")
 
   const handleSort = () => {
     if (isSorted === "asc") {
@@ -432,13 +436,15 @@ function DataGridColumnHeaderInner<TData, TValue>({
   ])
 
   if (hasControls) {
-    // SOLVRO PATCH note — KNOWN GAP: this branch ignores the `alignEnd`
-    // right-align convention (see `alignEnd` above). Unreachable today
-    // (no page enables column filters/move/visibility/pin), but the first
-    // column that pairs `hasControls` with meta.headerClassName
-    // "text-right" needs this branch taught the same trick.
+    // SOLVRO PATCH (ISS-114): this branch honors the `alignEnd` / `alignCenter`
+    // conventions (see above) like the sortable path below.
     return (
-      <div className="-ms-2 flex h-full items-center justify-between gap-1.5">
+      <div
+        className={cn(
+          "flex h-full items-center gap-1.5",
+          alignEnd ? "-me-2 justify-end" : alignCenter ? "justify-center" : "-ms-2 justify-between"
+        )}
+      >
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -487,7 +493,7 @@ function DataGridColumnHeaderInner<TData, TValue>({
     // margin to the trailing edge so it hugs the `<th>`'s right edge
     // instead of fighting it from the left.
     return (
-      <div className={cn("flex h-full items-center", alignEnd ? "-me-2 justify-end" : "-ms-2")}>
+      <div className={cn("flex h-full items-center", alignEnd ? "-me-2 justify-end" : alignCenter ? "justify-center" : "-ms-2")}>
         <Button
           variant="ghost"
           className={headerButtonClassName}

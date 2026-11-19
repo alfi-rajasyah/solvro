@@ -15,6 +15,15 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-19 — Drag handles, data-grid header alignment, risk cells, autocomplete focus
+
+- Kanban and sortable drag handles are now registered as the drag activator, so focus returns to the handle after a keyboard drop that remounts a card (vendored `reui/kanban.tsx`, `reui/sortable.tsx`).
+- Drag handles on the task, deal and iTop ticket boards now have a 24px hit area, without changing the icon size or card layout.
+- The data-grid column header can center-align sortable headers, and its controls menu now follows right-aligned columns.
+- Risk probability, impact and status cells on the project Risks page use the shared select instead of a native dropdown.
+- The vendored autocomplete no longer changes its border colour on focus; it keeps the primary ring.
+- The Gantt tree-row reorder handler is split into named planning helpers, with no behaviour change.
+
 ### Fixed — 2026-11-19 — Guest link address, iTop sync atomicity, cross-tab account switch
 
 - New optional `PUBLIC_BASE_URL` setting (an absolute http or https address with no trailing slash). When set, guest links are built from it instead of the address the owner is browsing from, so a link copied through an SSH tunnel or localhost opens for a guest. `setup.sh` asks for it (blank keeps the old behaviour) and saves it to `.env`; documented in `docs/CONFIGURATION.md`.
