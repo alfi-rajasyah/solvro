@@ -610,6 +610,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               projectId={projectId}
               selectedIds={labelIds}
               onChange={canEdit ? setLabelIds : () => {}}
+              canCreate={canEdit}
             />
           </FieldRow>
 

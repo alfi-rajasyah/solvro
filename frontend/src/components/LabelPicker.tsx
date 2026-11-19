@@ -28,10 +28,13 @@ export function LabelPicker({
   projectId,
   selectedIds,
   onChange,
+  canCreate = true,
 }: {
   projectId: number;
   selectedIds: number[];
   onChange: (ids: number[]) => void;
+  /** Creating a label needs task:write; read-only viewers get no "Add label" control. */
+  canCreate?: boolean;
 }) {
   const { data: labels } = useProjectLabels(projectId);
   const createLabel = useCreateLabel(projectId);
@@ -81,7 +84,7 @@ export function LabelPicker({
             </button>
           );
         })}
-        {!creating && (
+        {canCreate && !creating && (
           <button
             type="button"
             onClick={() => {
@@ -95,7 +98,7 @@ export function LabelPicker({
         )}
       </div>
 
-      {creating && (
+      {canCreate && creating && (
         <div className="rounded-sm border border-outline-variant bg-surface-container-low p-2">
           <div className="flex items-center gap-2">
             <input

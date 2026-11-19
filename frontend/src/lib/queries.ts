@@ -3389,6 +3389,7 @@ export interface ItopStatus {
   baseUrl: string | null;
   lastSyncAt: string | null;
   lastSyncOk: boolean | null;
+  lastSyncFailed: boolean;
   // `lastSyncError` is deliberately NOT part of this response — the raw
   // iTop error text is admin-only (see the Admin "iTop" tab / GET
   // /admin/itop/settings for that). Non-admin callers only learn
@@ -3513,6 +3514,19 @@ export function useCustomerTickets(
     poll = false,
   }: { scope: ItopTicketScope; cls?: ItopTicketClass; enabled?: boolean; poll?: boolean },
 ) {
+  const qc = useQueryClient();
+  // Re-render when the drag/mutation gate flips so the poll below is cleared
+  // on pause and re-armed on resume (see `useLiveRefresh`). Only a polling
+  // caller subscribes; the gate-check callers stay inert.
+  const subscribeGate = useCallback(
+    (listener: () => void) => (poll ? subscribeRefreshGate(qc, listener) : () => {}),
+    [qc, poll],
+  );
+  const getGateSnapshot = useCallback(
+    () => poll && shouldPauseRefresh(qc.isMutating()),
+    [qc, poll],
+  );
+  useSyncExternalStore(subscribeGate, getGateSnapshot);
   return useQuery({
     queryKey: queryKeys.customerTickets(customerId, scope, cls),
     queryFn: ({ signal }) => {
@@ -3525,15 +3539,20 @@ export function useCustomerTickets(
     },
     enabled,
     staleTime: 30_000,
-    // The first `refetchInterval` in the app — keep it scoped to this hook
-    // only. Backs the Tickets tab's "refreshed every 5 minutes" promise
+    // A 60 s poll scoped to this hook (the project queries use
+    // `useLiveRefresh` instead). Backs the Tickets tab's "refreshed every 5 minutes" promise
     // (docs/archive/plans/itop-integration-spec.md's mockup) while resting on
     // top of the backend's own sync cadence; `refetchIntervalInBackground:
     // false` so a backgrounded tab stops polling. `poll` defaults false so
     // CustomerDetail.tsx's own tab-visibility gate call (every customer page
     // load) doesn't quietly turn into a background poll for every visitor —
     // only TicketsTab.tsx's own call (the tab actually open) passes `true`.
-    refetchInterval: poll ? 60_000 : false,
+    // The poll holds off while a board drag or a mutation is live
+    // (`shouldPauseRefresh`), so a refetch never re-renders the ticket board
+    // under the cursor.
+    refetchInterval: () =>
+      poll && !shouldPauseRefresh(qc.isMutating()) ? 60_000 : false,
+    refetchOnWindowFocus: () => !shouldPauseRefresh(qc.isMutating()),
     refetchIntervalInBackground: false,
   });
 }
@@ -4457,6 +4476,8 @@ export interface ItopProbeResult {
   name: string;
   ok: boolean;
   message: string;
+  /** An optional probe: a failure is shown but does not fail the connection test. */
+  informational?: boolean;
 }
 
 export interface ItopSettings {

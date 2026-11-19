@@ -814,6 +814,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
               projectId={projectId}
               selectedIds={task.labels.map((l) => l.id)}
               onChange={canEdit ? (ids) => patch({ labelIds: ids }) : () => {}}
+              canCreate={canEdit}
             />
           </div>
 

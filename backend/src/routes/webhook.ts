@@ -14,12 +14,14 @@ import { HttpError } from "../http/errors.js";
 import { getItopConfig } from "../lib/itop/config.js";
 import { open, SecretBoxError } from "../lib/secretBox.js";
 import { requestSync } from "../lib/itop/scheduler.js";
+import { createRateLimiter, rateLimitKey } from "../http/rateLimit.js";
 
 export const webhookRouter = Router();
 
 const WEBHOOK_SECRET_HEADER = "X-Solvro-Webhook-Secret";
 const RATE_LIMIT_MAX_ACCEPTED = 6;
 const RATE_LIMIT_MAX_ALL_CALLS = 60;
+const RATE_LIMIT_MAX_PER_IP = 30;
 const RATE_LIMIT_WINDOW_MS = 60_000;
 const REJECTION_WARN_INTERVAL_MS = 60_000;
 
@@ -27,6 +29,11 @@ const REJECTION_WARN_INTERVAL_MS = 60_000;
 // timestamps — a call rejected for a bad/missing secret never counts
 // against this budget, only a call that would otherwise trigger a sync.
 let acceptedAt: number[] = [];
+
+// Per-client-IP window over every call, checked before the global window: one
+// flooding client exhausts its own budget, not everyone's (ISS-130). Sized
+// below the global window, which stays as the overall ceiling.
+const perIpLimiter = createRateLimiter({ limit: RATE_LIMIT_MAX_PER_IP, windowMs: RATE_LIMIT_WINDOW_MS });
 
 // A second, much wider sliding window over EVERY call to this route
 // (accepted or not) — checked first, before the config read and the AES
@@ -54,6 +61,7 @@ let rejectionWarnCallsForTests = 0;
 export function resetItopWebhookRateLimitForTests(): void {
   acceptedAt = [];
   allCallsAt = [];
+  perIpLimiter.reset();
   lastRejectionWarnAt = 0;
   rejectionsSinceLastWarn = 0;
   rejectionWarnCallsForTests = 0;
@@ -82,6 +90,14 @@ function warnRejectedSecret(): void {
 }
 
 webhookRouter.post("/itop", async (req, res) => {
+  res.setHeader("Cache-Control", "no-store");
+  res.setHeader("X-Robots-Tag", "noindex");
+  // Per-IP window first: a throttled client never spends the shared budget.
+  const { blocked, retryAfterSec } = perIpLimiter.hit(rateLimitKey(req.ip));
+  if (blocked) {
+    res.setHeader("Retry-After", String(retryAfterSec));
+    throw new HttpError(429, "rate_limited", "Too many webhook calls");
+  }
   // Cheapest check first, before any config read or decrypt: a flood (bad
   // secret or otherwise) is capped well ahead of the accepted-call budget.
   const now = Date.now();

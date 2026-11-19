@@ -87,6 +87,7 @@ const ColumnContext = createContext<{
 
 const ItemContext = createContext<{
   listeners: DraggableSyntheticListeners | undefined
+  attributes?: DraggableAttributes // SOLVRO PATCH: a11y attributes travel to the handle
   isDragging?: boolean
   disabled?: boolean
 }>({
@@ -793,7 +794,7 @@ function KanbanItem({
         "data-disabled": disabled,
         ref: setNodeRef,
         style,
-        ...attributes,
+        // SOLVRO PATCH: dnd-kit attributes (role=button, tabIndex 0) go on the handle, not the row
         className: cn(
           isSortableDragging && "opacity-50 z-50",
           disabled && "opacity-50",
@@ -807,7 +808,7 @@ function KanbanItem({
       value={
         isOverlay
           ? { listeners: undefined, isDragging: true, disabled: false }
-          : { listeners, isDragging: isItemDragging, disabled }
+          : { listeners, attributes, isDragging: isItemDragging, disabled } // SOLVRO PATCH
       }
     >
       {useRender({
@@ -829,12 +830,14 @@ function KanbanItemHandle({
   cursor = true,
   ...props
 }: KanbanItemHandleProps) {
-  const { listeners, isDragging, disabled } = useContext(ItemContext)
+  const { listeners, attributes, isDragging, disabled } = useContext(ItemContext) // SOLVRO PATCH
 
   const defaultProps = {
     "data-slot": "kanban-item-handle",
     "data-dragging": isDragging,
     "data-disabled": disabled,
+    // SOLVRO PATCH: the handle is the focusable keyboard activator; omitted when disabled or in the overlay
+    ...(disabled ? undefined : attributes),
     ...listeners,
     className: cn(
       cursor && (isDragging ? "cursor-grabbing!" : "cursor-grab!"),

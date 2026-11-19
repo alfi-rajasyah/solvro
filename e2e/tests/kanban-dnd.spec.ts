@@ -193,6 +193,43 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     expect(order.indexOf("Gamma")).toBeLessThan(order.indexOf("Alpha"));
   });
 
+  test("keyboard drag via the handle: Beta -> next column with Space, ArrowRight, Space", async ({
+    page,
+    seededProject,
+  }) => {
+    await openKanban(page, seededProject.projectId);
+
+    // The handle is the focusable activator (role=button, tabindex 0); the
+    // card row itself is not in the tab order.
+    const card = page
+      .locator('[data-slot="kanban-item"]')
+      .filter({ has: page.getByText("Beta", { exact: true }) })
+      .first();
+    await expect(card).not.toHaveAttribute("tabindex", /.*/);
+    const handle = card.getByRole("button", { name: "Drag to reorder", exact: true });
+    await handle.focus();
+    await expect(handle).toBeFocused();
+
+    // Wait for the sensor to attach before moving (see the subtask keyboard
+    // test below): dnd-kit's live region turns non-empty on pick-up.
+    const status = page.locator('[id^="DndLiveRegion"]').first();
+    await page.keyboard.press("Space");
+    await expect(status).not.toBeEmpty();
+    await page.keyboard.press("ArrowRight");
+    await page.waitForTimeout(300);
+    await page.keyboard.press("Space");
+
+    await expect
+      .poll(
+        async () => {
+          const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
+          return byTitle(tasks, "Beta")?.status;
+        },
+        { timeout: 10_000 },
+      )
+      .toBe("IN_PROGRESS");
+  });
+
   test("cross-column drag: Beta -> In Progress column", async ({ page, seededProject }) => {
     await openKanban(page, seededProject.projectId);
 
@@ -454,27 +491,12 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // `arrayMove` swap cancels the move outright (zero PATCH — the captured
     // failure this fix addresses).
     //
-    // The prescribed fix is a KEYBOARD drag — dnd-kit's KeyboardSensor +
-    // sortableKeyboardCoordinates ARE wired in reui/kanban.tsx (`useSensors`
-    // includes `useSensor(KeyboardSensor, ...)`), and `KeyboardSensor
-    // .activators` is `[{ eventName: "onKeyDown", ... }]`. Investigated
-    // interactively against the running dev server before writing this:
-    // `attributes` (role="button", tabIndex=0 — what makes an element
-    // focusable/Tab-reachable) is spread only onto `KanbanItem`'s OUTER
-    // wrapper (reui/kanban.tsx ~line 796, `[data-slot="kanban-item"]`),
-    // while `listeners` (the actual onKeyDown activator) reaches only
-    // `KanbanItemHandle` via `ItemContext` (~line 838) and carries no
-    // tabIndex/role of its own. Confirmed via direct DOM inspection: the
-    // handle (`[aria-label="Drag to reorder"]`) has neither `tabindex` nor
-    // `role`, so it can never become `document.activeElement` — clicking it
-    // moves focus to the outer item wrapper instead, and pressing Space
-    // there never sets `data-dragging` because the wrapper has no onKeyDown
-    // listener. With `attributes` and `listeners` split across two different
-    // DOM nodes, no real keyboard interaction (Tab, click-then-Space) can
-    // ever reach the sensor's activator — keyboard drag is a dead end here,
-    // not a gesture-timing issue. Falling back to the prescribed mouse
-    // alternative: drag PAST the target's card so the pointer lands solidly
-    // below the post-reshuffle boundary rather than riding it.
+    // This test was written when keyboard drag on a Kanban card was
+    // unreachable (attributes on the row, listeners on the handle). The
+    // vendored Kanban now puts both on the handle (ISS-107), and the
+    // "keyboard drag via the handle" test above covers that path. This one
+    // keeps the mouse path: drag PAST the target's card so the pointer lands
+    // solidly below the post-reshuffle boundary rather than riding it.
     //
     // T10 stabilization: a height-*multiplied* overshoot (originally 1.5x)
     // doesn't scale safely — against a real 3-card TODO column where the
