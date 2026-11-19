@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createFilter, findFilterMatch, type Filter } from "./filters";
+import { createFilter, findFilterMatch, type Filter } from "@/components/reui/filters";
 
 /**
  * Deterministic regression proof for the duplicate-chip idempotence guard

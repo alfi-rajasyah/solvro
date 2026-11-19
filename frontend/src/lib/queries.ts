@@ -2305,28 +2305,27 @@ export function useDuplicateTask(projectId: number) {
   return useMutation({
     mutationFn: (taskId: number) =>
       apiRequest<Task>(`/tasks/${taskId}/duplicate`, { method: "POST" }),
-    // Returning the Promise.all here (rather than firing invalidations without
-    // awaiting) makes React Query await the refetches before resolving
-    // mutateAsync — TaskPanel's handleDuplicate awaits the copy and then
-    // re-targets the panel at it, so the refetched list is already in cache
-    // by the time that happens, avoiding a "Loading task…" flash.
-    onSuccess: (data) =>
-      Promise.all([
-        qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) }),
-        qc.invalidateQueries({ queryKey: ["tasks"] }),
-        qc.invalidateQueries({ queryKey: queryKeys.overview }),
-        invalidateProjectHealth(qc, projectId),
-        invalidateProjectActivity(qc, projectId),
-        // Same rationale as useUpdateTask/useDeleteTask above — a duplicated
-        // task can newly appear in the Daily Review page's attention lists.
-        qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot }),
-        // lib/duplicate.ts copies keep `epicId` (§4) — the duplicate can
-        // count toward the same epic's total.
-        qc.invalidateQueries({ queryKey: queryKeys.projectEpics(projectId) }),
-        ...(data.epicId !== null
-          ? [qc.invalidateQueries({ queryKey: queryKeys.epic(data.epicId) })]
-          : []),
-      ]),
+    // Only the projectTasks refetch is returned, so only it is awaited: React
+    // Query holds mutateAsync until it settles, and TaskPanel's handleDuplicate
+    // re-targets the panel at the copy afterwards, so the refetched list is
+    // already in cache by then (no "Loading task…" flash). The rest fire
+    // un-awaited so isPending does not wait on them.
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: queryKeys.overview });
+      invalidateProjectHealth(qc, projectId);
+      invalidateProjectActivity(qc, projectId);
+      // Same rationale as useUpdateTask/useDeleteTask above — a duplicated
+      // task can newly appear in the Daily Review page's attention lists.
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      // lib/duplicate.ts copies keep `epicId` (§4) — the duplicate can
+      // count toward the same epic's total.
+      qc.invalidateQueries({ queryKey: queryKeys.projectEpics(projectId) });
+      if (data.epicId !== null) {
+        qc.invalidateQueries({ queryKey: queryKeys.epic(data.epicId) });
+      }
+      return qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
+    },
   });
 }
 
@@ -2483,26 +2482,24 @@ export function useDuplicateSection(projectId: number) {
       apiRequest<{ section: Section; taskCount: number }>(`/sections/${sectionId}/duplicate`, {
         method: "POST",
       }),
-    // Same shape as useDuplicateTask above — Promise.all so the invalidated
-    // queries have refetched before mutateAsync resolves, plus
-    // projectSections (the new group header) alongside the task-shaped
-    // invalidations every task-tree write already does.
-    onSuccess: () =>
-      Promise.all([
-        qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) }),
-        qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) }),
-        qc.invalidateQueries({ queryKey: ["tasks"] }),
-        qc.invalidateQueries({ queryKey: queryKeys.overview }),
-        invalidateProjectHealth(qc, projectId),
-        qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot }),
-        invalidateProjectActivity(qc, projectId),
-        // The section's duplicated tasks keep their `epicId` (§4) — their
-        // epics' done/total counts can change. Which epics is unknown here
-        // (the response is just `{ section, taskCount }`), so bust every
-        // open epic-detail cache alongside the list.
-        qc.invalidateQueries({ queryKey: queryKeys.projectEpics(projectId) }),
-        qc.invalidateQueries({ queryKey: ["epics"] }),
-      ]),
+    // Same shape as useDuplicateTask above — only the projectTasks refetch is
+    // returned (awaited); projectSections (the new group header) and the
+    // task-shaped invalidations every task-tree write does fire un-awaited.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: queryKeys.overview });
+      invalidateProjectHealth(qc, projectId);
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      invalidateProjectActivity(qc, projectId);
+      // The section's duplicated tasks keep their `epicId` (§4) — their
+      // epics' done/total counts can change. Which epics is unknown here
+      // (the response is just `{ section, taskCount }`), so bust every
+      // open epic-detail cache alongside the list.
+      qc.invalidateQueries({ queryKey: queryKeys.projectEpics(projectId) });
+      qc.invalidateQueries({ queryKey: ["epics"] });
+      return qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
+    },
   });
 }
 

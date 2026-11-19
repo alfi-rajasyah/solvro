@@ -115,6 +115,7 @@ if [ "$F_BACK" -eq 1 ]; then
 fi
 if [ "$F_FRONT" -eq 1 ]; then
   run_gate frontend-typecheck docker compose exec -T frontend npm run typecheck
+  run_gate frontend-lint docker compose exec -T frontend npm run lint
   run_gate frontend-vitest docker compose exec -T frontend npm test
   # East-of-UTC run: pins the date-contract invariant (dateField.ts) — a reintroduced
   # local-midnight serialization is invisible under the container's default UTC clock.

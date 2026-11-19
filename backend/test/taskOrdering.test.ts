@@ -109,9 +109,19 @@ describe("task creation appends to sibling list", () => {
     const patchRes = await patchTask(t1.id, { position: 0 });
     expect(patchRes.status).toBe(200);
 
-    const res = await request(app).get("/tasks").set("Authorization", `Bearer ${token}`);
+    // Scope the global list to this test's own project through a dedicated
+    // customer, so rows from other tests/files can never crowd the response
+    // window or interleave with the two rows asserted on.
+    const customer = await prisma.customer.create({
+      data: { name: `Ordering Co ${Date.now()}-${Math.random()}`, description: "" },
+    });
+    await prisma.project.update({ where: { id: projectId }, data: { customerId: customer.id } });
+
+    const res = await request(app)
+      .get(`/tasks?customerId=${customer.id}`)
+      .set("Authorization", `Bearer ${token}`);
     expect(res.status).toBe(200);
-    const ids = (res.body as TaskRow[]).map((t) => t.id).filter((id) => id === t0.id || id === t1.id);
+    const ids = (res.body as TaskRow[]).map((t) => t.id);
     expect(ids).toEqual([t1.id, t0.id]);
   });
 });

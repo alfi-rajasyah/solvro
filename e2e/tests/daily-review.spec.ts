@@ -1,6 +1,6 @@
 import type { Locator, Page } from "@playwright/test";
 import { apiBase, expect, loginViaUi, test } from "../fixtures/test";
-import { createTask, isoDateOffset } from "../fixtures/seed";
+import { createTask, isoDateOffset, login } from "../fixtures/seed";
 
 // Daily Review v2 (docs/archive/plans/daily-review-v2-spec.md §9; weekly sync tables
 // per docs/archive/plans/weekly-sync-tables.md): one end-to-end pass through the
@@ -27,13 +27,12 @@ import { createTask, isoDateOffset } from "../fixtures/seed";
 // pollution approach pipeline-board.spec.ts uses for its column-value-sum
 // assertions (a fresh API read rather than a hardcoded total).
 //
-// Note for whoever re-runs this spec repeatedly against the same dev DB:
-// unlike other fixtures (which leave their seeded project PLANNING and so
-// invisible to Daily Review), this spec flips its project ACTIVE and its
-// customer's `tamId` to the admin permanently — there is no DELETE
-// endpoint for either, so each run leaves one more ACTIVE project/customer
-// in scope forever. The baseline-delta approach above is exactly what
-// keeps the assertions correct regardless of how much of that accumulates.
+// Cleanup: this spec flips its seeded project ACTIVE and creates a customer
+// with `tamId` set to the admin, which would put both in scope for every
+// later run. The afterAll below deletes the project and the customer through
+// the existing DELETE routes so the shared dev DB does not accumulate them.
+// The baseline-delta approach above still keeps the assertions correct if a
+// run is interrupted before cleanup.
 //
 // e2e/ is its own standalone TS project with no dependency on frontend/src
 // (confirmed precedent: pipeline-board.spec.ts's header comment) — the ISO
@@ -42,6 +41,25 @@ import { createTask, isoDateOffset } from "../fixtures/seed";
 // lib/isoWeek.ts.
 
 test.describe.configure({ mode: "serial" });
+
+// Collected by the test, torn down once in afterAll (project first: its
+// customerId link is SetNull, but deleting the project first keeps the
+// customer delete independent of it).
+let createdProjectId: number | null = null;
+let createdCustomerId: number | null = null;
+
+test.afterAll(async ({}, workerInfo) => {
+  if (createdProjectId === null && createdCustomerId === null) return;
+  const base = new URL(workerInfo.project.use.baseURL ?? "http://localhost:8080").origin;
+  const { token } = await login(base);
+  const headers = { Authorization: `Bearer ${token}` };
+  if (createdProjectId !== null) {
+    await fetch(`${base}/api/projects/${createdProjectId}`, { method: "DELETE", headers }).catch(() => {});
+  }
+  if (createdCustomerId !== null) {
+    await fetch(`${base}/api/customers/${createdCustomerId}`, { method: "DELETE", headers }).catch(() => {});
+  }
+});
 
 async function readCount(page: Page, testId: string): Promise<number> {
   const el = page.getByTestId(testId);
@@ -148,6 +166,8 @@ test.describe("Daily Review v2", () => {
     });
     expect(customerRes.ok, `create customer: ${customerRes.status}`).toBeTruthy();
     const customer = (await customerRes.json()) as { id: number };
+    createdCustomerId = customer.id;
+    createdProjectId = projectId;
 
     const projectRes = await fetch(`${base}/api/projects/${projectId}`, {
       method: "PATCH",
