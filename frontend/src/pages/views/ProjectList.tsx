@@ -1115,7 +1115,7 @@ function SubtaskRow({
         {done && <span aria-hidden="true" className="material-symbols-outlined text-meta leading-none">check</span>}
       </button>
       <span className="flex min-w-0 items-center gap-1">
-        <span className={["truncate", done || task.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
+        <span className={["truncate font-[450]", done || task.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
           {task.title}
         </span>
         {task.isCriticalPath && <CriticalPathMark variant="glyph" className="shrink-0" />}

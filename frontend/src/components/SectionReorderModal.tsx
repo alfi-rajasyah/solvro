@@ -70,6 +70,14 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // After a failed save, follow the sections cache: a later drop's optimistic
+  // write (and the re-fetch after each settle) is then reflected here instead
+  // of leaving the modal on a stale local order.
+  useEffect(() => {
+    if (!saveError || !sections) return;
+    setOrder([...sections].sort((a, b) => a.position - b.position || a.id - b.id));
+  }, [saveError, sections]);
+
   function handleValueCommit(_value: Section[], meta: SortableCommitMeta<Section>) {
     const moved = meta.previousValue[meta.activeIndex];
     if (!moved) return;
@@ -78,13 +86,13 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
     // (backend/src/routes/sections.ts), so the frontend never fans out N
     // PATCHes. useUpdateSection's onSettled invalidates projectSections,
     // which refetches the re-packed order for the List view.
-    setSaveError(false);
     // mutateAsync, not mutate(…, { onError }): mutate-level callbacks only fire
     // for the latest call on this hook. The hook's own onError/onSettled have
     // restored and re-fetched the sections cache before this rejects, so the
     // cache read below is the server's order; the modal's local order follows it.
     updateSection
       .mutateAsync({ id: moved.id, patch: { position: meta.overIndex } })
+      .then(() => setSaveError(false))
       .catch(() => {
         const fresh = qc.getQueryData<Section[]>(queryKeys.projectSections(projectId));
         if (fresh) {
@@ -115,21 +123,7 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
       onClose={handleModalClose}
       title="Reorder sections"
       widthClass="max-w-md"
-      customHeader={
-        <header className="flex items-center justify-between border-b border-outline-variant px-5 py-3.5">
-          <span className="font-display text-[14px] font-semibold text-on-surface">
-            Reorder sections
-          </span>
-          <button
-            type="button"
-            onClick={handleCloseButton}
-            className="tap-target flex h-7 w-7 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
-            aria-label="Close"
-          >
-            <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
-          </button>
-        </header>
-      }
+      onCloseButton={handleCloseButton}
     >
       {saveError && (
         <p role="alert" className="mb-3 text-sm text-error">

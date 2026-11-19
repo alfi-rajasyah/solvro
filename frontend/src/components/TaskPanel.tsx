@@ -227,8 +227,17 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
         className="fixed right-0 top-14 bottom-0 z-40 flex w-full flex-col border-l border-outline-variant bg-surface-container px-5 py-4 md:w-[380px]"
       >
         <div className="flex items-center justify-between">
-          <span className="text-sm text-on-surface-variant">
-            {notFound ? "Task not found" : loadFailed ? "Could not load the task." : "Loading task…"}
+          <span role="status" className="flex items-center gap-3 text-sm text-on-surface-variant">
+            {notFound ? "Task not found." : loadFailed ? "Could not load the task." : "Loading task…"}
+            {loadFailed && (
+              <button
+                type="button"
+                onClick={() => void refetchTasks()}
+                className={`rounded-sm font-semibold text-primary hover:underline ${FIELD_FOCUS}`}
+              >
+                Try again
+              </button>
+            )}
           </span>
           <button
             type="button"
@@ -239,15 +248,6 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
             <span aria-hidden="true" className="material-symbols-outlined text-base">close</span>
           </button>
         </div>
-        {loadFailed && (
-          <button
-            type="button"
-            onClick={() => void refetchTasks()}
-            className={`mt-3 self-start rounded-sm border border-outline-variant px-3 py-1.5 text-xs font-semibold text-on-surface-variant transition-colors hover:border-primary hover:text-primary ${FIELD_FOCUS}`}
-          >
-            Try again
-          </button>
-        )}
       </aside>
     );
   }

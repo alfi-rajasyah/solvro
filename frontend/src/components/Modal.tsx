@@ -6,6 +6,12 @@ import { useDialogFocus } from "@/hooks/useDialogFocus";
 interface ModalProps {
   open: boolean;
   onClose: () => void;
+  /**
+   * What the header X calls instead of `onClose` (Escape and a backdrop click
+   * still call `onClose`). For a dialog that holds those back mid-action but
+   * must always keep one way out.
+   */
+  onCloseButton?: () => void;
   title: string;
   customHeader?: ReactNode;
   children: ReactNode;
@@ -16,6 +22,7 @@ interface ModalProps {
 export function Modal({
   open,
   onClose,
+  onCloseButton,
   title,
   customHeader,
   children,
@@ -60,7 +67,7 @@ export function Modal({
             </span>
             <button
               type="button"
-              onClick={onClose}
+              onClick={onCloseButton ?? onClose}
               className="tap-target flex h-7 w-7 items-center justify-center rounded-sm text-on-surface-variant hover:bg-surface-container hover:text-on-surface"
               aria-label="Close"
             >

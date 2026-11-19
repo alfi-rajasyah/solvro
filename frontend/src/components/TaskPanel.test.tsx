@@ -67,7 +67,7 @@ describe("TaskPanel load failure (ISS-067)", () => {
       return Promise.reject(new ApiError(500, "boom", null));
     });
     renderPanel();
-    expect(await screen.findByText("Could not load the task.")).toBeTruthy();
+    expect((await screen.findByText("Could not load the task.")).closest('[role="status"]')).not.toBeNull();
     expect(screen.queryByText("Loading task…")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Try again" }));
     expect(await screen.findByText("Parent task")).toBeTruthy();

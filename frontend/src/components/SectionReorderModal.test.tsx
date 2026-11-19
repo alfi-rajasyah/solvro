@@ -48,7 +48,7 @@ function renderModal(onClose = vi.fn()) {
       <SectionReorderModal projectId={1} open onClose={onClose} />
     </QueryClientProvider>,
   );
-  return { ...utils, onClose };
+  return { ...utils, onClose, qc };
 }
 
 beforeEach(() => {
@@ -90,6 +90,30 @@ describe("SectionReorderModal", () => {
     await screen.findByRole("alert");
     await waitFor(() => {
       expect(sortableProps.value.map((s) => s.name)).toEqual(["Alpha", "Beta", "Gamma"]);
+    });
+  });
+
+  it("keeps following the cache after a failure, so a later move shows (ISS-192)", async () => {
+    apiRequest.mockImplementation((path: string, opts?: { method?: string }) => {
+      if (opts?.method === "PATCH") return Promise.reject(new Error("save failed"));
+      if (path === "/projects/1/sections") return Promise.resolve(SERVER);
+      return Promise.resolve(null);
+    });
+    const { qc } = renderModal();
+    act(() => {
+      sortableProps.onValueCommit?.([SERVER[1], SERVER[2], SERVER[0]], {
+        previousValue: SERVER,
+        activeIndex: 0,
+        overIndex: 2,
+      });
+    });
+    await screen.findByRole("alert");
+    // A second drop's optimistic write lands in the cache.
+    act(() => {
+      qc.setQueryData(queryKeys.projectSections(1), [sec(2, "Beta", 0), sec(1, "Alpha", 1), sec(3, "Gamma", 2)]);
+    });
+    await waitFor(() => {
+      expect(sortableProps.value.map((s) => s.name)).toEqual(["Beta", "Alpha", "Gamma"]);
     });
   });
 });
