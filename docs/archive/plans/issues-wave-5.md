@@ -1,6 +1,6 @@
 # Issues wave 5: exports, users and access, small UI
 
-Status: in progress (2026-11-19), branch `fix/issues-wave-5`. Archive path once shipped: `docs/archive/plans/issues-wave-5.md`.
+Status: shipped 2026-11-19, branch `fix/issues-wave-5`. Archive path: `docs/archive/plans/issues-wave-5.md`.
 
 Lane P. One PR into `develop`; each group is one task and one commit.
 
@@ -27,4 +27,7 @@ O, P and S share no files. Backend tests run only in P. Frontend typechecks are 
 
 ## Records
 
-(Filled in at integration.)
+- Commits: S `8339f1c`, O `a902632`, P `bfae8f7`, adopt navigation `f47c73f`, ISS-074 `362475e` (needed the GET /tasks project status, done after P freed queries.ts), S nits `bdbbd2c`, O nits `33fd96a`, P fixes and docs `294e2b9`, copy and docs `a63eb89`, same-account token swap (the last code commit).
+- Phase review (opus): 0 blockers, 3 should-fix (custom roles KPI counted seeded roles; log redaction missed auth headers; cross-tab adopt could write the old user back), 7 nits. All fixed. Re-check: 1 should-fix (a same-account token change reloaded other tabs), fixed; copy and changelog nits fixed.
+- Closed 11: ISS-007, 012, 060, 063, 070, 071, 074, 075, 138, 139, 191. ISS-009 narrowed to AAD and key rotation.
+- Delivery Gate: PASS. Light and dark, 375px and 1280px: the members dialog shows the SA sentence; the Tasks grid shows Critical Path marks; no page side-scroll. The PDF hatch and caps were checked by rendering before and after PDFs (pdf.js). The Custom roles count, sync-modal marking and cross-tab behaviour are covered by tests.
