@@ -3552,6 +3552,7 @@ export function useCustomerTickets(
     // under the cursor.
     refetchInterval: () =>
       poll && !shouldPauseRefresh(qc.isMutating()) ? 60_000 : false,
+    refetchOnWindowFocus: () => !shouldPauseRefresh(qc.isMutating()),
     refetchIntervalInBackground: false,
   });
 }

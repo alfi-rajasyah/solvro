@@ -15,14 +15,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — Security & auth
 
-### ISS-001 · P2 · Label-route permission asymmetry
-
-- **Type:** bug · **Found:** 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** projectsRouter.post('/:id/labels') in backend/src/routes/projects.ts (line ~1276) vs labels.ts:37,53
-- **Problem:** Label creation needs project:write while label edit/delete need task:write; inconsistent for custom roles with granular permissions.
-- **Why deferred / fix direction:** Latent (TAM holds both, ADMIN wildcard). Align creation to task:write with vitest coverage.
-- **Source:** snapshot line 502, section "Gantt GH #58 deferred findings (2026-07-24)"
-
 ### ISS-002 · P2 · Token-ownership check: residual risk on some iTop installs
 
 - **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -129,14 +121,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Replace with a searchable picker or paginate; shares its root with the unpaginated GET /users entry.
 - **Source:** snapshot line 1426, section "Issues Sweep #1 — residuals (2026-08-02)"
 
-### ISS-016 · P2 · Full-sync removal passes bind one parameter per row (notIn)
-
-- **Type:** bug · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** syncTimeEntries (line ~752) and syncTickets (line ~913) removal passes in backend/src/lib/itop/sync.ts
-- **Problem:** notIn with a large seenIds set can exceed Postgres's bind-parameter limit; the surrounding catch only logs, so removal is silently skipped and stale rows accumulate.
-- **Why deferred / fix direction:** Stamp rows with syncRunId/seenAt during upsert and delete WHERE seenAt < runStart.
-- **Source:** snapshot line 1949, section "iTop integration (Utilization) — deferred findings (ported 2026-10-04)"
-
 ### ISS-017 · P3 · Offboarding and user delete update customers one at a time
 
 - **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -210,14 +194,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Source:** snapshot line 2386, section "Application review 2026-10-22 — remaining open items"
 
 ## Open — Backend/API
-
-### ISS-029 · P2 · Section and epic create compute max(position)+1 outside the project lock
-
-- **Type:** bug · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** POST /:id/sections (line ~720) and POST /:id/epics (line ~790) in backend/src/routes/projects.ts
-- **Problem:** Two concurrent creates read the same max and get the same position.
-- **Why deferred / fix direction:** Take lockProject inside a transaction around the aggregate and create, as the other project writes do.
-- **Source:** snapshot line 2387, section "Application review 2026-10-22 — remaining open items"
 
 ### ISS-030 · P2 · Offboarding endpoint accepts a receiver whose role has zero permissions
 
@@ -588,14 +564,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — Accessibility & tokens
 
-### ISS-077 · P2 · Every SortableItem is in the tab order, even for read-only viewers
-
-- **Type:** bug · **Found:** 2026-07-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** SortableItem in frontend/src/components/reui/sortable.tsx (line ~359)
-- **Problem:** dnd-kit attributes make each row focusable regardless of whether a handle is rendered, so read-only users tab through inert rows. The row's accessible name also concatenates its children.
-- **Why deferred / fix direction:** Patch the vendored file with a SOLVRO PATCH marker, bump EXPECTED_SORTABLE_PATCHES and add a CHANGELOG entry; or move attributes onto the handle. Spine file, needs instant review.
-- **Source:** snapshot line 1098, section "Sortable reorder (sections + subtasks) — deferred findings (2026-07-30)"; merged duplicates at snapshot lines 1487
-
 ### ISS-078 · P2 · Light-theme hover contrast: hover:bg-primary-container with text-on-primary
 
 - **Type:** bug · **Found:** 2026-08-15 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -832,22 +800,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — Boards & drag
 
-### ISS-107 · P2 · Vendored Kanban keyboard DnD unreachable
-
-- **Type:** bug · **Found:** 2026-07-27 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** KanbanItem and KanbanItemHandle in frontend/src/components/reui/kanban.tsx (lines ~796, ~838)
-- **Problem:** Mouse and touch drag work, keyboard drag cannot be reached (KeyboardSensor is configured at :219 but the activator is not focusable).
-- **Why deferred / fix direction:** Move listeners onto the focusable wrapper via a SOLVRO PATCH (needs CHANGELOG entry), or report upstream.
-- **Source:** snapshot line 555, section "Kanban → ReUI swap — deferred findings (2026-07-27)"
-
-### ISS-108 · P2 · iTop ticket board is not wired into the drag guard
-
-- **Type:** bug · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** TicketBoard onDragStart (frontend/src/components/itop/board/TicketBoard.tsx, line ~238); useCustomerTickets (frontend/src/lib/queries.ts, line ~3528)
-- **Problem:** The 60 s refetch can re-render the board under the cursor mid-drag; the other boards pause refresh while dragging.
-- **Why deferred / fix direction:** Call dragActivity.begin/end and gate the interval on shouldPauseRefresh; fix the stale comment.
-- **Source:** snapshot line 2340, section "Customer-edition port — deferred findings (2026-10-05)"
-
 ### ISS-109 · P3 · Vendored Kanban: drop on displaced card can cancel a one-slot move
 
 - **Type:** watch · **Found:** 2026-07-27 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -903,6 +855,27 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** The sortable header path supports left and right alignment only, so ProjectRisks Probability and Impact columns cannot be sorted and centered.
 - **Why deferred / fix direction:** Add alignCenter to the vendored header with a SOLVRO PATCH marker.
 - **Source:** snapshot line 1392, section "Issues Sweep #1 — residuals (2026-08-02)"
+
+### ISS-187 · P3 · Drag handles are not registered as the dnd-kit activator node
+
+- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `65a6c77`
+- **Where:** KanbanItem / KanbanItemHandle in frontend/src/components/reui/kanban.tsx (line ~760); SortableItem in reui/sortable.tsx
+- **Problem:** After a keyboard drop that remounts a card, dnd-kit restores focus to the first focusable element in the row. Today that is the handle in every card, so it works by chance.
+- **Why deferred / fix direction:** Pass setActivatorNodeRef through the context and set it on the handle (one more SOLVRO PATCH per file, counters bumped).
+
+### ISS-188 · P3 · Kanban drag handles are 16px touch targets
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `65a6c77`
+- **Where:** handles in frontend/src/components/itop/board/TicketCard.tsx, pipeline/OpportunityCard.tsx, kanban-v2/cards.tsx
+- **Problem:** The grip has no padding to enlarge its hit area (antislop R-03); on touch it is hard to hit.
+- **Why deferred / fix direction:** Pad the handle to a 24px or larger target without changing the icon size.
+
+### ISS-189 · P3 · Two drag-handle buttons use a different focus style from FIELD_FOCUS
+
+- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `65a6c77`
+- **Where:** handle buttons in frontend/src/components/SectionReorderModal.tsx and TaskPanel.tsx (`focus-visible:outline-ring`)
+- **Problem:** The Kanban handles now use FIELD_FOCUS (DESIGN.md §4); these two do not.
+- **Why deferred / fix direction:** Switch both to FIELD_FOCUS.
 
 ## Open — Pipeline
 
@@ -988,46 +961,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** No action until an install differs.
 - **Source:** snapshot line 2236, section "iTop integration — real-install findings (2026-09-24, ported 2026-10-04)"
 
-### ISS-129 · P3 · iTop client follows redirects, forwarding the application token
-
-- **Type:** bug · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** fetchImpl call in backend/src/lib/itop/client.ts (line ~172)
-- **Problem:** A 30x from the configured host forwards the Auth-Token header to the redirect target, including a plain http:// one that bypasses the https-only check on baseUrl. Needs a hostile or compromised iTop host.
-- **Why deferred / fix direction:** Pass redirect: 'error' to fetch.
-- **Source:** snapshot line 2297, section "Customer-edition port — deferred findings (2026-10-05)"
-
-### ISS-130 · P3 · Webhook rate limit is global, not per IP
-
-- **Type:** bug · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** rate-limit windows in backend/src/routes/webhook.ts (lines ~22-130)
-- **Problem:** An unauthenticated flood of 60 requests a minute starves legitimate iTop nudges; the sync degrades to its schedule, no data impact.
-- **Why deferred / fix direction:** Key the first window per IP via the shared limiter.
-- **Source:** snapshot line 2299, section "Customer-edition port — deferred findings (2026-10-05)"
-
-### ISS-131 · P3 · Older tickets of a newly mapped iTop organisation wait for the next full sync
-
-- **Type:** bug · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** incremental OQL in syncTickets (backend/src/lib/itop/sync.ts, line ~874); setCustomerOrgMapping (backend/src/routes/itopAdmin.ts, line ~591)
-- **Problem:** Tickets of an organisation mapped after the watermark appear only after the daily full sync or a manual Sync now, while GET /itop/status still reports ok.
-- **Why deferred / fix direction:** Force a full sync (or reset lastFullSyncAt) when a mapping is added.
-- **Source:** snapshot line 2300, section "Customer-edition port — deferred findings (2026-10-05)"
-
 ### ISS-132 · P3 · A failed iTop sync keeps half its work
 
-- **Type:** bug · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** upsertTicket (backend/src/lib/itop/sync.ts, line ~403); GET /itop/status (backend/src/routes/itop.ts, line ~207)
-- **Problem:** Rows written before a crash stay and the full-sync cleanup never runs; non-admins see no failure signal, so the Tickets tab looks fresh after a failed sync.
-- **Why deferred / fix direction:** Expose a sanitised failed-sync flag on /status and consider a per-page transaction.
-- **Source:** snapshot line 2301, section "Customer-edition port — deferred findings (2026-10-05)"
-
-### ISS-133 · P3 · 'Test connection' reports ok:false whenever TimeSpent is missing
-
-- **Type:** bug · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** probe() in backend/src/lib/itop/client.ts (line ~300); POST /admin/itop/test (backend/src/routes/itopAdmin.ts, line ~493)
-- **Problem:** Without the Time Tracking extension the whole probe fails; TimeSpent should be optional and reported as informational.
-- **Why deferred / fix direction:** Exclude TimeSpent from the aggregate ok and mark it informational.
-- **Source:** snapshot line 2302, section "Customer-edition port — deferred findings (2026-10-05)"
-
+- **Type:** bug · **Found:** 2026-10-05 · **Verified:** 2026-11-19 @ `50e3a4f`
+- **Where:** upsertTicket and the page loop in syncTickets (backend/src/lib/itop/sync.ts, line ~403, ~880)
+- **Problem:** Rows written before a crash stay and the full-sync cleanup never runs. Since 2026-11-19 GET /itop/status returns `lastSyncFailed`, but no screen shows it yet.
+- **Why deferred / fix direction:** Wrap each page's upserts in a transaction, and decide whether the Tickets tab shows a failed-sync notice.
 ### ISS-134 · P3 · Deployment note: itopUserId matching needs REST read rights on iTop's User class
 
 - **Type:** watch · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -1051,6 +990,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** A class with more than about 32,000 rows makes the NOT IN list exceed Postgres's 32,767-parameter limit and the prune fails.
 - **Why deferred / fix direction:** Trigger: an install with that many rows. Fix: prune via a temp table or unnest($1::int[]).
 - **Source:** snapshot line 2390, section "Application review 2026-10-22 — remaining open items"
+
+### ISS-186 · P3 · A full sync already running can undo the full-sync reset of a new org mapping
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `50e3a4f`
+- **Where:** setCustomerOrgMapping in backend/src/routes/itopAdmin.ts (line ~616); lastFullSyncAt write in backend/src/lib/itop/sync.ts (line ~786)
+- **Problem:** A full sync that read the customers before the mapping changed finishes and writes lastFullSyncAt, so the new org's older tickets wait up to a day again. The same run's removal pass deletes that org's tickets (older behavior).
+- **Why deferred / fix direction:** Self-heals within 24h. Write lastFullSyncAt only if it is unchanged since the run started, or request a sync after the mapping commits.
 
 ## Open — Exports & sharing
 
@@ -1288,14 +1234,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Match htmlFor per label element and require non-empty label text.
 - **Source:** snapshot line 2389, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-166 · P3 · Missing tests: withDeadlockRetry and baseline lock reorder
-
-- **Type:** test-gap · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** POST /:id/baseline in backend/src/routes/projects.ts (line ~324)
-- **Problem:** The baseline route's lockProject-first ordering has no dedicated test (the withDeadlockRetry half is covered).
-- **Why deferred / fix direction:** Add a concurrency test that locks a baseline while the project is cancelled or reactivated.
-- **Source:** snapshot line 2402, section "Project lifecycle and handover — deferred findings (2026-11-10)"
-
 ### ISS-167 · P3 · taskReorderConcurrency.test.ts:114 timed out once in a loaded gates run
 
 - **Type:** watch · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -1311,6 +1249,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** The audit's live run skipped these three surfaces.
 - **Why deferred / fix direction:** Check them in a browser at 375px in both themes.
 - **Source:** snapshot line 2425, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
+
+### ISS-190 · P3 · No DOM test environment for focus and keyboard behaviour
+
+- **Type:** decision · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `65a6c77`
+- **Where:** frontend/vitest.config.ts (node environment, `src/**/*.test.ts` only)
+- **Problem:** Question for the user: add jsdom and @testing-library as devDependencies? Today focus and keyboard behaviour can only be checked through static markup or Playwright, and hooks such as useCustomerTickets have no unit tests.
+- **Why deferred / fix direction:** New devDependencies need approval. With them, add hook and focus tests.
 
 ## Open — Dev env & ops
 
@@ -1443,3 +1388,14 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-116 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · Concurrent DELETE of two same-stage opportunities can deadlock (40P01)
 - ISS-117 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · Pipeline import preview queue has no length cap
 - ISS-119 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · Import parse silently defaults unparseable Win Probability to 50
+- ISS-001 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Label-route permission asymmetry
+- ISS-016 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Full-sync removal passes bind one parameter per row (notIn)
+- ISS-029 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Section and epic create compute max(position)+1 outside the project lock
+- ISS-077 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Every SortableItem is in the tab order, even for read-only viewers
+- ISS-107 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Vendored Kanban keyboard DnD unreachable
+- ISS-108 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · iTop ticket board is not wired into the drag guard
+- ISS-129 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · iTop client follows redirects, forwarding the application token
+- ISS-130 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Webhook rate limit is global, not per IP
+- ISS-131 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Older tickets of a newly mapped iTop organisation wait for the next full sync
+- ISS-133 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · 'Test connection' reports ok:false whenever TimeSpent is missing
+- ISS-166 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Missing tests: withDeadlockRetry and baseline lock reorder
