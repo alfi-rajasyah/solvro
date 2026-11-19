@@ -20,6 +20,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 - Frontend lint: ESLint with the React hooks rules (`rules-of-hooks`, `exhaustive-deps`) via `npm run lint` in `frontend/`, run in CI. New dev dependencies: `eslint` 10.14.0, `typescript-eslint` 8.72.1, `eslint-plugin-react-hooks` 7.1.1.
 - A few effects and memos in the Pipeline, Weekly Sync and Projects pages are explicit about their dependencies, with no behaviour change.
 - Duplicating a task or section now waits only on the task list refresh before finishing; the other cache refreshes run in the background.
+- Duplicating a section also waits for the section list refresh, so its new group appears before the action finishes.
 - The cross-project task ordering test is scoped to its own project, so other rows cannot make it flaky.
 - The Daily Review end-to-end spec deletes the project and customer it creates; two specs use the shared task helper instead of private copies; the vendored filters test moved out of `components/reui/` to `lib/`.
 

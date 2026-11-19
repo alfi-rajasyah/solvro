@@ -2482,11 +2482,10 @@ export function useDuplicateSection(projectId: number) {
       apiRequest<{ section: Section; taskCount: number }>(`/sections/${sectionId}/duplicate`, {
         method: "POST",
       }),
-    // Same shape as useDuplicateTask above — only the projectTasks refetch is
-    // returned (awaited); projectSections (the new group header) and the
-    // task-shaped invalidations every task-tree write does fire un-awaited.
+    // Like useDuplicateTask above, but projectSections is awaited too: the
+    // list groups by sections, so isPending holds until the copy (new group
+    // header and its tasks) is visible. The rest fire un-awaited.
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
       qc.invalidateQueries({ queryKey: ["tasks"] });
       qc.invalidateQueries({ queryKey: queryKeys.overview });
       invalidateProjectHealth(qc, projectId);
@@ -2498,7 +2497,10 @@ export function useDuplicateSection(projectId: number) {
       // open epic-detail cache alongside the list.
       qc.invalidateQueries({ queryKey: queryKeys.projectEpics(projectId) });
       qc.invalidateQueries({ queryKey: ["epics"] });
-      return qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
+      return Promise.all([
+        qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) }),
+        qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) }),
+      ]);
     },
   });
 }

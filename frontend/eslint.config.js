@@ -8,11 +8,14 @@ export default [
     files: ["src/**/*.{ts,tsx}"],
     languageOptions: { parser: tseslint.parser },
     plugins: { "react-hooks": reactHooks, "@typescript-eslint": tseslint.plugin },
-    // Disable comments for rules this config does not enable (vendored files) stay valid and silent.
-    linterOptions: { reportUnusedDisableDirectives: "off" },
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
     },
+  },
+  {
+    // Vendored files carry disables for rules this config does not enable.
+    files: ["src/components/{ui,reui}/**/*.{ts,tsx}"],
+    linterOptions: { reportUnusedDisableDirectives: "off" },
   },
 ];
