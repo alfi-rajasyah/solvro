@@ -193,6 +193,22 @@ describe("POST /tasks/:id/duplicate", () => {
     expect(copy.section).toEqual({ id: section, name: "Kickoff", position: 0, color: "#94a3b8" });
   });
 
+  it("copies a task whose assignee was deactivated as unassigned, keeping an active assignee", async () => {
+    const projectId = await createProject(admin.userId);
+    const gone = await createUserWithRole("TAM");
+    const stays = await createUserWithRole("TAM");
+    const sourceGone = await createTask(projectId, admin.token, { title: "Gone", assignedToId: gone.userId });
+    const sourceStays = await createTask(projectId, admin.token, { title: "Stays", assignedToId: stays.userId });
+    await prisma.user.update({ where: { id: gone.userId }, data: { active: false } });
+
+    const copyGone = (await duplicateTask(sourceGone.id, admin.token)).body as TaskRow;
+    const copyStays = (await duplicateTask(sourceStays.id, admin.token)).body as TaskRow;
+    expect(copyGone.assignedToId).toBeNull();
+    expect(copyStays.assignedToId).toBe(stays.userId);
+    // The source keeps its (now deactivated) assignee.
+    expect((await prisma.task.findUniqueOrThrow({ where: { id: sourceGone.id } })).assignedToId).toBe(gone.userId);
+  });
+
   // docs/archive/plans/epics-spec.md §4: "lib/duplicate.ts copies keep epicId (same
   // project)." Covered separately from the big verbatim test above so a
   // failure here reads unambiguously as an epic-copy regression.

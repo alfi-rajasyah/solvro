@@ -41,6 +41,7 @@ import {
   useUpdateTask,
   useUsers,
 } from "@/lib/queries";
+import { selectableUsers } from "@/lib/selectableUsers";
 
 const PRIORITIES: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
@@ -505,7 +506,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               className={`cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default ${FIELD_FOCUS}`}
             >
               <option value="">Unassigned</option>
-              {(users ?? []).map((u) => (
+              {selectableUsers(users, [assignedToId]).map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.username} · {u.role}
                 </option>

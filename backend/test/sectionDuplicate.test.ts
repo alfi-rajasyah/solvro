@@ -233,6 +233,87 @@ describe("POST /sections/:id/duplicate", () => {
     expect(sourceT1.status).toBe("DONE");
   });
 
+  it("copies a multi-level section in batches: links and labels on parents and subtasks, per-parent subtask order, one created event per top-level copy", async () => {
+    const projectId = await createProject(admin.userId);
+    const source = await createSection(projectId, admin.token, "Big");
+    const labelA = await createLabel(projectId, admin.token, "A");
+    const labelB = await createLabel(projectId, admin.token, "B");
+
+    const parents: TaskRow[] = [];
+    for (let i = 0; i < 4; i++) {
+      parents.push(
+        await createTask(projectId, admin.token, {
+          title: `P${i}`,
+          sectionId: source.id,
+          labelIds: i % 2 === 0 ? [labelA, labelB] : [labelB],
+        }),
+      );
+    }
+    for (const parent of parents.slice(0, 3)) {
+      for (let j = 0; j < 2; j++) {
+        await createTask(projectId, admin.token, {
+          title: `${parent.title}-S${j}`,
+          parentTaskId: parent.id,
+          sectionId: source.id,
+          labelIds: j === 0 ? [labelA] : [],
+        });
+      }
+    }
+    const linked = await prisma.task.findFirstOrThrow({ where: { title: "P1-S1" } });
+    await prisma.taskLink.createMany({
+      data: [
+        { taskId: parents[0]!.id, label: "First", url: "https://example.com/1" },
+        { taskId: parents[0]!.id, label: "Second", url: "https://example.com/2", createdAt: new Date(Date.now() + 5) },
+        { taskId: linked.id, label: "Sub", url: "https://example.com/3" },
+      ],
+    });
+
+    const res = await duplicateSection(source.id, admin.token);
+    expect(res.status).toBe(201);
+    expect(res.body.taskCount).toBe(4);
+    const copySectionId = (res.body.section as SectionRow).id;
+
+    const copies = await prisma.task.findMany({
+      where: { sectionId: copySectionId, parentTaskId: null },
+      orderBy: [{ position: "asc" }, { id: "asc" }],
+      include: {
+        labels: { select: { id: true }, orderBy: { id: "asc" } },
+        links: { orderBy: [{ createdAt: "asc" }, { id: "asc" }] },
+        subtasks: {
+          orderBy: { position: "asc" },
+          include: { labels: { select: { id: true } }, links: true },
+        },
+      },
+    });
+    expect(copies.map((c) => c.title)).toEqual(["P0", "P1", "P2", "P3"]);
+    expect(copies.map((c) => c.labels.map((l) => l.id))).toEqual([
+      [labelA, labelB],
+      [labelB],
+      [labelA, labelB],
+      [labelB],
+    ]);
+    expect(copies[0]!.links.map((l) => l.label)).toEqual(["First", "Second"]);
+    expect(copies.map((c) => c.subtasks.map((s) => s.title))).toEqual([
+      ["P0-S0", "P0-S1"],
+      ["P1-S0", "P1-S1"],
+      ["P2-S0", "P2-S1"],
+      [],
+    ]);
+    expect(copies[0]!.subtasks.map((s) => s.position)).toEqual([0, 1]);
+    expect(copies[1]!.subtasks[1]!.links.map((l) => l.label)).toEqual(["Sub"]);
+    expect(copies[2]!.subtasks.map((s) => s.labels.length)).toEqual([1, 0]);
+    // The copies are new rows, not the sources.
+    const sourceIds = new Set([...parents.map((p) => p.id), linked.id]);
+    for (const c of copies) expect(sourceIds.has(c.id)).toBe(false);
+
+    const events = await prisma.activityEvent.findMany({
+      where: { projectId, entityType: "task", action: "created", entityId: { in: copies.map((c) => c.id) } },
+      orderBy: { id: "asc" },
+    });
+    expect(events.map((e) => e.entityLabel)).toEqual(["P0", "P1", "P2", "P3"]);
+    expect(events.map((e) => e.entityId)).toEqual(copies.map((c) => c.id));
+  });
+
   it("copies labels onto the top-level copy and places copies right after the source section's last top-level task, dense", async () => {
     const projectId = await createProject(admin.userId);
     const label = await createLabel(projectId, admin.token, "urgent-copy");

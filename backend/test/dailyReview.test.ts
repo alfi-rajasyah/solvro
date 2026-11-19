@@ -494,7 +494,7 @@ describe("GET /daily-review — phase, progress, slipDays", () => {
     expect(dto.slipDays).toBe(5);
   });
 
-  it("phase is 'All phases complete' when every section is done, and '—' when there are no sections", async () => {
+  it("phase is 'All phases complete' when every section is done, and null when there are no sections", async () => {
     const tam = await createUserWithRole("TAM");
     const noSections = await createProject({ tamId: tam.userId, status: "ACTIVE", name: "No Sections" });
     await prisma.task.create({ data: { projectId: noSections.id, title: "loose", status: "TODO" } });
@@ -506,7 +506,7 @@ describe("GET /daily-review — phase, progress, slipDays", () => {
     const res = await get(tam.token, { week: WEEK, today: TODAY });
     const noSectionsDto = res.body.unassignedProjects.find((p: any) => p.id === noSections.id);
     const allDoneDto = res.body.unassignedProjects.find((p: any) => p.id === allDone.id);
-    expect(noSectionsDto.phase).toBe("—");
+    expect(noSectionsDto.phase).toBeNull();
     expect(allDoneDto.phase).toBe("All phases complete");
   });
 });

@@ -56,7 +56,7 @@ function project(overrides: Partial<DailyReviewProject> = {}): DailyReviewProjec
     status: "ACTIVE",
     customerId: 1,
     baselineLockedAt: null,
-    phase: "—",
+    phase: null,
     progress: { done: 0, total: 0 },
     slipDays: null,
     overdueTasks: [],

@@ -58,7 +58,7 @@ async function callItop<T>(fn: () => Promise<T>): Promise<T> {
       throw new HttpError(
         409,
         "itop_token_unreadable",
-        "The stored iTop token could not be decrypted (SECRETS_KEY changed?) — enter it again.",
+        "The stored iTop token could not be decrypted (SECRETS_KEY changed?). Enter it again.",
       );
     }
     if (err instanceof ItopError) {

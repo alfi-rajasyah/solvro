@@ -116,12 +116,12 @@ describe("assigned", () => {
     expect(await notesFor(other.userId)).toHaveLength(0);
   });
 
-  it("skips an inactive assignee", async () => {
+  it("refuses a newly assigned inactive user and notifies nobody", async () => {
     const { tam, other, project } = await fixture();
     await prisma.projectMember.create({ data: { projectId: project.id, userId: other.userId } });
     await prisma.user.update({ where: { id: other.userId }, data: { active: false } });
     const task = await makeTask(project.id);
-    expect((await patchTask(tam.token, task.id, { assignedToId: other.userId })).status).toBe(200);
+    expect((await patchTask(tam.token, task.id, { assignedToId: other.userId })).status).toBe(400);
     expect(await notesFor(other.userId)).toHaveLength(0);
   });
 

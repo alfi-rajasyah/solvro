@@ -144,6 +144,30 @@ test.describe("global search palette", () => {
     await expect(dialog).toHaveCount(0);
   });
 
+  // The palette input is the vendored reui AutocompleteInput with className
+  // overrides (CommandPalette.tsx) that strip its bordered-field look. Guard the
+  // cascade: if a reui re-pull reorders classes, these computed values regress.
+  test("palette input keeps its borderless, transparent overrides over the reui defaults", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
+    await loginViaUi(page);
+    await page.goto("/overview", { waitUntil: "networkidle" });
+    await page.keyboard.press("ControlOrMeta+k");
+
+    const input = page
+      .getByRole("dialog", { name: /global search/i })
+      .getByPlaceholder(/search projects/i);
+    await expect(input).toBeFocused();
+
+    await expect(input).toHaveCSS("border-top-width", "0px");
+    await expect(input).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(input).toHaveCSS("border-top-left-radius", "0px");
+    await expect(input).toHaveCSS("padding-left", "0px");
+    await expect(input).toHaveCSS("font-size", "13px");
+    // Focus ring is suppressed while focused (focus-visible:ring-0): a 2px ring
+    // would put a "0px 0px 0px 2px" layer in box-shadow.
+    await expect(input).not.toHaveCSS("box-shadow", /0px 0px 0px 2px/);
+  });
+
   // Addendum #3 (B1 regression guard): the fix-round-1 CHANGELOG entry
   // ("Stale search hits below the 2-char gate / across reopen") gated the
   // palette's remote items on `hasQuery` precisely so a reopen can never

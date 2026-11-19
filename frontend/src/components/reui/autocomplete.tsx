@@ -4,8 +4,13 @@
 // `scroll-area` registryDependency 401s against the @reui registry and falls back to
 // an unwanted upstream dependency this repo's guardrails forbid reintroducing (see
 // CLAUDE.md; details in the Task 3 report). Content below is the registry item's file
-// content verbatim except for a handful of marked hand-edits (missing React import,
-// icon import swap, a DOM-prop-leak fix — search this file for the marker comment).
+// content plus recorded drift (see VENDOR.md) and five local patches (diffed against the registry item on
+// 2026-11-19): (1) `import * as React` added; (2) `cn` import path rewritten from "cn" to
+// "@/lib/utils" (unmarked); (3) IconPlaceholder swapped for lucide-react XIcon and
+// ChevronsUpDownIcon (import plus two call sites); (4) focus treatment unified to the
+// DESIGN.md §4 primary ring; (5) `scrollFade`/`scrollbarGutter` destructured away so they
+// don't reach the DOM. Search "SOLVRO PATCH" for the marked ones. Registry source hash and
+// upstream drift since vendoring: see VENDOR.md in this directory.
 "use client"
 
 // SOLVRO PATCH (2026-07-27): registry source omits this import; `React.ComponentProps<...>`

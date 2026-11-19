@@ -55,6 +55,7 @@ import {
   useUpdateTask,
   useUsers,
 } from "@/lib/queries";
+import { selectableUsers } from "@/lib/selectableUsers";
 
 const PRIORITY_ORDER: Priority[] = ["LOW", "MEDIUM", "HIGH"];
 const PRIORITY_ICON_CLASS: Record<Priority, string> = {
@@ -1175,7 +1176,7 @@ function AssigneeOptions({
   value,
   onPick,
 }: {
-  users: { id: number; username: string }[];
+  users: { id: number; username: string; active?: boolean }[];
   projectId: number;
   value: number | null;
   onPick: (id: number | null) => void;
@@ -1190,7 +1191,7 @@ function AssigneeOptions({
       >
         Unassigned
       </button>
-      {users.map((u) => (
+      {selectableUsers(users, [value]).map((u) => (
         <button
           key={u.id}
           type="button"

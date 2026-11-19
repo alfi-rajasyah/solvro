@@ -142,22 +142,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Add a (project_id, id desc) index only if feed latency ever matters (trigger: slow feed query at larger row counts).
 - **Source:** snapshot line 2278, section "Collaboration & sharing — activity log, notifications, @mentions — deferred findings (2026-09-30, ported 2026-10-05)"
 
-### ISS-024 · P3 · Members backfill also inserts project:view-all holders
-
-- **Type:** debt · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** migration 20261004120700_project_members (line ~31)
-- **Problem:** Users whose role already sees every project (e.g. STAKEHOLDER) got redundant member rows that show in the Members list. Harmless.
-- **Why deferred / fix direction:** Optional: a one-off cleanup deleting rows for roles with project:view-all or *; otherwise accept.
-- **Source:** snapshot line 2318, section "Customer-edition port — deferred findings (2026-10-05)"
-
-### ISS-025 · P3 · Section duplicate does one INSERT per copied task under a 30 s transaction
-
-- **Type:** debt · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** duplicateTaskTree in backend/src/lib/duplicate.ts (line ~63); duplicate route in backend/src/routes/sections.ts (line ~166)
-- **Problem:** Duplicating a large section inserts task by task and records one activity event per copied top-level task while holding the project lock.
-- **Why deferred / fix direction:** Batch with createMany to shorten the lock.
-- **Source:** snapshot line 2386, section "Application review 2026-10-22 — remaining open items"
-
 ## Open — Backend/API
 
 ### ISS-031 · P3 · Offboarding a TAM with more than 500 projects is refused
@@ -192,14 +176,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Add itopTicketRef to the create schema if approved; otherwise record PATCH-only as settled.
 - **Source:** snapshot line 1985, section "iTop integration (webhook, task ticket links) — deferred findings (ported 2026-10-04)"
 
-### ISS-035 · P3 · Epic ownerId not validated against the project's people
-
-- **Type:** debt · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** epic ownerId handling in backend/src/routes/epics.ts (line ~161) and routes/projects.ts (line ~805)
-- **Problem:** Any existing user can own an epic regardless of the project's TAM/SA/members (ported as is by user decision). The FK 500 and misleading 404 symptoms were fixed in 2275683.
-- **Why deferred / fix direction:** Validate the owner against the project's people (400 owner_not_in_project) if the rule is wanted.
-- **Source:** snapshot line 2215, section "Epics — deferred findings (ported 2026-10-05)"; merged duplicates at snapshot lines 2314
-
 ### ISS-036 · P3 · CORS config has no exposedHeaders (X-Total-Count)
 
 - **Type:** watch · **Found:** 2026-09-29 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -208,14 +184,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Add exposedHeaders: ['X-Total-Count'] only if the API is ever called cross-origin.
 - **Source:** snapshot line 2256, section "Professional UI pass — deferred findings (2026-09-29, ported 2026-10-05)"
 
-### ISS-037 · P3 · Ordinary edit routes still accept an inactive user as assignee/TAM/SA/owner
-
-- **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** assertActiveUser(... { requireActive: false }) calls in backend/src/routes/projects.ts, customers.ts, epics.ts
-- **Problem:** Only the offboarding path requires active receivers; ordinary edits can assign work to a deactivated account.
-- **Why deferred / fix direction:** Needs a decision on whether to tighten; existing tests pin the tolerance for PATCH /projects/:id.
-- **Source:** snapshot line 2400, section "Project lifecycle and handover — deferred findings (2026-11-10)"
-
 ### ISS-038 · P3 · A handover does not notify a new customer owner
 
 - **Type:** decision · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -223,14 +191,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Should a new customer owner be notified? It needs a customer scope on ActivityEvent (migration plus an arm in routes/notifications.ts).
 - **Why deferred / fix direction:** Waiting for a user decision on whether the schema change is worth it.
 - **Source:** snapshot line 2401, section "Project lifecycle and handover — deferred findings (2026-11-10)"
-
-### ISS-040 · P3 · Backend-produced text with em dashes still reaches the interface
-
-- **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** backend/src/lib/projectHealth.ts (line ~143), routes/opportunities.ts (~629), routes/itop.ts, routes/itopUser.ts (~114)
-- **Problem:** Backend strings with em dashes (and a '—' empty mark) reach the UI; the em-dash gate does not scan the backend.
-- **Why deferred / fix direction:** Rewrite the strings and return the empty mark as null for the client to render.
-- **Source:** snapshot line 2418, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
 ### ISS-183 · P3 · Task create accepts a due date before the start date
 
@@ -405,6 +365,27 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Where:** `@import url(...Material+Symbols...)` in frontend/src/index.css (line ~8)
 - **Problem:** Moving the icon stylesheet from a `<link>` in index.html to a CSS `@import` chains the requests (app CSS, then the Google CSS, then the font) and holds the app stylesheet on a third-party fetch on a first visit (antislop R-40; not measured). Repeat visits hit the Workbox cache.
 - **Why deferred / fix direction:** Measure first. If it matters, load the font CSS with a `<link>` again and keep the class rules in `@layer base` (they hold without the layer).
+
+### ISS-196 · P3 · Vendored autocomplete item class carries a mangled size rule
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `5c85567`
+- **Where:** item className in frontend/src/components/reui/autocomplete.tsx (line ~203)
+- **Problem:** A run of repeated `([class*='size-'])]:size-4` fragments replaces upstream's single `[&_svg:not([class*='size-'])]:size-4`. Not marked as a patch; recorded in `reui/VENDOR.md`.
+- **Why deferred / fix direction:** Behaviour change in vendored code. Restore the upstream string and check item icon sizes.
+
+### ISS-197 · P3 · Vendored autocomplete lacks upstream's empty-list scroll fix
+
+- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `5c85567`
+- **Where:** list scroll area in frontend/src/components/reui/autocomplete.tsx (line ~147)
+- **Problem:** Upstream added `has-[[data-slot=autocomplete-list]:empty]:hidden`, which hides a stale scroll thumb when the list filters to empty. The vendored copy predates it.
+- **Why deferred / fix direction:** Re-pull the registry item and reapply the 5 `SOLVRO PATCH` sites listed in `reui/VENDOR.md`.
+
+### ISS-198 · P3 · Epic owner picker can offer a deactivated member, TAM or SA
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `50b5873`
+- **Where:** ownerOptions in frontend/src/components/EpicPanel.tsx (line ~159); members list in backend/src/routes/projectMembers.ts (line ~72)
+- **Problem:** Deactivation keeps member rows, and the members DTO and the project's tam/sa carry no `active` flag, so the picker lists people the backend refuses (400 `owner_not_found`, readable, no data change).
+- **Why deferred / fix direction:** Rare and refused safely. Add `active` to the member DTO and to project tam/sa, then drop inactive people unless they are the current owner.
 
 ## Open — Accessibility & tokens
 
@@ -727,22 +708,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Trigger: a fifth case joins or any case fails through its retry. Re-count flakes over the next CI runs.
 - **Source:** snapshot line 869, section "ReUI DateField swap — deferred findings (2026-07-28)"; merged duplicates at snapshot lines 518
 
-### ISS-146 · P2 · backend tsconfig include never reaches scripts/ or test/
-
-- **Type:** debt · **Found:** 2026-07-29 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** include in backend/tsconfig.json (line 17)
-- **Problem:** The typecheck gate never covers backend/scripts/ or backend/test/.
-- **Why deferred / fix direction:** Broaden include or add a second tsconfig run by the gate.
-- **Source:** snapshot line 1046, section "Date contract UTC-midnight unification — deferred findings (2026-07-29)"; merged duplicates at snapshot lines 1533
-
-### ISS-147 · P2 · gates.sh exercises only one e2e spec
-
-- **Type:** debt · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** smoke_gate in .claude/scripts/gates.sh (line ~94)
-- **Problem:** New e2e suites (e.g. duplicate.spec.ts) never run in the mechanical gate unless run by hand.
-- **Why deferred / fix direction:** Add a gate step that also runs specs touched by the diff (git diff --name-only -- e2e/tests).
-- **Source:** snapshot line 1813, section "Duplicate tasks, subtasks, and sections — deferred findings (2026-09-02)"
-
 ### ISS-149 · P3 · pwa.spec.ts fails against the Vite dev server
 
 - **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -766,14 +731,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Many specs use fixed sleeps instead of condition-based waits.
 - **Why deferred / fix direction:** Dedicated e2e-hardening pass converting to waitForResponse/expect.poll.
 - **Source:** snapshot line 523, section "Plan B Task 9 deferred findings — ReUI Gantt swap (2026-07-25)"; merged duplicates at snapshot lines 520
-
-### ISS-152 · P3 · Typecheck gate does not cover vite.config.ts
-
-- **Type:** debt · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** typecheck script in frontend/package.json (line 11); frontend/tsconfig.node.json (line 17)
-- **Problem:** vite.config.ts is never typechecked and tsconfig.node.json lists deleted files.
-- **Why deferred / fix direction:** Add `tsc -p tsconfig.node.json --noEmit` to the script and prune the stale include entries.
-- **Source:** snapshot line 544, section "PWA icon regeneration — deferred findings (2026-07-25/26)"
 
 ### ISS-153 · P3 · /search contract-test gaps
 
@@ -889,14 +846,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — Dev env & ops
 
-### ISS-169 · P3 · nginx has no Cache-Control for /icons/ or /favicon.png
-
-- **Type:** debt · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** frontend/nginx.conf (location blocks, lines 52-80)
-- **Problem:** Icon and favicon requests fall through to `/` with no explicit caching directive.
-- **Why deferred / fix direction:** Add a short Cache-Control for /icons/ and = /favicon.png.
-- **Source:** snapshot line 545, section "PWA icon regeneration — deferred findings (2026-07-25/26)"
-
 ### ISS-170 · P3 · Backend tsx watch inotify staleness observed once
 
 - **Type:** watch · **Found:** 2026-08-15 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -945,14 +894,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Watch trigger: the budget check fails. Then lazy-load more pages.
 - **Source:** snapshot line 2384, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-176 · P3 · gates.sh needs Node/npx on the host PATH for the smoke gate
-
-- **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** playwright-smoke gate in .claude/scripts/gates.sh (line ~94)
-- **Problem:** The gate fails with 'npx: command not found' on a host without Node.
-- **Why deferred / fix direction:** Skip with a clear message or run in a container.
-- **Source:** snapshot line 2409, section "Project lifecycle and handover — deferred findings (2026-11-10)"; merged duplicates at snapshot lines 2424
-
 ### ISS-177 · P3 · CI stack could not be built locally (disk space)
 
 - **Type:** watch · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -962,46 +903,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Source:** snapshot line 2410, section "Project lifecycle and handover — deferred findings (2026-11-10)"
 
 ## Open — Docs & process
-
-### ISS-178 · P3 · DESIGN.md theme_default: dark vs code default 'system'
-
-- **Type:** debt · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** theme_default frontmatter in docs/DESIGN.md (line 3, 141)
-- **Problem:** DESIGN.md says dark is the default theme but the app defaults to the OS preference.
-- **Why deferred / fix direction:** Docs-only: correct theme_default to 'system' (code is source of truth) and reword line 141.
-- **Source:** snapshot line 536, section "Login/Sidebar always-dark-pin fix — deferred findings (2026-07-25)"
-
-### ISS-179 · P3 · Vendored reui/autocomplete fidelity gaps
-
-- **Type:** debt · **Found:** 2026-07-27 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** header of frontend/src/components/reui/autocomplete.tsx; AutocompleteInput className in CommandPalette.tsx (line ~201)
-- **Problem:** Vendor header lacks exact patch count, no registry hashes pinned, and palette input overrides are untested.
-- **Why deferred / fix direction:** Name the exact count, pin registry hashes in one manifest, add a computed-style e2e assertion.
-- **Source:** snapshot line 658, section "Global search & ⌘K command palette — deferred findings (2026-07-27)"
-
-### ISS-180 · P3 · index.css chip-violet comment is stale
-
-- **Type:** debt · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** comment above the Alert tone tokens in frontend/src/index.css (line ~160)
-- **Problem:** The comment claims chip-violet has no meaning elsewhere, but Critical Path now uses it (SolvroBar.tsx:328, CriticalPathMark).
-- **Why deferred / fix direction:** Reword the comment on the next index.css touch; no behaviour effect.
-- **Source:** snapshot line 1733, section "Critical Path mark — deferred findings (2026-09-02)"
-
-### ISS-181 · P3 · Go-live: personal_tokens_allowed_profiles setting not documented
-
-- **Type:** debt · **Found:** 2026-09-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** iTop section of docs/CONFIGURATION.md (line ~412)
-- **Problem:** Personal tokens only work for profiles in the authent-token module setting personal_tokens_allowed_profiles (admins only by default), and the deploy doc does not say so.
-- **Why deferred / fix direction:** Add the setting to the per-TAM prerequisites in CONFIGURATION.md.
-- **Source:** snapshot line 2234, section "iTop integration — real-install findings (2026-09-24, ported 2026-10-04)"
-
-### ISS-182 · P3 · Spine list prose in CLAUDE.md and the SPINE regex in gates.sh are maintained by
-
-- **Type:** debt · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** SPINE regex in .claude/scripts/gates.sh (line 354) and the Spine paragraph in CLAUDE.md
-- **Problem:** Two hand-maintained copies of the spine list can drift apart with nothing checking that they agree.
-- **Why deferred / fix direction:** Add a gates.sh check, or generate one from the other. Note CLAUDE.md is user-owned wording.
-- **Source:** snapshot line 2334, section "Customer-edition port — deferred findings (2026-10-05)"
 
 ## Closed
 
@@ -1080,3 +981,18 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-138 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Download helpers revoke object URL synchronously after click
 - ISS-139 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Screen and PDF Gantt export diverge on bar treatments
 - ISS-191 · Resolved 2026-11-19 · CHANGELOG "Log redaction, secret tags, and receivers without access" and "Fixes in exports, users and access, and small UI" · Handover pickers still list receivers with zero permissions
+- ISS-024 · Resolved 2026-11-19 · Accepted as is by user decision 2026-11-19, no change · Members backfill also inserts project:view-all holders
+- ISS-025 · Resolved 2026-11-19 · CHANGELOG "Section duplicate speed, epic owners, deactivated users, backend messages" · Section duplicate does one INSERT per copied task under a 30 s transaction
+- ISS-035 · Resolved 2026-11-19 · CHANGELOG "Section duplicate speed, epic owners, deactivated users, backend messages" · Epic ownerId not validated against the project's people
+- ISS-037 · Resolved 2026-11-19 · CHANGELOG "Section duplicate speed, epic owners, deactivated users, backend messages" · Ordinary edit routes still accept an inactive user as assignee/TAM/SA/owner
+- ISS-040 · Resolved 2026-11-19 · CHANGELOG "Section duplicate speed, epic owners, deactivated users, backend messages" · Backend-produced text with em dashes still reaches the interface
+- ISS-146 · Resolved 2026-11-19 · CHANGELOG "Typecheck coverage and icon caching" · backend tsconfig include never reaches scripts/ or test/
+- ISS-152 · Resolved 2026-11-19 · CHANGELOG "Typecheck coverage and icon caching" · Typecheck gate does not cover vite.config.ts
+- ISS-169 · Resolved 2026-11-19 · CHANGELOG "Typecheck coverage and icon caching" · nginx has no Cache-Control for /icons/ or /favicon.png
+- ISS-147 · Resolved 2026-11-19 · `.claude/scripts/gates.sh` gate `e2e-touched-specs` · gates.sh exercises only one e2e spec
+- ISS-176 · Resolved 2026-11-19 · `.claude/scripts/gates.sh` npx SKIP in the smoke gates · gates.sh needs Node/npx on the host PATH for the smoke gate
+- ISS-182 · Resolved 2026-11-19 · `.claude/scripts/gates.sh` gate `spine-list-agreement` · Spine list prose in CLAUDE.md and the SPINE regex in gates.sh are maintained by
+- ISS-178 · Resolved 2026-11-19 · `docs/DESIGN.md` theme_default system · DESIGN.md theme_default: dark vs code default 'system'
+- ISS-179 · Resolved 2026-11-19 · CHANGELOG "Vendored component record and palette input check"; remaining drift filed as ISS-196 and ISS-197 · Vendored reui/autocomplete fidelity gaps
+- ISS-180 · Resolved 2026-11-19 · CHANGELOG "Vendored component record and palette input check" · index.css chip-violet comment is stale
+- ISS-181 · Resolved 2026-11-19 · `docs/CONFIGURATION.md` iTop per-TAM prerequisites · Go-live: personal_tokens_allowed_profiles setting not documented

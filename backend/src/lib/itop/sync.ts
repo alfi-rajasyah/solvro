@@ -207,7 +207,7 @@ function errorMessage(err: unknown): string {
   // `ItopConfig.lastSyncError` and Admin > iTop
   // (docs/archive/plans/application-review-2026-10-22.md, F-30).
   if (err instanceof SecretBoxError) {
-    return "The stored iTop token could not be decrypted (SECRETS_KEY changed?) — enter it again in Admin > iTop.";
+    return "The stored iTop token could not be decrypted (SECRETS_KEY changed?). Enter it again in Admin > iTop.";
   }
   return err instanceof Error ? err.message : String(err);
 }

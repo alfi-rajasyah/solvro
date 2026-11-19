@@ -1329,7 +1329,7 @@ async function main() {
       DELIVER_PROPOSAL: "Delivered Proposal",
       WAITING_RESPONSE: "Waiting Response",
     };
-    const OUTCOME_LABELS: Record<PipelineOutcome, string> = { WON: "Won", LOST: "Lost", CANCELLED: "Cancelled" };
+    const OUTCOME_LABELS: Record<PipelineOutcome, string> = { WON: "Won", LOST: "Lost", CANCELLED: "Cancelled", ARCHIVED: "Archived" };
     const REASON_LABELS: Record<PipelineOutcomeReason, string> = {
       PRICE: "Price",
       COMPETITOR: "Competitor",

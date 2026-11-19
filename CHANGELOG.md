@@ -15,6 +15,29 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-19 — Section duplicate speed, epic owners, deactivated users, backend messages
+
+- Duplicating a large section now copies its tasks, subtasks, labels, links and activity entries in a few batched writes instead of one write per task, so the project lock is held for much less time.
+- An epic's owner must now be the project's TAM, its SA, or a project member; any other user is refused with `owner_not_in_project`. An epic whose owner is left unchanged can still be edited.
+- Assigning a deactivated user as a project TAM or SA, a customer owner, a task assignee (on create or edit) or an epic owner is now refused with a 400 error. Saving a record with its current, since-deactivated holder still works.
+- Error messages from the iTop integration and the Pipeline import no longer use em dashes, and the Daily Review phase for a project without sections now reads "No sections".
+- Assignee, TAM, SA, customer owner and epic owner pickers no longer offer deactivated users, except when the record already holds that user. The epic owner picker lists only the project's TAM, SA and members.
+- Duplicating a task or a section now leaves a copy unassigned when the source task's assignee has been deactivated.
+- The iTop paging error message no longer uses an em dash.
+
+### Changed — 2026-11-19 — Vendored component record and palette input check
+
+- A new `frontend/src/components/reui/VENDOR.md` lists each vendored ReUI file with its registry source, and records the 5 local patches and the upstream source hash of the autocomplete component.
+- A stale comment about the violet chip token in `frontend/src/index.css` is corrected.
+- An end-to-end test now checks that the command palette input keeps its borderless, transparent styling over the component defaults.
+
+### Changed — 2026-11-19 — Typecheck coverage and icon caching
+
+- The backend typecheck now also covers `backend/scripts/` and `backend/test/` through a new `backend/tsconfig.check.json` (`npm run typecheck`, also used by CI). The type errors it exposed in the demo seed and two tests are fixed. The build configuration is unchanged.
+- The frontend typecheck now also checks `vite.config.ts`, and `frontend/tsconfig.node.json` no longer lists deleted files.
+- nginx now sends `Cache-Control: public, max-age=86400` for `/icons/` and `/favicon.png`, with the usual security headers.
+- The same cache header now also covers `/favicon-dark.png`, and the backend typecheck also covers `backend/prisma/` and `vitest.config.ts`.
+
 ### Security — 2026-11-19 — Log redaction, secret tags, and receivers without access
 
 - `backend/src/logger.ts`: the shared logger masks token, Auth-Token, personal iTop token, password, `Authorization`, cookie and webhook-secret fields at the top level of a logged object, in request and response bodies, and in headers.

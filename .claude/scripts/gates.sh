@@ -73,7 +73,7 @@ backend_vitest() { # isolated test DB — see backend/CLAUDE.md traps
   [ -n "$url" ] || { echo "could not derive test DATABASE_URL"; return 1; }
   docker compose exec -T -e DATABASE_URL="$url" backend npm test
 }
-smoke_gate() {
+e2e_preflight() {
   # Pre-flight: the e2e fixture admin (e2e/fixtures/test.ts) must be able to
   # log in, or every smoke test fails opaquely inside the seed fixture. Agents
   # have twice reset this user's password via create-admin.ts for their own
@@ -91,11 +91,26 @@ smoke_gate() {
     echo "  docker compose exec -e ADMIN_EMAIL=qa@solvro.test -e ADMIN_PASSWORD='QaTest1234!' backend npx tsx scripts/create-admin.ts"
     return 1
   fi
+}
+smoke_gate() {
+  e2e_preflight || return 1
   (cd e2e && BASE_URL="${BASE_URL:-http://localhost:5173}" npx playwright test tests/smoke.spec.ts)
+}
+# Specs touched by the diff (desktop only), independent of which areas changed, so a
+# new or edited suite is exercised mechanically. smoke.spec.ts has its own gate.
+TOUCHED_SPECS=()
+while IFS= read -r f; do
+  [ -n "$f" ] && [ -f "$f" ] && [ "$f" != "e2e/tests/smoke.spec.ts" ] && TOUCHED_SPECS+=("${f#e2e/}")
+done < <(echo "$DIFF_FILES" | grep -E '^e2e/tests/[^/]+\.spec\.ts$' | sort -u)
+touched_specs_gate() {
+  e2e_preflight || return 1
+  echo "touched e2e specs (desktop): ${TOUCHED_SPECS[*]}"
+  (cd e2e && BASE_URL="${BASE_URL:-http://localhost:5173}" npx playwright test --project=desktop "${TOUCHED_SPECS[@]}")
 }
 
 if [ "$F_BACK" -eq 1 ]; then
-  run_gate backend-typecheck docker compose exec -T backend npx tsc --noEmit
+  # tsconfig.check.json widens the build config to scripts/ and test/ (ISS-146).
+  run_gate backend-typecheck docker compose exec -T backend npx tsc -p tsconfig.check.json
   run_gate backend-vitest backend_vitest
 fi
 if [ "$F_FRONT" -eq 1 ]; then
@@ -109,7 +124,14 @@ if [ "$F_FRONT" -eq 1 ]; then
   FRONT_NON_TEST="$(echo "$DIFF_FILES" | grep -E '^frontend/' | grep -vE '\.test\.tsx?$' | sed '/^$/d')"
   if [ "$SKIP_SMOKE" -eq 1 ]; then echo "SKIP playwright-smoke (--skip-smoke)"
   elif touches '^frontend/' && [ -z "$FRONT_NON_TEST" ]; then echo "SKIP playwright-smoke (test-only frontend diff)"
+  elif ! command -v npx >/dev/null 2>&1; then echo "SKIP playwright-smoke (npx not on PATH: the smoke gate runs Playwright from the host, install Node or run it where Node exists)"
   else run_gate playwright-smoke smoke_gate; fi
+fi
+
+if [ "${#TOUCHED_SPECS[@]}" -gt 0 ]; then
+  if [ "$SKIP_SMOKE" -eq 1 ]; then echo "SKIP e2e-touched-specs (--skip-smoke)"
+  elif ! command -v npx >/dev/null 2>&1; then echo "SKIP e2e-touched-specs (npx not on PATH: Playwright runs from the host, install Node or run it where Node exists)"
+  else run_gate e2e-touched-specs touched_specs_gate; fi
 fi
 
 # ---------- changelog presence (always) ----------
@@ -352,6 +374,80 @@ design_check design-icon-hidden "material-symbols-outlined element without aria-
 # visibility matching (`backend/src/lib/visibility.ts`) stay; the Pipeline
 # module is a native port and is never removed — see guardrail-pipeline-intact.
 SPINE='^backend/src/lib/taskOrdering\.ts$|^backend/src/routes/tasks\.ts$|^backend/src/routes/projects\.ts$|^backend/src/http/auth\.ts$|^backend/src/routes/admin\.ts$|^backend/src/lib/visibility\.ts$|^backend/prisma/schema\.prisma$|^backend/prisma/migrations/|^frontend/src/lib/dateField\.ts$|^frontend/src/components/DateField\.tsx$|^frontend/src/components/DateRangeField\.tsx$|^frontend/src/components/InlineDateRangeEditor\.tsx$|^frontend/src/lib/queries\.ts$|^frontend/src/components/kanban-v2/(adapter|commitMapper)\.ts$|^frontend/src/components/gantt-v2/|^frontend/src/components/reui/|^frontend/src/lib/gantt/export|^docker-compose\.yml$|^\.env|^setup\.sh$|^frontend/nginx\.conf$|^backend/src/lib/secretBox\.ts$|^backend/src/routes/webhook\.ts$|^backend/src/routes/itopUser\.ts$|^backend/src/lib/itop/client\.ts$|^backend/src/http/requestLogger\.ts$|^backend/src/routes/publicShare\.ts$|^backend/src/lib/shareLinks\.ts$'
+# ---------- spine-list agreement (always) ----------
+# The spine exists twice: prose in CLAUDE.md (user-owned wording, never edited
+# from here) and the SPINE regex above. This check keeps them from drifting:
+#   1. every prose item in the CLAUDE.md paragraph is covered by a row below;
+#   2. every row's key still appears in that paragraph;
+#   3. every row's sample path matches SPINE;
+#   4. every SPINE alternative matches at least one sample path.
+# A new spine item therefore needs a table row here, which is the point.
+SPINE_MAP=(
+  "task ordering::backend/src/lib/taskOrdering.ts"
+  "task ordering::backend/src/routes/tasks.ts"
+  "routes/projects.ts::backend/src/routes/projects.ts"
+  "auth/admin/visibility::backend/src/http/auth.ts"
+  "auth/admin/visibility::backend/src/routes/admin.ts"
+  "auth/admin/visibility::backend/src/lib/visibility.ts"
+  "schema.prisma::backend/prisma/schema.prisma"
+  "schema.prisma::backend/prisma/migrations/20260101000000_x/migration.sql"
+  "date contract::frontend/src/lib/dateField.ts"
+  "date contract::frontend/src/components/DateField.tsx"
+  "date contract::frontend/src/components/DateRangeField.tsx"
+  "date contract::frontend/src/components/InlineDateRangeEditor.tsx"
+  "lib/queries.ts::frontend/src/lib/queries.ts"
+  "Kanban adapters::frontend/src/components/kanban-v2/adapter.ts"
+  "Kanban adapters::frontend/src/components/kanban-v2/commitMapper.ts"
+  "gantt-v2/::frontend/src/components/gantt-v2/GanttView.tsx"
+  "reui/::frontend/src/components/reui/gantt.tsx"
+  "Gantt exports::frontend/src/lib/gantt/exportPng.ts"
+  "docker/env::docker-compose.yml"
+  "docker/env::.env.example"
+  "docker/env::setup.sh"
+  "docker/env::frontend/nginx.conf"
+  "secrets and unauthenticated surfaces::backend/src/lib/secretBox.ts"
+  "secrets and unauthenticated surfaces::backend/src/routes/webhook.ts"
+  "secrets and unauthenticated surfaces::backend/src/routes/itopUser.ts"
+  "secrets and unauthenticated surfaces::backend/src/lib/itop/client.ts"
+  "secrets and unauthenticated surfaces::backend/src/http/requestLogger.ts"
+  "secrets and unauthenticated surfaces::backend/src/routes/publicShare.ts"
+  "secrets and unauthenticated surfaces::backend/src/lib/shareLinks.ts"
+)
+spine_agreement() {
+  local para items item row key path alt bad=""
+  # Whole paragraph (up to the next blank line), joined, so a re-wrapped paragraph
+  # is still parsed in full rather than silently truncated to its first line.
+  para="$(awk '/^\*\*Spine \(instant opus review/{f=1} f&&/^[[:space:]]*$/{exit} f{printf "%s ", $0}' CLAUDE.md)"
+  [ -n "$para" ] || { echo "CLAUDE.md has no '**Spine (instant opus review' paragraph"; return 1; }
+  # Item list = text between the label's "**:" and the sentence naming the regex;
+  # parenthetical asides are dropped so their commas do not split an item.
+  items="$(printf '%s' "$para" | perl -0pe 's/^.*?\)\*\*:\s*//; s/\.\s*The `SPINE`.*$//s; 1 while s/\([^()]*\)//g; s/,\s*(?:and\s+)?/\n/g')"
+  [ -n "$items" ] || { echo "could not parse the spine item list from CLAUDE.md"; return 1; }
+  while IFS= read -r item; do
+    [ -n "$item" ] || continue
+    local covered=0
+    for row in "${SPINE_MAP[@]}"; do
+      key="${row%%::*}"
+      case "$item" in *"$key"*) covered=1; break ;; esac
+    done
+    [ "$covered" -eq 1 ] || bad="$bad\n  CLAUDE.md lists \"$item\" but SPINE_MAP in gates.sh has no row for it"
+  done <<< "$items"
+  for row in "${SPINE_MAP[@]}"; do
+    key="${row%%::*}"; path="${row#*::}"
+    printf '%s' "$para" | grep -qF -- "$key" || bad="$bad\n  SPINE_MAP key \"$key\" no longer appears in the CLAUDE.md spine paragraph"
+    echo "$path" | grep -qE "$SPINE" || bad="$bad\n  SPINE regex does not match $path (listed under \"$key\")"
+  done
+  while IFS= read -r alt; do
+    [ -n "$alt" ] || continue
+    local hit=0
+    for row in "${SPINE_MAP[@]}"; do
+      echo "${row#*::}" | grep -qE "$alt" && { hit=1; break; }
+    done
+    [ "$hit" -eq 1 ] || bad="$bad\n  SPINE alternative $alt matches no SPINE_MAP sample path (add a row, or drop the alternative)"
+  done < <(printf '%s' "$SPINE" | perl -ne 'my ($d,$cur)=(0,""); for my $c (split //) { if ($c eq "(") {$d++} elsif ($c eq ")") {$d--} if ($c eq "|" && $d==0) { print "$cur\n"; $cur="" } else { $cur .= $c } } print "$cur\n"')
+  if [ -n "$bad" ]; then printf '%b\n' "$bad" | sed '/^$/d'; return 1; fi
+}
+run_gate spine-list-agreement spine_agreement
 SPINE_HITS="$(echo "$DIFF_FILES" | grep -E "$SPINE" | sed '/^$/d' || true)"
 if [ -n "$SPINE_HITS" ]; then
   echo "SPINE TOUCHED — instant review required:"

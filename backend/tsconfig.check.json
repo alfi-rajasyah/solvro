@@ -1,0 +1,10 @@
+{
+  // Typecheck-only config: build output (tsconfig.json, dist) is unchanged.
+  // Widens rootDir so scripts/ and test/ are covered alongside src/.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "noEmit": true
+  },
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "test/**/*.ts", "prisma/**/*.ts", "vitest.config.ts"]
+}

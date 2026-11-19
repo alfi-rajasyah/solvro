@@ -672,7 +672,7 @@ opportunitiesRouter.post(
         const stage = stageRaw ? normalizeStageLiteral(stageRaw) : undefined;
         if (!stage) {
           reasons.push(
-            `Invalid stage "${raw.stage ?? ""}" — must be one of: ${Object.keys(IMPORT_STAGE_MAP).join(", ")}`,
+            `Invalid stage "${raw.stage ?? ""}". It must be one of: ${Object.keys(IMPORT_STAGE_MAP).join(", ")}`,
           );
         }
 
