@@ -472,11 +472,15 @@ function ProbeList({ probes }: { probes: ItopProbeResult[] }) {
         <li key={p.name} className="flex items-start gap-2 text-xs">
           <span
             aria-hidden="true"
-            className={`material-symbols-outlined shrink-0 text-[16px] ${p.ok ? "text-chip-emerald-text" : "text-error"}`}
+            className={`material-symbols-outlined shrink-0 text-[16px] ${
+              p.ok ? "text-chip-emerald-text" : p.informational ? "text-on-surface-variant" : "text-error"
+            }`}
           >
-            {p.ok ? "check_circle" : "cancel"}
+            {p.ok ? "check_circle" : p.informational ? "info" : "cancel"}
           </span>
-          <span className="sr-only">{p.ok ? "Passed" : "Failed"}</span>
+          <span className="sr-only">
+            {p.ok ? "Passed" : p.informational ? "Not available" : "Failed"}
+          </span>
           <span className="shrink-0 font-medium text-on-surface">{p.name}</span>
           {p.informational && (
             <span className="shrink-0 text-meta text-on-surface-variant">(optional)</span>

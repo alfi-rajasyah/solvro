@@ -983,14 +983,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Confirm on a real iTop install that blank durations are transient; if they persist, decide how to store them.
 - **Source:** snapshot line 2385, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-136 · P3 · iTop full-sync prune can exceed Postgres bind-parameter limit
-
-- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** full-sync prune in backend/src/lib/itop/sync.ts (lines ~752, ~913)
-- **Problem:** A class with more than about 32,000 rows makes the NOT IN list exceed Postgres's 32,767-parameter limit and the prune fails.
-- **Why deferred / fix direction:** Trigger: an install with that many rows. Fix: prune via a temp table or unnest($1::int[]).
-- **Source:** snapshot line 2390, section "Application review 2026-10-22 — remaining open items"
-
 ### ISS-186 · P3 · A full sync already running can undo the full-sync reset of a new org mapping
 
 - **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `50e3a4f`
@@ -1399,3 +1391,4 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-131 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Older tickets of a newly mapped iTop organisation wait for the next full sync
 - ISS-133 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · 'Test connection' reports ok:false whenever TimeSpent is missing
 - ISS-166 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Missing tests: withDeadlockRetry and baseline lock reorder
+- ISS-136 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · iTop full-sync prune can exceed Postgres bind-parameter limit (same defect as ISS-016)

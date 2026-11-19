@@ -1,6 +1,6 @@
 # Issues wave 2: projects API, iTop backend, drag and keyboard
 
-Status: in progress (2026-11-19), branch `fix/issues-wave-2`. Archive path once shipped: `docs/archive/plans/issues-wave-2.md`.
+Status: shipped 2026-11-19, branch `fix/issues-wave-2`. Archive path: `docs/archive/plans/issues-wave-2.md`.
 
 Lane P. One PR into `develop`; each group is one task and one commit.
 
@@ -25,4 +25,7 @@ B, C and G share no files, so all three run in one parallel wave in the main wor
 
 ## Records
 
-(Filled in at integration.)
+- Commits: B `62a301a`, C `50e3a4f`, G `65a6c77`, G follow-up `2ac81ba` (ISS-133 UI, Add label gate, keyboard-drag e2e), review fixes `22f4b2d`, final fixes in the last commit.
+- Phase review (opus): 0 blockers, 3 should-fix (stale e2e comment and no keyboard-drag test; TRUST_PROXY docs; ISS-132 only half fixed), 3 nits. All fixed or filed (ISS-186, ISS-187). Re-check: ISS-136 duplicates ISS-016 (closed); a failed optional probe showed a red icon (fixed).
+- Closed 12: ISS-001, 016, 029, 077, 107, 108, 129, 130, 131, 133, 136, 166. ISS-132 narrowed. New: ISS-186 to ISS-190.
+- Delivery Gate (G): PASS. Task Kanban and Pipeline board, light and dark, 375px and 1280px: no card row has a tabindex; Tab reaches the "Drag to reorder" handle; the green FIELD_FOCUS ring shows; handles are visible at 375px. Keyboard drag itself is covered by the new e2e test. The "Add label" gate and the read-only tab order are covered by unit tests. The iTop probe panel was not clicked through: the dev stack has no iTop connection.
