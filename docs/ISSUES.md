@@ -39,14 +39,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Needs a user ruling. Until then comments stay open to both roles and built-ins stay editable.
 - **Source:** snapshot line 2368, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-006 · P3 · POST /tasks/:id/duplicate needs task:write, create needs project:write
-
-- **Type:** decision · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** duplicate route in backend/src/routes/tasks.ts (line ~635) vs create in backend/src/routes/projects.ts (line ~598)
-- **Problem:** A custom role holding task:write without project:write can duplicate tasks it could not create. Settled as plan Decision 11 (record only); seeded roles never split the two.
-- **Why deferred / fix direction:** No fix unless a custom-role split becomes real; revisit if the user wants duplicate to require project:write.
-- **Source:** snapshot line 1789, section "Duplicate tasks, subtasks, and sections — deferred findings (2026-09-02)"
-
 ### ISS-008 · P3 · Rate limiter is in-process only
 
 - **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -152,14 +144,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Needs a measurement first: time a large handover, batch per-project writes, then raise the cap.
 - **Source:** snapshot line 293, section "Tech debt / follow-ups from recent work"
 
-### ISS-032 · P3 · Inactive services can still be assigned to projects and customers
-
-- **Type:** decision · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** ServiceMappingList.tsx (line ~329) and ProjectServices.tsx missingSubscribed (line ~34)
-- **Problem:** Question for the user: should active:false services block new assignments? Today the picker shows them dimmed but toggleable and 'Add customer's services' carries inactive subscriptions over.
-- **Why deferred / fix direction:** Blocked on a product call; if yes, filter in the picker and in the bulk add, and reject on the PUT routes.
-- **Source:** snapshot line 315, section "Tech debt / follow-ups from recent work"
-
 ### ISS-033 · P3 · Three narrow task selects omit isCriticalPath
 
 - **Type:** watch · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -168,14 +152,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Not needed today; widen the three selects only if the mark is ever surfaced on those surfaces.
 - **Source:** snapshot line 1717, section "Critical Path mark — deferred findings (2026-09-02)"
 
-### ISS-034 · P3 · A task cannot be created with an iTop ticket ref pre-set
-
-- **Type:** decision · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** createTaskSchema in backend/src/routes/projects.ts (POST /:id/tasks, line ~598)
-- **Problem:** Question for the user: should create-time pinning of an iTop ticket ref be supported (e.g. from a create-iTop-ticket flow), or is PATCH-only fine indefinitely?
-- **Why deferred / fix direction:** Add itopTicketRef to the create schema if approved; otherwise record PATCH-only as settled.
-- **Source:** snapshot line 1985, section "iTop integration (webhook, task ticket links) — deferred findings (ported 2026-10-04)"
-
 ### ISS-036 · P3 · CORS config has no exposedHeaders (X-Total-Count)
 
 - **Type:** watch · **Found:** 2026-09-29 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -183,28 +159,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Cross-origin callers cannot read X-Total-Count; the same-origin /api proxy is unaffected.
 - **Why deferred / fix direction:** Add exposedHeaders: ['X-Total-Count'] only if the API is ever called cross-origin.
 - **Source:** snapshot line 2256, section "Professional UI pass — deferred findings (2026-09-29, ported 2026-10-05)"
-
-### ISS-038 · P3 · A handover does not notify a new customer owner
-
-- **Type:** decision · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** logCustomerOwnerChanges in backend/src/lib/offboarding.ts (line ~506)
-- **Problem:** Should a new customer owner be notified? It needs a customer scope on ActivityEvent (migration plus an arm in routes/notifications.ts).
-- **Why deferred / fix direction:** Waiting for a user decision on whether the schema change is worth it.
-- **Source:** snapshot line 2401, section "Project lifecycle and handover — deferred findings (2026-11-10)"
-
-### ISS-183 · P3 · Task create accepts a due date before the start date
-
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `39af8f6`
-- **Where:** POST /projects/:id/tasks in backend/src/routes/projects.ts (line ~597); createTaskSchema refine (line ~145)
-- **Problem:** PATCH /tasks/:id refuses an effective due date before the start date since ISS-028 closed, but POST /projects/:id/tasks has no such check, so a new task can start inverted.
-- **Why deferred / fix direction:** Found at the end of the ISS-028 fix. Add the same check (400 `invalid_date_range`) to create, with a test.
-
-### ISS-184 · P3 · Pipeline stage re-pack and offboarding lock deals in different orders
-
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `de9ae4a`
-- **Where:** insertAtStage / closeGapInStage UPDATEs in backend/src/routes/opportunities.ts (lines ~374, ~394) vs the deal reassignment in backend/src/lib/offboarding.ts (line ~390)
-- **Problem:** The set-based re-pack locks sibling rows in scan order; offboarding locks deals ORDER BY id and takes no stage lock. A re-pack and a PIC reassignment on overlapping deals can deadlock. The old per-row loop had the same exposure.
-- **Why deferred / fix direction:** Rare (needs a concurrent offboarding). Lock the stage's rows with SELECT id ... ORDER BY id FOR NO KEY UPDATE before the UPDATE.
 
 ## Open — Frontend UI
 
@@ -328,14 +282,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Not reproduced in code review; investigate the popover close/focus-return path if users report it.
 - **Source:** snapshot line 2272, section "Collaboration & sharing — stale-edit warning — deferred findings (2026-09-30, ported 2026-10-05)"
 
-### ISS-069 · P3 · Mention chips resolve against the whole directory, including deactivated users
-
-- **Type:** debt · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** taskMentionPeople `known` list in frontend/src/lib/mentions.ts (line ~190)
-- **Problem:** A mentioned person later deactivated or removed still renders as an ordinary chip; the UI gives no hint they are inactive.
-- **Why deferred / fix direction:** Fine for history; add a tooltip or muted style for inactive users.
-- **Source:** snapshot line 2276, section "Collaboration & sharing — activity log, notifications, @mentions — deferred findings (2026-09-30, ported 2026-10-05)"
-
 ### ISS-072 · P3 · Loading states without SkeletonRegion in ported iTop/customer/utilization UI
 
 - **Type:** debt · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -352,13 +298,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Accepted limitation; a fix would remount with a fresh lazy() per retry.
 - **Source:** snapshot line 2383, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-185 · P2 · Task form scrolls sideways at 375px when the label creator opens
-
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `1fd2bd1`
-- **Where:** the creating row (input, Add, Cancel, colour swatches) in frontend/src/components/LabelPicker.tsx (line ~98) inside the TaskFormModal body (`flex-1 overflow-y-auto px-5 py-4`)
-- **Problem:** At 375px the modal body's scrollWidth is 458 against a clientWidth of 374; the autofocused label input scrolls the body 38px sideways, cutting off the field labels on the left. Seen during the wave 1 Delivery Gate; not caused by its changes.
-- **Why deferred / fix direction:** Let the creating row wrap (flex-wrap, min-w-0 on the input) and check the Assignee row, whose chevron also sits past the panel edge.
-
 ### ISS-193 · P3 · The icon stylesheet now loads after the app stylesheet
 
 - **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `be6a448`
@@ -366,26 +305,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Moving the icon stylesheet from a `<link>` in index.html to a CSS `@import` chains the requests (app CSS, then the Google CSS, then the font) and holds the app stylesheet on a third-party fetch on a first visit (antislop R-40; not measured). Repeat visits hit the Workbox cache.
 - **Why deferred / fix direction:** Measure first. If it matters, load the font CSS with a `<link>` again and keep the class rules in `@layer base` (they hold without the layer).
 
-### ISS-196 · P3 · Vendored autocomplete item class carries a mangled size rule
+### ISS-199 · P3 · Vendored autocomplete changes its border on focus
 
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `5c85567`
-- **Where:** item className in frontend/src/components/reui/autocomplete.tsx (line ~203)
-- **Problem:** A run of repeated `([class*='size-'])]:size-4` fragments replaces upstream's single `[&_svg:not([class*='size-'])]:size-4`. Not marked as a patch; recorded in `reui/VENDOR.md`.
-- **Why deferred / fix direction:** Behaviour change in vendored code. Restore the upstream string and check item icon sizes.
-
-### ISS-197 · P3 · Vendored autocomplete lacks upstream's empty-list scroll fix
-
-- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `5c85567`
-- **Where:** list scroll area in frontend/src/components/reui/autocomplete.tsx (line ~147)
-- **Problem:** Upstream added `has-[[data-slot=autocomplete-list]:empty]:hidden`, which hides a stale scroll thumb when the list filters to empty. The vendored copy predates it.
-- **Why deferred / fix direction:** Re-pull the registry item and reapply the 5 `SOLVRO PATCH` sites listed in `reui/VENDOR.md`.
-
-### ISS-198 · P3 · Epic owner picker can offer a deactivated member, TAM or SA
-
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `50b5873`
-- **Where:** ownerOptions in frontend/src/components/EpicPanel.tsx (line ~159); members list in backend/src/routes/projectMembers.ts (line ~72)
-- **Problem:** Deactivation keeps member rows, and the members DTO and the project's tam/sa carry no `active` flag, so the picker lists people the backend refuses (400 `owner_not_found`, readable, no data change).
-- **Why deferred / fix direction:** Rare and refused safely. Add `active` to the member DTO and to project tam/sa, then drop inactive people unless they are the current owner.
+- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `964cb54`
+- **Where:** patch 4 focus classes in frontend/src/components/reui/autocomplete.tsx (line ~37, comment line ~31)
+- **Problem:** The patch adds `focus-visible:border-primary`; DESIGN.md §4's reduced focus form says no border change on focus.
+- **Why deferred / fix direction:** Predates this work. Drop the border change from the SOLVRO PATCH and keep the primary ring; update `reui/VENDOR.md`.
 
 ## Open — Accessibility & tokens
 
@@ -692,14 +617,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Add an ESLint config with react-hooks/exhaustive-deps and an npm run lint gate in CI.
 - **Source:** snapshot line 449, section "Tech debt / follow-ups from recent work"; merged duplicates at snapshot lines 2263
 
-### ISS-144 · P2 · No e2e spec asserts Login/Sidebar always-dark pin
-
-- **Type:** test-gap · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** Login.tsx root wrapper and Sidebar.tsx rail; no spec in e2e/tests
-- **Problem:** A future @theme change could silently re-break the dark pin that already regressed once.
-- **Why deferred / fix direction:** Add a spec forcing light theme and asserting computed dark backgrounds on /login and the sidebar.
-- **Source:** snapshot line 538, section "Login/Sidebar always-dark-pin fix — deferred findings (2026-07-25)"
-
 ### ISS-145 · P2 · e2e drag-reorder first-attempt flakes (list-dnd/kanban-dnd/gantt-parity)
 
 - **Type:** watch · **Found:** 2026-07-28 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -731,14 +648,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Many specs use fixed sleeps instead of condition-based waits.
 - **Why deferred / fix direction:** Dedicated e2e-hardening pass converting to waitForResponse/expect.poll.
 - **Source:** snapshot line 523, section "Plan B Task 9 deferred findings — ReUI Gantt swap (2026-07-25)"; merged duplicates at snapshot lines 520
-
-### ISS-153 · P3 · /search contract-test gaps
-
-- **Type:** test-gap · **Found:** 2026-07-27 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** backend/test/search.test.ts (lines ~121, ~200)
-- **Problem:** Four contract assertions missing; the LIKE-escape test name overclaims `_` coverage.
-- **Why deferred / fix direction:** Add the three assertions plus a literal `_` case, or rename the test.
-- **Source:** snapshot line 636, section "Global search & ⌘K command palette — deferred findings (2026-07-27)"
 
 ### ISS-154 · P3 · search.spec.ts polish and listener-ready guard
 
@@ -796,22 +705,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Observed once; no repro. Watch for recurrence (and note that files now run serially); fix by scoping the query to the test's project.
 - **Source:** snapshot line 2269, section "Collaboration & sharing — stale-edit warning — deferred findings (2026-09-30, ported 2026-10-05)"
 
-### ISS-162 · P3 · Recipient concurrency tests never shown to fail without the row lock
-
-- **Type:** test-gap · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** tests in backend/test/activity.test.ts (line ~204) and backend/test/notifications.test.ts (line ~128)
-- **Problem:** The concurrency tests cannot fail spuriously but nobody confirmed they fail when the task row lock is removed, so they may not guard it.
-- **Why deferred / fix direction:** Temporarily remove the lock and confirm both tests go red; if not, strengthen them.
-- **Source:** snapshot line 2277, section "Collaboration & sharing — activity log, notifications, @mentions — deferred findings (2026-09-30, ported 2026-10-05)"
-
-### ISS-163 · P3 · Backfill test checks a copy of the migration SELECT, not the file
-
-- **Type:** test-gap · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** migration-backfill describe in backend/test/taskAssigneeMembers.test.ts (line ~234)
-- **Problem:** The test's SQL copy and the migration can drift without the test failing.
-- **Why deferred / fix direction:** Read the SELECT out of the migration file in the test. Low value: the migration is already applied.
-- **Source:** snapshot line 2319, section "Customer-edition port — deferred findings (2026-10-05)"
-
 ### ISS-164 · P3 · list-dnd 'cross-status reorder in one section sticks' failed locally
 
 - **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -819,14 +712,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** The test failed 2 of 2 locally against the vite dev server.
 - **Why deferred / fix direction:** Cause was shared seeded project state across spec files, fixed by per-file seeding.
 - **Source:** snapshot line 2381, section "Application review 2026-10-22 — remaining open items"
-
-### ISS-165 · P3 · accessibleNames.test pairs id/htmlFor by whole-file text search
-
-- **Type:** test-gap · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** source guard in frontend/src/components/accessibleNames.test.ts (line ~170)
-- **Problem:** A label with that htmlFor anywhere in the file, even empty or for another control, satisfies the guard.
-- **Why deferred / fix direction:** Match htmlFor per label element and require non-empty label text.
-- **Source:** snapshot line 2389, section "Application review 2026-10-22 — remaining open items"
 
 ### ISS-167 · P3 · taskReorderConcurrency.test.ts:114 timed out once in a loaded gates run
 
@@ -996,3 +881,19 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-179 · Resolved 2026-11-19 · CHANGELOG "Vendored component record and palette input check"; remaining drift filed as ISS-196 and ISS-197 · Vendored reui/autocomplete fidelity gaps
 - ISS-180 · Resolved 2026-11-19 · CHANGELOG "Vendored component record and palette input check" · index.css chip-violet comment is stale
 - ISS-181 · Resolved 2026-11-19 · `docs/CONFIGURATION.md` iTop per-TAM prerequisites · Go-live: personal_tokens_allowed_profiles setting not documented
+- ISS-183 · Resolved 2026-11-19 · CHANGELOG "Task dates on create, stage locks, epic owners, inactive services" · Task create accepts a due date before the start date
+- ISS-184 · Resolved 2026-11-19 · CHANGELOG "Task dates on create, stage locks, epic owners, inactive services" · Pipeline stage re-pack and offboarding lock deals in different orders
+- ISS-198 · Resolved 2026-11-19 · CHANGELOG "Task dates on create, stage locks, epic owners, inactive services" · Epic owner picker can offer a deactivated member, TAM or SA
+- ISS-032 · Resolved 2026-11-19 · CHANGELOG "Task dates on create, stage locks, epic owners, inactive services" (user decision: block new adds) · Inactive services can still be assigned to projects and customers
+- ISS-185 · Resolved 2026-11-19 · CHANGELOG "Task form at phone width, inactive mention chips, autocomplete" · Task form scrolls sideways at 375px when the label creator opens
+- ISS-069 · Resolved 2026-11-19 · CHANGELOG "Task form at phone width, inactive mention chips, autocomplete" · Mention chips resolve against the whole directory, including deactivated users
+- ISS-196 · Resolved 2026-11-19 · CHANGELOG "Task form at phone width, inactive mention chips, autocomplete" · Vendored autocomplete item class carries a mangled size rule
+- ISS-197 · Resolved 2026-11-19 · CHANGELOG "Task form at phone width, inactive mention chips, autocomplete" · Vendored autocomplete lacks upstream's empty-list scroll fix
+- ISS-144 · Resolved 2026-11-19 · CHANGELOG "Dark pin spec and tighter tests" · No e2e spec asserts Login/Sidebar always-dark pin
+- ISS-153 · Resolved 2026-11-19 · CHANGELOG "Dark pin spec and tighter tests" · /search contract-test gaps
+- ISS-163 · Resolved 2026-11-19 · CHANGELOG "Dark pin spec and tighter tests" · Backfill test checks a copy of the migration SELECT, not the file
+- ISS-165 · Resolved 2026-11-19 · CHANGELOG "Dark pin spec and tighter tests" · accessibleNames.test pairs id/htmlFor by whole-file text search
+- ISS-162 · Resolved 2026-11-19 · Verified 2026-11-19: with the task row lock removed, both concurrency tests failed 3 of 3 runs; with it restored they passed; no change needed · Recipient concurrency tests never shown to fail without the row lock
+- ISS-006 · Resolved 2026-11-19 · Accepted as is by user decision 2026-11-19, no change · POST /tasks/:id/duplicate needs task:write, create needs project:write
+- ISS-034 · Resolved 2026-11-19 · Accepted as is by user decision 2026-11-19 (ticket ref stays edit-only), no change · A task cannot be created with an iTop ticket ref pre-set
+- ISS-038 · Resolved 2026-11-19 · Accepted as is by user decision 2026-11-19, no change · A handover does not notify a new customer owner

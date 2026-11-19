@@ -1,6 +1,6 @@
 # Issues wave 7: backend checks, small UI, tests
 
-Status: in progress, branch `fix/issues-wave-7`. Archive path: `docs/archive/plans/issues-wave-7.md`.
+Status: shipped 2026-11-19, branch `fix/issues-wave-7`. Archive path: `docs/archive/plans/issues-wave-7.md`.
 
 Lane P. One PR into `develop`; each group is one task and one commit.
 
@@ -26,3 +26,11 @@ AA, AB and J share no files. Backend tests run in AA and J under the backend-tes
 - AB: no side-scroll in the task form at 375px with the label creator open; mention chips of deactivated users look muted with a tooltip; the autocomplete item class matches upstream and the empty-list scroll fix is in.
 - J: the always-dark pin has an e2e spec; the search, recipient-lock, backfill and accessible-name tests are tightened.
 - `gates.sh` green; one opus phase review; Delivery Gate for visible changes.
+
+## Records
+
+- Commits: AA `05d3b6d`, AB `ff34ebb`, J `fae8ea4`, AB fixes `4d15c3f`, AA fixes `fc5d174`, J fixes `964cb54`, offboarding lock order `b65a33d`, then the issue records and this archive.
+- Phase review (opus): 1 blocker (a disabled service checkbox kept a pointer cursor), 4 should-fix (ISS-184 left deadlock paths; the sidebar half of the dark-pin spec could not fail; deal-note mention chips not muted; ISS-162 had no change), 4 nits. All fixed. Re-check: 1 should-fix (offboarding locked the leaver's row before the stage locks, which could deadlock with a deal create), fixed by taking stage locks first.
+- ISS-162 is verification only: with the task row lock removed, both concurrency tests failed 3 of 3 runs; with it restored they passed. The dark-pin spec went red when `dark` was removed from the sidebar.
+- Closed 16: ISS-006, 034, 038 (accepted as is), 032, 069, 144, 153, 162, 163, 165, 183, 184, 185, 196, 197, 198. Filed: ISS-199 (autocomplete focus border, older).
+- Delivery Gate: PASS. Light and dark, 375px and 1280px: the task form with the label creator open has no side-scroll (document 375/375, modal body 374/374); a deactivated user's mention chip renders muted with "(deactivated)" screen-reader text; no page side-scroll. The epic owner and service picker changes are covered by tests and the review.
