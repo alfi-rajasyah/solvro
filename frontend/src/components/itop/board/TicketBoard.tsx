@@ -33,6 +33,7 @@ import {
 } from "@/components/reui/kanban";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { useDragActivityGuard } from "@/lib/dragActivity";
 import {
   useCustomerTickets,
   useItopStatus,
@@ -79,6 +80,7 @@ export function TicketBoard({
   const actionsEnabled = status.data?.actionsEnabled ?? false;
   const tokenSet = myToken.data?.set ?? false;
   const { user } = useAuth();
+  const dragActivity = useDragActivityGuard();
   const canWrite = hasPermission(user, "task:write");
   const canAct = canWrite && actionsEnabled && tokenSet;
 
@@ -236,12 +238,19 @@ export function TicketBoard({
         onMove={handleMove}
         getItemValue={getItemValue}
         onDragStart={(event) => {
+          dragActivity.begin();
           setDragFromColumn(findColumnOf(String(event.active.id)));
           if (forbiddenTimerRef.current) clearTimeout(forbiddenTimerRef.current);
           setForbiddenNotice(null);
         }}
-        onDragEnd={() => setDragFromColumn(null)}
-        onDragCancel={() => setDragFromColumn(null)}
+        onDragEnd={() => {
+          dragActivity.end();
+          setDragFromColumn(null);
+        }}
+        onDragCancel={() => {
+          dragActivity.end();
+          setDragFromColumn(null);
+        }}
       >
         {/* Own layout div, `KanbanBoard` reduced to `className="contents"`
             — mirrors

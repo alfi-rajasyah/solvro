@@ -31,6 +31,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { ApiError } from "@/lib/api";
 import { formatIDRCompact, formatPipelineDate, formatWinProbability } from "@/lib/pipelineFormat";
 import { useUpdateOpportunity, type Opportunity, type UpdateOpportunityInput } from "@/lib/queries";
@@ -133,7 +134,7 @@ export function OpportunityCard({
           {canDrag && (
             <KanbanItemHandle
               aria-label="Drag to reorder"
-              className="mt-0.5 inline-flex shrink-0 touch-none items-center text-on-surface-variant/60"
+              className={`mt-0.5 inline-flex shrink-0 touch-none items-center rounded-sm text-on-surface-variant/60 ${FIELD_FOCUS}`}
             >
               <span aria-hidden="true" className="material-symbols-outlined text-[16px]">drag_indicator</span>
             </KanbanItemHandle>

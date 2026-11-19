@@ -183,15 +183,15 @@ if [ -n "$(git ls-files -- .claude CLAUDE.md backend/CLAUDE.md frontend/CLAUDE.m
 else fail guardrail-local-only-tracked "the agent workflow files (.claude/, CLAUDE.md, docs/) must stay tracked in this repository, and .superpowers must not be"; fi
 
 # Update EXPECTED_KANBAN_PATCHES together with the CHANGELOG when a sanctioned patch lands.
-EXPECTED_KANBAN_PATCHES=0
+EXPECTED_KANBAN_PATCHES=5
 if [ -f frontend/src/components/reui/kanban.tsx ]; then
   N="$(grep -c 'SOLVRO PATCH' frontend/src/components/reui/kanban.tsx)"
   if [ "$N" -eq "$EXPECTED_KANBAN_PATCHES" ]; then pass guardrail-kanban-vendor
   else fail guardrail-kanban-vendor "SOLVRO PATCH count $N != recorded $EXPECTED_KANBAN_PATCHES"; fi
 else fail guardrail-kanban-vendor "frontend/src/components/reui/kanban.tsx missing"; fi
 
-# Same drift guard for the vendored Sortable (vendored 2026-07-30, zero sanctioned patches).
-EXPECTED_SORTABLE_PATCHES=0
+# Same drift guard for the vendored Sortable (vendored 2026-07-30).
+EXPECTED_SORTABLE_PATCHES=6
 if [ -f frontend/src/components/reui/sortable.tsx ]; then
   N="$(grep -c 'SOLVRO PATCH' frontend/src/components/reui/sortable.tsx)"
   if [ "$N" -eq "$EXPECTED_SORTABLE_PATCHES" ]; then pass guardrail-sortable-vendor

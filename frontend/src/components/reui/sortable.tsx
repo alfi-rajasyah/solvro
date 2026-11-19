@@ -31,6 +31,7 @@ import {
   TouchSensor,
   useSensor,
   useSensors,
+  type DraggableAttributes, // SOLVRO PATCH
   type DraggableSyntheticListeners,
 } from "@dnd-kit/core"
 import {
@@ -51,6 +52,7 @@ import { cn } from "@/lib/utils"
 // Sortable Item Context
 const SortableItemContext = createContext<{
   listeners: DraggableSyntheticListeners | undefined
+  attributes?: DraggableAttributes // SOLVRO PATCH: a11y attributes travel to the handle
   isDragging?: boolean
   disabled?: boolean
 }>({
@@ -356,7 +358,7 @@ function SortableItem({
         "data-disabled": disabled,
         ref: setNodeRef,
         style,
-        ...attributes,
+        // SOLVRO PATCH: dnd-kit attributes (role=button, tabIndex 0) go on the handle, not the row
         className: cn(
           isSortableDragging && "opacity-50 z-50",
           disabled && "opacity-50",
@@ -370,7 +372,7 @@ function SortableItem({
       value={
         isOverlay
           ? { listeners: undefined, isDragging: true, disabled: false }
-          : { listeners, isDragging: isSortableDragging, disabled }
+          : { listeners, attributes, isDragging: isSortableDragging, disabled } // SOLVRO PATCH
       }
     >
       {useRender({
@@ -392,12 +394,14 @@ function SortableItemHandle({
   cursor = true,
   ...props
 }: SortableItemHandleProps) {
-  const { listeners, isDragging, disabled } = useContext(SortableItemContext)
+  const { listeners, attributes, isDragging, disabled } = useContext(SortableItemContext) // SOLVRO PATCH
 
   const defaultProps = {
     "data-slot": "sortable-item-handle",
     "data-dragging": isDragging,
     "data-disabled": disabled,
+    // SOLVRO PATCH: the handle is the focusable keyboard activator; omitted when disabled or in the overlay
+    ...(disabled ? undefined : attributes),
     ...listeners,
     className: cn(
       cursor && (isDragging ? "cursor-grabbing!" : "cursor-grab!"),
