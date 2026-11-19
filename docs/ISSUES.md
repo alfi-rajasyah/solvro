@@ -485,9 +485,9 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 ### ISS-191 · P3 · Handover pickers still list receivers with zero permissions
 
 - **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `7e6547f`
-- **Where:** handoverReceivers in frontend/src/lib/handover.ts (line ~84)
-- **Problem:** The pickers drop PENDING users only. A custom role with no permissions still shows; the server now refuses it with a clear message, so this is a late error, not wrong data.
-- **Why deferred / fix direction:** Expose a has-permissions flag on the users directory and filter on it, or accept the server message.
+- **Where:** handoverReceivers in frontend/src/lib/handover.ts (line ~84); assertReceiver in backend/src/lib/offboarding.ts (line ~150); PUT /admin/projects/reassign in backend/src/routes/admin.ts (line ~742) and tamCandidates in frontend/src/pages/Admin.tsx (line ~1587)
+- **Problem:** The handover pickers drop PENDING users only, so a custom role with no permissions is offered and then refused by the server. The server's PENDING test is a role-name check (backend/CLAUDE.md: permission-based only). The Project Overrides reassign route and picker still accept a PENDING or zero-permission TAM.
+- **Why deferred / fix direction:** One receiver rule everywhere: add a `hasAccess` field (permissions not empty) to the /users payload, filter on it in both pickers, refuse in the reassign route, and drop the role-name test.
 
 ### ISS-192 · P3 · Section reorder modal keeps its own order after a failed save
 
@@ -495,6 +495,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Where:** local `order` seeding in frontend/src/components/SectionReorderModal.tsx (lines ~39-47)
 - **Problem:** The modal seeds its order once on open. After a failed PATCH the sections cache re-seeds from the server (ISS-112), but the open modal still shows its diverged order until reopened.
 - **Why deferred / fix direction:** Re-seed the local order when a section mutation fails.
+
+### ISS-193 · P3 · The icon stylesheet now loads after the app stylesheet
+
+- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `be6a448`
+- **Where:** `@import url(...Material+Symbols...)` in frontend/src/index.css (line ~8)
+- **Problem:** Moving the icon stylesheet from a `<link>` in index.html to a CSS `@import` chains the requests (app CSS, then the Google CSS, then the font) and holds the app stylesheet on a third-party fetch on a first visit (antislop R-40; not measured). Repeat visits hit the Workbox cache.
+- **Why deferred / fix direction:** Measure first. If it matters, load the font CSS with a `<link>` again and keep the class rules in `@layer base` (they hold without the layer).
 
 ## Open — Accessibility & tokens
 
