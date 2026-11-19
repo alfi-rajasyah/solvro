@@ -12,6 +12,7 @@ import {
 } from "@/components/reui/filters";
 import { useNewParam } from "@/hooks/useNewParam";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { IS_ANY_OF_OPERATOR, IS_OPERATOR } from "@/lib/filterOperators";
 import { fmtRange } from "@/lib/formatDate";
 import { PROJECT_STATUS_LABEL, projectStatusOptions } from "@/lib/labels";
 import { parseStatusParam, serialiseStatusParam } from "@/lib/projectStatusFilter";
@@ -91,14 +92,14 @@ export function Projects() {
         key: CUSTOMER_FILTER_FIELD,
         label: "Customer",
         type: "select",
-        operators: [{ value: "is", label: "is" }],
+        operators: IS_OPERATOR,
         options: (customers ?? []).map((c) => ({ value: String(c.id), label: c.name })),
       },
       {
         key: STATUS_FILTER_FIELD,
         label: "Status",
         type: "multiselect",
-        operators: [{ value: "is_any_of", label: "is any of" }],
+        operators: IS_ANY_OF_OPERATOR,
         options: projectStatusOptions.map((o) => ({ value: o.value, label: o.label })),
       },
     ],

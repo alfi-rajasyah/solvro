@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { LabelChip } from "@/components/LabelChip";
+import { CriticalPathMark } from "@/components/CriticalPathMark";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { Tabs } from "@/components/Tabs";
@@ -19,6 +20,7 @@ import { FIELD_FOCUS } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { dateToDay } from "@/lib/dateField";
 import { isTaskShownOverdue, showsPlainDue } from "@/lib/taskOverdue";
+import { IS_OPERATOR } from "@/lib/filterOperators";
 import { fmtDay, fmtDue } from "@/lib/formatDate";
 import { parseWeekKey, weekKeyOf } from "@/lib/isoWeek";
 import { priorityOptions, taskStatusOptions } from "@/lib/labels";
@@ -58,7 +60,6 @@ const EMPTY_TASKS: TaskWithProject[] = [];
 // empty", "is not empty") would render a chip whose label lies about what's
 // actually being sent to useTasks (e.g. a "Status is not DONE" chip would
 // still filter as "Status is DONE"). Same fix as Projects.tsx's customer field.
-const ONLY_IS_OPERATOR = [{ value: "is", label: "is" }];
 
 // Saved views, synced to `?view=`. "open" is the default and is written to the
 // URL as the absence of the param, so `/tasks` and `/tasks?view=open` agree.
@@ -131,28 +132,28 @@ export function Tasks() {
         key: "status",
         label: "Status",
         type: "select",
-        operators: ONLY_IS_OPERATOR,
+        operators: IS_OPERATOR,
         options: taskStatusOptions,
       },
       {
         key: "priority",
         label: "Priority",
         type: "select",
-        operators: ONLY_IS_OPERATOR,
+        operators: IS_OPERATOR,
         options: priorityOptions,
       },
       {
         key: "assignedToId",
         label: "Assignee",
         type: "select",
-        operators: ONLY_IS_OPERATOR,
+        operators: IS_OPERATOR,
         options: (users ?? []).map((u) => ({ value: String(u.id), label: u.username })),
       },
       {
         key: "customerId",
         label: "Customer",
         type: "select",
-        operators: ONLY_IS_OPERATOR,
+        operators: IS_OPERATOR,
         options: (customers ?? []).map((c) => ({ value: String(c.id), label: c.name })),
       },
     ],
@@ -291,7 +292,12 @@ export function Tasks() {
         id: "priority",
         accessorFn: (row) => PRIORITY_ORDER[row.priority],
         header: ({ column }) => <DataGridColumnHeader column={column} title="Priority" />,
-        cell: ({ row }) => <PriorityBadge priority={row.original.priority} compact />,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <PriorityBadge priority={row.original.priority} compact />
+            {row.original.isCriticalPath && <CriticalPathMark variant="glyph" />}
+          </div>
+        ),
         meta: { skeleton: <Skeleton className="h-4 w-10 rounded-full" /> },
       },
       {

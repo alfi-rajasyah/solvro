@@ -264,6 +264,7 @@ export function SubtaskRow({
       >
         {task.title}
       </span>
+      {task.isCriticalPath && <CriticalPathMark variant="glyph" className="shrink-0" />}
       {task.assignedTo && (
         <span onPointerDown={(e) => e.stopPropagation()}>
           <AssigneeAvatar user={task.assignedTo} size="xs" />

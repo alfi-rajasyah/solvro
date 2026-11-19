@@ -33,14 +33,17 @@ export function ProjectMembersButton({
   const { data: members } = useProjectMembers(project.id);
   const { visible, overflow } = splitMemberOverflow(members ?? [], MAX_AVATARS);
   const count = (members?.length ?? 0) + 1;
+  // The count and avatars are the TAM plus added members; the SA sees the
+  // project through its own visibility arm and is never a member row.
+  const saNote = project.sa ? "The TAM and added members. The SA is not counted." : undefined;
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={`Project members (${count})`}
-        title="Project members"
+        aria-label={`Project members (${count})${saNote ? `. ${saNote}` : ""}`}
+        title={saNote ? `Project members. ${saNote}` : "Project members"}
         data-testid="project-members-button"
         className="flex h-8 items-center gap-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 outline-hidden transition-colors hover:bg-surface-container focus-visible:ring-2 focus-visible:ring-primary/30"
       >
