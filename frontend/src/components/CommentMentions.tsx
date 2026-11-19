@@ -52,6 +52,7 @@ export function CommentBody({
             }
           >
             {piece.text}
+            {piece.inactive && <span className="sr-only"> (deactivated)</span>}
           </span>
         ) : (
           <span key={i}>{piece.text}</span>

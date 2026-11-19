@@ -829,7 +829,7 @@ function ActivitySection({
   const { data: directory } = useUsers();
   const candidates = useMemo(() => dealMentionCandidates(directory), [directory]);
   const known = useMemo(
-    () => (directory ?? []).map((u) => ({ id: u.id, username: u.username })),
+    () => (directory ?? []).map((u) => ({ id: u.id, username: u.username, active: u.active })),
     [directory],
   );
 

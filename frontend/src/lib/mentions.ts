@@ -204,10 +204,9 @@ export function taskMentionPeople(input: {
   const candidates = activeIds ? project.filter((p) => activeIds.has(p.id)) : project;
   // Chips keep resolving a deactivated user (history) but flag them so the
   // chip can render muted.
-  const withActive = (p: MentionUser): MentionUser => {
-    const entry = directory?.find((u) => u.id === p.id);
-    return entry && !entry.active ? { ...p, active: false } : p;
-  };
+  const directoryActive = new Map((directory ?? []).map((u) => [u.id, u.active]));
+  const withActive = (p: MentionUser): MentionUser =>
+    directoryActive.get(p.id) === false ? { ...p, active: false } : p;
   const known = uniqueById<MentionUser>([
     ...project,
     ...(directory ?? []).map((u) => ({ id: u.id, username: u.username })),
