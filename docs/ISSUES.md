@@ -69,13 +69,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Only matters if that topology is used (documented in docs/CONFIGURATION.md 2.13). Fix then: per-account-only fallback when the address is a known proxy.
 - **Source:** snapshot line 2380, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-195 · P3 · A fast /auth/me reply can hide a cross-tab account switch
-
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `d779d7e`
-- **Where:** the boot /auth/me `.then` in frontend/src/lib/auth.tsx
-- **Problem:** When another tab signs in as a different account, the token event arrives first and this tab re-checks it with /auth/me. If that reply (user B) lands before B's user-key storage event, the later event sees the same id and never adopts, so the tab runs as B on A's cached data.
-- **Why deferred / fix direction:** Needs a network reply to beat a local storage event. Treat an id change in the /auth/me reply as an account switch: clear the cache (and navigate) when the previous user was not null.
-
 ## Open — Data & performance
 
 ### ISS-013 · P2 · GET /users is unpaginated
@@ -117,14 +110,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** The route range-scans project and customer notes by noteDate with no index leading on it, so it plans a seq scan. Fast at dev volume.
 - **Why deferred / fix direction:** Add @@index([noteDate]) on both models via migration when volume grows (about 10k notes a year is the stated horizon).
 - **Source:** snapshot line 1662, section "Daily Review collapse & Recent notes — deferred findings (2026-08-31)"
-
-### ISS-022 · P3 · useDuplicateTask/Section isPending includes inactive-query refetches
-
-- **Type:** debt · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** useDuplicateTask / useDuplicateSection in frontend/src/lib/queries.ts (line ~2200)
-- **Problem:** isPending waits on inactive queries too; near-zero cost since inactive queries refetch lazily. Considered, not taken.
-- **Why deferred / fix direction:** Optionally await only projectTasks and fire the rest un-awaited.
-- **Source:** snapshot line 1820, section "Duplicate tasks, subtasks, and sections — deferred findings (2026-09-02)"
 
 ### ISS-023 · P3 · Activity feed orders by id while the index is (project_id, created_at desc)
 
@@ -242,14 +227,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Deepen the equality check when such a field is added.
 - **Source:** snapshot line 1412, section "Issues Sweep #1 — residuals (2026-08-02)"
 
-### ISS-058 · P3 · ProjectRisks inline cells use plain select instead of ui/select
-
-- **Type:** debt · **Found:** 2026-08-29 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** probability, impact and status cells in frontend/src/pages/views/ProjectRisks.tsx (lines ~378, 409, 457)
-- **Problem:** Risk editors use hand-rolled selects while the Daily Review lists use the vendored ui/select.
-- **Why deferred / fix direction:** Align on ui/select the next time the file is touched.
-- **Source:** snapshot line 1631, section "Daily Review v2 — deferred findings (2026-08-29)"
-
 ### ISS-059 · P3 · CriticalPathMark chip padding coupled to Chip's DOM shape
 
 - **Type:** debt · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -305,12 +282,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Moving the icon stylesheet from a `<link>` in index.html to a CSS `@import` chains the requests (app CSS, then the Google CSS, then the font) and holds the app stylesheet on a third-party fetch on a first visit (antislop R-40; not measured). Repeat visits hit the Workbox cache.
 - **Why deferred / fix direction:** Measure first. If it matters, load the font CSS with a `<link>` again and keep the class rules in `@layer base` (they hold without the layer).
 
-### ISS-199 · P3 · Vendored autocomplete changes its border on focus
+### ISS-200 · P3 · Vendored select trigger changes its border on focus
 
-- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `964cb54`
-- **Where:** patch 4 focus classes in frontend/src/components/reui/autocomplete.tsx (line ~37, comment line ~31)
-- **Problem:** The patch adds `focus-visible:border-primary`; DESIGN.md §4's reduced focus form says no border change on focus.
-- **Why deferred / fix direction:** Predates this work. Drop the border change from the SOLVRO PATCH and keep the primary ring; update `reui/VENDOR.md`.
+- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `8fd10ee`
+- **Where:** SelectTrigger classes in frontend/src/components/ui/select.tsx (line ~59); also ui/input.tsx and ui/textarea.tsx
+- **Problem:** `focus-visible:border-primary` breaks DESIGN.md §4's reduced focus form (border never changes on focus). Daily Review ProjectCard.tsx (~247) tries to override it and does not.
+- **Why deferred / fix direction:** Predates this work; the ring stays visible. Drop the border change from the vendored classes, keep the primary ring, and re-check every consumer.
 
 ## Open — Accessibility & tokens
 
@@ -396,14 +373,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Trigger: a project rendering low hundreds of bars at once. Then share a single observer.
 - **Source:** snapshot line 519, section "Plan B Task 9 deferred findings — ReUI Gantt swap (2026-07-25)"
 
-### ISS-101 · P3 · handleResourceReorder is ~130 lines
-
-- **Type:** debt · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** handleResourceReorder in frontend/src/components/gantt-v2/SolvroGantt.tsx (line ~605)
-- **Problem:** Single callback with three branches, kept to mirror the old engine for diffability.
-- **Why deferred / fix direction:** Split into named helpers in a readability pass.
-- **Source:** snapshot line 530, section "Final whole-branch review additions (2026-07-25)"
-
 ### ISS-105 · P3 · Dark-theme Gantt bar ring contrast for the Critical Path mark
 
 - **Type:** decision · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -429,36 +398,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Subtask list is derived from the tasks query, so the DOM keeps the pre-drop order until the optimistic update lands. A snap-back flicker is possible in that window.
 - **Why deferred / fix direction:** Only act if the flicker is seen in practice; direction is a local order mirror like SectionReorderModal.
 - **Source:** snapshot line 1064, section "Sortable reorder (sections + subtasks) — deferred findings (2026-07-30)"
-
-### ISS-114 · P3 · data-grid-column-header hasControls branch ignores right-align
-
-- **Type:** watch · **Found:** 2026-08-01 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** hasControls branch in frontend/src/components/reui/data-grid/data-grid-column-header.tsx (line ~434)
-- **Problem:** The move/pin/visibility header path does not honor meta.headerClassName text-right. Unreachable today because no grid enables those controls.
-- **Why deferred / fix direction:** Teach the branch alignEnd when the first right-aligned column enables controls.
-- **Source:** snapshot line 1300, section "ReUI Data Grid phase — deferred findings (2026-08-01)"
-
-### ISS-115 · P3 · Sortable DataGrid header cannot center-align
-
-- **Type:** debt · **Found:** 2026-08-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** alignEnd in frontend/src/components/reui/data-grid/data-grid-column-header.tsx (line ~107)
-- **Problem:** The sortable header path supports left and right alignment only, so ProjectRisks Probability and Impact columns cannot be sorted and centered.
-- **Why deferred / fix direction:** Add alignCenter to the vendored header with a SOLVRO PATCH marker.
-- **Source:** snapshot line 1392, section "Issues Sweep #1 — residuals (2026-08-02)"
-
-### ISS-187 · P3 · Drag handles are not registered as the dnd-kit activator node
-
-- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `65a6c77`
-- **Where:** KanbanItem / KanbanItemHandle in frontend/src/components/reui/kanban.tsx (line ~760); SortableItem in reui/sortable.tsx
-- **Problem:** After a keyboard drop that remounts a card, dnd-kit restores focus to the first focusable element in the row. Today that is the handle in every card, so it works by chance.
-- **Why deferred / fix direction:** Pass setActivatorNodeRef through the context and set it on the handle (one more SOLVRO PATCH per file, counters bumped).
-
-### ISS-188 · P3 · Kanban drag handles are 16px touch targets
-
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `65a6c77`
-- **Where:** handles in frontend/src/components/itop/board/TicketCard.tsx, pipeline/OpportunityCard.tsx, kanban-v2/cards.tsx
-- **Problem:** The grip has no padding to enlarge its hit area (antislop R-03); on touch it is hard to hit.
-- **Why deferred / fix direction:** Pad the handle to a 24px or larger target without changing the icon size.
 
 ## Open — Pipeline
 
@@ -544,12 +483,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** No action until an install differs.
 - **Source:** snapshot line 2236, section "iTop integration — real-install findings (2026-09-24, ported 2026-10-04)"
 
-### ISS-132 · P3 · A failed iTop sync keeps half its work
-
-- **Type:** bug · **Found:** 2026-10-05 · **Verified:** 2026-11-19 @ `50e3a4f`
-- **Where:** upsertTicket and the page loop in syncTickets (backend/src/lib/itop/sync.ts, line ~403, ~880)
-- **Problem:** Rows written before a crash stay and the full-sync cleanup never runs. Since 2026-11-19 GET /itop/status returns `lastSyncFailed`, but no screen shows it yet.
-- **Why deferred / fix direction:** Wrap each page's upserts in a transaction, and decide whether the Tickets tab shows a failed-sync notice.
 ### ISS-134 · P3 · Deployment note: itopUserId matching needs REST read rights on iTop's User class
 
 - **Type:** watch · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -566,12 +499,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Confirm on a real iTop install that blank durations are transient; if they persist, decide how to store them.
 - **Source:** snapshot line 2385, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-186 · P3 · A full sync already running can undo the full-sync reset of a new org mapping
+### ISS-202 · P3 · Unmapping an iTop org during a running sync can re-attach its tickets
 
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `50e3a4f`
-- **Where:** setCustomerOrgMapping in backend/src/routes/itopAdmin.ts (line ~616); lastFullSyncAt write in backend/src/lib/itop/sync.ts (line ~786)
-- **Problem:** A full sync that read the customers before the mapping changed finishes and writes lastFullSyncAt, so the new org's older tickets wait up to a day again. The same run's removal pass deletes that org's tickets (older behavior).
-- **Why deferred / fix direction:** Self-heals within 24h. Write lastFullSyncAt only if it is unchanged since the run started, or request a sync after the mapping commits.
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `8fd10ee`
+- **Where:** setCustomerOrgMapping (clears lastFullSyncAt only when a mapping is set) and the sync's orgIdToCustomerId snapshot in backend/src/lib/itop/sync.ts
+- **Problem:** A running sync can set customerId again on tickets just detached from an unmapped customer. The next sync corrects them; no ticket moves to a wrong customer.
+- **Why deferred / fix direction:** Predates this work and self-heals. Apply the same updatedAt compare-and-set to the ticket writes, or re-read the mapping per page.
 
 ## Open — Exports & sharing
 
@@ -599,23 +532,7 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Self-host the fonts; deferred because it changes the whole app shell.
 - **Source:** snapshot line 2283, section "Collaboration & sharing — guest links — deferred findings (2026-09-30, ported 2026-10-05)"
 
-### ISS-142 · P3 · Guest links use the address the owner is browsing from
-
-- **Type:** bug · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** ProjectShare copy-link handler in frontend/src/components/ProjectShare.tsx (line ~247)
-- **Problem:** An owner signed in through an SSH tunnel or localhost copies a link a guest cannot open, since the origin comes from the browser.
-- **Why deferred / fix direction:** Add a PUBLIC_BASE_URL setting and build the link from it.
-- **Source:** snapshot line 2286, section "Collaboration & sharing — guest links — deferred findings (2026-09-30, ported 2026-10-05)"
-
 ## Open — Tests & CI
-
-### ISS-143 · P2 · No ESLint config; exhaustive-deps disable comment is inert
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** reset-effect deps in frontend/src/components/TaskFormModal.tsx (line ~176); no lint config in frontend/
-- **Problem:** Nothing mechanically stops a future edit from reintroducing the whole props object into the reset-effect dependencies (second root cause of GH #56).
-- **Why deferred / fix direction:** Add an ESLint config with react-hooks/exhaustive-deps and an npm run lint gate in CI.
-- **Source:** snapshot line 449, section "Tech debt / follow-ups from recent work"; merged duplicates at snapshot lines 2263
 
 ### ISS-145 · P2 · e2e drag-reorder first-attempt flakes (list-dnd/kanban-dnd/gantt-parity)
 
@@ -665,30 +582,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Accept as is unless the upstream race becomes reproducible.
 - **Source:** snapshot line 1403, section "Issues Sweep #1 — residuals (2026-08-02)"
 
-### ISS-157 · P3 · filters.test.ts colocated in vendored reui/ and imports a patched export
-
-- **Type:** debt · **Found:** 2026-08-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** frontend/src/components/reui/filters.test.ts (line ~2)
-- **Problem:** A shadcn/ReUI re-pull of filters.tsx would delete findFilterMatch and silently break this test's import. The patch counter does not protect the test.
-- **Why deferred / fix direction:** Move the test outside reui/ or add a gate for it.
-- **Source:** snapshot line 1418, section "Issues Sweep #1 — residuals (2026-08-02)"
-
-### ISS-158 · P3 · createTask helper duplicated across e2e specs
-
-- **Type:** debt · **Found:** 2026-08-03 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** createTask in e2e/tests/gantt-parity.spec.ts and date-picker.spec.ts
-- **Problem:** Two specs keep private copies of a helper that now lives in fixtures/seed.ts.
-- **Why deferred / fix direction:** Fold both into the shared helper; costs re-running two slow specs.
-- **Source:** snapshot line 1499, section "Gantt visual refresh — deferred findings (2026-08-03)"
-
-### ISS-159 · P3 · daily-review.spec.ts leaves a new ACTIVE project and customer per run
-
-- **Type:** debt · **Found:** 2026-08-29 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** cleanup in e2e/tests/daily-review.spec.ts (header ~25-36)
-- **Problem:** The spec flips its project ACTIVE and its customer's tamId to admin and never deletes them, so junk rows grow in the shared dev DB each run. The header comment's premise is outdated.
-- **Why deferred / fix direction:** Add an afterAll that calls the existing DELETE routes and correct the comment.
-- **Source:** snapshot line 1638, section "Daily Review v2 — deferred findings (2026-08-29)"
-
 ### ISS-160 · P3 · Three pre-existing flaky e2e tests retried clean (gantt-parity, kanban-dnd)
 
 - **Type:** watch · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -696,22 +589,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Three e2e tests passed only on retry in one gate run; the mobile touch-reorder depends on the seeded project's task count staying contiguous.
 - **Why deferred / fix direction:** No action until one fails consistently; then tighten the wait (case c) or fixture isolation (the other two).
 - **Source:** snapshot line 1698, section "Critical Path mark — deferred findings (2026-09-02)"; merged duplicates at snapshot lines 2253
-
-### ISS-161 · P3 · Flaky backend test: taskOrdering 'orders GET /tasks (cross-project)'
-
-- **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** test 'orders GET /tasks (cross-project) by position asc, then id asc' in backend/test/taskOrdering.test.ts (line ~104)
-- **Problem:** The test occasionally failed in a full run and passed alone, since it reads the 200-row window of GET /tasks.
-- **Why deferred / fix direction:** Observed once; no repro. Watch for recurrence (and note that files now run serially); fix by scoping the query to the test's project.
-- **Source:** snapshot line 2269, section "Collaboration & sharing — stale-edit warning — deferred findings (2026-09-30, ported 2026-10-05)"
-
-### ISS-164 · P3 · list-dnd 'cross-status reorder in one section sticks' failed locally
-
-- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** e2e/tests/list-dnd.spec.ts (line 89)
-- **Problem:** The test failed 2 of 2 locally against the vite dev server.
-- **Why deferred / fix direction:** Cause was shared seeded project state across spec files, fixed by per-file seeding.
-- **Source:** snapshot line 2381, section "Application review 2026-10-22 — remaining open items"
 
 ### ISS-167 · P3 · taskReorderConcurrency.test.ts:114 timed out once in a loaded gates run
 
@@ -786,6 +663,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Those two specs fail against a vite dev server and were not run locally.
 - **Why deferred / fix direction:** Rely on CI or free disk space.
 - **Source:** snapshot line 2410, section "Project lifecycle and handover — deferred findings (2026-11-10)"
+
+### ISS-201 · P3 · Frontend lint dev tools add moderate audit advisories
+
+- **Type:** watch · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `07bd7af`
+- **Where:** `minimatch` under eslint and typescript-eslint in frontend/package-lock.json
+- **Problem:** The ESLint packages add 7 moderate advisories (ReDoS in `minimatch`), dev-only; total went from 24 to 31.
+- **Why deferred / fix direction:** Dev-only, not shipped. Trigger: a high advisory, or an upstream release that fixes it; then bump in the container.
 
 ## Open — Docs & process
 
@@ -897,3 +781,21 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-006 · Resolved 2026-11-19 · Accepted as is by user decision 2026-11-19, no change · POST /tasks/:id/duplicate needs task:write, create needs project:write
 - ISS-034 · Resolved 2026-11-19 · Accepted as is by user decision 2026-11-19 (ticket ref stays edit-only), no change · A task cannot be created with an iTop ticket ref pre-set
 - ISS-038 · Resolved 2026-11-19 · Accepted as is by user decision 2026-11-19, no change · A handover does not notify a new customer owner
+- ISS-195 · Resolved 2026-11-19 · CHANGELOG "Guest link address, iTop sync atomicity, cross-tab account switch" · A fast /auth/me reply can hide a cross-tab account switch
+- ISS-132 · Resolved 2026-11-19 · CHANGELOG "Guest link address, iTop sync atomicity, cross-tab account switch" (user decision: no Tickets tab notice) · A failed iTop sync keeps half its work
+- ISS-186 · Resolved 2026-11-19 · CHANGELOG "Guest link address, iTop sync atomicity, cross-tab account switch" · A full sync already running can undo the full-sync reset of a new org mapping
+- ISS-142 · Resolved 2026-11-19 · CHANGELOG "Guest link address, iTop sync atomicity, cross-tab account switch" · Guest links use the address the owner is browsing from
+- ISS-187 · Resolved 2026-11-19 · CHANGELOG "Drag handles, data-grid header alignment, risk cells, autocomplete focus" · Drag handles are not registered as the dnd-kit activator node
+- ISS-188 · Resolved 2026-11-19 · CHANGELOG "Drag handles, data-grid header alignment, risk cells, autocomplete focus" · Kanban drag handles are 16px touch targets
+- ISS-115 · Resolved 2026-11-19 · CHANGELOG "Drag handles, data-grid header alignment, risk cells, autocomplete focus" · Sortable DataGrid header cannot center-align
+- ISS-114 · Resolved 2026-11-19 · CHANGELOG "Drag handles, data-grid header alignment, risk cells, autocomplete focus" · data-grid-column-header hasControls branch ignores right-align
+- ISS-058 · Resolved 2026-11-19 · CHANGELOG "Drag handles, data-grid header alignment, risk cells, autocomplete focus" · ProjectRisks inline cells use plain select instead of ui/select
+- ISS-199 · Resolved 2026-11-19 · CHANGELOG "Drag handles, data-grid header alignment, risk cells, autocomplete focus" · Vendored autocomplete changes its border on focus
+- ISS-101 · Resolved 2026-11-19 · CHANGELOG "Drag handles, data-grid header alignment, risk cells, autocomplete focus" · handleResourceReorder is ~130 lines
+- ISS-143 · Resolved 2026-11-19 · CHANGELOG "Frontend lint and test cleanups" (user decision: hooks rules only) · No ESLint config; exhaustive-deps disable comment is inert
+- ISS-157 · Resolved 2026-11-19 · CHANGELOG "Frontend lint and test cleanups" · filters.test.ts colocated in vendored reui/ and imports a patched export
+- ISS-158 · Resolved 2026-11-19 · CHANGELOG "Frontend lint and test cleanups" · createTask helper duplicated across e2e specs
+- ISS-159 · Resolved 2026-11-19 · CHANGELOG "Frontend lint and test cleanups" · daily-review.spec.ts leaves a new ACTIVE project and customer per run
+- ISS-161 · Resolved 2026-11-19 · CHANGELOG "Frontend lint and test cleanups" · Flaky backend test: taskOrdering 'orders GET /tasks (cross-project)'
+- ISS-022 · Resolved 2026-11-19 · CHANGELOG "Frontend lint and test cleanups" · useDuplicateTask/Section isPending includes inactive-query refetches
+- ISS-164 · Resolved 2026-11-19 · Cause (shared seeded project state across spec files) already fixed by per-file seeding; closed 2026-11-19 · list-dnd 'cross-status reorder in one section sticks' failed locally

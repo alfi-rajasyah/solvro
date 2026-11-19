@@ -35,7 +35,8 @@
 #                   and saved to .env when set — on install and on update.
 #   PUBLIC_BASE_URL optional. The address guests open, e.g.
 #                   "https://solvro.example.com" (http or https, no trailing
-#                   slash). Guest links are built from it. Blank (default): the
+#                   slash; letters, digits and . - _ ~ % only, no user:password
+#                   and no IPv6 literal). Guest links are built from it. Blank (default): the
 #                   link uses the address the owner is browsing from, which a
 #                   guest cannot open when the owner signs in through an SSH
 #                   tunnel or localhost. Validated and saved to .env when set,
@@ -263,7 +264,7 @@ if [[ -f "$ENV_FILE" ]]; then
   fi
   if [[ -n "$PUBLIC_BASE_URL_ARG" ]]; then
     is_public_base_url "$PUBLIC_BASE_URL_ARG" || {
-      echo "ERROR: PUBLIC_BASE_URL must be an absolute http(s) URL without a trailing slash (got '$PUBLIC_BASE_URL_ARG')."
+      echo "ERROR: PUBLIC_BASE_URL must be an absolute http(s) URL without a trailing slash, using only letters, digits and . - _ ~ % (got '$PUBLIC_BASE_URL_ARG')."
       exit 1
     }
     PUBLIC_BASE_URL="$PUBLIC_BASE_URL_ARG"
@@ -395,7 +396,7 @@ fi
 
 if [[ -n "$PUBLIC_BASE_URL" ]]; then
   is_public_base_url "$PUBLIC_BASE_URL" || {
-    echo "ERROR: PUBLIC_BASE_URL must be an absolute http(s) URL without a trailing slash (got '$PUBLIC_BASE_URL')."
+    echo "ERROR: PUBLIC_BASE_URL must be an absolute http(s) URL without a trailing slash, using only letters, digits and . - _ ~ % (got '$PUBLIC_BASE_URL')."
     exit 1
   }
 fi

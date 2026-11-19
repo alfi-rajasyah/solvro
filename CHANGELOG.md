@@ -36,6 +36,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 ### Fixed — 2026-11-19 — Guest link address, iTop sync atomicity, cross-tab account switch
 
 - New optional `PUBLIC_BASE_URL` setting (an absolute http or https address with no trailing slash). When set, guest links are built from it instead of the address the owner is browsing from, so a link copied through an SSH tunnel or localhost opens for a guest. `setup.sh` asks for it (blank keeps the old behaviour) and saves it to `.env`; documented in `docs/CONFIGURATION.md`.
+- `setup.sh` accepts a `PUBLIC_BASE_URL` made only of URL-safe characters and writes it to `.env` in single quotes; the backend also refuses one with `user:password@` or a backslash.
 - The iTop ticket sync stores each page of tickets in one transaction, so a sync that fails part-way no longer keeps half a page. A single unreadable ticket is still skipped on its own.
 - A full iTop sync that was already running when an organisation mapping was saved no longer records itself as the latest full sync, so the next sync is full again and picks up the new organisation's older tickets.
 - A tab whose `/auth/me` check names a different user than the one it was running as now treats it as an account switch: cached data is cleared and the app returns to the start page.
