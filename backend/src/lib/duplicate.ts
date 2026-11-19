@@ -60,7 +60,11 @@ interface PendingCopy {
 // same order as `pending`. A multi-row INSERT's RETURNING order is not a
 // documented guarantee, so the rows are matched back by (parent, position),
 // which is unique within a sibling list.
-async function insertCopies(tx: Tx, pending: PendingCopy[]): Promise<number[]> {
+async function insertCopies(
+  tx: Tx,
+  pending: PendingCopy[],
+  activeAssignees: Set<number>,
+): Promise<number[]> {
   if (pending.length === 0) return [];
   const created = await tx.task.createManyAndReturn({
     data: pending.map((p) => ({
@@ -75,18 +79,28 @@ async function insertCopies(tx: Tx, pending: PendingCopy[]): Promise<number[]> {
       isCriticalPath: p.source.isCriticalPath,
       baselineStartDate: null,
       baselineDueDate: null,
-      assignedToId: p.source.assignedToId,
+      assignedToId:
+        p.source.assignedToId !== null && activeAssignees.has(p.source.assignedToId)
+          ? p.source.assignedToId
+          : null,
       parentTaskId: p.parentTaskId,
       sectionId: p.sectionId,
       epicId: p.source.epicId,
       position: p.position,
     })),
-    select: { id: true, parentTaskId: true, position: true },
+    select: { id: true, projectId: true, parentTaskId: true, position: true },
   });
-  const idByKey = new Map(created.map((c) => [`${c.parentTaskId ?? "top"}:${c.position}`, c.id]));
+  const keyOf = (projectId: number, parentTaskId: number | null, position: number) =>
+    `${projectId}:${parentTaskId ?? "top"}:${position}`;
+  const idByKey = new Map(
+    created.map((c) => [keyOf(c.projectId, c.parentTaskId, c.position), c.id]),
+  );
+  if (idByKey.size !== pending.length) {
+    throw new Error("duplicateTaskTree: the copied rows do not match the requested copies");
+  }
   const ids: number[] = [];
   for (const p of pending) {
-    const id = idByKey.get(`${p.parentTaskId ?? "top"}:${p.position}`);
+    const id = idByKey.get(keyOf(p.source.projectId, p.parentTaskId, p.position));
     if (id === undefined) throw new Error("duplicateTaskTree: a copied task was not returned");
     ids.push(id);
   }
@@ -129,7 +143,8 @@ async function copyLabelsAndLinks(tx: Tx, pending: PendingCopy[], newIds: number
  * Copies every task in `sourceIds` (in the given order) plus, for each one,
  * its own subtasks (in source `position` then `id` order) — the shared
  * engine behind `POST /tasks/:id/duplicate` and `POST /sections/:id/duplicate`.
- * Every copy: resets `status` to `TODO`, clears both baseline date columns,
+ * Every copy: resets `status` to `TODO`, keeps the source assignee only while
+ * that account is still active (otherwise the copy is unassigned), clears both baseline date columns,
  * connects the same labels as its source, gets new copies of its source's
  * document links (same label and url), and gets no `TaskDependency` rows
  * (dependencies are dropped; comments are never copied). A subtask source
@@ -214,6 +229,27 @@ export async function duplicateTaskTree(
     return next;
   }
 
+  // A copy of a task whose assignee has been deactivated starts unassigned:
+  // a deactivated account must not be newly assigned work (one lookup for
+  // every distinct assignee in the tree).
+  const assigneeIds = [
+    ...new Set(
+      [...sources, ...allSubtasks]
+        .map((t) => t.assignedToId)
+        .filter((id): id is number => id !== null),
+    ),
+  ];
+  const activeAssignees = new Set(
+    assigneeIds.length === 0
+      ? []
+      : (
+          await tx.user.findMany({
+            where: { id: { in: assigneeIds }, active: true },
+            select: { id: true },
+          })
+        ).map((u) => u.id),
+  );
+
   // Level 1: every top-level copy in one INSERT, positions taken in order.
   const topPending: PendingCopy[] = [];
   for (const sourceId of sourceIds) {
@@ -228,7 +264,7 @@ export async function duplicateTaskTree(
       }),
     });
   }
-  const topIds = await insertCopies(tx, topPending);
+  const topIds = await insertCopies(tx, topPending, activeAssignees);
   topPending.forEach((p, i) => result.set(sourceIds[i]!, topIds[i]!));
 
   // Level 2: every subtask of every copy in one INSERT. The new parents were
@@ -250,7 +286,7 @@ export async function duplicateTaskTree(
       });
     }
   });
-  const subIds = await insertCopies(tx, subPending);
+  const subIds = await insertCopies(tx, subPending, activeAssignees);
   subPending.forEach((p, i) => result.set(p.source.id, subIds[i]!));
 
   await copyLabelsAndLinks(tx, [...topPending, ...subPending], [...topIds, ...subIds]);

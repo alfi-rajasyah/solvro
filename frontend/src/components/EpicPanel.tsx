@@ -13,8 +13,9 @@ import {
   type UpdateEpicInput,
   useCreateTask,
   useEpic,
+  useProject,
+  useProjectMembers,
   useUpdateEpic,
-  useUsers,
 } from "@/lib/queries";
 
 // Epics cannot be cancelled (tasks only).
@@ -61,7 +62,8 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
   // rendered via the Alert further down) — reusing the name here would
   // shadow it.
   const { data: epic, isLoading, isError, error: epicError } = useEpic(epicId);
-  const { data: users } = useUsers();
+  const { data: project } = useProject(projectId);
+  const { data: members } = useProjectMembers(projectId);
   const updateEpic = useUpdateEpic();
   const createTask = useCreateTask(projectId);
 
@@ -151,6 +153,18 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
   // stale deep link) settles `isLoading` to false with `epic` still
   // undefined — without this branch, that state fell into the loading
   // branch and showed "Loading epic…" forever.
+  // The backend accepts an epic owner only from the project's own people (its
+  // TAM, SA or a member), so only those are offered, plus a current owner who
+  // has since left the project so the select still shows them.
+  const ownerOptions: { id: number; username: string }[] = [];
+  const addOwnerOption = (u: { id: number; username: string } | null | undefined) => {
+    if (u && !ownerOptions.some((o) => o.id === u.id)) ownerOptions.push(u);
+  };
+  addOwnerOption(project?.tam);
+  addOwnerOption(project?.sa);
+  for (const m of members ?? []) addOwnerOption({ id: m.userId, username: m.username });
+  addOwnerOption(epic?.owner);
+
   if (isError) {
     return (
       <aside
@@ -258,7 +272,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
             className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface ${FIELD_FOCUS} disabled:cursor-default`}
           >
             <option value="">Unassigned</option>
-            {(users ?? []).map((u) => (
+            {ownerOptions.map((u) => (
               <option key={u.id} value={u.id}>
                 {u.username}
               </option>

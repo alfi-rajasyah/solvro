@@ -266,7 +266,7 @@ export function createItopClient(options: ItopClientOptions): ItopClient {
       if (page > MAX_GETALL_PAGES) {
         throw new ItopError({
           code: "paging",
-          message: `iTop paging exceeded ${MAX_GETALL_PAGES} pages for class '${cls}' — the server may be ignoring limit/page`,
+          message: `iTop paging exceeded ${MAX_GETALL_PAGES} pages for class '${cls}'. The server may be ignoring limit/page.`,
         });
       }
 

@@ -58,6 +58,7 @@ import {
   useUpdateTask,
   useUsers,
 } from "@/lib/queries";
+import { selectableUsers } from "@/lib/selectableUsers";
 
 const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
 
@@ -591,7 +592,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                   className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface ${FIELD_FOCUS}`}
                 >
                   <option value="">Unassigned</option>
-                  {(users ?? []).map((u) => (
+                  {selectableUsers(users, [task.assignedToId]).map((u) => (
                     <option key={u.id} value={u.id}>
                       {`${u.username}${assigneeAddsMember(u.id) ? " (not on project)" : ""}`}
                     </option>

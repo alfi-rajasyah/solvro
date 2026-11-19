@@ -21,6 +21,9 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 - An epic's owner must now be the project's TAM, its SA, or a project member; any other user is refused with `owner_not_in_project`. An epic whose owner is left unchanged can still be edited.
 - Assigning a deactivated user as a project TAM or SA, a customer owner, a task assignee (on create or edit) or an epic owner is now refused with a 400 error. Saving a record with its current, since-deactivated holder still works.
 - Error messages from the iTop integration and the Pipeline import no longer use em dashes, and the Daily Review phase for a project without sections now reads "No sections".
+- Assignee, TAM, SA, customer owner and epic owner pickers no longer offer deactivated users, except when the record already holds that user. The epic owner picker lists only the project's TAM, SA and members.
+- Duplicating a task or a section now leaves a copy unassigned when the source task's assignee has been deactivated.
+- The iTop paging error message no longer uses an em dash.
 
 ### Changed — 2026-11-19 — Vendored component record and palette input check
 
