@@ -15,6 +15,21 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-19 — Fixes in offboarding, icon sizing and the app shell, and query hooks
+
+- `backend/src/lib/offboarding.ts`: offboarding and user deletion refuse a new owner who has no access yet (a pending account or a role with no permissions) for tasks, the TAM and SA seats and customer ownership, with a clear error that the handover dialog shows. Customers move with one update per new owner instead of one per customer, and each new owner is checked once.
+- `frontend/src/components/admin/HandoverModal.tsx`: the handover dialog reloads its list of work when the browser window regains focus.
+- `frontend/src/pages/Admin.tsx`: the Project Overrides reassign column uses a searchable TAM picker instead of a full user list in every row.
+- `frontend/src/index.css`: icon size and display classes now apply. The Material Symbols stylesheet loads into a cascade layer below Tailwind's utilities, so icons render at the size their classes set (for example 20px in the sidebar) instead of always at 24px.
+- `frontend/src/components/InstallBanner.tsx`: install and dismiss are separate buttons instead of a button inside a button, and the dismiss target is 32px.
+- `frontend/vite.config.ts`, `frontend/index.html`: a 192px maskable app icon and a favicon for dark browser themes.
+- `frontend/src/lib/queries.ts`: creating a task refreshes the Daily Review lists. Ticking a service on a customer or project, or editing its tools, updates at once and rolls back if the save fails. Dragging a task to another section updates the section shown in an open task panel. After a failed section reorder, the sections reload from the server before later queued moves are sent.
+- `frontend/src/pages/CustomerDetail.tsx`: the customer page reads the iTop organisation name from the customer record.
+
+### Added — 2026-11-19 — Component and hook tests
+
+- `frontend/package.json`: jsdom and Testing Library (`@testing-library/react`, `@testing-library/dom`, `@testing-library/user-event`) as development dependencies. Frontend tests named `*.test.tsx` run in a browser-like DOM, with new tests for the handover dialog, the reactivation dialog, the install banner and the query hooks.
+
 ### Fixed — 2026-11-19 — Fixes in project create locks, the iTop integration, and keyboard drag
 
 - `backend/src/routes/projects.ts`: creating a section or an epic reads the next position while holding the project lock, so two simultaneous creates no longer get the same position. Creating a project label now needs the task-write permission, the same as editing or deleting one. In the task panel and task form, "Add label" is hidden for users without it.
