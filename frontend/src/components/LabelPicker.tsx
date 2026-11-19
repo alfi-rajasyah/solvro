@@ -100,7 +100,7 @@ export function LabelPicker({
 
       {canCreate && creating && (
         <div className="rounded-sm border border-outline-variant bg-surface-container-low p-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               autoFocus
               type="text"
@@ -116,7 +116,7 @@ export function LabelPicker({
               placeholder="Label name"
               aria-label="Label name"
               maxLength={50}
-              className={`flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs ${FIELD_FOCUS}`}
+              className={`min-w-0 flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs ${FIELD_FOCUS}`}
             />
             <button
               type="button"
@@ -138,7 +138,7 @@ export function LabelPicker({
               Cancel
             </button>
           </div>
-          <div className="mt-2 flex items-center gap-1">
+          <div className="mt-2 flex flex-wrap items-center gap-1">
             <span className="text-label-caps uppercase text-on-surface-variant">
               Color
             </span>

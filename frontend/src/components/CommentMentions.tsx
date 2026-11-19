@@ -44,9 +44,15 @@ export function CommentBody({
           <span
             key={i}
             data-testid="mention-chip"
-            className="rounded-sm bg-primary/10 px-1 py-px font-semibold text-primary"
+            title={piece.inactive ? "Deactivated user" : undefined}
+            className={
+              piece.inactive
+                ? "rounded-sm bg-surface-container-high px-1 py-px font-semibold text-on-surface-variant"
+                : "rounded-sm bg-primary/10 px-1 py-px font-semibold text-primary"
+            }
           >
             {piece.text}
+            {piece.inactive && <span className="sr-only"> (deactivated)</span>}
           </span>
         ) : (
           <span key={i}>{piece.text}</span>

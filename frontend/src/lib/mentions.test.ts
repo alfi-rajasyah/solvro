@@ -177,6 +177,21 @@ describe("taskMentionPeople", () => {
     expect(known.map((c) => c.username)).toContain("eko");
   });
 
+  it("flags a deactivated user in the known list and leaves active ones unflagged", () => {
+    const { known } = taskMentionPeople({
+      tam: { id: 1, username: "ana" },
+      sa: null,
+      members: [{ id: 5, username: "eko" }],
+      customerOwnerId: null,
+      directory,
+    });
+    expect(known.find((u) => u.id === 5)?.active).toBe(false);
+    expect(known.find((u) => u.id === 1)?.active).toBeUndefined();
+    const pieces = splitComment("hi @eko and @ana", [5, 1], known);
+    expect(pieces.find((p) => p.kind === "mention" && p.userId === 5)).toMatchObject({ inactive: true });
+    expect(pieces.find((p) => p.kind === "mention" && p.userId === 1)).not.toHaveProperty("inactive");
+  });
+
   it("does not drop anyone while the directory is loading, and skips an unresolved owner", () => {
     const { candidates } = taskMentionPeople({
       tam: { id: 1, username: "ana" },

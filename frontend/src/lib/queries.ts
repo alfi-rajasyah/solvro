@@ -215,10 +215,10 @@ export interface ProjectSummary {
 }
 
 export interface ProjectDetail extends ProjectSummary {
-  sa: { id: number; username: string; email: string; avatarUrl?: string | null } | null;
+  sa: { id: number; username: string; email: string; avatarUrl?: string | null; active?: boolean } | null;
   /** Present on GET /projects/:id; adds the baseline slip (whole days, null without a baseline). */
   health?: ProjectHealth & { slipDays: number | null };
-  tam: { id: number; username: string; email: string; avatarUrl?: string | null };
+  tam: { id: number; username: string; email: string; avatarUrl?: string | null; active?: boolean };
   /** `tamId` is the customer's owner (null = unowned). */
   customer: { id: number; name: string; tamId?: number | null } | null;
   baselineLockedBy: { id: number; username: string } | null;
@@ -235,6 +235,8 @@ export interface ProjectMember {
   username: string;
   email: string;
   avatarUrl: string | null;
+  /** False once the account is deactivated; the member row stays. */
+  active: boolean;
   addedAt: string;
   addedBy: { id: number; username: string } | null;
   /** Tasks in this project assigned to the member; removing them unassigns these. */

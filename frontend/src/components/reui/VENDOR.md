@@ -25,7 +25,7 @@ Not listed by the vendoring header (no registry source recorded): `alert.tsx`, `
 4. Input focus treatment: `focus-visible:border-ring ring-ring/50 ring-3` becomes the DESIGN.md §4 primary ring.
 5. `scrollFade` / `scrollbarGutter` destructured and discarded in the list scroll-area wrapper.
 
-Drift against the registry as of 2026-11-19 that is not a deliberate patch: upstream has since
-added a `has-[[data-slot=autocomplete-list]:empty]:hidden` rule on the list scroll area, and
-the item class string in this repo carries a mangled run of `([class*='size-'])]:size-4`
-fragments where upstream has a single `[&_svg:not([class*='size-'])]:size-4`.
+The two drifts found on 2026-11-19 are closed: the list scroll area carries upstream's
+`has-[[data-slot=autocomplete-list]:empty]:hidden` rule, and the item class string carries
+upstream's single `[&_svg:not([class*='size-'])]:size-4` again. Neither is a SOLVRO PATCH; the
+code matches the registry item there.

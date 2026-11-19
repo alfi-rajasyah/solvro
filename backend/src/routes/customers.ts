@@ -32,6 +32,7 @@ import {
   OPEN_TASK_STATUS_FILTER,
   TASK_PROJECT_CAN_BE_OVERDUE,
 } from "../lib/taskStatus.js";
+import { assertNoNewInactiveServices } from "../lib/serviceAssignment.js";
 import { MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
 import { assertActiveUser } from "../lib/users.js";
 
@@ -373,6 +374,12 @@ customersRouter.put(
       if (found !== uniqueIds.length) {
         throw new HttpError(400, "service_not_found", "One or more services do not exist");
       }
+      await assertNoNewInactiveServices(
+        uniqueIds,
+        (await prisma.customerService.findMany({ where: { customerId: id }, select: { serviceId: true } })).map(
+          (r) => r.serviceId,
+        ),
+      );
     }
     await prisma.$transaction([
       prisma.customerService.deleteMany({

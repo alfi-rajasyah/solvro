@@ -503,7 +503,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               disabled={!canEdit}
               aria-label="Assignee"
               {...invalidProps("assignedToId")}
-              className={`cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default ${FIELD_FOCUS}`}
+              className={`max-w-full cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default ${FIELD_FOCUS}`}
             >
               <option value="">Unassigned</option>
               {selectableUsers(users, [assignedToId]).map((u) => (
@@ -804,7 +804,7 @@ function FieldRow({
         {icon}
       </span>
       <span className="w-20 shrink-0 text-xs text-on-surface-variant">{label}</span>
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         {children}
         <FieldError id={errorId} message={error} />
       </div>

@@ -15,6 +15,29 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-11-19 — Dark pin spec and tighter tests
+
+- An end-to-end spec confirms the login page and the sidebar stay dark under the light theme.
+- The `/search` tests now cover a literal `_`, the query length limit, result ordering, and that project notes are never searched.
+- The task-assignee backfill test now runs the SELECT read from the migration file instead of a copy.
+- The accessible-name guard now requires a label with text that targets each control's own id.
+
+### Fixed — 2026-11-19 — Task form at phone width, inactive mention chips, autocomplete
+
+- The task form no longer scrolls sideways on narrow screens when the label creator is open; the label row wraps and the Assignee field stays inside the panel.
+- Comment mention chips for deactivated users now render muted with a "Deactivated user" tooltip, instead of looking like an active person.
+- The vendored autocomplete's item icon-size rule and empty-list scroll fix match the upstream registry again.
+
+### Fixed — 2026-11-19 — Task dates on create, stage locks, epic owners, inactive services
+
+- Creating a task with a due date before its start date is now refused with `invalid_date_range`, matching the edit rule.
+- Pipeline stage re-packs lock the stage's deals in id order first, so a re-pack and a deal reassignment on the same deals can no longer deadlock.
+- The offboarding handover of a leaver's open deals now takes the same pipeline stage locks before it locks any deal row, so it queues behind a stage re-pack instead of crossing it.
+- Offboarding takes those stage locks before it locks the leaver's account, so a deal create, import, move or delete that refers to the leaver cannot deadlock with it.
+- In the service picker, an inactive service that cannot be linked shows a not-allowed cursor.
+- The epic owner picker no longer offers deactivated members, TAMs or SAs (the current owner stays listed). Project members and a project's TAM and SA now carry an `active` flag.
+- Inactive services can no longer be newly linked to a project or customer: the service picker disables them, "Add customer's services" skips them, and the services PUT routes refuse them with `service_inactive`. Services already linked stay in place.
+
 ### Changed — 2026-11-19 — Section duplicate speed, epic owners, deactivated users, backend messages
 
 - Duplicating a large section now copies its tasks, subtasks, labels, links and activity entries in a few batched writes instead of one write per task, so the project lock is held for much less time.

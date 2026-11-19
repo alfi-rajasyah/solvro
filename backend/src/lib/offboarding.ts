@@ -6,6 +6,7 @@ import { recordActivity, shortLabel, type ActivityChanges } from "./activity.js"
 import { utcMidnightOf } from "./dateBoundary.js";
 import { canUserSeePipeline, notifyForEvent } from "./notifications.js";
 import { recordOpportunityChange } from "./opportunityActivity.js";
+import { ALL_PIPELINE_STAGES, lockStages } from "./pipelineStageLock.js";
 import { lockProject } from "./positionRepack.js";
 import { ensureAssigneeIsMember } from "./projectMembers.js";
 import { diffProjectSeats, projectSeatsSelect, recordSeatChangeNotes } from "./projectSeats.js";
@@ -238,10 +239,14 @@ export async function offboardUser(
   });
   if (!leaver) throw new HttpError(404, "user_not_found", "User not found");
 
-  // Lock order: projects (ascending id) -> customers (ascending id) -> the
-  // leaver's user row -> authoritative recompute -> deals (ascending id). The
-  // project lock always precedes any row lock
-  // (backend/CLAUDE.md, "Position re-packs take the project lock").
+  // Lock order: projects (ascending id) -> customers (ascending id) -> every
+  // pipeline stage's advisory lock (sorted) -> the leaver's user row ->
+  // authoritative recompute -> deals (ascending id). The project lock always
+  // precedes any row lock (backend/CLAUDE.md, "Position re-packs take the
+  // project lock"). The stage locks precede the user row because a deal write
+  // holds its stage lock and then takes FOR KEY SHARE on the user row it
+  // points at (PIC, activity actor); taking them the other way round would
+  // deadlock against this FOR UPDATE.
   const firstLook = await computeHandoverPreview(tx, leaverId);
   const lockIds = [
     ...new Set([...firstLook.projects.map((p) => p.id), ...body.projects.map((p) => p.projectId)]),
@@ -253,6 +258,7 @@ export async function offboardUser(
   if (customerLockIds.length > 0) {
     await tx.$queryRaw`SELECT id FROM customers WHERE id IN (${Prisma.join(customerLockIds)}) ORDER BY id FOR NO KEY UPDATE`;
   }
+  await lockStages(tx, ...ALL_PIPELINE_STAGES);
   // Any write that sets a foreign key to this user (a task assignment, a seat,
   // a customer owner, a deal PIC) takes FOR KEY SHARE on the row, so it either
   // commits before the recompute below (and is seen) or waits until after the

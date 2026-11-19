@@ -54,6 +54,7 @@ import {
   onHoldSinceFor,
   shiftOpenDates,
 } from "../lib/projectLifecycle.js";
+import { assertNoNewInactiveServices } from "../lib/serviceAssignment.js";
 import { MAX_LABEL_IDS, MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
 
 // Kanban WIP limits — one optional positive-int cap per top-level status
@@ -113,8 +114,8 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 // of POST /:id/baseline (previously duplicated three times). Keep list-view
 // includes (GET /, /:id/tasks, etc.) separate — they're intentionally lighter.
 const projectDetailInclude = {
-  sa: { select: { id: true, username: true, email: true, avatarUrl: true } },
-  tam: { select: { id: true, username: true, email: true, avatarUrl: true } },
+  sa: { select: { id: true, username: true, email: true, avatarUrl: true, active: true } },
+  tam: { select: { id: true, username: true, email: true, avatarUrl: true, active: true } },
   customer: { select: { id: true, name: true, tamId: true } },
   baselineLockedBy: { select: { id: true, username: true } },
   // Cancelled tasks are in no total; the delete confirmation says so
@@ -399,6 +400,12 @@ projectsRouter.put(
       if (found !== uniqueIds.length) {
         throw new HttpError(400, "service_not_found", "One or more services do not exist");
       }
+      await assertNoNewInactiveServices(
+        uniqueIds,
+        (await prisma.projectService.findMany({ where: { projectId: id }, select: { serviceId: true } })).map(
+          (r) => r.serviceId,
+        ),
+      );
     }
     await prisma.$transaction([
       prisma.projectService.deleteMany({
@@ -604,6 +611,17 @@ projectsRouter.post(
     await ensureProjectVisible(req.user!, id);
 
     const status = body.status ?? "TODO";
+
+    // Same rule PATCH /tasks/:id applies (ISS-028): a milestone's start is its
+    // due date, so only a plain task can arrive inverted.
+    if (
+      !body.isMilestone &&
+      body.startDate &&
+      body.dueDate &&
+      utcMidnightOf(body.dueDate).getTime() < utcMidnightOf(body.startDate).getTime()
+    ) {
+      throw new HttpError(400, "invalid_date_range", "Due date cannot be before the start date");
+    }
 
     const task = await prisma.$transaction(async (tx) => {
       // The append position below is a sibling count: serialise with any

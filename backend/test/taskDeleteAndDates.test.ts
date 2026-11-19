@@ -183,3 +183,23 @@ describe("GET /tasks customerId filter (ISS-039)", () => {
     expect(foreign.body).toEqual([]);
   });
 });
+
+describe("POST /projects/:id/tasks date order (ISS-183)", () => {
+  const create = (token: string, projectId: number, body: object) =>
+    request(app).post(`/projects/${projectId}/tasks`).set(auth(token)).send({ title: "T", ...body });
+
+  it("refuses a due date before the start date", async () => {
+    const { tam, project } = await fixture();
+    const res = await create(tam.token, project.id, { startDate: "2026-11-20", dueDate: "2026-11-10" });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe("invalid_date_range");
+    expect(await prisma.task.count({ where: { projectId: project.id } })).toBe(0);
+  });
+
+  it("accepts equal dates, a single date and a milestone", async () => {
+    const { tam, project } = await fixture();
+    expect((await create(tam.token, project.id, { startDate: "2026-11-10", dueDate: "2026-11-10" })).status).toBe(201);
+    expect((await create(tam.token, project.id, { dueDate: "2026-11-10" })).status).toBe(201);
+    expect((await create(tam.token, project.id, { startDate: "2026-11-20", dueDate: "2026-11-10", isMilestone: true })).status).toBe(201);
+  });
+});
