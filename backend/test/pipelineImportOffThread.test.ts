@@ -184,3 +184,40 @@ describe("createImportParser", () => {
     await expect(b).resolves.toEqual([]);
   });
 });
+
+describe("createImportParser queue cap", () => {
+  it("refuses a request past maxQueued with ImportQueueFullError and keeps the queued ones", async () => {
+    const { createImportParser, ImportQueueFullError } = await import("../src/lib/pipelineImport/offThread.js");
+    const workers: StubWorker[] = [];
+    const parse = createImportParser({
+      maxConcurrent: 1,
+      maxQueued: 2,
+      timeoutMs: 5000,
+      spawn: () => {
+        const w = new StubWorker();
+        workers.push(w);
+        return w as unknown as ImportWorker;
+      },
+    });
+    const running = parse(buf, pics);
+    const q1 = parse(buf, pics);
+    const q2 = parse(buf, pics);
+    await expect(parse(buf, pics)).rejects.toBeInstanceOf(ImportQueueFullError);
+
+    await tick();
+    workers[0].emit("message", { rows: [] });
+    await running;
+    await tick();
+    workers[1].emit("message", { rows: [] });
+    await q1;
+    await tick();
+    workers[2].emit("message", { rows: [] });
+    await expect(q2).resolves.toEqual([]);
+
+    // A freed line accepts new work again.
+    const again = parse(buf, pics);
+    await tick();
+    workers[3].emit("message", { rows: [] });
+    await expect(again).resolves.toEqual([]);
+  });
+});

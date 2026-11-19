@@ -4,6 +4,9 @@
 // bounded: at most MAX_CONCURRENT parses run at once (the rest queue in
 // order), each worker has a memory cap, and a parse that takes over
 // TIMEOUT_MS is terminated. All three failures answer as "unreadable_file".
+// Past MAX_QUEUED waiting requests a new one is refused at once
+// (ImportQueueFullError, answered as 503), so many users at once cannot pile
+// up uploads of up to 1 MB each in memory.
 // A request whose client has gone (its AbortSignal fires) leaves the queue,
 // or has its worker stopped, so it stops holding a slot.
 import { Worker } from "node:worker_threads";
@@ -11,6 +14,7 @@ import { ImportFileError, UNREADABLE_FILE_MESSAGE } from "./errors.js";
 import type { ParsedRow } from "./parseRow.js";
 
 const MAX_CONCURRENT = 2;
+const MAX_QUEUED = 8;
 const TIMEOUT_MS = 5000;
 const MAX_OLD_GENERATION_MB = 256;
 
@@ -47,13 +51,25 @@ export class ImportAbortedError extends Error {
   }
 }
 
+/** Every parse slot is busy and the waiting line is full. */
+export class ImportQueueFullError extends Error {
+  constructor() {
+    super(IMPORT_BUSY_MESSAGE);
+    this.name = "ImportQueueFullError";
+  }
+}
+
+export const IMPORT_BUSY_MESSAGE = "Other imports are being read right now. Try again in a minute.";
+
 export interface ImportParserOptions {
   maxConcurrent: number;
+  /** Most requests allowed to wait for a slot; one more is refused. */
+  maxQueued?: number;
   timeoutMs: number;
   spawn: (file: Uint8Array, picByUsername: Map<string, number>) => ImportWorker;
 }
 
-export function createImportParser({ maxConcurrent, timeoutMs, spawn }: ImportParserOptions) {
+export function createImportParser({ maxConcurrent, maxQueued = MAX_QUEUED, timeoutMs, spawn }: ImportParserOptions) {
   let active = 0;
   const waiting: Array<() => void> = [];
 
@@ -63,6 +79,7 @@ export function createImportParser({ maxConcurrent, timeoutMs, spawn }: ImportPa
       active++;
       return Promise.resolve();
     }
+    if (waiting.length >= maxQueued) return Promise.reject(new ImportQueueFullError());
     return new Promise((resolve, reject) => {
       const take = () => {
         signal?.removeEventListener("abort", leave);

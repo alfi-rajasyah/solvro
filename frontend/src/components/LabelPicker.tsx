@@ -1,6 +1,7 @@
 import { FIELD_FOCUS } from "@/lib/utils";
 import { useState } from "react";
 import { LabelChip } from "./LabelChip";
+import { ApiError } from "@/lib/api";
 import { useCreateLabel, useProjectLabels, type Label } from "@/lib/queries";
 
 // No red or near-red: a label must never read as an error.
@@ -14,6 +15,14 @@ const PALETTE = [
   "#ec4899",
   "#64748b",
 ];
+
+/** A 409 on label create is the (project, name) unique constraint: say so in plain words. */
+export function labelCreateErrorMessage(error: Error): string {
+  if (error instanceof ApiError && error.status === 409) {
+    return "A label with this name already exists.";
+  }
+  return error.message;
+}
 
 export function LabelPicker({
   projectId,
@@ -146,7 +155,7 @@ export function LabelPicker({
           </div>
           {createLabel.error && (
             <p className="mt-1 text-xs text-error">
-              {(createLabel.error as Error).message}
+              {labelCreateErrorMessage(createLabel.error)}
             </p>
           )}
         </div>

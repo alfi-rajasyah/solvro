@@ -16,6 +16,7 @@ import {
   assertLabelsInProject,
   assertSectionInProject,
   assertValidParent,
+  closeGap,
   insertManyAfter,
   moveTaskWithinSiblings,
   siblingKeyEquals,
@@ -260,9 +261,10 @@ tasksRouter.get("/", validate("query", tasksListQuerySchema), async (req, res) =
   if (priority) where.priority = priority;
   if (assignedToId) where.assignedToId = assignedToId;
   if (labelId) where.labels = { some: { id: labelId } };
-  if (customerId) {
-    where.project = { ...(where.project as object | undefined), customerId };
-  }
+  // AND-composed like every other project-level filter: `where.project` already
+  // carries the visibility arm, and a spread would merge into (or be overwritten
+  // by) any other writer of that key.
+  if (customerId) and.push({ project: { customerId } });
   if (topLevel) where.parentTaskId = null;
   if (status) and.push({ status });
   if (open) and.push({ status: OPEN_TASK_STATUS_FILTER });
@@ -361,6 +363,7 @@ tasksRouter.patch(
       status: TaskStatus;
       parentTaskId: number | null;
       isMilestone: boolean;
+      startDate: Date | null;
       dueDate: Date | null;
       assignedToId: number | null;
     }) => {
@@ -531,6 +534,26 @@ tasksRouter.patch(
       const effectiveDue =
         body.dueDate !== undefined ? body.dueDate : cur.dueDate;
       if (willBeMilestone && effectiveDue) data.startDate = effectiveDue;
+      // A patch that touches a date is checked against the EFFECTIVE pair
+      // (incoming merged with the locked row): the panel sends only the field it
+      // changed, so a lone due-date edit can land before a start date someone
+      // else set. Patches that touch neither date pass, so an already-inverted
+      // legacy row can still be renamed or re-statused.
+      if (body.startDate !== undefined || body.dueDate !== undefined) {
+        const effectiveStart =
+          willBeMilestone && effectiveDue
+            ? effectiveDue
+            : body.startDate !== undefined
+              ? body.startDate
+              : cur.startDate;
+        if (
+          effectiveStart &&
+          effectiveDue &&
+          utcMidnightOf(effectiveDue).getTime() < utcMidnightOf(effectiveStart).getTime()
+        ) {
+          throw new HttpError(400, "invalid_date_range", "Due date cannot be before the start date");
+        }
+      }
       if (body.assignedToId !== undefined) {
         data.assignedTo = body.assignedToId === null
           ? { disconnect: true }
@@ -605,12 +628,21 @@ tasksRouter.delete(
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     await ensureTaskVisible(req.user!, id);
     await prisma.$transaction(async (tx) => {
+      // Project lock first (before any row lock), then the delete and the
+      // sibling re-pack, so concurrent deletes in one project serialise.
+      const located = await tx.task.findUnique({
+        where: { id },
+        select: { projectId: true },
+      });
+      if (!located) throw new HttpError(404, "not_found", "Task not found");
+      await lockProject(tx, located.projectId);
       const task = await tx.task.findUnique({
         where: { id },
-        select: { projectId: true, title: true },
+        select: { projectId: true, title: true, parentTaskId: true },
       });
       if (!task) throw new HttpError(404, "not_found", "Task not found");
       await tx.task.delete({ where: { id } });
+      await closeGap(tx, { projectId: task.projectId, parentTaskId: task.parentTaskId }, id);
       await recordActivity(tx, {
         projectId: task.projectId,
         actorId: req.user!.sub,
@@ -657,10 +689,10 @@ tasksRouter.post(
       // The copy lands at the end of the same sibling list duplicateTaskTree
       // appended it to (source's own list, since no overrides were passed) —
       // move it to right after the source. Placed by the source's identity
-      // (insertManyAfter), not `source.position + 1` as an index: DELETE
-      // /tasks/:id never re-packs its sibling list, so a stale position
-      // value can point at the wrong row once an earlier sibling was
-      // deleted. insertManyAfter re-packs the whole list dense regardless.
+      // (insertManyAfter), not `source.position + 1` as an index: rows written
+      // before DELETE /tasks/:id began re-packing (ISS-027) can still hold
+      // sparse positions, so a stale value can point at the wrong row.
+      // insertManyAfter re-packs the whole list dense regardless.
       const key: SiblingKey = { projectId: source.projectId, parentTaskId: source.parentTaskId };
       await insertManyAfter(tx, key, id, [newId]);
 

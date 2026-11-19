@@ -209,31 +209,7 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Batch with createMany to shorten the lock.
 - **Source:** snapshot line 2386, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-026 · P3 · Pipeline stage reorder re-packs one row per sibling
-
-- **Type:** debt · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** insertAtStage / closeGapInStage in backend/src/routes/opportunities.ts (line ~359-380)
-- **Problem:** Moving a deal re-packs its stage with one UPDATE per sibling, the pattern projects/sections already replaced with a set-based statement.
-- **Why deferred / fix direction:** Reuse the set-based re-pack approach from lib/positionRepack.ts, scoped to the stage.
-- **Source:** snapshot line 2388, section "Application review 2026-10-22 — remaining open items"
-
 ## Open — Backend/API
-
-### ISS-027 · P2 · DELETE /tasks/:id never re-packs sibling positions
-
-- **Type:** bug · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** tasksRouter.delete('/:id') in backend/src/routes/tasks.ts (line ~600)
-- **Problem:** Deleting a task leaves positions sparse; any consumer treating position as an index is exposed. Duplicate routes avoid it via insertManyAfter.
-- **Why deferred / fix direction:** Re-pack the sibling list inside the delete transaction (closeGap).
-- **Source:** snapshot line 1778, section "Duplicate tasks, subtasks, and sections — deferred findings (2026-09-02)"
-
-### ISS-028 · P2 · Panel date edits can leave a task with due date before start date
-
-- **Type:** bug · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** PATCH /tasks/:id in backend/src/routes/tasks.ts (line ~515)
-- **Problem:** The task panel sends only the changed date, so a due-date edit can merge with another user's later start date and persist due < start; the server never checks. Gantt edits could already do this.
-- **Why deferred / fix direction:** Add a server-side check or clamp of start <= due on the effective values.
-- **Source:** snapshot line 2268, section "Collaboration & sharing — stale-edit warning — deferred findings (2026-09-30, ported 2026-10-05)"
 
 ### ISS-029 · P2 · Section and epic create compute max(position)+1 outside the project lock
 
@@ -315,14 +291,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Waiting for a user decision on whether the schema change is worth it.
 - **Source:** snapshot line 2401, section "Project lifecycle and handover — deferred findings (2026-11-10)"
 
-### ISS-039 · P3 · tasks.ts object-spreads into where.project
-
-- **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** tasks list handler in backend/src/routes/tasks.ts (line ~264)
-- **Problem:** A second writer to where.project would be silently overwritten or merged unsafely.
-- **Why deferred / fix direction:** Compose through the `and` list instead.
-- **Source:** snapshot line 2403, section "Project lifecycle and handover — deferred findings (2026-11-10)"
-
 ### ISS-040 · P3 · Backend-produced text with em dashes still reaches the interface
 
 - **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -331,23 +299,21 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Rewrite the strings and return the empty mark as null for the client to render.
 - **Source:** snapshot line 2418, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
+### ISS-183 · P3 · Task create accepts a due date before the start date
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `39af8f6`
+- **Where:** POST /projects/:id/tasks in backend/src/routes/projects.ts (line ~597); createTaskSchema refine (line ~145)
+- **Problem:** PATCH /tasks/:id refuses an effective due date before the start date since ISS-028 closed, but POST /projects/:id/tasks has no such check, so a new task can start inverted.
+- **Why deferred / fix direction:** Found at the end of the ISS-028 fix. Add the same check (400 `invalid_date_range`) to create, with a test.
+
+### ISS-184 · P3 · Pipeline stage re-pack and offboarding lock deals in different orders
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `de9ae4a`
+- **Where:** insertAtStage / closeGapInStage UPDATEs in backend/src/routes/opportunities.ts (lines ~374, ~394) vs the deal reassignment in backend/src/lib/offboarding.ts (line ~390)
+- **Problem:** The set-based re-pack locks sibling rows in scan order; offboarding locks deals ORDER BY id and takes no stage lock. A re-pack and a PIC reassignment on overlapping deals can deadlock. The old per-row loop had the same exposure.
+- **Why deferred / fix direction:** Rare (needs a concurrent offboarding). Lock the stage's rows with SELECT id ... ORDER BY id FOR NO KEY UPDATE before the UPDATE.
+
 ## Open — Frontend UI
-
-### ISS-041 · P2 · Duplicate-label-name 409 shows raw DB message
-
-- **Type:** bug · **Found:** 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** createLabel error render in frontend/src/components/LabelPicker.tsx (line ~147); P2002 mapping in backend/src/http/errors.ts (line ~59)
-- **Problem:** Creating a label with a duplicate name shows 'Unique constraint violated' to the user.
-- **Why deferred / fix direction:** Map the 409 in LabelPicker (or the label route) to a plain message such as 'A label with this name already exists'.
-- **Source:** snapshot line 504, section "Gantt GH #58 deferred findings (2026-07-24)"
-
-### ISS-042 · P2 · Create-mode parent picker offers subtasks the server rejects
-
-- **Type:** bug · **Found:** 2026-08-03 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** possibleParents in frontend/src/components/TaskFormModal.tsx (line ~194)
-- **Problem:** In create mode every project task, subtasks included, is offered as parent. Picking a subtask 400s via assertValidParent's max-depth guard.
-- **Why deferred / fix direction:** Apply the parentTaskId === null filter regardless of edit/create mode.
-- **Source:** snapshot line 1458, section "Gantt visual refresh — deferred findings (2026-08-03)"
 
 ### ISS-043 · P2 · Material Symbols stylesheet overrides icon size/display utilities
 
@@ -412,14 +378,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Promoting or re-parenting a subtask requires the modal round-trip.
 - **Why deferred / fix direction:** Revisit if usage shows the modal is friction (Promote to task row-menu action).
 - **Source:** snapshot line 586, section "Kanban → ReUI swap — deferred findings (2026-07-27)"
-
-### ISS-051 · P3 · TaskFormModal subtask DONE checkbox lacks canEdit gate
-
-- **Type:** bug · **Found:** 2026-07-27 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** SubtaskRow checkbox in frontend/src/components/TaskFormModal.tsx (line ~738)
-- **Problem:** A user without task:write can toggle the checkbox; the PATCH is rejected server-side so the control only misleads.
-- **Why deferred / fix direction:** Add `!canEdit ||` to disabled.
-- **Source:** snapshot line 603, section "Kanban → ReUI swap — deferred findings (2026-07-27)"
 
 ### ISS-052 · P3 · Palette visual polish
 
@@ -620,6 +578,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** If the leaver stops being a project's TAM while the dialog is open, the required TAM select may still show until a submit fails with stale.
 - **Why deferred / fix direction:** Refetch the preview when the dialog regains focus, or accept.
 - **Source:** snapshot line 2407, section "Project lifecycle and handover — deferred findings (2026-11-10)"
+
+### ISS-185 · P2 · Task form scrolls sideways at 375px when the label creator opens
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `1fd2bd1`
+- **Where:** the creating row (input, Add, Cancel, colour swatches) in frontend/src/components/LabelPicker.tsx (line ~98) inside the TaskFormModal body (`flex-1 overflow-y-auto px-5 py-4`)
+- **Problem:** At 375px the modal body's scrollWidth is 458 against a clientWidth of 374; the autofocused label input scrolls the body 38px sideways, cutting off the field labels on the left. Seen during the wave 1 Delivery Gate; not caused by its changes.
+- **Why deferred / fix direction:** Let the creating row wrap (flex-wrap, min-w-0 on the input) and check the Assignee row, whose chevron also sits past the panel edge.
 
 ## Open — Accessibility & tokens
 
@@ -941,22 +906,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — Pipeline
 
-### ISS-116 · P2 · Concurrent DELETE of two same-stage opportunities can deadlock (40P01)
-
-- **Type:** bug · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** closeGapInStage and DELETE /:id handler in backend/src/routes/opportunities.ts (lines ~376, ~1260)
-- **Problem:** Two concurrent deletes in one stage each run a per-sibling UPDATE loop in their own transaction and can lock rows in different order, so Postgres raises 40P01 and the losing request 500s. Same shape as lib/taskOrdering.ts closeGap.
-- **Why deferred / fix direction:** Deferred; e2e cleanup was routed around it. Fix: lock siblings in a deterministic order (ORDER BY id FOR UPDATE) or repack with a single UPDATE ... ROW_NUMBER() statement, plus a concurrency test.
-- **Source:** snapshot line 201, section "Known bugs / inconsistencies"
-
-### ISS-117 · P3 · Pipeline import preview queue has no length cap
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** createImportParser in backend/src/lib/pipelineImport/offThread.ts (line ~56)
-- **Problem:** The parser runs 2 parses at once and queues the rest without limit; many users at once can queue many requests, each holding an upload of up to 1 MB in memory.
-- **Why deferred / fix direction:** Deferred because it needs a new user-facing message. Fix: cap the queue (e.g. 8) and refuse past it with a 503.
-- **Source:** snapshot line 284, section "Tech debt / follow-ups from recent work"
-
 ### ISS-118 · P3 · DealCard reads the full deal list client-side
 
 - **Type:** watch · **Found:** 2026-08-15 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -964,14 +913,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Every project Overview tab loads the whole opportunity list to find one deal. Fine at hundreds of deals.
 - **Why deferred / fix direction:** Revisit at the PRD's ~2k-deal trigger, e.g. with a by-project endpoint.
 - **Source:** snapshot line 1526, section "Pipeline native port — accepted risks & deferred items (2026-08-15)"
-
-### ISS-119 · P3 · Import parse silently defaults unparseable Win Probability to 50
-
-- **Type:** bug · **Found:** 2026-08-15 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** winProbability parsing in backend/src/lib/pipelineImport/parseRow.ts (line ~221)
-- **Problem:** A non-numeric Win Probability cell imports as 50 with no error.
-- **Why deferred / fix direction:** Report a row error for a non-empty unparseable value.
-- **Source:** snapshot line 1536, section "Pipeline native port — accepted risks & deferred items (2026-08-15)"
 
 ## Open — iTop
 
@@ -1492,3 +1433,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 Entries closed during the 2026-11-18 restructure are in the ledger in `docs/archive/plans/issues-restructure.md`, not here.
 
 - ISS-004 · Resolved 2026-11-18 · CHANGELOG "An iTop personal token is saved only when iTop proves it is yours" · Personal-token ownership check is best-effort, not fail-closed
+- ISS-026 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · Pipeline stage reorder re-packs one row per sibling
+- ISS-027 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · DELETE /tasks/:id never re-packs sibling positions
+- ISS-028 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · Panel date edits can leave a task with due date before start date
+- ISS-039 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · tasks.ts object-spreads into where.project
+- ISS-041 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · Duplicate-label-name 409 shows raw DB message
+- ISS-042 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · Create-mode parent picker offers subtasks the server rejects
+- ISS-051 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · TaskFormModal subtask DONE checkbox lacks canEdit gate
+- ISS-116 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · Concurrent DELETE of two same-stage opportunities can deadlock (40P01)
+- ISS-117 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · Pipeline import preview queue has no length cap
+- ISS-119 · Resolved 2026-11-19 · CHANGELOG "Fixes in task delete, task dates, Pipeline ordering and import, and the task form" · Import parse silently defaults unparseable Win Probability to 50
