@@ -33,6 +33,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 - The backend typecheck now also covers `backend/scripts/` and `backend/test/` through a new `backend/tsconfig.check.json` (`npm run typecheck`, also used by CI). The type errors it exposed in the demo seed and two tests are fixed. The build configuration is unchanged.
 - The frontend typecheck now also checks `vite.config.ts`, and `frontend/tsconfig.node.json` no longer lists deleted files.
 - nginx now sends `Cache-Control: public, max-age=86400` for `/icons/` and `/favicon.png`, with the usual security headers.
+- The same cache header now also covers `/favicon-dark.png`, and the backend typecheck also covers `backend/prisma/` and `vitest.config.ts`.
 
 ### Security — 2026-11-19 — Log redaction, secret tags, and receivers without access
 

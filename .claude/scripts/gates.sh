@@ -73,7 +73,7 @@ backend_vitest() { # isolated test DB — see backend/CLAUDE.md traps
   [ -n "$url" ] || { echo "could not derive test DATABASE_URL"; return 1; }
   docker compose exec -T -e DATABASE_URL="$url" backend npm test
 }
-smoke_gate() {
+e2e_preflight() {
   # Pre-flight: the e2e fixture admin (e2e/fixtures/test.ts) must be able to
   # log in, or every smoke test fails opaquely inside the seed fixture. Agents
   # have twice reset this user's password via create-admin.ts for their own
@@ -91,18 +91,21 @@ smoke_gate() {
     echo "  docker compose exec -e ADMIN_EMAIL=qa@solvro.test -e ADMIN_PASSWORD='QaTest1234!' backend npx tsx scripts/create-admin.ts"
     return 1
   fi
-  local base_url="${BASE_URL:-http://localhost:5173}"
-  (cd e2e && BASE_URL="$base_url" npx playwright test tests/smoke.spec.ts) || return 1
-  # Specs touched by the diff also run (desktop only), so a new or edited suite is
-  # exercised mechanically. smoke.spec.ts already ran above, so it is left out.
-  local specs=() f
-  while IFS= read -r f; do
-    [ -n "$f" ] && [ -f "$f" ] && [ "$f" != "e2e/tests/smoke.spec.ts" ] && specs+=("${f#e2e/}")
-  done < <(echo "$DIFF_FILES" | grep -E '^e2e/tests/[^/]+\.spec\.ts$' | sort -u)
-  if [ "${#specs[@]}" -gt 0 ]; then
-    echo "touched e2e specs (desktop): ${specs[*]}"
-    (cd e2e && BASE_URL="$base_url" npx playwright test --project=desktop "${specs[@]}")
-  fi
+}
+smoke_gate() {
+  e2e_preflight || return 1
+  (cd e2e && BASE_URL="${BASE_URL:-http://localhost:5173}" npx playwright test tests/smoke.spec.ts)
+}
+# Specs touched by the diff (desktop only), independent of which areas changed, so a
+# new or edited suite is exercised mechanically. smoke.spec.ts has its own gate.
+TOUCHED_SPECS=()
+while IFS= read -r f; do
+  [ -n "$f" ] && [ -f "$f" ] && [ "$f" != "e2e/tests/smoke.spec.ts" ] && TOUCHED_SPECS+=("${f#e2e/}")
+done < <(echo "$DIFF_FILES" | grep -E '^e2e/tests/[^/]+\.spec\.ts$' | sort -u)
+touched_specs_gate() {
+  e2e_preflight || return 1
+  echo "touched e2e specs (desktop): ${TOUCHED_SPECS[*]}"
+  (cd e2e && BASE_URL="${BASE_URL:-http://localhost:5173}" npx playwright test --project=desktop "${TOUCHED_SPECS[@]}")
 }
 
 if [ "$F_BACK" -eq 1 ]; then
@@ -123,6 +126,12 @@ if [ "$F_FRONT" -eq 1 ]; then
   elif touches '^frontend/' && [ -z "$FRONT_NON_TEST" ]; then echo "SKIP playwright-smoke (test-only frontend diff)"
   elif ! command -v npx >/dev/null 2>&1; then echo "SKIP playwright-smoke (npx not on PATH: the smoke gate runs Playwright from the host, install Node or run it where Node exists)"
   else run_gate playwright-smoke smoke_gate; fi
+fi
+
+if [ "${#TOUCHED_SPECS[@]}" -gt 0 ]; then
+  if [ "$SKIP_SMOKE" -eq 1 ]; then echo "SKIP e2e-touched-specs (--skip-smoke)"
+  elif ! command -v npx >/dev/null 2>&1; then echo "SKIP e2e-touched-specs (npx not on PATH: Playwright runs from the host, install Node or run it where Node exists)"
+  else run_gate e2e-touched-specs touched_specs_gate; fi
 fi
 
 # ---------- changelog presence (always) ----------
@@ -406,7 +415,9 @@ SPINE_MAP=(
 )
 spine_agreement() {
   local para items item row key path alt bad=""
-  para="$(grep -m1 '^\*\*Spine (instant opus review' CLAUDE.md)"
+  # Whole paragraph (up to the next blank line), joined, so a re-wrapped paragraph
+  # is still parsed in full rather than silently truncated to its first line.
+  para="$(awk '/^\*\*Spine \(instant opus review/{f=1} f&&/^[[:space:]]*$/{exit} f{printf "%s ", $0}' CLAUDE.md)"
   [ -n "$para" ] || { echo "CLAUDE.md has no '**Spine (instant opus review' paragraph"; return 1; }
   # Item list = text between the label's "**:" and the sentence naming the regex;
   # parenthetical asides are dropped so their commas do not split an item.
