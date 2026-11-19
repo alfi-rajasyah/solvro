@@ -23,7 +23,6 @@ export const LAST_USED_REFRESH_MS = 60 * 60 * 1000;
 /** Shape of every token we issue (32 bytes, base64url, unpadded). */
 export const SHARE_TOKEN_FORMAT = /^[A-Za-z0-9_-]{43}$/;
 
-/** 32 random bytes, base64url — shown to the owner exactly once. */
 /**
  * The link an owner copies for a token. Absolute when `PUBLIC_BASE_URL` is set
  * (the address guests actually reach), else the bare path and the client adds
@@ -33,6 +32,7 @@ export function shareUrlFor(token: string, baseUrl: string | undefined = env.PUB
   return `${baseUrl ?? ""}/share/${token}`;
 }
 
+/** 32 random bytes, base64url — shown to the owner exactly once. */
 export function generateShareToken(): string {
   return randomBytes(32).toString("base64url");
 }

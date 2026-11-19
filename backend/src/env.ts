@@ -30,10 +30,10 @@ const schema = z.object({
     .refine(
       (value) => {
         if (value === "") return true;
-        if (value.endsWith("/") || /[?#\s]/.test(value)) return false;
+        if (value.endsWith("/") || /[?#\\\s]/.test(value)) return false;
         try {
           const url = new URL(value);
-          return url.protocol === "http:" || url.protocol === "https:";
+          return (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password;
         } catch {
           return false;
         }

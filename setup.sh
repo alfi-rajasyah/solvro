@@ -100,7 +100,9 @@ is_ipv4() {
 # PUBLIC_BASE_URL: an absolute http(s) URL with no trailing slash, query or
 # fragment (the backend, src/env.ts, refuses anything else at startup).
 is_public_base_url() {
-  [[ "$1" =~ ^https?://[^[:space:]/?#]+(/[^[:space:]?#]*[^[:space:]/?#])?$ ]]
+  # Whitelist, not a blacklist: the value is written to .env (sourced by bash)
+  # and used in a sed replacement, so no shell metacharacter may get through.
+  [[ "$1" =~ ^https?://[A-Za-z0-9.-]+(:[0-9]{1,5})?(/[A-Za-z0-9._~%/-]*[A-Za-z0-9._~%-])?$ ]]
 }
 
 # Light check of TRUST_PROXY: a hop count 0-10, or a comma list of
@@ -266,9 +268,9 @@ if [[ -f "$ENV_FILE" ]]; then
     }
     PUBLIC_BASE_URL="$PUBLIC_BASE_URL_ARG"
     if grep -q '^PUBLIC_BASE_URL=' "$ENV_FILE"; then
-      sed -i "s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL=\"$PUBLIC_BASE_URL\"|" "$ENV_FILE"
+      sed -i "s|^PUBLIC_BASE_URL=.*|PUBLIC_BASE_URL='$PUBLIC_BASE_URL'|" "$ENV_FILE"
     else
-      echo "PUBLIC_BASE_URL=\"$PUBLIC_BASE_URL\"" >> "$ENV_FILE"
+      echo "PUBLIC_BASE_URL='$PUBLIC_BASE_URL'" >> "$ENV_FILE"
     fi
   fi
   write_compose_file
@@ -442,7 +444,7 @@ EOF
 [[ -n "$POSTGRES_PORT" ]] && echo "POSTGRES_PORT=$POSTGRES_PORT" >> "$ENV_FILE"
 # Quoted: the value may hold spaces ("loopback, uniquelocal") and .env is sourced by bash on update.
 [[ -n "$TRUST_PROXY" ]] && echo "TRUST_PROXY=\"$TRUST_PROXY\"" >> "$ENV_FILE"
-[[ -n "$PUBLIC_BASE_URL" ]] && echo "PUBLIC_BASE_URL=\"$PUBLIC_BASE_URL\"" >> "$ENV_FILE"
+[[ -n "$PUBLIC_BASE_URL" ]] && echo "PUBLIC_BASE_URL='$PUBLIC_BASE_URL'" >> "$ENV_FILE"
 chmod 600 "$ENV_FILE"
 
 write_compose_file

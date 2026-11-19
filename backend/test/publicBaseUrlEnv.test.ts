@@ -42,7 +42,7 @@ describe("PUBLIC_BASE_URL", () => {
     },
   );
 
-  it.each(["solvro.example.com", "ftp://solvro.example.com", "https://solvro.example.com/", "https://x.example/?a=1", "https://x.example/#top", "not a url"])(
+  it.each(["solvro.example.com", "ftp://solvro.example.com", "https://solvro.example.com/", "https://x.example/?a=1", "https://x.example/#top", "not a url", "https://user:pw@x.example", "https://user@x.example", "https://x.example\\evil.example"])(
     "rejects %j and stops startup",
     async (raw) => {
       expect((await load(raw)).exited).toBe(true);
