@@ -15,6 +15,33 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Added — 2026-11-19 — Frontend lint and test cleanups
+
+- Frontend lint: ESLint with the React hooks rules (`rules-of-hooks`, `exhaustive-deps`) via `npm run lint` in `frontend/`, run in CI. New dev dependencies: `eslint` 10.14.0, `typescript-eslint` 8.72.1, `eslint-plugin-react-hooks` 7.1.1.
+- A few effects and memos in the Pipeline, Weekly Sync and Projects pages are explicit about their dependencies, with no behaviour change.
+- Duplicating a task or section now waits only on the task list refresh before finishing; the other cache refreshes run in the background.
+- Duplicating a section also waits for the section list refresh, so its new group appears before the action finishes.
+- The cross-project task ordering test is scoped to its own project, so other rows cannot make it flaky.
+- The Daily Review end-to-end spec deletes the project and customer it creates; two specs use the shared task helper instead of private copies; the vendored filters test moved out of `components/reui/` to `lib/`.
+
+### Fixed — 2026-11-19 — Drag handles, data-grid header alignment, risk cells, autocomplete focus
+
+- Kanban and sortable drag handles are now registered as the drag activator, so focus returns to the handle after a keyboard drop that remounts a card (vendored `reui/kanban.tsx`, `reui/sortable.tsx`).
+- Drag handles on the task, deal and iTop ticket boards now have a 24px hit area, without changing the icon size or card layout.
+- The data-grid column header can center-align sortable headers, and its controls menu now follows right-aligned columns.
+- Risk probability, impact and status cells on the project Risks page use the shared select instead of a native dropdown.
+- The vendored autocomplete no longer changes its border colour on focus; it keeps the primary ring.
+- A comment in the vendored autocomplete no longer contains text that Tailwind read as a class, which produced an invalid CSS rule and a build warning.
+- The Gantt tree-row reorder handler is split into named planning helpers, with no behaviour change.
+
+### Fixed — 2026-11-19 — Guest link address, iTop sync atomicity, cross-tab account switch
+
+- New optional `PUBLIC_BASE_URL` setting (an absolute http or https address with no trailing slash). When set, guest links are built from it instead of the address the owner is browsing from, so a link copied through an SSH tunnel or localhost opens for a guest. `setup.sh` asks for it (blank keeps the old behaviour) and saves it to `.env`; documented in `docs/CONFIGURATION.md`.
+- `setup.sh` accepts a `PUBLIC_BASE_URL` made only of URL-safe characters and writes it to `.env` in single quotes; the backend also refuses one with `user:password@` or a backslash.
+- The iTop ticket sync stores each page of tickets in one transaction, so a sync that fails part-way no longer keeps half a page. A single unreadable ticket is still skipped on its own.
+- A full iTop sync that was already running when an organisation mapping was saved no longer records itself as the latest full sync, so the next sync is full again and picks up the new organisation's older tickets.
+- A tab whose `/auth/me` check names a different user than the one it was running as now treats it as an account switch: cached data is cleared and the app returns to the start page.
+
 ### Added — 2026-11-19 — Dark pin spec and tighter tests
 
 - An end-to-end spec confirms the login page and the sidebar stay dark under the light theme.

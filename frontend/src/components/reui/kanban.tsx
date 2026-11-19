@@ -88,6 +88,7 @@ const ColumnContext = createContext<{
 const ItemContext = createContext<{
   listeners: DraggableSyntheticListeners | undefined
   attributes?: DraggableAttributes // SOLVRO PATCH: a11y attributes travel to the handle
+  setActivatorNodeRef?: (element: HTMLElement | null) => void // SOLVRO PATCH: registers the handle as the dnd-kit activator node
   isDragging?: boolean
   disabled?: boolean
 }>({
@@ -763,6 +764,7 @@ function KanbanItem({
     transition,
     attributes,
     listeners,
+    setActivatorNodeRef, // SOLVRO PATCH
     isDragging: isSortableDragging,
   } = useSortable({
     id: value,
@@ -808,7 +810,7 @@ function KanbanItem({
       value={
         isOverlay
           ? { listeners: undefined, isDragging: true, disabled: false }
-          : { listeners, attributes, isDragging: isItemDragging, disabled } // SOLVRO PATCH
+          : { listeners, attributes, setActivatorNodeRef, isDragging: isItemDragging, disabled } // SOLVRO PATCH
       }
     >
       {useRender({
@@ -830,7 +832,7 @@ function KanbanItemHandle({
   cursor = true,
   ...props
 }: KanbanItemHandleProps) {
-  const { listeners, attributes, isDragging, disabled } = useContext(ItemContext) // SOLVRO PATCH
+  const { listeners, attributes, setActivatorNodeRef, isDragging, disabled } = useContext(ItemContext) // SOLVRO PATCH
 
   const defaultProps = {
     "data-slot": "kanban-item-handle",
@@ -839,6 +841,8 @@ function KanbanItemHandle({
     // SOLVRO PATCH: the handle is the focusable keyboard activator; omitted when disabled or in the overlay
     ...(disabled ? undefined : attributes),
     ...listeners,
+    // SOLVRO PATCH: dnd-kit restores focus to the activator node after a remounting keyboard drop
+    ref: setActivatorNodeRef,
     className: cn(
       cursor && (isDragging ? "cursor-grabbing!" : "cursor-grab!"),
       className

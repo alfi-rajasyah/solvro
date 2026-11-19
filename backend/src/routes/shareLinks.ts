@@ -12,6 +12,7 @@ import {
   SHARE_MAX_EXPIRY_DAYS,
   generateShareToken,
   hashShareToken,
+  shareUrlFor,
 } from "../lib/shareLinks.js";
 
 // Owner-side management of guest links (docs/archive/plans/collaboration-and-sharing.md,
@@ -88,9 +89,9 @@ shareLinksRouter.post(
       return created;
     });
 
-    // Relative on purpose: the backend has no public-base-URL setting, so the
-    // client prefixes window.location.origin. Returned only here.
-    res.status(201).json({ ...link, url: `/share/${token}` });
+    // Absolute when PUBLIC_BASE_URL is set; otherwise relative and the client
+    // prefixes the origin it is browsing from. Returned only here.
+    res.status(201).json({ ...link, url: shareUrlFor(token) });
   },
 );
 

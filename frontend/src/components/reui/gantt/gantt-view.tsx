@@ -717,6 +717,8 @@ function GanttView({
       )
     }
     return map
+  // SOLVRO PATCH: the callback is read off `viewConfig` and called as a method; its identity is the real dependency, not the whole config object
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, allEvents, descendantIds, viewConfig.getSummaryProgress])
 
   // Lane memory across layout passes, keyed by getLaneKey (event identity,

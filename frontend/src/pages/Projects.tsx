@@ -61,6 +61,7 @@ export function Projects() {
     if (!customers.some((c) => c.id === customerFilter)) {
       setCustomerFilter("");
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- setCustomerFilter is re-created every render; the effect must only re-run when the filter or the customer list changes.
   }, [customerFilter, customers]);
 
   const activeCustomer = customers?.find((c) => c.id === customerFilter);

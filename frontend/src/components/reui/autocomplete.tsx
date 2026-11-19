@@ -4,7 +4,7 @@
 // `scroll-area` registryDependency 401s against the @reui registry and falls back to
 // an unwanted upstream dependency this repo's guardrails forbid reintroducing (see
 // CLAUDE.md; details in the Task 3 report). Content below is the registry item's file
-// content (the empty-list `has-[...]:hidden` rule and the item icon-size class match upstream as of 2026-11-19) and five local patches (diffed against the registry item on
+// content (the empty-list hide rule and the item icon-size class match upstream as of 2026-11-19) and five local patches (diffed against the registry item on
 // 2026-11-19): (1) `import * as React` added; (2) `cn` import path rewritten from "cn" to
 // "@/lib/utils" (unmarked); (3) IconPlaceholder swapped for lucide-react XIcon and
 // ChevronsUpDownIcon (import plus two call sites); (4) focus treatment unified to the
@@ -28,13 +28,13 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 // repo's existing `*Icon` lucide-react convention (see ui/checkbox.tsx, ui/dropdown-menu.tsx).
 import { ChevronsUpDownIcon, XIcon } from "lucide-react"
 
-// SOLVRO PATCH (focus-style unification tail) — DESIGN.md §4: the one focus
-// treatment app-wide is `focus-visible:border-primary focus-visible:ring-2
-// focus-visible:ring-primary/30`. Replaced the upstream `focus-visible:border-ring`
-// / `focus-visible:ring-ring/50 focus-visible:ring-3` pair (see ui/input.tsx for
-// the same swap).
+// SOLVRO PATCH (focus-style unification tail) — DESIGN.md §4's reduced focus
+// form: the primary ring only (`focus-visible:ring-2 focus-visible:ring-primary/30`),
+// no border change on focus. Replaced the upstream `focus-visible:border-ring`
+// / `focus-visible:ring-ring/50 focus-visible:ring-3` pair; the border colour
+// stays `border-input` while focused.
 const inputVariants = cva(
-  "outline-none flex w-full text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 [[readonly]]:bg-muted/80 [[readonly]]:cursor-not-allowed border border-input focus-visible:border-primary aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-lg bg-transparent dark:bg-input/30 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-primary/30 aria-invalid:ring-3",
+  "outline-none flex w-full text-foreground placeholder:text-muted-foreground disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 [[readonly]]:bg-muted/80 [[readonly]]:cursor-not-allowed border border-input aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:aria-invalid:border-destructive/50 rounded-lg bg-transparent dark:bg-input/30 text-sm transition-colors focus-visible:ring-2 focus-visible:ring-primary/30 aria-invalid:ring-3",
   {
     variants: {
       size: {

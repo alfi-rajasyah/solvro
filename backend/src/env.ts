@@ -19,6 +19,31 @@ const schema = z.object({
           "SECRETS_KEY must be a base64 string that decodes to exactly 32 bytes (generate with: openssl rand -base64 32)",
       },
     ),
+  // The address guests reach this app at, used to build the guest links the
+  // owner copies (routes/shareLinks.ts). Unset or blank: the link is relative
+  // and the browser prefixes the address the owner is browsing from, which a
+  // guest may not be able to open (SSH tunnel, localhost).
+  PUBLIC_BASE_URL: z
+    .string()
+    .trim()
+    .default("")
+    .refine(
+      (value) => {
+        if (value === "") return true;
+        if (value.endsWith("/") || /[?#\\\s]/.test(value)) return false;
+        try {
+          const url = new URL(value);
+          return (url.protocol === "http:" || url.protocol === "https:") && !url.username && !url.password;
+        } catch {
+          return false;
+        }
+      },
+      {
+        message:
+          'PUBLIC_BASE_URL must be an absolute http(s) URL without a trailing slash, query or fragment (e.g. "https://solvro.example.com")',
+      },
+    )
+    .transform((value) => (value === "" ? undefined : value)),
   CORS_ORIGIN: z.string().default("http://localhost:5173"),
   LOG_LEVEL: z.enum(["fatal", "error", "warn", "info", "debug", "trace"]).default("info"),
   // How many reverse-proxy hops (or which subnets) `req.ip` may trust, i.e.

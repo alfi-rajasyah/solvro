@@ -5,9 +5,10 @@ import "./env.js";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
+import { env } from "../src/env.js";
 import { prisma } from "../src/prisma.js";
 import { publicShareRateLimiter, PUBLIC_SHARE_RATE_LIMIT } from "../src/routes/publicShare.js";
-import { derivePhase, generateShareToken, hashShareToken } from "../src/lib/shareLinks.js";
+import { derivePhase, generateShareToken, hashShareToken, shareUrlFor } from "../src/lib/shareLinks.js";
 import { createUserWithRole, seedRoles } from "./testAuth.js";
 
 const app = createApp();
@@ -677,5 +678,29 @@ describe("guardrail: nothing internal reaches the guest payload", () => {
       milestones: [{ title: "Public milestone", date: "2026-11-30", done: false }],
       generatedAt: expect.any(String),
     });
+  });
+});
+
+// ISS-142: with PUBLIC_BASE_URL set, the link the owner copies is built from it
+// instead of the address the owner is browsing from.
+describe("guest link base address (PUBLIC_BASE_URL)", () => {
+  it("builds the path alone when unset and prefixes the base when set", () => {
+    expect(shareUrlFor("abc", undefined)).toBe("/share/abc");
+    expect(shareUrlFor("abc", "https://solvro.example.com")).toBe("https://solvro.example.com/share/abc");
+  });
+
+  it("POST returns an absolute link on the configured base, and the token still resolves", async () => {
+    const { tam, project } = await fixture();
+    env.PUBLIC_BASE_URL = "https://solvro.example.com";
+    try {
+      const res = await request(app).post(`/projects/${project.id}/share-links`).set(auth(tam.token)).send({});
+      expect(res.status).toBe(201);
+      const url = (res.body as { url: string }).url;
+      expect(url).toMatch(/^https:\/\/solvro\.example\.com\/share\/[A-Za-z0-9_-]{43}$/);
+      const guest = await request(app).get(`/public/share/${url.split("/share/")[1]}`);
+      expect(guest.status).toBe(200);
+    } finally {
+      env.PUBLIC_BASE_URL = undefined;
+    }
   });
 });

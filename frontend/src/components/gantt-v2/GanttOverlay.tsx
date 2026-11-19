@@ -166,6 +166,7 @@ export function GanttOverlay({
   // change identity across renders. State assignment bails out via
   // Object.is when the resolved node is unchanged, so this doesn't cause
   // extra re-renders in the steady state.
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally every render: the pane node can change identity without any dep changing (see above), and the state setters bail out on an unchanged node
   useEffect(() => {
     const pane = resolvePane(containerRef.current);
     setPaneEl(pane);

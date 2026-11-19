@@ -400,12 +400,18 @@ function caseLogJson(raw: ItopCaseLogRaw, tz: string) {
   return entries.length > 0 ? (entries as unknown as Prisma.InputJsonValue) : Prisma.JsonNull;
 }
 
-async function upsertTicket(
+/**
+ * Validates and converts one iTop ticket row into the data an upsert writes,
+ * without touching the database. A row that cannot be stored throws here —
+ * the page loop counts that as a skip — so any error raised by the write
+ * itself is a real database failure, never a bad row.
+ */
+function prepareTicketUpsert(
   cls: string,
   row: ItopObjectRow<ItopTicketFields>,
   orgIdToCustomerId: Map<number, number>,
   timezone: string,
-): Promise<void> {
+) {
   const fields = row.fields;
   const orgId = parseItopInt(fields.org_id);
   if (orgId === null) {
@@ -460,11 +466,16 @@ async function upsertTicket(
     syncedAt: new Date(),
   };
 
-  await prisma.itopTicket.upsert({
-    where: { id: row.key },
-    create: { id: row.key, ...data },
-    update: data,
-  });
+  return { where: { id: row.key }, create: { id: row.key, ...data }, update: data };
+}
+
+async function upsertTicket(
+  cls: string,
+  row: ItopObjectRow<ItopTicketFields>,
+  orgIdToCustomerId: Map<number, number>,
+  timezone: string,
+): Promise<void> {
+  await prisma.itopTicket.upsert(prepareTicketUpsert(cls, row, orgIdToCustomerId, timezone));
 }
 
 /**
@@ -771,7 +782,18 @@ async function writeConfigResult(
   // watermark tracks. Defaults to `ok`; a run whose tickets succeeded but
   // whose time-entry pass failed passes `true` here with `ok = false`.
   advanceWatermark: boolean = ok,
+  // `ItopConfig.updatedAt` as read before the run took its snapshot of the
+  // mapped customers. `lastFullSyncAt` is written only if the row has not
+  // been touched since (ISS-186).
+  configVersion?: Date,
 ): Promise<void> {
+  // The guarded write goes first: the main update bumps updatedAt.
+  if (setFullSyncAt && configVersion) {
+    await prisma.itopConfig.updateMany({
+      where: { id: "default", updatedAt: configVersion },
+      data: { lastFullSyncAt: new Date() },
+    });
+  }
   await prisma.itopConfig.update({
     where: { id: "default" },
     data: {
@@ -783,7 +805,7 @@ async function writeConfigResult(
       ...(advanceWatermark ? { lastSyncAt: startedAt } : {}),
       lastSyncOk: ok,
       lastSyncError: message ? message.slice(0, 500) : null,
-      ...(setFullSyncAt ? { lastFullSyncAt: new Date() } : {}),
+      ...(setFullSyncAt && !configVersion ? { lastFullSyncAt: new Date() } : {}),
     },
   });
   bustItopConfigCache();
@@ -824,6 +846,7 @@ export async function syncTickets(opts: { full?: boolean } = {}): Promise<SyncSu
   let timeEntriesSkipped = 0;
   let timeEntriesError: string | undefined;
   let runError: string | undefined;
+  let configVersion: Date | undefined;
 
   // The single-runner lock is a session advisory lock held on its own
   // dedicated connection for the whole run (lib/itop/syncLock.ts); every
@@ -850,6 +873,13 @@ export async function syncTickets(opts: { full?: boolean } = {}): Promise<SyncSu
       } else {
         usersMatched = (await prisma.user.count({ where: { active: true, itopPersonId: { not: null } } })) ?? 0;
       }
+
+      // Read before the customers are: a mapping saved after this point
+      // changes the row (it clears lastFullSyncAt), and the end-of-run write
+      // of lastFullSyncAt then stands down so the next sync is full again.
+      configVersion = (
+        await prisma.itopConfig.findUnique({ where: { id: "default" }, select: { updatedAt: true } })
+      )?.updatedAt;
 
       const customers = await prisma.customer.findMany({
         where: { itopOrgId: { not: null } },
@@ -882,19 +912,56 @@ export async function syncTickets(opts: { full?: boolean } = {}): Promise<SyncSu
           for await (const pageRows of client.getPages<ItopTicketFields>(cls, oql, ITOP_TICKET_OUTPUT_FIELDS, {
             pageSize: 100,
           })) {
+            // One transaction per page (ISS-132): a failure part-way leaves
+            // none of the page behind and fails the run. A row that cannot be
+            // stored — unreadable fields, or a constraint the database refuses
+            // (a duplicate ref) — is skipped on its own: validation runs
+            // before any write, and a refused write is undone to a savepoint
+            // so the rest of the page still commits.
+            const skippedKeys = new Set<number>();
+            const writes: { key: number; write: ReturnType<typeof prepareTicketUpsert> }[] = [];
             for (const row of pageRows) {
               seenIds.add(row.key);
               try {
-                await upsertTicket(cls, row, orgIdToCustomerId, timezone);
-                upserted += 1;
+                writes.push({ key: row.key, write: prepareTicketUpsert(cls, row, orgIdToCustomerId, timezone) });
               } catch (err) {
-                ticketsSkipped += 1;
+                skippedKeys.add(row.key);
                 logger.warn(
                   { err: errorMessage(err), ticketId: row.key, cls },
                   "iTop sync: skipping a ticket that failed to upsert",
                 );
               }
             }
+            await prisma.$transaction(
+              async (tx) => {
+                for (const { key, write } of writes) {
+                  await tx.$executeRaw`SAVEPOINT ticket_row`;
+                  try {
+                    await tx.itopTicket.upsert(write);
+                    await tx.$executeRaw`RELEASE SAVEPOINT ticket_row`;
+                  } catch (err) {
+                    // Only a refused row is skipped (a database constraint, or
+                    // a field Prisma rejects client-side); anything else (a
+                    // lost connection, a timeout) aborts the page.
+                    if (
+                      !(err instanceof Prisma.PrismaClientKnownRequestError) &&
+                      !(err instanceof Prisma.PrismaClientValidationError)
+                    ) {
+                      throw err;
+                    }
+                    await tx.$executeRaw`ROLLBACK TO SAVEPOINT ticket_row`;
+                    skippedKeys.add(key);
+                    logger.warn(
+                      { err: errorMessage(err), ticketId: key, cls },
+                      "iTop sync: skipping a ticket that failed to upsert",
+                    );
+                  }
+                }
+              },
+              { timeout: 60_000, maxWait: 10_000 },
+            );
+            ticketsSkipped += skippedKeys.size;
+            upserted += pageRows.length - skippedKeys.size;
           }
         }
       }
@@ -947,7 +1014,7 @@ export async function syncTickets(opts: { full?: boolean } = {}): Promise<SyncSu
       const message = ok
         ? skippedNote
         : [`Time entries: ${timeEntriesError}`, skippedNote].filter(Boolean).join(" · ");
-      await writeConfigResult(startedAt, ok, message, full, true);
+      await writeConfigResult(startedAt, ok, message, full, true, configVersion);
       logger.info(
         {
           full,

@@ -151,7 +151,7 @@ export function WeeklySync() {
     copyTimeoutRef.current = setTimeout(() => setCopyMessage(null), 2000);
   }
 
-  const customers = data?.customers ?? [];
+  const customers = useMemo(() => data?.customers ?? [], [data]);
   // Rows without an update for the active tab are hidden unless `showAll`.
   // Pinned rows always carry a managerDecision, so the filter never changes
   // the decision count.
