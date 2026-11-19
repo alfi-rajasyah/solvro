@@ -1,6 +1,6 @@
 // Offboarding handover: hands a leaver's work to other people and deactivates
 // them in one call (docs/archive/plans/feedback-round-lifecycle-spec.md, F5).
-import { useEffect, useId, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Modal } from "@/components/Modal";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { Alert, AlertDescription } from "@/components/reui/alert";
@@ -19,6 +19,7 @@ import {
   type ProjectDraft,
 } from "@/lib/handover";
 import {
+  isHandoverPreviewEmpty,
   useAdminOffboardUser,
   useUsers,
   type AdminUser,
@@ -137,6 +138,24 @@ export function HandoverModal({ open, user, preview, onClose, onDone, onStale }:
       setReload("idle");
     }
   }, [open, user.id]);
+
+  // The preview is a one-off fetch, so work reassigned elsewhere while this
+  // tab was in the background would leave rows that no longer apply. Refetch
+  // quietly when the window regains focus; a failed refetch keeps the list on
+  // screen and a submit still reports a stale handover. An emptied preview
+  // stays open with a notice rather than closing under a half-made draft.
+  const refreshOnFocus = useRef(onStale);
+  refreshOnFocus.current = onStale;
+  const busyRef = useRef(false);
+  busyRef.current = offboard.isPending;
+  useEffect(() => {
+    if (!open) return;
+    const onFocus = () => {
+      if (!busyRef.current) void refreshOnFocus.current();
+    };
+    window.addEventListener("focus", onFocus);
+    return () => window.removeEventListener("focus", onFocus);
+  }, [open]);
 
   const receivers = handoverReceivers(allUsers ?? [], user.id);
   const picReceivers = receivers.filter((u) => u.pipelineAccess);
@@ -391,6 +410,11 @@ export function HandoverModal({ open, user, preview, onClose, onDone, onStale }:
           </section>
         )}
 
+        {isHandoverPreviewEmpty(preview) && (
+          <p role="status" data-testid="handover-empty" className="text-sm text-on-surface-variant">
+            Nothing is left to hand over for {user.username}. Hand over and deactivate will only deactivate the account.
+          </p>
+        )}
         {!complete && missingTams.size > 0 && (
           <p id={tamHintId} className="text-sm text-on-surface-variant">
             Choose a new TAM for every project {user.username} leads to continue.

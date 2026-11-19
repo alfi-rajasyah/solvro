@@ -113,22 +113,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Add project/customer/date filters or real pagination.
 - **Source:** snapshot line 575, section "Kanban → ReUI swap — deferred findings (2026-07-27)"; merged duplicates at snapshot lines 2257
 
-### ISS-015 · P2 · Admin Project Overrides reassign select renders every candidate per row
-
-- **Type:** debt · **Found:** 2026-08-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** reassign column cell in frontend/src/pages/Admin.tsx (line ~1693)
-- **Problem:** Each row renders an unfiltered select of all active users with no pagination. Harmless at 8 users, heavy at production scale.
-- **Why deferred / fix direction:** Replace with a searchable picker or paginate; shares its root with the unpaginated GET /users entry.
-- **Source:** snapshot line 1426, section "Issues Sweep #1 — residuals (2026-08-02)"
-
-### ISS-017 · P3 · Offboarding and user delete update customers one at a time
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** offboard customer loop and reassignOwnedCustomers in backend/src/lib/offboarding.ts (lines ~349, ~463)
-- **Problem:** Each customer costs about 3 ms (an active-user check and an update), which is what holds the cap at 2,000.
-- **Why deferred / fix direction:** Check each distinct newOwnerId once and use one updateMany per new owner.
-- **Source:** snapshot line 301, section "Tech debt / follow-ups from recent work"
-
 ### ISS-018 · P3 · ensureTaskVisible adds a second DB round-trip per task mutation
 
 - **Type:** watch · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -152,14 +136,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** The route range-scans project and customer notes by noteDate with no index leading on it, so it plans a seq scan. Fast at dev volume.
 - **Why deferred / fix direction:** Add @@index([noteDate]) on both models via migration when volume grows (about 10k notes a year is the stated horizon).
 - **Source:** snapshot line 1662, section "Daily Review collapse & Recent notes — deferred findings (2026-08-31)"
-
-### ISS-021 · P3 · useCreateTask omits the Daily Review invalidation
-
-- **Type:** bug · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** useCreateTask in frontend/src/lib/queries.ts (line ~2172)
-- **Problem:** Creating an overdue TODO task leaves Daily Review attention lists stale until staleTime elapses; sibling mutations invalidate dailyReviewRoot.
-- **Why deferred / fix direction:** Add `qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot })` to onSuccess.
-- **Source:** snapshot line 1770, section "Duplicate tasks, subtasks, and sections — deferred findings (2026-09-02)"
 
 ### ISS-022 · P3 · useDuplicateTask/Section isPending includes inactive-query refetches
 
@@ -194,14 +170,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Source:** snapshot line 2386, section "Application review 2026-10-22 — remaining open items"
 
 ## Open — Backend/API
-
-### ISS-030 · P2 · Offboarding endpoint accepts a receiver whose role has zero permissions
-
-- **Type:** bug · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** offboard receivers in backend/src/lib/offboarding.ts (line ~236); filter in frontend/src/lib/handover.ts:84
-- **Problem:** POST /admin/users/:id/offboard accepts a receiver with no useful permissions or a PENDING account; only the UI filters them.
-- **Why deferred / fix direction:** Reject PENDING and zero-permission receivers server-side.
-- **Source:** snapshot line 2399, section "Project lifecycle and handover — deferred findings (2026-11-10)"
 
 ### ISS-031 · P3 · Offboarding a TAM with more than 500 projects is refused
 
@@ -291,22 +259,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — Frontend UI
 
-### ISS-043 · P2 · Material Symbols stylesheet overrides icon size/display utilities
-
-- **Type:** bug · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** Material Symbols <link> in frontend/index.html (line ~19)
-- **Problem:** The unlayered Google stylesheet sets display:inline-block and font-size:24px on .material-symbols-outlined, so it beats Tailwind v4 utilities: hidden/sm:inline do not hide an icon and text-base/text-[20px] on icons are likely no-ops.
-- **Why deferred / fix direction:** Load the stylesheet into a layer below utilities or wrap icons in sized elements, then re-check every icon size class.
-- **Source:** snapshot line 2378, section "Application review 2026-10-22 — remaining open items"; merged duplicates at snapshot lines 1685
-
-### ISS-044 · P3 · Service-mapping mutations lack optimistic updates
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** useUpdateProjectServices / useUpdateCustomerServices in frontend/src/lib/queries.ts (lines ~1774, ~1789)
-- **Problem:** The service-mapping checkboxes and tool chips disable while saving; correct but not instant.
-- **Why deferred / fix direction:** Add onMutate snapshot, optimistic services[] patch, onError rollback and onSettled invalidate to both hooks together.
-- **Source:** snapshot line 308, section "Tech debt / follow-ups from recent work"
-
 ### ISS-045 · P3 · Section-color parity gap on non-Gantt surfaces (no fallback resolver)
 
 - **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -314,14 +266,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Uncustomized sections render vivid presets on the Gantt but legacy slate #94a3b8 in the List tab, Executive roll-up chips and the task-panel dot.
 - **Why deferred / fix direction:** Export a shared resolver from lib/gantt/palette.ts or centralize the fallback server-side in the Section query.
 - **Source:** snapshot line 383, section "Tech debt / follow-ups from recent work"
-
-### ISS-046 · P3 · TaskPanel section chip stale during cross-section drag
-
-- **Type:** bug · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** reorderTasksLocally in frontend/src/lib/queries.ts (line ~1871); TaskPanel.tsx section chip (line ~725)
-- **Problem:** During a cross-section move's optimistic window, a TaskPanel open on the dragged task shows the old section chip until the refetch settles.
-- **Why deferred / fix direction:** Transient and self-healing. Fix: recompute nested section from the sections cache inside reorderTasksLocally.
-- **Source:** snapshot line 407, section "Tech debt / follow-ups from recent work"
 
 ### ISS-047 · P3 · Comment composer is a single-line input
 
@@ -338,14 +282,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Absolute-positioned popovers near the bottom of internally scrolling containers can be clipped instead of flipping.
 - **Why deferred / fix direction:** Revisit if a user reports it; fix by portalling the popovers.
 - **Source:** snapshot line 517, section "Plan B Task 9 deferred findings — ReUI Gantt swap (2026-07-25)"
-
-### ISS-049 · P3 · Only a 512 maskable icon declared
-
-- **Type:** debt · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** manifest icons in frontend/vite.config.ts (line ~36)
-- **Problem:** Low-DPI Android launchers downscale the 512 maskable icon.
-- **Why deferred / fix direction:** Generate icon-maskable-192.png and add a manifest entry.
-- **Source:** snapshot line 546, section "PWA icon regeneration — deferred findings (2026-07-25/26)"
 
 ### ISS-050 · P3 · No board-adjacent subtask promote/re-parent
 
@@ -451,14 +387,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Mark the offending card (error-tone border) or scroll/focus it when save is blocked.
 - **Source:** snapshot line 1863, section "Weekly Sync achievement rows — deferred findings (2026-09-10)"
 
-### ISS-064 · P3 · GET /customers/:id itopOrgId/itopOrgName not typed or used on frontend
-
-- **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** CustomerDetail type in frontend/src/lib/queries.ts (line ~157); frontend/src/pages/CustomerDetail.tsx (lines ~50, ~206)
-- **Problem:** The backend returns itopOrgId/itopOrgName (include without select) but the frontend neither types nor reads them, and a code comment wrongly blames a select.
-- **Why deferred / fix direction:** Type and use the fields directly, or trim the response with a real select; fix the comment either way.
-- **Source:** snapshot line 1910, section "iTop integration (connection, snapshot, Tickets tab) — deferred findings (ported 2026-10-04)"
-
 ### ISS-065 · P3 · useItopTicket utcOffsetMinutes isn't part of its query key
 
 - **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -547,20 +475,33 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Extract a shared constant.
 - **Source:** snapshot line 2406, section "Project lifecycle and handover — deferred findings (2026-11-10)"
 
-### ISS-076 · P3 · Stale preview in the handover dialog
-
-- **Type:** bug · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** HandoverModal submit in frontend/src/components/admin/HandoverModal.tsx (line ~160)
-- **Problem:** If the leaver stops being a project's TAM while the dialog is open, the required TAM select may still show until a submit fails with stale.
-- **Why deferred / fix direction:** Refetch the preview when the dialog regains focus, or accept.
-- **Source:** snapshot line 2407, section "Project lifecycle and handover — deferred findings (2026-11-10)"
-
 ### ISS-185 · P2 · Task form scrolls sideways at 375px when the label creator opens
 
 - **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `1fd2bd1`
 - **Where:** the creating row (input, Add, Cancel, colour swatches) in frontend/src/components/LabelPicker.tsx (line ~98) inside the TaskFormModal body (`flex-1 overflow-y-auto px-5 py-4`)
 - **Problem:** At 375px the modal body's scrollWidth is 458 against a clientWidth of 374; the autofocused label input scrolls the body 38px sideways, cutting off the field labels on the left. Seen during the wave 1 Delivery Gate; not caused by its changes.
 - **Why deferred / fix direction:** Let the creating row wrap (flex-wrap, min-w-0 on the input) and check the Assignee row, whose chevron also sits past the panel edge.
+
+### ISS-191 · P3 · Handover pickers still list receivers with zero permissions
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `7e6547f`
+- **Where:** handoverReceivers in frontend/src/lib/handover.ts (line ~84); assertReceiver in backend/src/lib/offboarding.ts (line ~150); PUT /admin/projects/reassign in backend/src/routes/admin.ts (line ~742) and tamCandidates in frontend/src/pages/Admin.tsx (line ~1587)
+- **Problem:** The handover pickers drop PENDING users only, so a custom role with no permissions is offered and then refused by the server. The server's PENDING test is a role-name check (backend/CLAUDE.md: permission-based only). The Project Overrides reassign route and picker still accept a PENDING or zero-permission TAM.
+- **Why deferred / fix direction:** One receiver rule everywhere: add a `hasAccess` field (permissions not empty) to the /users payload, filter on it in both pickers, refuse in the reassign route, and drop the role-name test.
+
+### ISS-192 · P3 · Section reorder modal keeps its own order after a failed save
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `b4bb1df`
+- **Where:** local `order` seeding in frontend/src/components/SectionReorderModal.tsx (lines ~39-47)
+- **Problem:** The modal seeds its order once on open. After a failed PATCH the sections cache re-seeds from the server (ISS-112), but the open modal still shows its diverged order until reopened.
+- **Why deferred / fix direction:** Re-seed the local order when a section mutation fails.
+
+### ISS-193 · P3 · The icon stylesheet now loads after the app stylesheet
+
+- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `be6a448`
+- **Where:** `@import url(...Material+Symbols...)` in frontend/src/index.css (line ~8)
+- **Problem:** Moving the icon stylesheet from a `<link>` in index.html to a CSS `@import` chains the requests (app CSS, then the Google CSS, then the font) and holds the app stylesheet on a third-party fetch on a first visit (antislop R-40; not measured). Repeat visits hit the Workbox cache.
+- **Why deferred / fix direction:** Measure first. If it matters, load the font CSS with a `<link>` again and keep the class rules in `@layer base` (they hold without the layer).
 
 ## Open — Accessibility & tokens
 
@@ -587,22 +528,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Text at 60% opacity of on-surface-variant measures about 3.6:1, under AA 4.5:1.
 - **Why deferred / fix direction:** Use the full text-on-surface-variant token.
 - **Source:** snapshot line 2419, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
-
-### ISS-081 · P2 · InstallBanner nests a role=button span inside a <button>
-
-- **Type:** bug · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** dismiss control in frontend/src/components/InstallBanner.tsx (line ~86)
-- **Problem:** Invalid interactive nesting, and the dismiss target is a 16px icon.
-- **Why deferred / fix direction:** Split into two sibling buttons.
-- **Source:** snapshot line 2422, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
-
-### ISS-082 · P3 · Favicon is on-light mark only; weak on dark tab strips
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** favicon link in frontend/index.html (line ~6), frontend/public/favicon.png
-- **Problem:** The flat on-light mark's arc ink #5b5b5d is 2.38:1 against Chrome's dark tab background #202124.
-- **Why deferred / fix direction:** Add a prefers-color-scheme-aware SVG favicon or a second <link media="(prefers-color-scheme: dark)"> with an on-dark mark.
-- **Source:** snapshot line 339, section "Tech debt / follow-ups from recent work"
 
 ### ISS-083 · P3 · Overview.tsx off-token styling (remaining: raw font-mono P- id)
 
@@ -823,14 +748,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** The modal relies wholly on ProjectList's canEdit gate on the button that opens it. A second entry point would inherit no protection.
 - **Why deferred / fix direction:** Add a canEdit/permission guard inside the modal or accept the single gated mount; low risk today.
 - **Source:** snapshot line 1076, section "Sortable reorder (sections + subtasks) — deferred findings (2026-07-30)"
-
-### ISS-112 · P3 · useUpdateSection scope can diverge from server after a failed PATCH
-
-- **Type:** bug · **Found:** 2026-07-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** useUpdateSection in frontend/src/lib/queries.ts (line ~2302)
-- **Problem:** If a queued drop's predecessor PATCH fails, its onError rollback discards optimistic writes of later queued drops, and those then run against a server that never applied the first. The modal shows a diverged order until reopened.
-- **Why deferred / fix direction:** Reachable only on a mid-session PATCH failure. Fix by refetching or re-seeding local order on error.
-- **Source:** snapshot line 1086, section "Sortable reorder (sections + subtasks) — deferred findings (2026-07-30)"
 
 ### ISS-113 · P3 · SectionReorderModal drag guard can strand the modal
 
@@ -1082,14 +999,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Add a gate step that also runs specs touched by the diff (git diff --name-only -- e2e/tests).
 - **Source:** snapshot line 1813, section "Duplicate tasks, subtasks, and sections — deferred findings (2026-09-02)"
 
-### ISS-148 · P2 · No component tests for ProjectStatusChangeDialogs and HandoverModal
-
-- **Type:** test-gap · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** frontend/src/components/project/ProjectStatusChangeDialogs.tsx; frontend/src/components/admin/HandoverModal.tsx
-- **Problem:** The handover and status-change dialogs, which move users' work, have no component or browser tests for the PIC/SA sections or holds longer than a day.
-- **Why deferred / fix direction:** Add component tests and an e2e for the handover dialog.
-- **Source:** snapshot line 2405, section "Project lifecycle and handover — deferred findings (2026-11-10)"
-
 ### ISS-149 · P3 · pwa.spec.ts fails against the Vite dev server
 
 - **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -1242,13 +1151,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Check them in a browser at 375px in both themes.
 - **Source:** snapshot line 2425, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
-### ISS-190 · P3 · No DOM test environment for focus and keyboard behaviour
-
-- **Type:** decision · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `65a6c77`
-- **Where:** frontend/vitest.config.ts (node environment, `src/**/*.test.ts` only)
-- **Problem:** Question for the user: add jsdom and @testing-library as devDependencies? Today focus and keyboard behaviour can only be checked through static markup or Playwright, and hooks such as useCustomerTickets have no unit tests.
-- **Why deferred / fix direction:** New devDependencies need approval. With them, add hook and focus tests.
-
 ## Open — Dev env & ops
 
 ### ISS-169 · P3 · nginx has no Cache-Control for /icons/ or /favicon.png
@@ -1392,3 +1294,18 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-133 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · 'Test connection' reports ok:false whenever TimeSpent is missing
 - ISS-166 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · Missing tests: withDeadlockRetry and baseline lock reorder
 - ISS-136 · Resolved 2026-11-19 · CHANGELOG "Fixes in project create locks, the iTop integration, and keyboard drag" · iTop full-sync prune can exceed Postgres bind-parameter limit (same defect as ISS-016)
+- ISS-015 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · Admin Project Overrides reassign select renders every candidate per row
+- ISS-017 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · Offboarding and user delete update customers one at a time
+- ISS-021 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · useCreateTask omits the Daily Review invalidation
+- ISS-030 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · Offboarding endpoint accepts a receiver whose role has zero permissions
+- ISS-043 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · Material Symbols stylesheet overrides icon size/display utilities
+- ISS-044 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · Service-mapping mutations lack optimistic updates
+- ISS-046 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · TaskPanel section chip stale during cross-section drag
+- ISS-049 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · Only a 512 maskable icon declared
+- ISS-064 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · GET /customers/:id itopOrgId/itopOrgName not typed or used on frontend
+- ISS-076 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · Stale preview in the handover dialog
+- ISS-081 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · InstallBanner nests a role=button span inside a <button>
+- ISS-082 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · Favicon is on-light mark only; weak on dark tab strips
+- ISS-112 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · useUpdateSection scope can diverge from server after a failed PATCH
+- ISS-148 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · No component tests for ProjectStatusChangeDialogs and HandoverModal
+- ISS-190 · Resolved 2026-11-19 · CHANGELOG "Fixes in offboarding, icon sizing and the app shell, and query hooks" · No DOM test environment for focus and keyboard behaviour

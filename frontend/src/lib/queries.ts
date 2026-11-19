@@ -155,6 +155,9 @@ export interface ProjectServiceAssignment {
 }
 
 export interface CustomerDetail extends CustomerSummary {
+  /** iTop organisation this customer is mapped to (GET /customers/:id returns the scalar columns). */
+  itopOrgId: number | null;
+  itopOrgName: string | null;
   projects: ProjectSummary[];
   services: CustomerServiceAssignment[];
 }
@@ -1771,6 +1774,33 @@ export interface ServiceAssignmentInput {
   tools: string[];
 }
 
+// Optimistic services[] for the service-mapping PUTs: keeps rows already
+// assigned (so their ids and createdAt survive), builds a new row from the
+// existing assignment's service or the services catalogue cache, and drops a
+// serviceId neither knows — the settle refetch brings that one in.
+function optimisticAssignments<A extends { serviceId: number; service: Service; tools: string[] }>(
+  prev: A[],
+  inputs: ServiceAssignmentInput[],
+  catalogue: Service[] | undefined,
+  build: (service: Service, tools: string[]) => A,
+): A[] {
+  const out: A[] = [];
+  for (const input of inputs) {
+    const existing = prev.find((a) => a.serviceId === input.serviceId);
+    if (existing) {
+      out.push({ ...existing, tools: input.tools });
+      continue;
+    }
+    const service = catalogue?.find((s) => s.id === input.serviceId);
+    if (service) out.push(build(service, input.tools));
+  }
+  // Codepoint compare, not localeCompare: closer to the server's ordering and
+  // independent of the host locale (same choice as the pipeline helpers below).
+  return out.sort((a, b) =>
+    a.service.name < b.service.name ? -1 : a.service.name > b.service.name ? 1 : 0,
+  );
+}
+
 export function useUpdateCustomerServices(customerId: number) {
   const qc = useQueryClient();
   return useMutation({
@@ -1779,7 +1809,29 @@ export function useUpdateCustomerServices(customerId: number) {
         method: "PUT",
         body: { assignments },
       }),
-    onSuccess: () => {
+    onMutate: async (assignments) => {
+      await qc.cancelQueries({ queryKey: queryKeys.customer(customerId) });
+      const prev = qc.getQueryData<CustomerDetail>(queryKeys.customer(customerId));
+      if (prev) {
+        const catalogue = qc.getQueryData<Service[]>(["services"]);
+        qc.setQueryData<CustomerDetail>(queryKeys.customer(customerId), {
+          ...prev,
+          services: optimisticAssignments(prev.services, assignments, catalogue, (service, tools) => ({
+            id: -service.id,
+            customerId,
+            serviceId: service.id,
+            service,
+            tools,
+            createdAt: new Date().toISOString(),
+          })),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(queryKeys.customer(customerId), ctx.prev);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.customer(customerId) });
       qc.invalidateQueries({ queryKey: queryKeys.customers });
     },
@@ -1794,7 +1846,29 @@ export function useUpdateProjectServices(projectId: number) {
         method: "PUT",
         body: { assignments },
       }),
-    onSuccess: () => {
+    onMutate: async (assignments) => {
+      await qc.cancelQueries({ queryKey: queryKeys.project(projectId) });
+      const prev = qc.getQueryData<ProjectDetail>(queryKeys.project(projectId));
+      if (prev) {
+        const catalogue = qc.getQueryData<Service[]>(["services"]);
+        qc.setQueryData<ProjectDetail>(queryKeys.project(projectId), {
+          ...prev,
+          services: optimisticAssignments(prev.services, assignments, catalogue, (service, tools) => ({
+            id: -service.id,
+            projectId,
+            serviceId: service.id,
+            service,
+            tools,
+            createdAt: new Date().toISOString(),
+          })),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(queryKeys.project(projectId), ctx.prev);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.project(projectId) });
       qc.invalidateQueries({ queryKey: ["projects"] });
     },
@@ -1855,6 +1929,22 @@ function siblingListId(t: Pick<Task, "parentTaskId" | "status">): string {
   return t.parentTaskId === null ? "top" : `sub:${t.parentTaskId}`;
 }
 
+// The nested `section` is what TaskPanel's chip reads: on a section change
+// take it from the sections cache (null when unassigned). Without the cache
+// entry the old object is kept and the settle refetch corrects it.
+function nestedSectionFor(
+  current: Pick<Task, "sectionId" | "section">,
+  nextSectionId: number | null,
+  sections: Pick<Section, "id" | "name" | "position" | "color">[] | undefined,
+): Task["section"] {
+  if (nextSectionId === current.sectionId) return current.section;
+  if (nextSectionId === null) return null;
+  const found = sections?.find((s) => s.id === nextSectionId);
+  return found
+    ? { id: found.id, name: found.name, position: found.position, color: found.color }
+    : current.section;
+}
+
 /**
  * Reorders/re-parents `id` inside a locally-cached task list exactly the way
  * the backend's moveTaskWithinSiblings does: remove from the old sibling
@@ -1872,6 +1962,7 @@ export function reorderTasksLocally(
   tasks: Task[],
   id: number,
   patch: Pick<UpdateTaskInput, "status" | "parentTaskId" | "position" | "sectionId">,
+  sections?: Pick<Section, "id" | "name" | "position" | "color">[],
 ): Task[] {
   const current = tasks.find((t) => t.id === id);
   if (!current) return tasks;
@@ -1886,6 +1977,7 @@ export function reorderTasksLocally(
     status: nextStatus,
     parentTaskId: nextParentTaskId,
     sectionId: nextSectionId,
+    section: nestedSectionFor(current, nextSectionId, sections),
     // Mirror the backend: re-parenting under a parent clears epicId in the
     // same transaction (§4) — a subtask never carries its own epic link.
     epicId: nextParentTaskId !== null ? null : current.epicId,
@@ -2015,8 +2107,9 @@ export function useUpdateTask(projectId: number) {
               status: patch.status ?? current.status,
             });
         const touchesOrdering = patch.position !== undefined || listChanged;
+        const sectionsCache = qc.getQueryData<Section[]>(queryKeys.projectSections(projectId));
         const next = touchesOrdering
-          ? reorderTasksLocally(prev, id, patch)
+          ? reorderTasksLocally(prev, id, patch, sectionsCache)
           : prev.map((t) =>
               t.id === id
                 ? ({
@@ -2025,6 +2118,9 @@ export function useUpdateTask(projectId: number) {
                     // Same server mirror as reorderTasksLocally above, for
                     // whichever plain-merge patch also touches parentTaskId.
                     ...(patch.parentTaskId != null ? { epicId: null } : {}),
+                    ...(patch.sectionId !== undefined
+                      ? { section: nestedSectionFor(t, patch.sectionId, sectionsCache) }
+                      : {}),
                   } as Task)
                 : t,
             );
@@ -2183,6 +2279,8 @@ export function useCreateTask(projectId: number) {
       qc.invalidateQueries({ queryKey: queryKeys.overview });
       invalidateProjectHealth(qc, projectId);
       invalidateProjectActivity(qc, projectId);
+      // A new overdue TODO task changes the Daily Review attention lists.
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
       // Same as useUpdateTask: an assignee who is not yet a member becomes one.
       if (variables.assignedToId != null) {
         qc.invalidateQueries({ queryKey: queryKeys.projectMembers(projectId) });
@@ -2349,9 +2447,14 @@ export function useUpdateSection(projectId: number) {
         qc.setQueryData(queryKeys.projectSections(projectId), ctx.prev);
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
       // Tasks carry `section: { color }`; invalidate so the diagram repaints.
       qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
+      // The snapshot restored on error predates this mutation's queued
+      // successors, so after a failure their PATCHes would run against a
+      // server that never applied this one. Re-seed from the server and
+      // return the promise: it holds the scope's queue until the cache is
+      // authoritative again.
+      return qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
     },
   });
 }

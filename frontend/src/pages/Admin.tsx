@@ -15,6 +15,7 @@ import { Chip, ProjectStatusChip } from "@/components/StatusChip";
 import { Tabs } from "@/components/Tabs";
 import { ItopTab } from "@/components/admin/ItopTab";
 import { HandoverModal } from "@/components/admin/HandoverModal";
+import { useHandoverSession } from "@/components/admin/useHandoverSession";
 import { DeleteUserModal } from "@/components/admin/DeleteUserModal";
 import { ApiError } from "@/lib/api";
 import {
@@ -42,6 +43,7 @@ import {
 } from "@/lib/queries";
 import type { Role } from "@/lib/auth";
 import { TempPasswordNotice } from "@/components/admin/TempPasswordNotice";
+import { TamPicker } from "@/components/admin/TamPicker";
 import { PermissionPicker } from "@/components/admin/PermissionPicker";
 import { roleSaveErrorMessage } from "@/components/admin/roleErrors";
 import { useAuth } from "@/lib/auth";
@@ -127,7 +129,8 @@ function UsersTab() {
   const updateRole = useAdminUpdateRole();
   const setActive = useAdminSetActive();
   const fetchHandoverPreview = useAdminFetchHandoverPreview();
-  const [handover, setHandover] = useState<{ user: AdminUser; preview: HandoverPreview } | null>(null);
+  const { session: handover, open: openHandover, close: closeHandover, reload: reloadHandoverPreview } =
+    useHandoverSession(fetchHandoverPreview);
   const resetPassword = useAdminResetPassword();
   const [deletingUser, setDeletingUser] = useState<
     { user: AdminUser; customers: HandoverPreview["customers"] } | null
@@ -427,7 +430,7 @@ function UsersTab() {
         // -> the plain deactivate below; otherwise the handover modal.
         const preview = await fetchHandoverPreview(u.id);
         if (!isHandoverPreviewEmpty(preview)) {
-          setHandover({ user: u, preview });
+          openHandover(u, preview);
           return;
         }
       }
@@ -439,7 +442,7 @@ function UsersTab() {
         try {
           const preview = await fetchHandoverPreview(u.id);
           if (!isHandoverPreviewEmpty(preview)) {
-            setHandover({ user: u, preview });
+            openHandover(u, preview);
             return;
           }
           // Nothing left to hand over any more: the plain deactivate now works.
@@ -451,19 +454,6 @@ function UsersTab() {
         }
       }
       setError(err instanceof ApiError ? err.message : "Failed to update status.");
-    }
-  }
-
-  // Resolves true once the modal has a fresh preview; false when the reload failed.
-  async function reloadHandoverPreview(): Promise<boolean> {
-    if (!handover) return false;
-    try {
-      const preview = await fetchHandoverPreview(handover.user.id);
-      if (isHandoverPreviewEmpty(preview)) setHandover(null);
-      else setHandover({ user: handover.user, preview });
-      return true;
-    } catch {
-      return false;
     }
   }
 
@@ -657,8 +647,8 @@ function UsersTab() {
           open
           user={handover.user}
           preview={handover.preview}
-          onClose={() => setHandover(null)}
-          onDone={() => setHandover(null)}
+          onClose={closeHandover}
+          onDone={closeHandover}
           onStale={reloadHandoverPreview}
         />
       )}
@@ -1678,28 +1668,19 @@ function ProjectsTab() {
       header: ({ column }) => (
         <DataGridColumnHeader column={column} title="Current TAM → Reassign" />
       ),
-      // An interactive <select>, not a single sortable value — same
+      // An interactive picker, not a single sortable value — same
       // exemption as UsersTab's "role"/"actions" columns.
       enableSorting: false,
       cell: ({ row }) => {
         const p = row.original;
         return (
-          <select
-            value={p.tamId}
-            aria-label={`Reassign TAM for ${p.name}`}
-            onChange={(e) => handleReassign(p, Number(e.target.value))}
-            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-xs text-on-surface ${FIELD_FOCUS}`}
-          >
-            {tamCandidates.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.username} ({u.role})
-              </option>
-            ))}
-            {/* If the current TAM isn't in the candidate list (inactive or wrong role), show them anyway */}
-            {!tamCandidates.some((u) => u.id === p.tamId) && (
-              <option value={p.tamId}>{p.tam.username} (current)</option>
-            )}
-          </select>
+          <TamPicker
+            label={p.name}
+            currentId={p.tamId}
+            currentName={p.tam.username}
+            candidates={tamCandidates}
+            onPick={(id) => void handleReassign(p, id)}
+          />
         );
       },
       meta: { skeleton: <Skeleton className="h-7 w-40" /> },

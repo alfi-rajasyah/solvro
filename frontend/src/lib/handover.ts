@@ -112,6 +112,9 @@ const ROW_MESSAGES: Record<string, string> = {
   assignee_not_found: "The person chosen for the tasks is not an active user.",
   tam_not_found: "The new TAM is not an active user.",
   sa_not_found: "The new SA is not an active user.",
+  assignee_cannot_receive: "The person chosen for the tasks has no access yet.",
+  tam_cannot_receive: "The new TAM has no access yet.",
+  sa_cannot_receive: "The new SA has no access yet.",
   user_has_no_access: "The chosen person cannot be given access to this project.",
 };
 
@@ -138,6 +141,11 @@ export function handoverErrorFrom(err: unknown): HandoverError {
     case "owner_not_found":
       return {
         message: "The new owner is not an active user.",
+        customerId: numberField(details, "customerId"),
+      };
+    case "owner_cannot_receive":
+      return {
+        message: "The new owner has no access yet.",
         customerId: numberField(details, "customerId"),
       };
     case "pic_not_found":
