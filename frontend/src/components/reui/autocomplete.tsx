@@ -4,7 +4,7 @@
 // `scroll-area` registryDependency 401s against the @reui registry and falls back to
 // an unwanted upstream dependency this repo's guardrails forbid reintroducing (see
 // CLAUDE.md; details in the Task 3 report). Content below is the registry item's file
-// content plus recorded drift (see VENDOR.md) and five local patches (diffed against the registry item on
+// content (the empty-list `has-[...]:hidden` rule and the item icon-size class match upstream as of 2026-11-19) and five local patches (diffed against the registry item on
 // 2026-11-19): (1) `import * as React` added; (2) `cn` import path rewritten from "cn" to
 // "@/lib/utils" (unmarked); (3) IconPlaceholder swapped for lucide-react XIcon and
 // ChevronsUpDownIcon (import plus two call sites); (4) focus treatment unified to the
@@ -149,7 +149,7 @@ function AutocompleteList({
   return (
     <ScrollArea
       className={cn(
-        "size-full min-h-0 **:data-[slot=scroll-area-viewport]:h-full **:data-[slot=scroll-area-viewport]:overscroll-contain",
+        "size-full min-h-0 has-[[data-slot=autocomplete-list]:empty]:hidden **:data-[slot=scroll-area-viewport]:h-full **:data-[slot=scroll-area-viewport]:overscroll-contain",
         scrollAreaClassName
       )}
     >
@@ -200,7 +200,7 @@ function AutocompleteItem({
         "text-foreground data-highlighted:text-foreground data-highlighted:before:bg-accent gap-1.5",
         "rounded-md",
         "data-highlighted:before:rounded-md",
-        "px-1.5 py-1 text-sm ([class*='size-'])]:size-4 ([class*='size-'])]:size-4 [&_svg:not([class*='size-'])]:size-4 ([class*='size-'])]:size-4 ([class*='size-'])]:size-3.5 ([class*='size-'])]:size-4 ([class*='size-'])]:size-3.5 relative flex cursor-default items-center outline-hidden transition-colors select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:relative data-highlighted:z-0 data-highlighted:before:absolute data-highlighted:before:inset-x-0 data-highlighted:before:inset-y-0 data-highlighted:before:z-[-1] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([role=img]):not([class*=text-])]:opacity-60",
+        "px-1.5 py-1 text-sm [&_svg:not([class*='size-'])]:size-4 relative flex cursor-default items-center outline-hidden transition-colors select-none data-disabled:pointer-events-none data-disabled:opacity-50 data-highlighted:relative data-highlighted:z-0 data-highlighted:before:absolute data-highlighted:before:inset-x-0 data-highlighted:before:inset-y-0 data-highlighted:before:z-[-1] [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([role=img]):not([class*=text-])]:opacity-60",
         className
       )}
       {...props}

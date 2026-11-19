@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-19 — Task form at phone width, inactive mention chips, autocomplete
+
+- The task form no longer scrolls sideways on narrow screens when the label creator is open; the label row wraps and the Assignee field stays inside the panel.
+- Comment mention chips for deactivated users now render muted with a "Deactivated user" tooltip, instead of looking like an active person.
+- The vendored autocomplete's item icon-size rule and empty-list scroll fix match the upstream registry again.
+
 ### Fixed — 2026-11-19 — Task dates on create, stage locks, epic owners, inactive services
 
 - Creating a task with a due date before its start date is now refused with `invalid_date_range`, matching the edit rule.
