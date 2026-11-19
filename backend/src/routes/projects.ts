@@ -790,10 +790,9 @@ projectsRouter.post(
     const body = req.body as z.infer<typeof createEpicSchema>;
     await ensureProjectVisible(req.user!, id);
 
-    // Appends at the end. Epics have no re-pack on delete (unlike tasks'
-    // countSiblings, which is safe because DELETE /tasks/:id never re-packs
-    // either, but nothing here re-packs the epic list after a delete), so a
-    // plain count would collide with — or land before — an existing epic
+    // Appends at the end. Nothing re-packs the epic list after a delete
+    // (DELETE /tasks/:id re-packs task siblings, but epics have no such
+    // step), so a plain count would collide with — or land before — an existing epic
     // once any earlier epic has been deleted (count != max position + 1).
     // max(position) + 1 mirrors the sections POST /:id/sections above.
     const max = await prisma.epic.aggregate({

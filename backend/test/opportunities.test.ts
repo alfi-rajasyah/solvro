@@ -1054,25 +1054,57 @@ describe("stage re-pack under concurrency (ISS-116)", () => {
 
   it("two parallel deletes in one stage both succeed and leave dense positions", async () => {
     const sa = await createSaLikeUser();
-    const ids: string[] = [];
-    for (let i = 0; i < 6; i++) {
-      const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });
-      expect(created.status).toBe(201);
-      ids.push(created.body.id as string);
-    }
-
     // Several rounds: the deadlock needed an unlucky interleave to show.
-    const doomed = [ids[1], ids[4], ids[2], ids[3]];
-    const statuses = await Promise.all(doomed.map((id) => deleteOpportunity(sa.token, id).then((r) => r.status)));
-    expect(statuses).toEqual([204, 204, 204, 204]);
+    for (let round = 0; round < 4; round++) {
+      const ids: string[] = [];
+      for (let i = 0; i < 6; i++) {
+        const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });
+        expect(created.status).toBe(201);
+        ids.push(created.body.id as string);
+      }
 
-    const left = await prisma.opportunity.findMany({
-      where: { id: { in: ids } },
-      orderBy: { stageOrder: "asc" },
-      select: { id: true, stageOrder: true },
+      const doomed = [ids[1], ids[4], ids[2], ids[3]];
+      const statuses = await Promise.all(doomed.map((id) => deleteOpportunity(sa.token, id).then((r) => r.status)));
+      expect(statuses).toEqual([204, 204, 204, 204]);
+
+      const left = await prisma.opportunity.findMany({
+        where: { stage: "DELIVER_PROPOSAL" },
+        orderBy: { stageOrder: "asc" },
+        select: { id: true, stageOrder: true },
+      });
+      expect(left.map((o) => o.id)).toEqual([ids[0], ids[5]]);
+      expect(left.map((o) => o.stageOrder)).toEqual([0, 1]);
+      await prisma.opportunity.deleteMany({ where: { id: { in: [ids[0], ids[5]] } } });
+    }
+  });
+
+  it("a delete that lost the race to a move answers 409 stale_stage and re-packs nothing", async () => {
+    const sa = await createSaLikeUser();
+    const a = (await createOpportunity(sa.token, { picId: sa.userId, stage: "ASSESSMENT" })).body.id as string;
+    const b = (await createOpportunity(sa.token, { picId: sa.userId, stage: "ASSESSMENT" })).body.id as string;
+    // Hold the stage lock in an open transaction, start a delete that read
+    // the deal in ASSESSMENT, then move the deal away before releasing.
+    let release!: () => void;
+    let held!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const holding = new Promise<void>((r) => (held = r));
+    const holder = prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('pipeline_stage:ASSESSMENT'))`;
+      await tx.$executeRaw`UPDATE opportunities SET stage = 'poc'::"PipelineStage", stage_order = 0 WHERE id = ${a}`;
+      held();
+      await gate;
     });
-    expect(left.map((o) => o.id)).toEqual([ids[0], ids[5]]);
-    expect(left.map((o) => o.stageOrder)).toEqual([0, 1]);
+    await holding;
+    // supertest sends lazily; .then starts the request now.
+    const del = deleteOpportunity(sa.token, a).then((r) => r);
+    await new Promise((r) => setTimeout(r, 200));
+    release();
+    await holder;
+    const res = await del;
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("stale_stage");
+    expect(await prisma.opportunity.count({ where: { id: { in: [a, b] } } })).toBe(2);
+    await prisma.opportunity.deleteMany({ where: { id: { in: [a, b] } } });
   });
 
   it("opposite cross-stage moves at the same time do not deadlock and keep both stages dense", async () => {

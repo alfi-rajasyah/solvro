@@ -299,12 +299,19 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Rewrite the strings and return the empty mark as null for the client to render.
 - **Source:** snapshot line 2418, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
-### ISS-183 · P3 · POST /tasks accepts a due date before the start date
+### ISS-183 · P3 · Task create accepts a due date before the start date
 
 - **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `39af8f6`
-- **Where:** create handler and its body schema in backend/src/routes/tasks.ts (schema refine near line ~101)
-- **Problem:** PATCH /tasks/:id refuses an effective due date before the start date since ISS-028 closed, but create has no such check, so a new task can start inverted.
+- **Where:** POST /projects/:id/tasks in backend/src/routes/projects.ts (line ~597); createTaskSchema refine (line ~145)
+- **Problem:** PATCH /tasks/:id refuses an effective due date before the start date since ISS-028 closed, but POST /projects/:id/tasks has no such check, so a new task can start inverted.
 - **Why deferred / fix direction:** Found at the end of the ISS-028 fix. Add the same check (400 `invalid_date_range`) to create, with a test.
+
+### ISS-184 · P3 · Pipeline stage re-pack and offboarding lock deals in different orders
+
+- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `de9ae4a`
+- **Where:** insertAtStage / closeGapInStage UPDATEs in backend/src/routes/opportunities.ts (lines ~374, ~394) vs the deal reassignment in backend/src/lib/offboarding.ts (line ~390)
+- **Problem:** The set-based re-pack locks sibling rows in scan order; offboarding locks deals ORDER BY id and takes no stage lock. A re-pack and a PIC reassignment on overlapping deals can deadlock. The old per-row loop had the same exposure.
+- **Why deferred / fix direction:** Rare (needs a concurrent offboarding). Lock the stage's rows with SELECT id ... ORDER BY id FOR NO KEY UPDATE before the UPDATE.
 
 ## Open — Frontend UI
 

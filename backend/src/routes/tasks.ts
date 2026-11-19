@@ -689,10 +689,10 @@ tasksRouter.post(
       // The copy lands at the end of the same sibling list duplicateTaskTree
       // appended it to (source's own list, since no overrides were passed) —
       // move it to right after the source. Placed by the source's identity
-      // (insertManyAfter), not `source.position + 1` as an index: DELETE
-      // /tasks/:id never re-packs its sibling list, so a stale position
-      // value can point at the wrong row once an earlier sibling was
-      // deleted. insertManyAfter re-packs the whole list dense regardless.
+      // (insertManyAfter), not `source.position + 1` as an index: rows written
+      // before DELETE /tasks/:id began re-packing (ISS-027) can still hold
+      // sparse positions, so a stale value can point at the wrong row.
+      // insertManyAfter re-packs the whole list dense regardless.
       const key: SiblingKey = { projectId: source.projectId, parentTaskId: source.parentTaskId };
       await insertManyAfter(tx, key, id, [newId]);
 

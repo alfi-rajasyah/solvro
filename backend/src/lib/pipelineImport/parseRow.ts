@@ -223,7 +223,9 @@ export function parseImportRow(
   const winProbCell = String(winProbRaw ?? "").trim();
   let winProbability = 50;
   if (winProbCell !== "") {
-    const winProbParsed = Number.parseInt(winProbCell, 10);
+    // Whole numbers only, with an optional trailing %: "0.7", "12abc" and
+    // "1e2" are errors, not a silently truncated or rescaled value.
+    const winProbParsed = /^\d{1,3}%?$/.test(winProbCell) ? Number(winProbCell.replace("%", "")) : Number.NaN;
     if (!Number.isFinite(winProbParsed)) {
       errors.push("Win Probability must be a number between 0 and 100.");
     } else if (winProbParsed < 0 || winProbParsed > 100) {

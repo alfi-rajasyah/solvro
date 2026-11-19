@@ -356,6 +356,23 @@ async function lockStages(tx: Tx, ...stages: PipelineStage[]): Promise<void> {
 }
 
 /**
+ * After `lockStages`, re-reads the deal under a row lock and refuses when it
+ * is no longer in the stage that was locked (a concurrent move got there
+ * first): the `current` row the handler read before the transaction is stale
+ * then, and re-packing the old stage would be the wrong one. Only the stage
+ * already locked is checked; locking the new one too would break the sorted
+ * lock order.
+ */
+async function assertStillInStage(tx: Tx, oppId: string, lockedStage: PipelineStage): Promise<void> {
+  const rows = await tx.$queryRaw<{ stage: string }[]>`
+    SELECT stage::text AS stage FROM opportunities WHERE id = ${oppId} FOR NO KEY UPDATE`;
+  if (rows.length === 0) throw new HttpError(404, "not_found", "Opportunity not found");
+  if (rows[0].stage !== dbStage(lockedStage)) {
+    throw new HttpError(409, "stale_stage", "This deal was just moved. Refresh and try again.");
+  }
+}
+
+/**
  * Inserts `oppId` into `stage`'s sibling list at `requestedPosition`
  * (clamped to [0, siblings.length]) by shifting the siblings from that slot
  * on up by one, in one set-based UPDATE (the siblings are first re-packed
@@ -509,9 +526,12 @@ opportunitiesRouter.post(
     // `COALESCE(MAX(stage_order), -1) + 1` (VeloraApp's opportunities
     // route) and lib/taskOrdering.ts's append-at-end (finding S6). The
     // stage's existing siblings are already dense 0..n-1, so a plain count
-    // is the next slot; wrapped in a transaction so a concurrent create
-    // into the same stage can't race to the same stageOrder.
+    // is the next slot. The per-stage lock (not the transaction alone, which
+    // does not stop two creates reading the same count) is what keeps a
+    // concurrent create, import row, move or delete in the same stage from
+    // taking that slot too.
     const created = await prisma.$transaction(async (tx) => {
+      await lockStages(tx, stage);
       const stageOrder = await tx.opportunity.count({ where: { stage } });
       const row = await tx.opportunity.create({
         data: { ...data, stageOrder },
@@ -589,7 +609,7 @@ opportunitiesRouter.post(
     } catch (err) {
       if (err instanceof ImportAbortedError) return; // no one is waiting for an answer
       if (err instanceof ImportQueueFullError) {
-        res.setHeader("Retry-After", "30");
+        res.setHeader("Retry-After", "60");
         throw new HttpError(503, "import_busy", err.message);
       }
       if (err instanceof ImportFileError) throw new HttpError(400, err.code, err.message);
@@ -719,7 +739,9 @@ opportunitiesRouter.post(
 
         const created = await prisma.$transaction(async (tx) => {
           // Same bottom-append ordering POST "/" uses (finding S6): next
-          // stageOrder is the current sibling count in that stage.
+          // stageOrder is the current sibling count in that stage, read
+          // under the stage lock (each row is its own transaction).
+          await lockStages(tx, stage);
           const stageOrder = await tx.opportunity.count({ where: { stage } });
           const data: Prisma.OpportunityCreateInput = {
             title,
@@ -967,6 +989,7 @@ opportunitiesRouter.post(
 
     const updated = await prisma.$transaction(async (tx) => {
       await lockStages(tx, current.stage, body.stage);
+      await assertStillInStage(tx, id, current.stage);
       if (!sameStage) {
         await closeGapInStage(tx, current.stage, id);
       }
@@ -1290,6 +1313,7 @@ opportunitiesRouter.delete("/:id", validate("params", idParamSchema), async (req
   assertCanWriteOpportunity(req.user!, "delete", current);
   await prisma.$transaction(async (tx) => {
     await lockStages(tx, current.stage);
+    await assertStillInStage(tx, id, current.stage);
     await tx.opportunity.delete({ where: { id } });
     await closeGapInStage(tx, current.stage, id);
   });
