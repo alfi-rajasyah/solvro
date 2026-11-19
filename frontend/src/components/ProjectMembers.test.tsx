@@ -38,7 +38,7 @@ describe("ProjectMembersButton", () => {
   it("shows the SA sentence in the dialog, visible to touch and keyboard users", async () => {
     mount({ id: 2, username: "sa", email: "s@x.test" });
     await userEvent.setup().click(screen.getByTestId("project-members-button"));
-    expect(screen.getByTestId("project-members-sa-note").textContent).toContain("The SA is listed below but not counted");
+    expect(screen.getByTestId("project-members-sa-note").textContent).toContain("not added as a member or counted on the button");
   });
   it("omits the dialog sentence without an SA", async () => {
     mount(null);

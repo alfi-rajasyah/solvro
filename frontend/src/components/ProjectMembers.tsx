@@ -23,7 +23,8 @@ import {
 const MAX_AVATARS = 3;
 
 const SA_BUTTON_NOTE = "The TAM and added members. The SA is not counted.";
-const SA_NOT_COUNTED = "The SA is listed below but not counted as a member.";
+const SA_NOT_COUNTED =
+  "The project's SA can already see it, so the SA is not added as a member or counted on the button.";
 
 export function ProjectMembersButton({
   project,
@@ -151,14 +152,11 @@ function ProjectMembersDialog({
     <Modal open={open} onClose={close} title="Project members">
       <div className="space-y-4">
         <p className="text-xs text-on-surface-variant">
-          Members can view and edit everything in this project, like its TAM. The project's SA
-          can already see it and isn't added as a member.
+          Members can view and edit everything in this project, like its TAM.
+          {project.sa && (
+            <span data-testid="project-members-sa-note"> {SA_NOT_COUNTED}</span>
+          )}
         </p>
-        {project.sa && (
-          <p className="text-xs text-on-surface-variant" data-testid="project-members-sa-note">
-            {SA_NOT_COUNTED} The count on the button covers the TAM and added members.
-          </p>
-        )}
 
         {error && (
           <Alert variant="destructive">

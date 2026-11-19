@@ -1062,14 +1062,14 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-189 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Two drag-handle buttons use a different focus style from FIELD_FOCUS
 - ISS-192 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Section reorder modal keeps its own order after a failed save
 - ISS-194 · Resolved 2026-11-19 · CHANGELOG "Fixes in the Gantt, the task panel and section dialog, and accessibility" · Modal cannot tell its close button from Escape or a backdrop click (filed and fixed in the same change)
-- ISS-007 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · No pino redact configuration for the iTop token
+- ISS-007 · Resolved 2026-11-19 · CHANGELOG "Log redaction, secret tags, and receivers without access" · No pino redact configuration for the iTop token
 - ISS-012 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Cross-tab sign-out leaves the other tab on cached pages
 - ISS-060 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Tasks.tsx grid and kanban-v2 SubtaskRow show no Critical Path mark
 - ISS-063 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Missing-title banner doesn't name the offending card
 - ISS-070 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Members button count and avatars exclude the SA
 - ISS-071 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Frontend built-in role list omits SALES
-- ISS-074 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Tasks page makes an extra GET /projects request per visit
+- ISS-074 · Resolved 2026-11-19 · CHANGELOG "Project status in the task list" · Tasks page makes an extra GET /projects request per visit
 - ISS-075 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Inline 'is'/'is any of' operator strings in Projects.tsx
 - ISS-138 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Download helpers revoke object URL synchronously after click
 - ISS-139 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Screen and PDF Gantt export diverge on bar treatments
-- ISS-191 · Resolved 2026-11-19 · CHANGELOG "Fixes in exports, users and access, and small UI" · Handover pickers still list receivers with zero permissions
+- ISS-191 · Resolved 2026-11-19 · CHANGELOG "Log redaction, secret tags, and receivers without access" and "Fixes in exports, users and access, and small UI" · Handover pickers still list receivers with zero permissions
