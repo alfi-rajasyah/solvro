@@ -15,6 +15,14 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-19 — Fixes in task delete, task dates, Pipeline ordering and import, and the task form
+
+- `backend/src/routes/tasks.ts`: deleting a task now closes the gap it leaves, so the remaining tasks and subtasks keep consecutive positions, even when several are deleted at once.
+- `backend/src/routes/tasks.ts`: editing only a task's due date or only its start date can no longer leave the due date before the start date. The API refuses it with `400 invalid_date_range`. The customer filter of the task list now combines with the visibility filter through an explicit AND list.
+- `backend/src/routes/opportunities.ts`: deleting or moving a Pipeline deal re-packs its stage with a single statement under a per-stage lock, so two simultaneous deletes in one stage no longer fail with a deadlock error.
+- `backend/src/lib/pipelineImport/`: a Win Probability cell that is filled in but not a number is now a row error, not a silent 50; a blank cell still defaults to 50. The import preview holds at most 8 waiting files and past that answers `503` with "Other imports are being read right now. Try again in a minute."
+- `frontend/src/components/LabelPicker.tsx`, `TaskFormModal.tsx`: a duplicate label name shows "A label with this name already exists." instead of the raw database error. The parent picker offers only top-level tasks when creating a task. The subtask done checkbox is disabled for users who cannot edit tasks.
+
 ### Changed — 2026-11-18 — Code comments cite known issues by ID
 
 - Code and test comments in `frontend/src`, `backend/test`, and `e2e/tests` that referred to known issues by title or line number now cite the issue's ID in `docs/ISSUES.md`, or the archived issue log `docs/archive/ISSUES-2026-11-18-phase-log.md` for entries closed before IDs existed. No behavior change.
