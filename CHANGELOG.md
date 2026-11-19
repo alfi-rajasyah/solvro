@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-19 — Vendored component record and palette input check
+
+- A new `frontend/src/components/reui/VENDOR.md` lists each vendored ReUI file with its registry source, and records the 5 local patches and the upstream source hash of the autocomplete component.
+- A stale comment about the violet chip token in `frontend/src/index.css` is corrected.
+- An end-to-end test now checks that the command palette input keeps its borderless, transparent styling over the component defaults.
+
 ### Changed — 2026-11-19 — Typecheck coverage and icon caching
 
 - The backend typecheck now also covers `backend/scripts/` and `backend/test/` through a new `backend/tsconfig.check.json` (`npm run typecheck`, also used by CI). The type errors it exposed in the demo seed and two tests are fixed. The build configuration is unchanged.
