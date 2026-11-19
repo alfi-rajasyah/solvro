@@ -745,15 +745,13 @@ export async function syncTimeEntries(opts: { full?: boolean } = {}): Promise<Ti
       // likewise never delete history *older* than the pull window, since
       // that history can never be re-fetched to restore it.
       const deleteCutoff = new Date(cutoff.getTime() + MAX_ZONE_OFFSET_MS);
-      const deleted = await prisma.itopTimeEntry.deleteMany({
-        where: {
-          AND: [
-            { startDate: { gte: deleteCutoff } },
-            { OR: [{ itopUserId: { notIn: mappedItopUserIds } }, { id: { notIn: [...seenIds] } }] },
-          ],
-        },
-      });
-      removed = deleted.count;
+      // Raw delete with the id sets as ONE array parameter each: `notIn`
+      // would bind one parameter per id and overflow Postgres's bind limit
+      // on a large install (ISS-016). Same predicate as before.
+      removed = await prisma.$executeRaw`
+        DELETE FROM itop_time_entries
+        WHERE start_date >= ${deleteCutoff}
+          AND (NOT (itop_user_id = ANY(${mappedItopUserIds}::int[])) OR NOT (id = ANY(${[...seenIds]}::int[])))`;
     }
 
     return { ran: true, upserted, removed, skipped };
@@ -908,12 +906,10 @@ export async function syncTickets(opts: { full?: boolean } = {}): Promise<SyncSu
         // customer (whose tickets would otherwise keep a stale
         // customerId via ON DELETE SET NULL) as well as a ticket iTop no
         // longer returns for a still-mapped org.
-        const deleted = await prisma.itopTicket.deleteMany({
-          where: {
-            OR: [{ orgId: { notIn: orgIds } }, { id: { notIn: [...seenIds] } }],
-          },
-        });
-        removed = deleted.count;
+        // One array parameter per set, not one bind parameter per id (ISS-016).
+        removed = await prisma.$executeRaw`
+          DELETE FROM itop_tickets
+          WHERE NOT (org_id = ANY(${orgIds}::int[])) OR NOT (id = ANY(${[...seenIds]}::int[]))`;
       }
 
       // Time entries after tickets, inside the same advisory-lock-guarded

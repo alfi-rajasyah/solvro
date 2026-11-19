@@ -213,6 +213,9 @@ itopRouter.get("/status", async (_req, res) => {
     baseUrl: config.baseUrl,
     lastSyncAt: config.lastSyncAt,
     lastSyncOk: config.lastSyncOk,
+    // Sanitised failure signal for non-admins: true only when the last run
+    // finished and failed. Carries no error text (ISS-132).
+    lastSyncFailed: config.lastSyncOk === false,
     refreshMinutes: config.refreshMinutes,
     actionsEnabled: config.actionsEnabled,
   });

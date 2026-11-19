@@ -462,9 +462,12 @@ describe("POST /admin/itop/test", () => {
     await configureItop(started.baseUrl);
     const res = await call("post", "/admin/itop/test", adminToken).send({});
     expect(res.status).toBe(200);
-    expect(res.body.ok).toBe(false);
+    // TimeSpent is informational (optional Time Tracking extension): it fails
+    // on its own line but not the aggregate.
+    expect(res.body.ok).toBe(true);
     const timeSpent = res.body.probes.find((p: { name: string }) => p.name === "TimeSpent");
     expect(timeSpent.ok).toBe(false);
+    expect(timeSpent.informational).toBe(true);
     expect(res.body.probes.filter((p: { name: string }) => p.name !== "TimeSpent").every((p: { ok: boolean }) => p.ok)).toBe(
       true,
     );
@@ -556,6 +559,21 @@ describe("organizations + customer↔org mapping", () => {
       itopOrgName: "PT Sinar Logistik",
       match: "manual",
     });
+  });
+
+  it("PATCH that adds a mapping clears lastFullSyncAt so the next sync is full; clearing a mapping does not", async () => {
+    const stamp = new Date("2026-11-01T00:00:00Z");
+    await prisma.itopConfig.update({ where: { id: "default" }, data: { lastFullSyncAt: stamp } });
+    bustItopConfigCache();
+    const customer = await createCustomer({ name: "Fresh Mapping" });
+
+    const clear = await call("patch", `/admin/itop/customers/${customer.id}`, adminToken).send({ itopOrgId: null });
+    expect(clear.status).toBe(200);
+    expect((await prisma.itopConfig.findUnique({ where: { id: "default" } }))?.lastFullSyncAt).toEqual(stamp);
+
+    const res = await call("patch", `/admin/itop/customers/${customer.id}`, adminToken).send({ itopOrgId: 2 });
+    expect(res.status).toBe(200);
+    expect((await prisma.itopConfig.findUnique({ where: { id: "default" } }))?.lastFullSyncAt).toBeNull();
   });
 
   it("PATCH with an unknown org id: 400 itop_org_not_found", async () => {
