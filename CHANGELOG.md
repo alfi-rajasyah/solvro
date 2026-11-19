@@ -31,6 +31,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 - The data-grid column header can center-align sortable headers, and its controls menu now follows right-aligned columns.
 - Risk probability, impact and status cells on the project Risks page use the shared select instead of a native dropdown.
 - The vendored autocomplete no longer changes its border colour on focus; it keeps the primary ring.
+- A comment in the vendored autocomplete no longer contains text that Tailwind read as a class, which produced an invalid CSS rule and a build warning.
 - The Gantt tree-row reorder handler is split into named planning helpers, with no behaviour change.
 
 ### Fixed — 2026-11-19 — Guest link address, iTop sync atomicity, cross-tab account switch

@@ -4,7 +4,7 @@
 // `scroll-area` registryDependency 401s against the @reui registry and falls back to
 // an unwanted upstream dependency this repo's guardrails forbid reintroducing (see
 // CLAUDE.md; details in the Task 3 report). Content below is the registry item's file
-// content (the empty-list `has-[...]:hidden` rule and the item icon-size class match upstream as of 2026-11-19) and five local patches (diffed against the registry item on
+// content (the empty-list hide rule and the item icon-size class match upstream as of 2026-11-19) and five local patches (diffed against the registry item on
 // 2026-11-19): (1) `import * as React` added; (2) `cn` import path rewritten from "cn" to
 // "@/lib/utils" (unmarked); (3) IconPlaceholder swapped for lucide-react XIcon and
 // ChevronsUpDownIcon (import plus two call sites); (4) focus treatment unified to the
