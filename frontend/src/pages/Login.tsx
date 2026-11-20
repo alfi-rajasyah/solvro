@@ -306,7 +306,7 @@ export function Login() {
 
           {/* Footer */}
           <p
-            className="mt-6 text-center text-meta text-on-surface-variant/60"
+            className="mt-6 text-center text-meta text-on-surface-variant"
           >
             Internal use only · Elitery © 2026
           </p>
@@ -354,7 +354,7 @@ function PasswordForm({
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="you@example.com"
-            className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-hidden"
+            className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant focus:outline-hidden"
           />
         </div>
       </label>
@@ -374,7 +374,7 @@ function PasswordForm({
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="••••••••"
-            className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant/60 focus:outline-hidden"
+            className="flex-1 bg-transparent text-sm text-on-surface placeholder:text-on-surface-variant focus:outline-hidden"
           />
           <button
             type="button"

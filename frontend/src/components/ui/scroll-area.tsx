@@ -19,11 +19,11 @@ function ScrollArea({
       <ScrollAreaPrimitive.Viewport
         data-slot="scroll-area-viewport"
         // SOLVRO PATCH — DESIGN.md §4: the one focus treatment app-wide is
-        // `focus-visible:border-primary focus-visible:ring-2
-        // focus-visible:ring-primary/30`. Replaced the upstream
+        // `focus-visible:ring-2 focus-visible:ring-primary/30`
+        // (no border change on focus). Replaced the upstream
         // `focus-visible:ring-[3px] focus-visible:ring-ring/50
         // focus-visible:outline-1` leftover from the focus-style unification.
-        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30"
+        className="size-full rounded-[inherit] transition-[color,box-shadow] outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
       >
         {children}
       </ScrollAreaPrimitive.Viewport>

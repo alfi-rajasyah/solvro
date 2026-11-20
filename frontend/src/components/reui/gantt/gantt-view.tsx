@@ -2279,10 +2279,10 @@ function GanttView({
             className={cn(
               "group/gantt-splitter bg-border hover:bg-primary/60 data-resizing:bg-primary relative z-30 w-px shrink-0 cursor-col-resize touch-none outline-none",
               // SOLVRO PATCH (focus-style unification tail) — DESIGN.md §4
-              // canonical focus treatment: `focus-visible:border-primary
-              // focus-visible:ring-2 focus-visible:ring-primary/30`. Replaced
+              // reduced focus treatment: `focus-visible:ring-2
+              // focus-visible:ring-primary/30`, no border change on focus. Replaced
               // `focus-visible:ring-ring/50`.
-              "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+              "focus-visible:ring-2 focus-visible:ring-primary/30",
               "after:absolute after:inset-y-0 after:-start-1 after:-end-1"
             )}
             onPointerDown={beginSplit}

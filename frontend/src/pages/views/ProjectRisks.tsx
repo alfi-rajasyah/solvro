@@ -89,7 +89,7 @@ function InlineSelect({
 }) {
   return (
     <Select items={items} value={value} onValueChange={(v) => v != null && onChange(String(v))}>
-      <SelectTrigger size="sm" aria-label={ariaLabel} className={`px-2 data-[size=sm]:h-7 focus-visible:border-input ${className ?? ""}`}>
+      <SelectTrigger size="sm" aria-label={ariaLabel} className={`px-2 data-[size=sm]:h-7 ${className ?? ""}`}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

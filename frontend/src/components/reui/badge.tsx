@@ -1,8 +1,8 @@
 // Vendored from ReUI: https://reui.io/r/badge.json
 // Retrieved: 2026-08-01
 // Content below is the registry item's file content verbatim except for the
-// marked SOLVRO PATCH hand-edits (focus-ring normalization; dropped the
-// undefined "focus" tone and its "-light"/"-outline" siblings; rerouted the
+// marked SOLVRO PATCH hand-edits (focus-ring normalization; dropped the solid
+// tone variants and the undefined "focus" tone and its "-light"/"-outline" siblings; rerouted the
 // "-light"/"-outline" tint variants off this codebase's undefined
 // "-foreground" tokens onto the base tone).
 import { mergeProps } from "@base-ui/react/merge-props"
@@ -15,11 +15,11 @@ const badgeVariants = cva(
   [
     "relative inline-flex shrink-0 items-center justify-center w-fit border border-transparent font-medium whitespace-nowrap outline-none transition-shadow",
     // SOLVRO PATCH — DESIGN.md §4: the one focus treatment app-wide is
-    // `focus-visible:border-primary focus-visible:ring-2
-    // focus-visible:ring-primary/30` (Button/Input/Textarea precedent).
+    // `focus-visible:ring-2 focus-visible:ring-primary/30`
+    // with no border change (Button/Input/Textarea precedent).
     // Replaced upstream's `focus-visible:ring-2 focus-visible:ring-ring
     // focus-visible:ring-offset-1 focus-visible:ring-offset-background`.
-    "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:pointer-events-none disabled:opacity-50",
+    "focus-visible:ring-2 focus-visible:ring-primary/30 disabled:pointer-events-none disabled:opacity-50",
     "[&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*=size-])]:size-3",
   ],
   {
@@ -28,28 +28,9 @@ const badgeVariants = cva(
         default: "bg-primary text-primary-foreground",
         outline: "border-border bg-transparent dark:bg-input/32",
         secondary: "bg-secondary text-secondary-foreground",
-        // SOLVRO PATCH — `info`/`success`/`warning`/`destructive` NOT FOR
-        // USE until the Phase 4 chip rebase. `--color-info`/`-success`/
-        // `-warning` are calibrated as text-on-tint colors (Alert's existing
-        // usage: `text-success` on `bg-success/10`), not vivid solid-fill
-        // colors — as a *solid* full-opacity background with `text-white`
-        // on top, dark-mode contrast measures ≈1.2-1.3:1 (near-invisible).
-        // `destructive` is a milder case, not the same failure: white on
-        // dark-mode `--error` (`#f87171`) measures ≈2.8:1 — below AA but
-        // not near-invisible — and it is NOT the same combination
-        // `ui/button.tsx`'s destructive variant ships, despite sharing the
-        // `bg-{tone} text-white` shape: Button adds `dark:bg-destructive/60`
-        // (mixing the fill toward the surface, raising contrast further),
-        // which this Badge variant does not carry, so it still falls short
-        // of Button's precedent and stays constrained here too. These TONE
-        // variants have zero consumers today — only `secondary`/`outline`
-        // are consumed, by `data-grid-column-filter.tsx`'s selected-count
-        // chips — flagged for whoever wires one of the tone variants up
-        // before Phase 4 decides on a real solid-fill tone family.
-        info: "bg-info text-white",
-        success: "bg-success text-white",
-        warning: "bg-warning text-white",
-        destructive: "bg-destructive text-white",
+        // SOLVRO PATCH — dropped upstream's solid `info`/`success`/`warning`/
+        // `destructive` tones: no consumer, and white on those tokens fails
+        // contrast (about 1.2:1 to 2.8:1). Use the `-light`/`-outline` tints.
         // SOLVRO PATCH — upstream's "focus" tone (`bg-focus`/`text-focus-
         // foreground`) has no home in this codebase: it's not even in this
         // registry item's own `cssVars` (only destructive-foreground/

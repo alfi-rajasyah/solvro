@@ -72,7 +72,8 @@ function Calendar({
           defaultClassNames.dropdowns
         ),
         dropdown_root: cn(
-          "relative rounded-md border border-input has-focus:border-primary has-focus:ring-2 has-focus:ring-primary/30",
+          // SOLVRO PATCH — DESIGN.md §4: ring-only focus, no `has-focus:border-primary`.
+          "relative rounded-md border border-input has-focus:ring-2 has-focus:ring-primary/30",
           defaultClassNames.dropdown_root
         ),
         dropdown: cn(

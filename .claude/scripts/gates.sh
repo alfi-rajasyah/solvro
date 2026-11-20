@@ -350,6 +350,10 @@ design_check design-min-text-size "text below 12px (use text-meta / text-label-c
 # 3. One focus treatment — no border-primary on focus (DESIGN.md §4; use FIELD_FOCUS).
 design_check design-focus-ring "border-primary focus style (use FIELD_FOCUS / FIELD_FOCUS_WITHIN from lib/utils.ts)" \
   "$(design_grep '(focus|focus-visible|focus-within):border-primary')"
+# 3b. The same rule for vendored ui/ and reui/ (ISS-200): code lines only, so the
+#     SOLVRO PATCH comments that quote the old form do not trip it.
+design_check design-focus-ring-vendored "border-primary focus style in vendored ui/reui (ring only, the border never changes on focus)" \
+  "$(grep -rnE '(focus|focus-visible|has-focus|focus-within):border-primary' frontend/src/components/ui frontend/src/components/reui --include='*.ts' --include='*.tsx' | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\*)' || true)"
 # 4. Caps labels use the named role — no hand-rolled uppercase + tracking-wider (DESIGN.md §2).
 design_check design-caps-role "hand-rolled caps label (use text-label-caps uppercase)" \
   "$(design_grep "uppercase[^\"'\`]*tracking-wider|tracking-wider[^\"'\`]*uppercase")"

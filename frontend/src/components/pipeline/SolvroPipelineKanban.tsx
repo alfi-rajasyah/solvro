@@ -313,7 +313,7 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
                   setHandoffDeal(justWonDeal);
                   setJustWonDeal(null);
                 }}
-                className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container"
+                className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container"
               >
                 Create project
               </button>
@@ -472,7 +472,7 @@ function EmptyBoardState({ onCreate }: { onCreate?: () => void }) {
         <button
           type="button"
           onClick={onCreate}
-          className="mt-2 inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
+          className="mt-2 inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container hover:text-on-primary-container"
         >
           <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
           New opportunity

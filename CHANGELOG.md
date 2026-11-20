@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-20 — Hover contrast, secondary text, focus borders, badge variants
+
+- Primary buttons stay readable on hover in the light theme: about 27 hover states now pair the pale green background with its dark text colour (contrast 1.3:1 to 11.4:1).
+- Empty-value marks on Admin and the footer text on the sign-in page use the full secondary text colour (3.1:1 to 8.9:1).
+- Vendored form controls (select, input, textarea, checkbox, scroll area, button, badge, calendar, Gantt bar and splitter) no longer change their border on focus; the primary focus ring is the only focus change. A new `design-focus-ring-vendored` check in `.claude/scripts/gates.sh` keeps `components/ui` and `components/reui` on this rule.
+- Removed the unused solid info, success, warning and destructive badge variants in `reui/badge.tsx`, which failed contrast.
+
 ### Changed — 2026-11-20 — Loading placeholders, out-of-range iTop durations
 
 - Loading placeholders on Projects, Overview, Executive, customer, iTop ticket, Utilization, Weekly Sync, Daily Review, guest-link and project views use the shared skeleton components inside a `SkeletonRegion` (150 ms delay) instead of bare pulsing blocks or "Loading…" text. The placeholders lose their old border and tint.

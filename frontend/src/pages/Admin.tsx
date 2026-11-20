@@ -598,7 +598,7 @@ function UsersTab() {
             !newUsername.trim() ||
             newPassword.length < 8
           }
-          className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
+          className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-60 md:w-auto"
         >
           {createUser.isPending ? "Adding…" : "Add user"}
         </button>
@@ -833,7 +833,7 @@ function RolesTab() {
         return isEditing ? (
           <PermissionPicker value={editPerms} onChange={setEditPerms} />
         ) : r.permissions.length === 0 ? (
-          <span className="text-on-surface-variant/60">{EMPTY_VALUE}</span>
+          <span className="text-on-surface-variant">{EMPTY_VALUE}</span>
         ) : (
           <div className="flex flex-wrap gap-1">
             {r.permissions.map((p) => (
@@ -883,7 +883,7 @@ function RolesTab() {
                   type="button"
                   onClick={() => saveEdit(r)}
                   disabled={updatePerms.isPending}
-                  className="rounded-sm bg-primary px-2 py-1 font-display text-sm text-on-primary hover:bg-primary-container disabled:opacity-50 font-semibold"
+                  className="rounded-sm bg-primary px-2 py-1 font-display text-sm text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50 font-semibold"
                 >
                   Save
                 </button>
@@ -1059,7 +1059,7 @@ function RolesTab() {
           <button
             type="submit"
             disabled={createRole.isPending || !newName.trim()}
-            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-60"
           >
             {createRole.isPending ? "Adding…" : "Add role"}
           </button>
@@ -1201,7 +1201,7 @@ function SignInTab() {
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container"
           >
             {connected ? "Manage" : "Connect"}
           </button>
@@ -1412,7 +1412,7 @@ function SignInModal({
             type="button"
             onClick={save}
             disabled={!dirty || update.isPending}
-            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50"
           >
             {update.isPending ? "Saving…" : "Save"}
           </button>
@@ -1816,7 +1816,7 @@ function PipelineTab() {
       sortingFn: personNameSortingFn,
       cell: ({ row }) => {
         const user = row.original.user;
-        if (!user) return <span className="text-on-surface-variant/60">{EMPTY_VALUE}</span>;
+        if (!user) return <span className="text-on-surface-variant">{EMPTY_VALUE}</span>;
         return (
           <span className="flex min-w-0 items-center gap-1.5">
             <AssigneeAvatar user={user} size="xs" />
@@ -1916,7 +1916,7 @@ function PipelineTab() {
       enableSorting: false,
       cell: ({ row }) => {
         const msg = row.original.errorMessage;
-        if (!msg) return <span className="text-on-surface-variant/60">{EMPTY_VALUE}</span>;
+        if (!msg) return <span className="text-on-surface-variant">{EMPTY_VALUE}</span>;
         // Truncated in the grid; full text on hover via `title` per the
         // dispatch brief.
         return (

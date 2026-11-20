@@ -117,7 +117,7 @@ export function Customers() {
               <button
                 type="button"
                 onClick={() => setCreateOpen(true)}
-                className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
+                className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container hover:text-on-primary-container"
               >
                 <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
                 Add your first customer
