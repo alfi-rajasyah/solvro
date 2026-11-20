@@ -1,13 +1,14 @@
 name: CI
 
-# What runs where (kept lean to save GitHub Actions minutes):
-# - PR into develop: typecheck, backend tests, desktop e2e in 4 parallel shards.
-#   This is the merge gate.
-# - PR into main (the release PR from develop): the full suite, desktop and
-#   mobile e2e (4 shards each). There is no staging branch, so this is the one
-#   place mobile runs before the code reaches main.
-# - Push to main: the full suite again, on the merged commit. A green run
-#   here is what lets docker-publish.yml ship images.
+# What runs where. The repo is public, so runner minutes are free; the
+# limit that matters is the 20 jobs GitHub runs at once, and every path
+# below stays at or under 20 jobs.
+# - PR into develop: typecheck, frontend tests (two time zones), backend
+#   tests (2 shards), desktop e2e (15 shards). This is the merge gate.
+# - PR into main (the release PR from develop), push to main, manual run:
+#   the same checks, plus mobile e2e, with desktop in 8 shards and mobile in
+#   6. These runs build both images from their Dockerfiles, so the release
+#   path tests the exact images docker-publish.yml ships.
 # - Push to develop does not run: every change reached it through a tested PR,
 #   and nothing publishes from develop.
 # - Draft PRs wait until they are marked ready; docs-only changes never run.
@@ -52,10 +53,15 @@ env:
   npm_config_fetch_retries: "5"
   npm_config_fetch_retry_maxtimeout: "30000"
 
+# node_modules caching: every job restores node_modules itself, keyed on the
+# lock file hash, and runs `npm ci` only on a miss. A hit takes about 5 s;
+# `npm ci` took 34–62 s even with the npm download cache. A lock file change
+# misses once and the next run hits.
+
 jobs:
-  # Fast-feedback gate: surfaces type errors in ~2 minutes instead of burying
-  # them inside the e2e job's Docker image builds. Covers all three packages,
-  # including the e2e suite whose typecheck is not exercised anywhere else.
+  # Fast-feedback gate: type errors, lint, the production build and the
+  # bundle-size check for all three packages. The frontend test suite runs in
+  # its own jobs below, so this one finishes in under a minute on a cache hit.
   typecheck:
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
@@ -66,16 +72,23 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: |
-            backend/package-lock.json
-            frontend/package-lock.json
-            e2e/package-lock.json
 
-      - name: npm ci (backend, retry once on failure)
-        working-directory: backend
+      - name: Restore node_modules
+        id: nm
+        uses: actions/cache@v4
+        with:
+          path: |
+            backend/node_modules
+            frontend/node_modules
+            e2e/node_modules
+          key: nm-all-${{ runner.os }}-${{ hashFiles('backend/package-lock.json', 'frontend/package-lock.json', 'e2e/package-lock.json') }}
+
+      - name: npm ci on a cache miss (retry once on failure)
+        if: steps.nm.outputs.cache-hit != 'true'
         run: |
-          npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
+          for p in backend frontend e2e; do
+            (cd "$p" && { npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci); }) || exit 1
+          done
 
       - name: Generate Prisma client
         working-directory: backend
@@ -85,11 +98,6 @@ jobs:
         working-directory: backend
         run: npx tsc -p tsconfig.check.json
 
-      - name: npm ci (frontend, retry once on failure)
-        working-directory: frontend
-        run: |
-          npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
-
       - name: Typecheck frontend
         working-directory: frontend
         run: npm run typecheck
@@ -97,19 +105,6 @@ jobs:
       - name: Lint frontend (React hooks rules)
         working-directory: frontend
         run: npm run lint
-
-      - name: Run frontend test suite
-        working-directory: frontend
-        run: npm test
-
-      # Second run east of UTC: the date-contract invariant (dateField.ts, UTC-midnight
-      # serialization) is invisible under a UTC clock — Asia/Jakarta is the zone that
-      # exposed the original walk-back bug and the only run that can catch a regression.
-      - name: Run frontend test suite (TZ=Asia/Jakarta)
-        working-directory: frontend
-        run: npm test
-        env:
-          TZ: Asia/Jakarta
 
       # Route-level code splitting keeps the entry chunk under 1 MB; this fails
       # the build if a static import pulls a heavy page back into it. `npx vite
@@ -120,19 +115,65 @@ jobs:
           npx vite build
           npm run check:bundle-size
 
-      - name: npm ci (e2e, retry once on failure)
-        working-directory: e2e
-        run: |
-          npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
-
       - name: Typecheck e2e
         working-directory: e2e
         run: npm run typecheck
 
+  # The second run is east of UTC: the date-contract invariant (dateField.ts,
+  # UTC-midnight serialization) is invisible under a UTC clock — Asia/Jakarta
+  # is the zone that exposed the original walk-back bug and the only run that
+  # can catch a regression. The two runs share one job and run side by side,
+  # which keeps the PR path at GitHub's 20-concurrent-job limit.
+  frontend-tests:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restore node_modules
+        id: nm
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: nm-frontend-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json') }}
+
+      - name: npm ci on a cache miss (retry once on failure)
+        if: steps.nm.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: |
+          npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
+
+      - name: Run frontend test suite (UTC and Asia/Jakarta, side by side)
+        working-directory: frontend
+        run: |
+          TZ=UTC npm test > /tmp/fe-utc.log 2>&1 &
+          utc=$!
+          TZ=Asia/Jakarta npm test > /tmp/fe-jakarta.log 2>&1 &
+          jakarta=$!
+          status=0
+          wait $utc || status=1
+          wait $jakarta || status=1
+          echo "::group::TZ=UTC"; cat /tmp/fe-utc.log; echo "::endgroup::"
+          echo "::group::TZ=Asia/Jakarta"; cat /tmp/fe-jakarta.log; echo "::endgroup::"
+          exit $status
+
+  # Two shards, each with its own Postgres service, so the suite keeps its
+  # one-file-at-a-time rule (vitest.config.ts, fileParallelism: false) inside
+  # each shard while the shards run side by side.
   backend-tests:
+    name: backend-tests (${{ matrix.shard }}/2)
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
     services:
       postgres:
         image: postgres:15-alpine
@@ -155,9 +196,9 @@ jobs:
           - 5432:5432
         options: >-
           --health-cmd "pg_isready -U solvro -d solvro_test"
-          --health-interval 5s
+          --health-interval 2s
           --health-timeout 5s
-          --health-retries 20
+          --health-retries 30
     env:
       # Must match the service-container literal above.
       DATABASE_URL: postgresql://solvro:ci-ephemeral-postgres@localhost:5432/solvro_test?schema=public
@@ -175,54 +216,89 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: backend/package-lock.json
 
-      - name: npm ci (backend, retry once on failure)
+      - name: Restore node_modules
+        id: nm
+        uses: actions/cache@v4
+        with:
+          path: backend/node_modules
+          key: nm-backend-${{ runner.os }}-${{ hashFiles('backend/package-lock.json') }}
+
+      - name: npm ci on a cache miss (retry once on failure)
+        if: steps.nm.outputs.cache-hit != 'true'
         working-directory: backend
         run: |
           npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
 
-      - name: Prisma migrate deploy
+      # Always regenerated: the cached node_modules can hold a client built
+      # from an older schema.prisma.
+      - name: Prisma generate and migrate deploy
         working-directory: backend
-        run: npx prisma migrate deploy
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy
 
-      - name: Run backend test suite
+      - name: Run backend test suite (shard ${{ matrix.shard }}/2)
         working-directory: backend
-        run: npm test
+        run: npx vitest run --shard=${{ matrix.shard }}/2
 
-  # One job per Playwright project (desktop, mobile), each on its own stack,
-  # so the two halves of the suite run side by side instead of back to back.
-  # Each job keeps Playwright's single worker: the specs share one database
-  # and assert deltas against it, which two workers on one stack would race.
-  # The images build through BuildKit's GitHub Actions cache, so the three
-  # `npm ci` layers inside the Dockerfiles are rebuilt only when a lock file
-  # changes — on every other run the build is seconds, not minutes, and a
-  # slow registry cannot stall the gate.
-  # The desktop project alone runs ~15 min of tests. Setup varies from ~3 to
-  # ~15 min: a lock-file change rebuilds the backend image's `npm ci` layers
-  # (7 min once), and the apt step for Playwright's system dependencies has
-  # taken from 15 s to 7 min. 20 and then 30 minutes both cancelled a run
-  # that was passing (at test 176 of 190, then at 191 of 193).
-  # e2e runs on PRs into develop (desktop only) and on PRs into main, pushes
-  # to main or a manual run (desktop and mobile). Mobile regressions on a
-  # feature PR therefore surface on the release PR into main, before merge.
-  # Each project is split into 4 shards (`--shard=N/4`), each on its own stack
-  # and database, so no check runs much past 10 minutes. Playwright splits the
-  # suite by spec file (fullyParallel is off). Only the first desktop shard
-  # writes the image layer cache; the others read it.
+  # Keeps the BuildKit layer cache current for the e2e image builds. It runs
+  # beside the gate, never in front of it: a cache export costs about 70 s,
+  # which used to sit on the first e2e shard and make it the slowest one.
+  image-cache:
+    if: github.event_name != 'pull_request' || !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Export backend image layers
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          target: runtime
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+
+      - name: Export frontend image layers
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          target: runtime
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+
+  # One job per shard, each on its own stack and database. Each job keeps
+  # Playwright's single worker: the specs share one database and assert
+  # deltas against it, which two workers on one stack would race.
+  # `--fully-parallel` makes Playwright split the suite by test, not by spec
+  # file, so no single long file sets a floor under every shard. Inside a
+  # shard, tests still run one at a time. A spec file whose tests depend on
+  # each other's state opts out with `test.describe.configure({ mode:
+  # "default" })`, which keeps that file whole, in order, on one shard
+  # (kanban-dnd.spec.ts does: its G1/G2 cases fail when split from the
+  # tests before them).
+  # Image builds:
+  # - PR into develop: the frontend is built on the runner (`vite build`) and
+  #   copied into an nginx image with the production nginx.conf and security
+  #   headers; the backend image builds from its Dockerfile in parallel.
+  # - Release path (everything else): both images build from their
+  #   Dockerfiles, in parallel, so the shipped images are what e2e tests.
+  # Both read the BuildKit layer cache that `image-cache` writes.
   e2e:
-    name: e2e (${{ matrix.project }} ${{ matrix.shard }}/4)
+    name: e2e (${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }})
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
       fail-fast: false
       matrix:
-        project: ${{ github.event_name == 'pull_request' && github.base_ref == 'develop' && fromJSON('["desktop"]') || fromJSON('["desktop","mobile"]') }}
-        shard: [1, 2, 3, 4]
+        include: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref == 'develop' && '[{"project":"desktop","shard":1,"total":15},{"project":"desktop","shard":2,"total":15},{"project":"desktop","shard":3,"total":15},{"project":"desktop","shard":4,"total":15},{"project":"desktop","shard":5,"total":15},{"project":"desktop","shard":6,"total":15},{"project":"desktop","shard":7,"total":15},{"project":"desktop","shard":8,"total":15},{"project":"desktop","shard":9,"total":15},{"project":"desktop","shard":10,"total":15},{"project":"desktop","shard":11,"total":15},{"project":"desktop","shard":12,"total":15},{"project":"desktop","shard":13,"total":15},{"project":"desktop","shard":14,"total":15},{"project":"desktop","shard":15,"total":15}]' || '[{"project":"desktop","shard":1,"total":8},{"project":"desktop","shard":2,"total":8},{"project":"desktop","shard":3,"total":8},{"project":"desktop","shard":4,"total":8},{"project":"desktop","shard":5,"total":8},{"project":"desktop","shard":6,"total":8},{"project":"desktop","shard":7,"total":8},{"project":"desktop","shard":8,"total":8},{"project":"mobile","shard":1,"total":6},{"project":"mobile","shard":2,"total":6},{"project":"mobile","shard":3,"total":6},{"project":"mobile","shard":4,"total":6},{"project":"mobile","shard":5,"total":6},{"project":"mobile","shard":6,"total":6}]') }}
     env:
       ADMIN_EMAIL: qa@solvro.test
+      RELEASE_PATH: ${{ !(github.event_name == 'pull_request' && github.base_ref == 'develop') }}
     steps:
       - uses: actions/checkout@v4
 
@@ -248,39 +324,65 @@ jobs:
             echo "ADMIN_PASSWORD=$(openssl rand -hex 24)"
           } >> "$GITHUB_ENV"
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Restore node_modules
+        id: nm
+        uses: actions/cache@v4
+        with:
+          path: |
+            frontend/node_modules
+            e2e/node_modules
+          key: nm-e2e-${{ runner.os }}-${{ hashFiles('frontend/package-lock.json', 'e2e/package-lock.json') }}
+
+      - name: npm ci on a cache miss (retry once on failure)
+        if: steps.nm.outputs.cache-hit != 'true'
+        run: |
+          for p in frontend e2e; do
+            (cd "$p" && { npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci); }) || exit 1
+          done
+
       - uses: docker/setup-buildx-action@v3
 
-      # Both images are built here, not by `compose up --build`, so BuildKit
-      # can read and write the GitHub Actions layer cache. `load: true` puts
-      # the result in the local daemon under the `image:` name the compose
-      # file declares, and `compose up` below starts it without rebuilding.
-      - name: Build backend image (cached)
-        uses: docker/build-push-action@v6
-        with:
-          context: backend
-          target: runtime
-          tags: solvro-ci-backend:latest
-          load: true
-          cache-from: type=gha,scope=backend
-          cache-to: ${{ matrix.project == 'desktop' && matrix.shard == 1 && 'type=gha,mode=max,scope=backend' || '' }}
+      # Exposes the Actions cache service to the plain `docker buildx` calls
+      # below, which run in the background so the two builds overlap.
+      - uses: crazy-max/ghaction-github-runtime@v3
 
-      - name: Build frontend image (cached)
-        uses: docker/build-push-action@v6
-        with:
-          context: frontend
-          target: runtime
-          tags: solvro-ci-frontend:latest
-          load: true
-          cache-from: type=gha,scope=frontend
-          cache-to: ${{ matrix.project == 'desktop' && matrix.shard == 1 && 'type=gha,mode=max,scope=frontend' || '' }}
+      - name: Build images
+        run: |
+          docker buildx build backend --target runtime --load \
+            -t solvro-ci-backend:latest \
+            --cache-from type=gha,scope=backend > /tmp/backend-build.log 2>&1 &
+          backend_pid=$!
+          if [ "$RELEASE_PATH" = "true" ]; then
+            docker buildx build frontend --target runtime --load \
+              -t solvro-ci-frontend:latest \
+              --cache-from type=gha,scope=frontend
+          else
+            (cd frontend && npx vite build)
+            ctx=$(mktemp -d)
+            cp -r frontend/dist "$ctx/dist"
+            cp frontend/nginx.conf frontend/security-headers.conf "$ctx/"
+            printf '%s\n' \
+              'FROM nginx:1.27-alpine' \
+              'COPY dist /usr/share/nginx/html' \
+              'COPY nginx.conf /etc/nginx/conf.d/default.conf' \
+              'COPY security-headers.conf /etc/nginx/snippets/solvro-security-headers.conf' \
+              > "$ctx/Dockerfile"
+            docker build -q -t solvro-ci-frontend:latest "$ctx"
+          fi
+          if ! wait "$backend_pid"; then cat /tmp/backend-build.log; exit 1; fi
 
       - name: Start stack
         run: docker compose -f ci/docker-compose.ci.yml up -d --no-build
 
       - name: Wait for backend health
         run: |
-          for i in $(seq 1 60); do
+          for i in $(seq 1 120); do
             if curl -fsS http://localhost:3300/health; then
+              echo
               echo "backend healthy"
               exit 0
             fi
@@ -288,8 +390,7 @@ jobs:
               echo "backend container exited — failing fast instead of waiting out the timeout"
               break
             fi
-            echo "waiting for backend... ($i)"
-            sleep 2
+            sleep 1
           done
           echo "backend did not become healthy in time"
           exit 1
@@ -301,20 +402,8 @@ jobs:
             -e ADMIN_PASSWORD="$ADMIN_PASSWORD" \
             backend npx tsx scripts/create-admin.ts
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: npm
-          cache-dependency-path: e2e/package-lock.json
-
-      - name: npm ci (e2e, retry once on failure)
-        working-directory: e2e
-        run: |
-          npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
-
       # The Chromium download is the same on every run for a given Playwright
-      # version, so it is cached on the e2e lock file. On a hit only the
-      # system libraries are (re)installed, which takes seconds.
+      # version, so it is cached on the e2e lock file.
       - name: Cache Playwright browsers
         id: playwright-cache
         uses: actions/cache@v4
@@ -322,22 +411,27 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ runner.os }}-${{ hashFiles('e2e/package-lock.json') }}
 
-      - name: Install Playwright browsers (chromium)
+      - name: Install Chromium on a cache miss
         if: steps.playwright-cache.outputs.cache-hit != 'true'
         working-directory: e2e
-        run: npx playwright install --with-deps chromium
+        run: npx playwright install chromium
 
-      - name: Install Playwright system dependencies (cached browser)
-        if: steps.playwright-cache.outputs.cache-hit == 'true'
+      # The ubuntu-latest image already carries Chromium's system libraries,
+      # so `playwright install-deps` is skipped: its apt step took from 7 s to
+      # 317 s and was the main source of slow shards. If a runner image ever
+      # drops a library, the launch check fails and the apt step runs.
+      - name: Check Chromium launches (apt fallback)
         working-directory: e2e
-        run: npx playwright install-deps chromium
+        run: |
+          node -e "require('@playwright/test').chromium.launch().then(b => b.close())" \
+            || npx playwright install-deps chromium
 
-      - name: Run Playwright tests (${{ matrix.project }} ${{ matrix.shard }}/4)
+      - name: Run Playwright tests (${{ matrix.project }} ${{ matrix.shard }}/${{ matrix.total }})
         working-directory: e2e
         env:
           BASE_URL: http://localhost:8080
           CI: "true"
-        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/4
+        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --fully-parallel
 
       - name: Dump container logs on failure
         if: failure()
@@ -352,7 +446,3 @@ jobs:
             e2e/test-results/
             e2e/playwright-report/
           retention-days: 7
-
-      - name: Tear down stack
-        if: always()
-        run: docker compose -f ci/docker-compose.ci.yml down -v
