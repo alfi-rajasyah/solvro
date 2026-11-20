@@ -98,7 +98,25 @@ export const KANBAN_ROUTE = "kanban";
 
 export async function openKanban(page: Page, projectId: number): Promise<void> {
   await page.goto(`/projects/${projectId}/${KANBAN_ROUTE}`, { waitUntil: "networkidle" });
-  await expect(page.locator('[aria-label="Drag to reorder"]:visible').first()).toBeVisible();
+  const grips = page.locator('[aria-label="Drag to reorder"]:visible');
+  await expect(grips.first()).toBeVisible();
+  // The board keeps laying out after the first grip paints (columns fill and
+  // dnd-kit measures). Drag specs read card boxes next, so wait until the
+  // grip count and the last grip's box hold still across two 100 ms samples.
+  let prev: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const n = await grips.count();
+        const box = n ? await grips.nth(n - 1).boundingBox() : null;
+        const cur = box ? `${n}:${JSON.stringify(box)}` : null;
+        const stable = cur !== null && cur === prev;
+        prev = cur;
+        return stable;
+      },
+      { intervals: [100] },
+    )
+    .toBe(true);
 }
 
 export interface CapturedTaskRequest {
