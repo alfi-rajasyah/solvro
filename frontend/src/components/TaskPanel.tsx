@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { resolveSectionColor, resolveSectionColors } from "@/lib/gantt/palette";
 import { AssigneeAvatar } from "./AssigneeAvatar";
@@ -795,10 +797,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                       className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
                     >
                       {taskEpicPending ? (
-                        <span
-                          aria-hidden="true"
-                          className="h-4 w-16 animate-pulse rounded-full bg-surface-container-high"
-                        />
+                        <Skeleton aria-hidden="true" className="h-4 w-16 rounded-full" />
                       ) : taskEpic ? (
                         <EpicChip epic={taskEpic} compact />
                       ) : (
@@ -1131,7 +1130,9 @@ function PanelComments({ taskId, projectId }: { taskId: number; projectId: numbe
       </h2>
 
       {isLoading && (
-        <div className="h-12 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+        <SkeletonRegion>
+          <Skeleton className="h-12 rounded-sm" />
+        </SkeletonRegion>
       )}
 
       {isError && (

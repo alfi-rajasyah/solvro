@@ -142,7 +142,6 @@ function ddmmyyyy(day: string): string {
 
 async function openTaskPanel(page: Page, projectId: number, taskId: number): Promise<Locator> {
   await page.goto(`/projects/${projectId}/list?task=${taskId}`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
   const panel = page.getByRole("dialog", { name: "Task details" });
   await expect(panel).toBeVisible();
   return panel;
@@ -264,7 +263,6 @@ test.describe("date pickers — DateField / DateRangeField", () => {
     expect(textAfterApply).toBeTruthy();
 
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     const panelAfterReload = page.getByRole("dialog", { name: "Task details" });
     await expect(panelAfterReload).toBeVisible();
     await expect(panelDatesTrigger(panelAfterReload)).toHaveText(textAfterApply!);
@@ -393,7 +391,6 @@ test.describe("date pickers — DateField / DateRangeField", () => {
     // fixtures/seed.ts's own comment documents that an unscoped GET /tasks
     // window can leave a freshly seeded row outside its `take: 200`).
     await page.goto(`/projects/${projectId}/timeline`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     await page.getByRole("button", { name: task.title, exact: true }).click();
 
     const drawer = page.getByRole("dialog", { name: "Edit task" });
@@ -463,7 +460,6 @@ test.describe("date pickers — DateField / DateRangeField", () => {
 
     await loginViaUi(page);
     await page.goto(`/projects/${projectId}/list`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     // Desktop row: the `grid-cols-[...]` arbitrary-value token is unique to
     // the column-header row + every desktop task row (list-dnd.spec.ts's
@@ -489,7 +485,7 @@ test.describe("date pickers — DateField / DateRangeField", () => {
     // Cell text updates (self-referential — Intl-locale formatting isn't
     // worth reproducing here, just proving it changed from the seed).
     // Retrying assertion (fix round, NIT 2) instead of a bare
-    // waitForTimeout + non-retrying textContent() snapshot — toHaveText
+    // fixed sleep + non-retrying textContent() snapshot — toHaveText
     // polls until the mutation's cache update actually lands, rather than
     // assuming 800ms was always enough.
     await expect(row.getByRole("button", { name: /^Due date/ })).not.toHaveText(textBefore!);
@@ -573,7 +569,6 @@ test.describe("date pickers — DateField / DateRangeField", () => {
 
     await loginViaUi(page);
     await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     // Tree-pane row for this task (gantt-parity.spec.ts's
     // `[data-gantt-row-id="task-<id>"]` convention), scoped under the tree
@@ -635,7 +630,6 @@ test.describe("date pickers — DateField / DateRangeField", () => {
 
     await loginViaUi(page);
     await page.goto(`/projects/${projectId}/timeline`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     await page.getByRole("button", { name: task.title, exact: true }).click();
 
     const drawer = page.getByRole("dialog", { name: "Edit task" });
@@ -781,7 +775,6 @@ test.describe("date pickers — Jakarta timezone regression (UTC-midnight day co
     );
 
     await page.goto(`/projects/${projectId}/list`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     if (testInfo.project.name === "desktop") {
       const row = page.locator('div[class*="grid-cols-"]', { hasText: task.title });
@@ -799,7 +792,6 @@ test.describe("date pickers — Jakarta timezone regression (UTC-midnight day co
     // project, same as every other Gantt case in this file.
     if (testInfo.project.name === "desktop") {
       await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
-      await page.waitForTimeout(800);
       const treeRow = page.locator(
         `[data-slot="gantt-tree-pane"] [data-gantt-row-id="task-${task.id}"]`,
       );

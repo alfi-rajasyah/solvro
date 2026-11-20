@@ -32,12 +32,11 @@ function topLevelSorted(tasks: SeededTask[]): SeededTask[] {
 
 async function openList(page: Page, projectId: number): Promise<void> {
   await page.goto(`/projects/${projectId}/list`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
 }
 
 async function openGanttView(page: Page, projectId: number): Promise<void> {
   await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
+  await expect(page.locator('[data-slot="gantt-tree-pane"] [data-gantt-row-id]').first()).toBeVisible();
 }
 
 /**

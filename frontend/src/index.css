@@ -376,6 +376,22 @@
   }
 }
 
+/* Hover state for a solid `bg-primary text-on-primary` button. Light: the pale
+   container with its dark pair (11.4:1). Dark: the container is a mid green
+   that no token text clears 4.5:1 on, so dark keeps the resting text and
+   fades the fill to 90% (4.6:1 over --surface, 4.57:1 over the darkest
+   surface). One class so the pair is not hand-copied per button. */
+@utility primary-hover {
+  &:hover {
+    background-color: var(--color-primary-container);
+    color: var(--color-on-primary-container);
+  }
+  &:where(.dark, .dark *):hover {
+    background-color: color-mix(in srgb, var(--color-primary) 90%, transparent);
+    color: var(--color-on-primary);
+  }
+}
+
 /* Touch target: on touch input (and only there) a small control gets a hit
    area of at least 44px, centred on it, without changing how it looks or
    how the row around it lays out. Desktop density is untouched. Put it on

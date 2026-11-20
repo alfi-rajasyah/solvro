@@ -489,7 +489,7 @@ function NoteEditorForm({
             type="button"
             onClick={onSave}
             disabled={disabled}
-            className="rounded-sm bg-primary px-3 py-1.5 font-display text-meta font-semibold text-on-primary hover:bg-primary-container disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="rounded-sm bg-primary px-3 py-1.5 font-display text-meta font-semibold text-on-primary primary-hover disabled:cursor-not-allowed disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             {saving ? "Saving…" : "Save note"}
           </button>

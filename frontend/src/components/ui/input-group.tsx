@@ -43,7 +43,8 @@ function InputGroup({ className, ...props }: React.ComponentProps<"div">) {
         // app-wide contract (see CustomerFormModal.tsx/TaskFormModal.tsx's
         // hand-written inputs). Replaced `border-ring`/`ring-[3px]`/
         // `ring-ring/50` with the canonical 2px/30%-opacity treatment.
-        "has-[[data-slot=input-group-control]:focus-visible]:border-primary has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-primary/30",
+        // SOLVRO PATCH — DESIGN.md §4: ring only, no border change on focus (dropped `:border-primary`).
+        "has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-primary/30",
 
         // Error state.
         "has-[[data-slot][aria-invalid=true]]:border-destructive has-[[data-slot][aria-invalid=true]]:ring-destructive/20 dark:has-[[data-slot][aria-invalid=true]]:ring-destructive/40",

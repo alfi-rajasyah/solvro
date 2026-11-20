@@ -165,7 +165,7 @@ export function ServiceCatalogueManager() {
                   type="button"
                   onClick={saveEdit}
                   disabled={update.isPending || !editName.trim()}
-                  className="rounded-sm bg-primary px-2 py-1 font-display text-sm text-on-primary hover:bg-primary-container disabled:opacity-50 font-semibold"
+                  className="rounded-sm bg-primary px-2 py-1 font-display text-sm text-on-primary primary-hover disabled:opacity-50 font-semibold"
                 >
                   Save
                 </button>

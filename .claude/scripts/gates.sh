@@ -350,6 +350,14 @@ design_check design-min-text-size "text below 12px (use text-meta / text-label-c
 # 3. One focus treatment — no border-primary on focus (DESIGN.md §4; use FIELD_FOCUS).
 design_check design-focus-ring "border-primary focus style (use FIELD_FOCUS / FIELD_FOCUS_WITHIN from lib/utils.ts)" \
   "$(design_grep '(focus|focus-visible|focus-within):border-primary')"
+# 3b. The same rule for vendored ui/ and reui/ (ISS-200): code lines only, so the
+#     SOLVRO PATCH comments that quote the old form do not trip it. Catches the
+#     prefixed forms too (has-[...:focus-visible]:, group-data-[focused=true]/day:).
+FOCUS_BORDER_RE='(focus[a-z-]*|focus-visible\]|focused=true\][^ :]*):border-(primary|ring)'
+VENDORED_FOCUS_OUT="$(grep -rnE "$FOCUS_BORDER_RE" frontend/src/components/ui frontend/src/components/reui --include='*.ts' --include='*.tsx')"; VENDORED_FOCUS_RC=$?
+if [ "$VENDORED_FOCUS_RC" -gt 1 ]; then VENDORED_FOCUS_HITS="GREP-ERROR: grep exited $VENDORED_FOCUS_RC for the vendored focus-border pattern"
+else VENDORED_FOCUS_HITS="$(echo "$VENDORED_FOCUS_OUT" | grep -vE '^[^:]*:[0-9]+:[[:space:]]*(//|\*)' | sed '/^$/d' || true)"; fi
+design_check design-focus-ring-vendored "border change on focus in vendored ui/reui (ring only, the border never changes on focus)" "$VENDORED_FOCUS_HITS"
 # 4. Caps labels use the named role — no hand-rolled uppercase + tracking-wider (DESIGN.md §2).
 design_check design-caps-role "hand-rolled caps label (use text-label-caps uppercase)" \
   "$(design_grep "uppercase[^\"'\`]*tracking-wider|tracking-wider[^\"'\`]*uppercase")"

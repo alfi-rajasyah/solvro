@@ -145,14 +145,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Not worth a vendored patch; revisit only if reported.
 - **Source:** snapshot line 1231, section "ReUI Filters phase — deferred findings (2026-07-31)"
 
-### ISS-066 · P3 · Legacy exceptions to the binding UI-pass rules (animate-pulse, text sizes)
-
-- **Type:** debt · **Found:** 2026-09-29 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** bare `animate-pulse` placeholders across the frontend pages/components listed in the entry
-- **Problem:** Carried-over sites still use bare animate-pulse instead of components/skeletons/; the Gantt toolbar 11.5px labels and most text-[12px] sites have since been cleaned up.
-- **Why deferred / fix direction:** Sweep the remaining animate-pulse sites onto components/skeletons/; verify the DESIGN.md §2 'counts' wording.
-- **Source:** snapshot line 2240, section "Professional UI pass — deferred findings (2026-09-29, ported 2026-10-05)"
-
 ### ISS-068 · P3 · Filters popover keeps stealing focus after a filter is chosen
 
 - **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -161,54 +153,14 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Not reproduced in code review; investigate the popover close/focus-return path if users report it.
 - **Source:** snapshot line 2272, section "Collaboration & sharing — stale-edit warning — deferred findings (2026-09-30, ported 2026-10-05)"
 
-### ISS-072 · P3 · Loading states without SkeletonRegion in ported iTop/customer/utilization UI
-
-- **Type:** debt · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** loading branches in the listed files under frontend/src/components/itop, components/customer, pages/
-- **Problem:** These loading states use bare Skeletons or 'Loading…' text instead of SkeletonRegion with its 150 ms delay (DESIGN.md §2).
-- **Why deferred / fix direction:** Presentation-only; wrap each in SkeletonRegion in one pass.
-- **Source:** snapshot line 2339, section "Customer-edition port — deferred findings (2026-10-05)"
-
-### ISS-200 · P3 · Vendored select trigger changes its border on focus
-
-- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `8fd10ee`
-- **Where:** SelectTrigger classes in frontend/src/components/ui/select.tsx (line ~59); also ui/input.tsx, ui/textarea.tsx and the other vendored ui/* and reui/* files with the fuller focus form (merged ISS-087)
-- **Problem:** `focus-visible:border-primary` breaks DESIGN.md §4's reduced focus form (border never changes on focus). Daily Review ProjectCard.tsx (~247) tries to override it and does not.
-- **Why deferred / fix direction:** Predates this work; the ring stays visible. Drop the border change from the vendored classes, keep the primary ring, and re-check every consumer.
-
 ## Open — Accessibility & tokens
 
-### ISS-078 · P2 · Light-theme hover contrast: hover:bg-primary-container with text-on-primary
+### ISS-205 · P3 · Faint /60 and /40 secondary text on placeholders and row marks
 
-- **Type:** bug · **Found:** 2026-08-15 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** hover:bg-primary-container sites across frontend/src (27 matches; Admin, Settings, Pipeline, gantt, DateRangeField)
-- **Problem:** The white label on pale green hover background reads about 1.3:1 in light theme, below AA, on 27 sites.
-- **Why deferred / fix direction:** One global fix to the hover token pairing rather than per-feature edits.
-- **Source:** snapshot line 1521, section "Pipeline native port — accepted risks & deferred items (2026-08-15)"
-
-### ISS-079 · P2 · About 30 primary buttons use hover:bg-primary-container with white text
-
-- **Type:** bug · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** hover:bg-primary-container buttons across frontend/src/components (e.g. DateRangeField.tsx line ~332)
-- **Problem:** On hover the button turns pale green while text stays white, about 1.4:1 contrast in light mode.
-- **Why deferred / fix direction:** Pair each with hover:text-on-primary-container (as the update banner does) or add a shared button class.
-- **Source:** snapshot line 2379, section "Application review 2026-10-22 — remaining open items"
-
-### ISS-080 · P2 · text-on-surface-variant/60 on empty marks and the Login footer is about 3.6:1
-
-- **Type:** bug · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** Login.tsx (lines ~305, ~353, ~373); Admin.tsx (lines ~846, ~1838, ~1938)
-- **Problem:** Text at 60% opacity of on-surface-variant measures about 3.6:1, under AA 4.5:1.
-- **Why deferred / fix direction:** Use the full text-on-surface-variant token.
-- **Source:** snapshot line 2419, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
-
-### ISS-086 · P3 · Badge solid-tone variants not for use until chip rebase
-
-- **Type:** debt · **Found:** 2026-08-01 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** tone variants in frontend/src/components/reui/badge.tsx (lines ~31-52)
-- **Problem:** The solid tone variants render white on tint at about 1.2-2.8:1 contrast. They have no consumers and are constrained by an in-file comment.
-- **Why deferred / fix direction:** Fix contrast or delete the variants before anyone wires one up; chips stay bespoke per standing decision.
-- **Source:** snapshot line 1272, section "ReUI Data Grid phase — deferred findings (2026-08-01)"
+- **Type:** bug · **Found:** 2026-11-20 · **Verified:** 2026-11-20 @ wave 10
+- **Where:** `text-on-surface-variant/60` placeholders in EpicPanel.tsx (~328, ~374), TaskPanel.tsx (~1002), CommentMentions.tsx (~225); icon marks in TaskPanel.tsx, kanban-v2/cards.tsx, OpportunityCard.tsx, TicketCard.tsx, ProjectEpics.tsx, SectionReorderModal.tsx; `/40` in TaskFormModal.tsx (~437, ~634) and ProjectList.tsx (~1103)
+- **Problem:** Placeholder text at 60% (or 40%) opacity reads about 3.1:1 or lower, under 4.5:1; Login now uses the full token, so placeholders differ across the app.
+- **Why deferred / fix direction:** Outside ISS-080's named sites. Use the full `text-on-surface-variant` token for text placeholders; icons need 3:1 non-text contrast only.
 
 ## Open — Gantt
 
@@ -250,13 +202,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 
 ## Open — iTop
 
-### ISS-204 · P3 · iTop time entry with a very large duration fails the INT4 column and is skipped
-
-- **Type:** debt · **Found:** 2026-11-20 · **Verified:** 2026-11-20 @ wave 9
-- **Where:** upsertTimeEntry in backend/src/lib/itop/sync.ts (line ~576); the itop_time_entries duration column in backend/prisma/schema.prisma
-- **Problem:** A duration that does not fit a 32-bit integer (seen in a test fixture: 166666666667) makes the upsert fail; the entry is skipped and counted every tick.
-- **Why deferred / fix direction:** No real entry is that long. Clamp or reject out-of-range durations before the upsert and log once, or widen the column if ISS-120 shows minutes vs seconds matters.
-
 ### ISS-120 · P2 · iTop go-live checks: TimeSpent, User class, lifecycle stimuli
 
 - **Type:** watch · **Found:** 2026-09-24 · **Verified:** 2026-11-20 @ `cdac38f`
@@ -271,14 +216,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Problem:** Below md the five columns stack vertically with touch drag; long scroll to a distant column and touch precision are unevaluated.
 - **Why deferred / fix direction:** Evaluate on a real phone before treating it as the phone-usable Board.
 - **Source:** snapshot line 2101, section "iTop integration (board, new tickets) — deferred findings (ported 2026-10-04)"
-
-### ISS-134 · P3 · Deployment note: itopUserId matching needs REST read rights on iTop's User class
-
-- **Type:** watch · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** POST /itop/tickets/:id/time error path in backend/src/routes/itop.ts (line ~1303)
-- **Problem:** Without read rights on User, time logging fails with 'Your iTop user account is not linked yet'. A setup requirement, not a code bug.
-- **Why deferred / fix direction:** Document the required profile rights in docs/CONFIGURATION.md; otherwise nothing to fix in code.
-- **Source:** snapshot line 2303, section "Customer-edition port — deferred findings (2026-10-05)"
 
 ## Open — Exports & sharing
 
@@ -306,38 +243,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Where:** list-dnd.spec.ts, kanban-dnd.spec.ts (R3 parity, mobile touch-reorder), gantt-parity.spec.ts (connector-hover case c); backend/test/taskReorderConcurrency.test.ts (line ~114)
 - **Problem:** First-attempt flakes absorbed by retries; one 30 s backend timeout in a loaded gates run.
 - **Why deferred / fix direction:** Trigger: a case fails through its retry, or a new case joins. Then tighten the wait or fixture isolation; for the backend test capture pg_locks joined to pg_stat_activity during the stall. Merged ISS-160, 167.
-
-### ISS-150 · P3 · No e2e coverage for colorBy persistence across page reload
-
-- **Type:** test-gap · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** e2e/tests/gantt-legend.spec.ts
-- **Problem:** Spec only switches Status/Section/Priority in-session; it never asserts that the choice in localStorage survives a full reload.
-- **Why deferred / fix direction:** Add a step: pick a mode, reload, then assert the select value and legend are restored.
-- **Source:** snapshot line 467, section "Tech debt / follow-ups from recent work"
-
-### ISS-151 · P3 · E2E fixed-timeout (waitForTimeout) convention
-
-- **Type:** debt · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** waitForTimeout calls throughout e2e/tests/*.spec.ts
-- **Problem:** Many specs use fixed sleeps instead of condition-based waits.
-- **Why deferred / fix direction:** Dedicated e2e-hardening pass converting to waitForResponse/expect.poll.
-- **Source:** snapshot line 523, section "Plan B Task 9 deferred findings — ReUI Gantt swap (2026-07-25)"; merged duplicates at snapshot lines 520
-
-### ISS-154 · P3 · search.spec.ts polish and listener-ready guard
-
-- **Type:** debt · **Found:** 2026-07-27 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** e2e/tests/search.spec.ts (lines ~31, ~85, ~97, ~75)
-- **Problem:** Four minor spec issues, the main one a missing listener-ready guard behind a flake seen once under CI load.
-- **Why deferred / fix direction:** Assert the TopBar trigger is visible before pressing the shortcut; check res.ok; anchor the regex; fix the comment pointer.
-- **Source:** snapshot line 759, section "Global search & ⌘K command palette — deferred findings (2026-07-27)"
-
-### ISS-168 · P3 · Verification gap: /pipeline/:id, /share/:token and PWA banner not exercised
-
-- **Type:** watch · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** /pipeline/:id, /share/:token, InstallBanner
-- **Problem:** The audit's live run skipped these three surfaces.
-- **Why deferred / fix direction:** Check them in a browser at 375px in both themes.
-- **Source:** snapshot line 2425, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
 ## Open — Dev env & ops
 
@@ -525,3 +430,16 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-065 · Resolved 2026-11-20 · CHANGELOG "Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet" · useItopTicket utcOffsetMinutes isn't part of its query key
 - ISS-149 · Resolved 2026-11-20 · CHANGELOG "Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet" · pwa.spec.ts fails against the Vite dev server
 - ISS-193 · Resolved 2026-11-20 · CHANGELOG "Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet" (preload keeps the icons layer, see frontend/index.html) · The icon stylesheet now loads after the app stylesheet
+- ISS-078 · Resolved 2026-11-20 · CHANGELOG "Hover contrast, secondary text, focus borders, badge variants" · Light-theme hover contrast: hover:bg-primary-container with text-on-primary
+- ISS-079 · Resolved 2026-11-20 · CHANGELOG "Hover contrast, secondary text, focus borders, badge variants" · About 30 primary buttons use hover:bg-primary-container with white text
+- ISS-080 · Resolved 2026-11-20 · CHANGELOG "Hover contrast, secondary text, focus borders, badge variants" · text-on-surface-variant/60 on empty marks and the Login footer is about 3.6:1
+- ISS-200 · Resolved 2026-11-20 · CHANGELOG "Hover contrast, secondary text, focus borders, badge variants" · Vendored select trigger changes its border on focus
+- ISS-086 · Resolved 2026-11-20 · CHANGELOG "Hover contrast, secondary text, focus borders, badge variants" · Badge solid-tone variants not for use until chip rebase
+- ISS-066 · Resolved 2026-11-20 · CHANGELOG "Loading placeholders, out-of-range iTop durations" · Legacy exceptions to the binding UI-pass rules (animate-pulse, text sizes)
+- ISS-072 · Resolved 2026-11-20 · CHANGELOG "Loading placeholders, out-of-range iTop durations" · Loading states without SkeletonRegion in ported iTop/customer/utilization UI
+- ISS-204 · Resolved 2026-11-20 · CHANGELOG "Loading placeholders, out-of-range iTop durations" · iTop time entry with a very large duration fails the INT4 column and is skipped
+- ISS-134 · Resolved 2026-11-20 · docs/CONFIGURATION.md §2.17 (iTop User-class read right), wave 10 · Deployment note: itopUserId matching needs REST read rights on iTop's User class
+- ISS-150 · Resolved 2026-11-20 · CHANGELOG "End-to-end waits, search spec, colour-by reload test" · No e2e coverage for colorBy persistence across page reload
+- ISS-151 · Resolved 2026-11-20 · CHANGELOG "End-to-end waits, search spec, colour-by reload test" · E2E fixed-timeout (waitForTimeout) convention
+- ISS-154 · Resolved 2026-11-20 · CHANGELOG "End-to-end waits, search spec, colour-by reload test" · search.spec.ts polish and listener-ready guard
+- ISS-168 · Resolved 2026-11-20 · Checked at the wave 10 Delivery Gate (docs/archive/plans/issues-wave-10.md) · Verification gap: /pipeline/:id, /share/:token and PWA banner not exercised

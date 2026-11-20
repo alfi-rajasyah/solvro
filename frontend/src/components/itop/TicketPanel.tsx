@@ -11,6 +11,8 @@
 // on `assign_to_me` opens the team ActionSheet instead of surfacing as a
 // plain error; any other failure shows iTop's message inline and leaves the
 // ticket untouched.
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -195,7 +197,9 @@ export function TicketPanel({
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {isLoading && (
-            <div className="h-24 animate-pulse rounded-sm bg-surface-container-low" />
+            <SkeletonRegion>
+              <Skeleton className="h-24 rounded-sm" />
+            </SkeletonRegion>
           )}
 
           {isError && (

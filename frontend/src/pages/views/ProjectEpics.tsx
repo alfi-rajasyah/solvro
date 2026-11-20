@@ -204,7 +204,7 @@ export function ProjectEpics() {
           <button
             type="submit"
             disabled={createEpic.isPending || !newTitle.trim()}
-            className="rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className="rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary primary-hover disabled:opacity-50"
           >
             Create
           </button>

@@ -122,7 +122,7 @@ export function LabelPicker({
               type="button"
               onClick={() => void handleCreate()}
               disabled={createLabel.isPending || !newName.trim()}
-              className="rounded-sm bg-primary px-2 py-1 font-display text-xs text-on-primary hover:bg-primary-container disabled:opacity-50 font-semibold"
+              className="rounded-sm bg-primary px-2 py-1 font-display text-xs text-on-primary primary-hover disabled:opacity-50 font-semibold"
             >
               {createLabel.isPending ? "…" : "Add"}
             </button>

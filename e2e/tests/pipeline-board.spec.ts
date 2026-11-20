@@ -212,10 +212,28 @@ function cardRoot(page: Page, stage: string, cardTitle: string): Locator {
  * it. Anchoring near the top avoids ever needing to know (or scroll to) the
  * bottom of a column that may already hold many pre-existing dev-DB deals.
  */
+/** Resolves once the locator's box is identical across two consecutive 100 ms
+ * samples, i.e. the scroll and any layout transition have finished. */
+async function waitForStableBox(locator: Locator): Promise<void> {
+  let prev: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const box = await locator.boundingBox();
+        const cur = box ? JSON.stringify(box) : null;
+        const stable = cur !== null && cur === prev;
+        prev = cur;
+        return stable;
+      },
+      { intervals: [100] },
+    )
+    .toBe(true);
+}
+
 async function dragCardIntoColumn(page: Page, cardTitle: string, targetStage: string): Promise<void> {
   const col = column(page, targetStage);
   await col.scrollIntoViewIfNeeded();
-  await page.waitForTimeout(300);
+  await waitForStableBox(col);
 
   const grip = await gripFor(page, cardTitle, "Drag to reorder");
   const box = await col.boundingBox();
@@ -329,7 +347,6 @@ test.describe("pipeline board", () => {
   }) => {
     await loginViaUi(page);
     await page.goto("/pipeline", { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     // KPI bar (PipelineKpiBar.tsx's 5 tiles — a 5th "Idle alerts" tile
     // joined the original 4 in the 2026-09-25 flow redesign, D1/§3.6).
@@ -405,7 +422,6 @@ test.describe("pipeline board", () => {
     // (the persisted choice) so both ends of the drag are on screen.
     await page.evaluate(() => localStorage.setItem("solvro.sidebar", "closed"));
     await page.goto("/pipeline", { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     await dragCardIntoColumn(page, deals.assessment.title, "RFP");
 
@@ -415,7 +431,6 @@ test.describe("pipeline board", () => {
     // Persists after reload — proves the server round-trip actually
     // happened, not just the optimistic local write.
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     await expect(column(page, "RFP").getByText(deals.assessment.title, { exact: true })).toBeVisible();
 
     const updated = await getDeal(token, deals.assessment.id);
@@ -434,7 +449,6 @@ test.describe("pipeline board", () => {
     );
     await loginViaUi(page);
     await page.goto("/pipeline", { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     await cardRoot(page, "ASSESSMENT", closeTarget.title)
       .getByRole("button", { name: "More actions" })
@@ -458,7 +472,6 @@ test.describe("pipeline board", () => {
     await closeDialog.getByLabel("Note (optional)").fill("Lost to a lower-priced competitor.");
     await closeDialog.getByRole("button", { name: "Close as Lost", exact: true }).click();
     await expect(closeDialog).toBeHidden({ timeout: 10_000 });
-    await page.waitForTimeout(600);
 
     // Left the Active board.
     await expect(column(page, "ASSESSMENT").getByText(closeTarget.title, { exact: true })).toHaveCount(0);
@@ -467,7 +480,6 @@ test.describe("pipeline board", () => {
     // `aria-pressed`, D11).
     const closedBtn = dealsFilterGroup(page).getByRole("button", { name: /^Closed/ });
     await closedBtn.click();
-    await page.waitForTimeout(500);
     await expect(page).toHaveURL(/[?&]deals=closed/);
     await expect(closedBtn).toHaveAttribute("aria-pressed", "true");
 
@@ -482,13 +494,11 @@ test.describe("pipeline board", () => {
     // note is appended after a colon — backend/src/routes/opportunities.ts's
     // POST /:id/close — so this matches the fixed prefix, not the whole note).
     await page.goto(`/pipeline/${closeTarget.id}`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
     const reopenButton = page.getByRole("button", { name: "Reopen" });
     await expect(reopenButton).toBeVisible();
     await expect(page.getByText(/Closed as Lost \(Competitor\)/)).toBeVisible();
 
     await reopenButton.click();
-    await page.waitForTimeout(800);
     await expect(page.getByRole("button", { name: "Reopen" })).toHaveCount(0);
 
     const reopened = await getDeal(token, closeTarget.id);
@@ -497,7 +507,6 @@ test.describe("pipeline board", () => {
 
     // Back on the Active board, same stage.
     await page.goto("/pipeline", { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     await expect(column(page, "ASSESSMENT").getByText(closeTarget.title, { exact: true })).toBeVisible();
   });
 
@@ -555,11 +564,9 @@ test.describe("pipeline board", () => {
     );
     await loginViaUi(page);
     await page.goto("/pipeline", { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     await cardRoot(page, "RFP", holdTarget.title).getByRole("button", { name: "More actions" }).click();
     await page.getByRole("menuitem", { name: "Hold", exact: true }).click();
-    await page.waitForTimeout(600);
 
     // Stays in RFP, shows the Hold chip.
     await expect(column(page, "RFP").getByText(holdTarget.title, { exact: true })).toBeVisible();
@@ -567,7 +574,6 @@ test.describe("pipeline board", () => {
 
     // Persists after reload.
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     await expect(column(page, "RFP").getByText(holdTarget.title, { exact: true })).toBeVisible();
     await expect(cardRoot(page, "RFP", holdTarget.title)).toContainText("Hold");
 
@@ -575,13 +581,11 @@ test.describe("pipeline board", () => {
       .getByRole("button", { name: "More actions" })
       .click();
     await page.getByRole("menuitem", { name: "Release hold", exact: true }).click();
-    await page.waitForTimeout(600);
 
     await expect(cardRoot(page, "RFP", holdTarget.title)).not.toContainText("Hold");
 
     // Persists after reload.
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     await expect(column(page, "RFP").getByText(holdTarget.title, { exact: true })).toBeVisible();
     await expect(cardRoot(page, "RFP", holdTarget.title)).not.toContainText("Hold");
   });
@@ -602,7 +606,6 @@ test.describe("pipeline board", () => {
     // first drag test above).
     await page.evaluate(() => localStorage.setItem("solvro.sidebar", "closed"));
     await page.goto("/pipeline", { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     // --- Cancel path -----------------------------------------------------
     await dragCardIntoColumn(page, skipTarget.title, "RFP");
@@ -617,7 +620,6 @@ test.describe("pipeline board", () => {
     ).toBeVisible();
 
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     await expect(
       column(page, "TECHNICAL_CLARIFICATION").getByText(skipTarget.title, { exact: true }),
     ).toBeVisible();
@@ -643,7 +645,6 @@ test.describe("pipeline board", () => {
 
     // Deal page's activity feed carries the skip reason.
     await page.goto(`/pipeline/${skipTarget.id}`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
     await expect(
       page.getByText(`Moved from Technical Clarification to RFP, PoC skipped: ${reasonText}`, {
         exact: true,
@@ -659,7 +660,6 @@ test.describe("pipeline board", () => {
   }) => {
     await loginViaUi(page);
     await page.goto("/pipeline", { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     const group = page.locator('div[role="group"]');
     const listBtn = group.getByRole("button").filter({ hasText: "List" });
@@ -667,13 +667,11 @@ test.describe("pipeline board", () => {
     const quarterBtn = group.getByRole("button").filter({ hasText: "Quarter" });
 
     await listBtn.click();
-    await page.waitForTimeout(400);
     await expect(page).toHaveURL(/[?&]view=list/);
     await expect(listBtn).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText(deals.rfp.title, { exact: true }).first()).toBeVisible();
 
     await swimlaneBtn.click();
-    await page.waitForTimeout(400);
     await expect(page).toHaveURL(/[?&]view=swimlane/);
     await expect(swimlaneBtn).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText(deals.poc.title, { exact: true }).first()).toBeVisible();
@@ -683,7 +681,6 @@ test.describe("pipeline board", () => {
     await expect(page.getByText("Active deals", { exact: true })).toBeVisible();
 
     await quarterBtn.click();
-    await page.waitForTimeout(400);
     await expect(page).toHaveURL(/[?&]view=quarter/);
     await expect(quarterBtn).toHaveAttribute("aria-pressed", "true");
     await expect(page.getByText(deals.tech.title, { exact: true }).first()).toBeVisible();
@@ -691,7 +688,6 @@ test.describe("pipeline board", () => {
     // Switcher survives reload — `?view=` in the URL is what Pipeline.tsx's
     // own useState initializer reads on mount (Pipeline.tsx).
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     await expect(page).toHaveURL(/[?&]view=quarter/);
     await expect(page.getByText(deals.tech.title, { exact: true }).first()).toBeVisible();
   });
@@ -703,7 +699,6 @@ test.describe("pipeline board", () => {
   test("keyboard: a card's title link is focusable and Enter navigates to the detail page", async ({ page }) => {
     await loginViaUi(page);
     await page.goto("/pipeline", { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     // OpportunityCard.tsx renders the title as a real `<a>` (`<Link>`) —
     // reachable by Tab, unlike the card's own onClick div. `.press()`

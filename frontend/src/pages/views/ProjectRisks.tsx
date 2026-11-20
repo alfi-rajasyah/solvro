@@ -1,3 +1,4 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
 import { FIELD_FOCUS, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_STAT } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import {
@@ -88,7 +89,7 @@ function InlineSelect({
 }) {
   return (
     <Select items={items} value={value} onValueChange={(v) => v != null && onChange(String(v))}>
-      <SelectTrigger size="sm" aria-label={ariaLabel} className={`px-2 data-[size=sm]:h-7 focus-visible:border-input ${className ?? ""}`}>
+      <SelectTrigger size="sm" aria-label={ariaLabel} className={`px-2 data-[size=sm]:h-7 ${className ?? ""}`}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>
@@ -148,7 +149,9 @@ export function ProjectRisks() {
 
   if (isLoading) {
     return (
-      <div className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+      <SkeletonRegion>
+        <Skeleton className="h-64 rounded-sm" />
+      </SkeletonRegion>
     );
   }
 

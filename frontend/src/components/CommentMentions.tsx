@@ -231,7 +231,7 @@ export function CommentComposer({
             <button
               type="submit"
               disabled={isPending || !body.trim()}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary primary-hover disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-base" aria-hidden="true">
                 send

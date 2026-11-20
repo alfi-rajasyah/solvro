@@ -1,4 +1,5 @@
 import { test, expect, loginViaUi, apiBase } from "../fixtures/test";
+import type { Page } from "@playwright/test";
 
 // The palette is desktop-first (⌘K + top-bar box are md:-gated); the mobile
 // entry point is the TopBar search icon. Desktop assertions skip the mobile
@@ -28,14 +29,14 @@ async function createUniqueTask(
  * 24/40 chars, 7px at 60, 836px at 200 — so the short title from
  * `createUniqueTask` structurally cannot stress the row this test exists to
  * guard. Padded to ~100+ chars (well under the server's 200-char `title`
- * cap, `backend/src/routes/tasks.ts:22`) so a truncation regression has
+ * cap in `backend/src/routes/tasks.ts`) so a truncation regression has
  * something to actually overflow. Kept separate from `createUniqueTask`
  * rather than adding a parameter to it, since every other test in this file
  * relies on that helper producing a short, readable title.
  *
  * Returns a separate `query` (the unpadded prefix) alongside the full
  * `title`: `GET /search`'s own `q` param is capped at 100 chars
- * (`backend/src/routes/search.ts:12`, `z.string().min(2).max(100)`), so
+ * (`searchQuerySchema` in `backend/src/routes/search.ts`, `z.string().min(2).max(100)`), so
  * filling the palette input with the full ~100+ char padded title fails
  * that validation outright (discovered by running this test — the search
  * request 400s and no rows render, timing out `toBeVisible()`). Searching
@@ -61,6 +62,16 @@ async function createLongUniqueTask(
   return { id: body.id, title, query };
 }
 
+/**
+ * Presses the palette shortcut only once the app shell has rendered. The ⌘K
+ * listener is attached by the shell next to the TopBar, so a press before
+ * the TopBar search trigger exists can be dropped under load.
+ */
+async function pressPaletteShortcut(page: Page): Promise<void> {
+  await expect(page.locator('button[aria-label="Open search"]:visible').first()).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+k");
+}
+
 test.describe("global search palette", () => {
   test("⌘K opens the palette and a task hit deep-links into List with the panel param", async ({ page, seededProject }, testInfo) => {
     test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
@@ -72,7 +83,7 @@ test.describe("global search palette", () => {
 
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await expect(dialog).toBeVisible();
@@ -83,7 +94,7 @@ test.describe("global search palette", () => {
     await hit.click();
 
     await page.waitForURL(
-      new RegExp(`/projects/${seededProject.projectId}/list\\?task=${target.id}`),
+      new RegExp(`/projects/${seededProject.projectId}/list\\?task=${target.id}$`),
       { timeout: 10_000 },
     );
   });
@@ -94,11 +105,12 @@ test.describe("global search palette", () => {
     const res = await fetch(`${apiBase(testInfo)}/api/projects/${seededProject.projectId}`, {
       headers: { Authorization: `Bearer ${seededProject.token}` },
     });
+    expect(res.ok, `project fetch failed: ${res.status}`).toBe(true);
     const project = (await res.json()) as { name: string };
 
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await dialog.getByPlaceholder(/search projects/i).fill(project.name);
@@ -132,7 +144,7 @@ test.describe("global search palette", () => {
     test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await expect(dialog).toBeVisible();
@@ -151,7 +163,7 @@ test.describe("global search palette", () => {
     test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const input = page
       .getByRole("dialog", { name: /global search/i })
@@ -189,7 +201,7 @@ test.describe("global search palette", () => {
 
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     let dialog = page.getByRole("dialog", { name: /global search/i });
     await dialog.getByPlaceholder(/search projects/i).fill(target.title);
@@ -198,7 +210,7 @@ test.describe("global search palette", () => {
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
 
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
     dialog = page.getByRole("dialog", { name: /global search/i });
     await expect(dialog).toBeVisible();
 
@@ -258,7 +270,7 @@ test.describe("global search palette", () => {
     test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await expect(dialog).toBeVisible();
@@ -295,7 +307,7 @@ test.describe("global search palette", () => {
       }),
     );
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await dialog.getByPlaceholder(/search projects/i).fill("zzzz-search-failure-probe");
@@ -336,7 +348,7 @@ test.describe("global search palette", () => {
     // focus off the input before invoking the palette, same as a real user
     // clicking anywhere non-editable in the modal chrome first.
     await modal.getByText("New customer", { exact: true }).click();
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
     const palette = page.getByRole("dialog", { name: /global search/i });
     await expect(palette).toBeVisible();
 

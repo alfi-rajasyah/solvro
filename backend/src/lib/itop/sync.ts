@@ -500,6 +500,11 @@ export async function upsertTicketFromItop(
   await upsertTicket(cls, row, orgIdToCustomerId, timezone);
 }
 
+/** Largest value of the INT4 `ItopTimeEntry.durationMinutes` column. */
+const MAX_DURATION_MINUTES = 2147483647;
+/** TimeSpent ids already warned about for an out-of-range duration; bounded so a long-lived process cannot grow it without limit. */
+const warnedBadDurationKeys = new Set<number>();
+
 /**
  * `ticketIdByRef` is resolved once per chunk by the caller (a single
  * `findMany({ ref: { in } })` over that chunk's distinct refs) rather than
@@ -555,6 +560,20 @@ async function upsertTimeEntry(
   const ticketId = ticketRef ? (ticketIdByRef.get(ticketRef) ?? null) : null;
 
   const durationMinutes = Math.round(durationSeconds / (ITOP_TIME_SPENT_DURATION_IN_SECONDS ? 60 : 1));
+  // durationMinutes is a 32-bit column: a value outside it (or negative)
+  // would make the upsert throw on every tick. Skip it here and warn once per
+  // entry id for the life of the process (docs/ISSUES.md ISS-204).
+  if (durationMinutes < 0 || durationMinutes > MAX_DURATION_MINUTES) {
+    if (!warnedBadDurationKeys.has(row.key)) {
+      if (warnedBadDurationKeys.size >= 1000) warnedBadDurationKeys.clear();
+      warnedBadDurationKeys.add(row.key);
+      logger.warn(
+        { itopKey: row.key, durationMinutes },
+        "iTop syncTimeEntries: skipping a TimeSpent row whose duration does not fit the stored column",
+      );
+    }
+    return false;
+  }
 
   const data = {
     itopUserId,

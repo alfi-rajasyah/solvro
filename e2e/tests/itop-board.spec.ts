@@ -186,6 +186,8 @@ async function captureActionRequests(
   page.on("request", onRequest);
   try {
     await fn();
+    // Collects outgoing requests: a stray request has no DOM signal to await,
+    // so the window itself is the check.
     await page.waitForTimeout(800);
   } finally {
     page.off("request", onRequest);
@@ -200,11 +202,8 @@ async function openBoard(page: Page, customerId: number): Promise<void> {
   // gate query that decides whether "Tickets" even appears in `TAB_ITEMS`
   // on first render (CustomerDetail.tsx).
   await page.goto(`/customers/${customerId}`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Tickets" }).click();
-  await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Board", exact: true }).click();
-  await page.waitForTimeout(500);
   await expect(page.getByRole("button", { name: "Board", exact: true })).toHaveAttribute(
     "aria-pressed",
     "true",
@@ -574,9 +573,7 @@ test.describe("New ticket sheet", () => {
 
     await loginViaUi(page);
     await page.goto(`/customers/${seededProject.customerId}`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
     await page.getByRole("button", { name: "Tickets" }).click();
-    await page.waitForTimeout(500);
 
     await page.getByRole("button", { name: "New ticket" }).click();
     const dialog = page.getByRole("dialog", { name: "New ticket" });

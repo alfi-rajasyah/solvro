@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { useMemo } from "react";
 import { Link } from "react-router-dom";
@@ -41,18 +43,18 @@ export function ProjectOverview() {
 
   if (isLoading) {
     return (
-      <div className="space-y-4">
+      <SkeletonRegion className="space-y-4">
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: 4 }).map((_, i) => (
-            <div key={i} className="h-24 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+            <Skeleton key={i} className="h-24 rounded-sm" />
           ))}
         </div>
-        <div className="h-72 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+        <Skeleton className="h-72 rounded-sm" />
         <div className="grid gap-4 lg:grid-cols-2">
-          <div className="h-48 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
-          <div className="h-48 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+          <Skeleton className="h-48 rounded-sm" />
+          <Skeleton className="h-48 rounded-sm" />
         </div>
-      </div>
+      </SkeletonRegion>
     );
   }
 
@@ -334,7 +336,9 @@ function TopRisks({ projectId }: { projectId: number }) {
         </Link>
       </header>
       {isLoading ? (
-        <div className="h-16 animate-pulse rounded-sm bg-surface-container-low" />
+        <SkeletonRegion>
+          <Skeleton className="h-16 rounded-sm" />
+        </SkeletonRegion>
       ) : isError ? (
         <p className="text-xs text-on-surface-variant">Could not load risks.</p>
       ) : top.length === 0 ? (
@@ -381,7 +385,9 @@ function ProjectNotesPanel({ projectId }: { projectId: number }) {
         </Link>
       </header>
       {isLoading ? (
-        <div className="h-16 animate-pulse rounded-sm bg-surface-container-low" />
+        <SkeletonRegion>
+          <Skeleton className="h-16 rounded-sm" />
+        </SkeletonRegion>
       ) : isError ? (
         <p className="text-xs text-on-surface-variant">Could not load notes.</p>
       ) : !notes || notes.length === 0 ? (

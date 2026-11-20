@@ -35,8 +35,8 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           // app-wide contract (see CustomerFormModal.tsx/TaskFormModal.tsx's
           // hand-written inputs). Replaced `focus-visible:border-ring
           // focus-visible:ring-[3px] focus-visible:ring-ring/50` with the
-          // canonical 2px/30%-opacity treatment.
-          "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+          // reduced 2px/30%-opacity ring; the border never changes on focus.
+          "focus-visible:ring-2 focus-visible:ring-primary/30",
           "aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40",
           className
         )}

@@ -171,7 +171,7 @@ Every token is a CSS custom property in `index.css` (`--token-name`, space-separ
 | `primary` | `#3aaf51` | `#1f7533` | Elitery Green — the only accent color. Both values hold WCAG AA (4.5:1) as text on every surface up to `surface-container-high` (hovered rows, tinted cards), pinned by `frontend/src/lib/tokenContrast.test.ts`. The dark value was `#3aae51` (4.4986:1 on dark `surface-container-high`) until 2026-11-20, when its green channel moved up one step to reach 4.5460:1 |
 | `on-primary` | `#0f2b16` | `#ffffff` | |
 | `primary-container` | `#2d9042` | `#c8e6cf` | |
-| `on-primary-container` | `#e8f7eb` | `#0f2b16` | |
+| `on-primary-container` | `#e8f7eb` | `#0f2b16` | Hover fill for primary buttons goes through the `primary-hover` utility (light: this pair; dark: primary at 90% with `on-primary`), never a hand-written `hover:bg-primary-container`. |
 | `inverse-primary` | `#2d9042` | `#3aaf51` | |
 | `secondary` | `#888780` | `#5f5e57` | inactive sidebar icons |
 | `on-secondary` | `#1a1a18` | `#ffffff` | |
@@ -399,7 +399,7 @@ The generic `Chip` export takes any of `emerald` / `amber` / `rose` / `violet` /
 
 ### Enforcement
 
-Seven design guards in `.claude/scripts/gates.sh` enforce these rules on app code (vendored `components/ui`, `components/reui` and tests are excluded): `design-no-palette-colours` (no raw Tailwind palette classes such as `bg-slate-800` or `text-amber-600` — use tokens), `design-min-text-size` (no `text-[Npx]` or inline `fontSize` below 12px), `design-focus-ring` (no `focus:`/`focus-visible:`/`focus-within:border-primary` — use `FIELD_FOCUS` / `FIELD_FOCUS_WITHIN`), `design-caps-role` (no hand-rolled `uppercase` + `tracking-wider` — use `text-label-caps uppercase`), `design-on-primary` (no `text-white` on a solid `bg-primary` — use `text-on-primary`), `design-no-em-dash` (no em dash in user-facing text; comments are blanked first), and `design-icon-hidden` (every `material-symbols-outlined` element is `aria-hidden` or labelled, never both).
+Eight design guards in `.claude/scripts/gates.sh` enforce these rules. Seven run on app code (vendored `components/ui`, `components/reui` and tests are excluded): `design-no-palette-colours` (no raw Tailwind palette classes such as `bg-slate-800` or `text-amber-600` — use tokens), `design-min-text-size` (no `text-[Npx]` or inline `fontSize` below 12px), `design-focus-ring` (no `focus:`/`focus-visible:`/`focus-within:border-primary` — use `FIELD_FOCUS` / `FIELD_FOCUS_WITHIN`), `design-caps-role` (no hand-rolled `uppercase` + `tracking-wider` — use `text-label-caps uppercase`), `design-on-primary` (no `text-white` on a solid `bg-primary` — use `text-on-primary`), `design-no-em-dash` (no em dash in user-facing text; comments are blanked first), and `design-icon-hidden` (every `material-symbols-outlined` element is `aria-hidden` or labelled, never both). The eighth, `design-focus-ring-vendored`, runs on vendored `components/ui` and `components/reui` only: no focus state there may change a border to `primary` or `ring`.
 
 ---
 

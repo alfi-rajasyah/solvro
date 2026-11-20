@@ -60,7 +60,7 @@ export function UpdateNotice({
       <button
         type="button"
         onClick={onReload}
-        className="rounded-sm bg-primary px-2.5 py-0.5 text-sm font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+        className="rounded-sm bg-primary px-2.5 py-0.5 text-sm font-semibold text-on-primary primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
       >
         Reload
       </button>
@@ -127,7 +127,7 @@ export function SessionExpiryNotice({ shift, onSignIn }: { shift: string; onSign
       <button
         type="button"
         onClick={onSignIn}
-        className="rounded-sm bg-primary px-2.5 py-0.5 text-sm font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+        className="rounded-sm bg-primary px-2.5 py-0.5 text-sm font-semibold text-on-primary primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
       >
         Sign in again
       </button>

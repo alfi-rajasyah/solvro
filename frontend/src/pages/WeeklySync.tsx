@@ -1,3 +1,4 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import { useSearchParams } from "react-router-dom";
 import { MidweekSyncModal } from "@/components/daily-review/MidweekSyncModal";
@@ -283,11 +284,11 @@ export function WeeklySync() {
       </nav>
 
       {isLoading && (
-        <div className="space-y-2">
+        <SkeletonRegion className="space-y-2">
           {[0, 1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-12 w-full rounded-sm" />
           ))}
-        </div>
+        </SkeletonRegion>
       )}
 
       {isError && (

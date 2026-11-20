@@ -86,7 +86,7 @@ async function createSection(
 
 async function gotoSeededGantt(page: Page, projectId: number): Promise<void> {
   await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
+  await expect(page.locator('[data-slot="gantt-tree-pane"] [data-gantt-row-id]').first()).toBeVisible();
 }
 
 /** The bar's WRAPPER button (`[data-slot="gantt-bar"]`, vendored), located
@@ -256,7 +256,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     expect(new Date(newStart).getTime()).toBeGreaterThan(new Date(startIso).getTime());
 
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
+    await expect(barButton(page, task.id)).toBeVisible();
     const afterReload = await barButton(page, task.id).boundingBox();
     expect(afterReload, "bar not found after reload").toBeTruthy();
     expect(afterReload!.x).toBeGreaterThan(before!.x + 40);
@@ -347,7 +347,6 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await expect(connector).toHaveAttribute("data-connector-type", "HARD");
 
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     const reloadedConnector = page.locator(`[data-connector-id="${created.id}"]`);
     await expect(reloadedConnector).toHaveAttribute("data-connector-type", "HARD");
 
@@ -518,7 +517,8 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     // Same canonical order, read back from List view (one shared order —
     // CLAUDE.md's "one canonical manual order shared by List/Kanban/Gantt").
     await page.goto(`/projects/${projectId}/list`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
+    await expect(page.getByText(taskA.title, { exact: true }).first()).toBeVisible();
+    await expect(page.getByText(taskB.title, { exact: true }).first()).toBeVisible();
     const listBoxA = await page.getByText(taskA.title, { exact: true }).first().boundingBox();
     const listBoxB = await page.getByText(taskB.title, { exact: true }).first().boundingBox();
     expect(listBoxA, "List row for taskA not found").toBeTruthy();
@@ -619,7 +619,6 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     for (const label of ["Day", "Week", "Month", "Quarter"] as const) {
       const pill = page.getByRole("button", { name: label, exact: true });
       await pill.click();
-      await page.waitForTimeout(300);
       // Active-pill styling is the only signal available (no aria-pressed
       // on this toolbar) — matches SolvroGantt.tsx's `cn(...)` active class.
       await expect(pill).toHaveClass(/bg-primary/);
@@ -725,7 +724,9 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     // would be), and it doubles as proof the derived name-column width
     // tracks the reset too (the title re-truncates).
     await splitter.dblclick();
-    await page.waitForTimeout(300);
+    await expect
+      .poll(async () => Math.abs(((await treePane.boundingBox())?.width ?? 0) - paneBefore!.width))
+      .toBeLessThanOrEqual(2);
 
     const paneAfterReset = await treePane.boundingBox();
     expect(paneAfterReset, "tree pane not found after double-click reset").toBeTruthy();
@@ -758,7 +759,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     expect(Number(persistedWidth)).toBeGreaterThan(500);
 
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
+    await expect(treePane).toBeVisible();
 
     const paneAfterReload = await treePane.boundingBox();
     expect(paneAfterReload, "tree pane not found after reload").toBeTruthy();
@@ -848,7 +849,12 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     expect(paneBox, "tree pane not found").toBeTruthy();
     expect(Math.abs(paneBox!.width - 610), "pane should render at 400 + 210").toBeLessThanOrEqual(2);
 
-    await page.waitForTimeout(300);
+    await expect
+      .poll(() => page.evaluate(() => Number(localStorage.getItem("solvro.gantt.treeWidth.v4"))))
+      .toBe(610);
+    // No extra negative window for the v3/v2/legacy checks: the migration and
+    // the v4 write happen in one mount-time effect, so once v4 has landed (polled
+    // above) every other key is already in its final state.
     const stored = await page.evaluate(() => ({
       v4: localStorage.getItem("solvro.gantt.treeWidth.v4"),
       v3: localStorage.getItem("solvro.gantt.treeWidth.v3"),
@@ -946,6 +952,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     // Give a wrongly-mounted menu time to open before asserting absence —
     // an immediate toHaveCount(0) would pass even if the wiring were live.
     // The "…" block below re-proves the positive path right after this.
+    // Negative assertion: no DOM signal exists for "the menu did not open".
     await page.waitForTimeout(400);
     await expect(resourceMenu).toHaveCount(0);
 
@@ -970,7 +977,6 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await expect(editDialog.locator('input[placeholder="Task title"]')).toHaveValue(task.title);
     await page.keyboard.press("Escape");
     await expect(editDialog).not.toBeVisible();
-    await page.waitForTimeout(400); // drawer slide-out transition
 
     // Add subtask opens create, pre-parented to this row's task.
     await taskRow.click({ button: "right" });
@@ -983,7 +989,6 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await expect(parentSelect).toHaveValue(String(task.id));
     await page.keyboard.press("Escape");
     await expect(createDialog).not.toBeVisible();
-    await page.waitForTimeout(400);
 
     // Delete goes through the shared ConfirmModal, never a bare
     // window.confirm — TaskPanel.tsx's own delete flow, mirrored here.
@@ -1092,6 +1097,7 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     // (iii) resize-handle ergonomics with the outside connect-dots.
     const bar = barButton(page, pred.id);
     await bar.hover();
+    // Screenshot artifact only: the hover-reveal transition has no DOM signal.
     await page.waitForTimeout(250);
     await page.screenshot({ path: "test-results/checklist-03-resize-handles-and-dots-hover.png" });
     await page.mouse.move(5, 5);
@@ -1114,8 +1120,8 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await page.mouse.move(paneBox!.x + paneBox!.width / 2, paneBox!.y + paneBox!.height / 2);
     for (let i = 0; i < 10; i++) {
       await page.mouse.wheel(0, 100);
-      await page.waitForTimeout(60);
     }
+    // Screenshot artifact only: the custom ScrollArea's scroll settle has no DOM signal.
     await page.waitForTimeout(300);
     await page.mouse.move(5, 5);
     await page.screenshot({ path: "test-results/checklist-04b-connectors-vs-sticky-header.png" });

@@ -1,3 +1,4 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
@@ -302,11 +303,11 @@ function RecentNotes({ customerId }: { customerId: number }) {
 
   if (isLoading) {
     return (
-      <div className="space-y-2">
+      <SkeletonRegion className="space-y-2">
         {Array.from({ length: 2 }).map((_, i) => (
-          <div key={i} className="h-12 animate-pulse rounded-sm bg-surface-container-low" />
+          <Skeleton key={i} className="h-12 rounded-sm" />
         ))}
-      </div>
+      </SkeletonRegion>
     );
   }
   if (isError) {
@@ -478,7 +479,11 @@ function WeeklyUpdatesPanel({ customerId }: { customerId: number }) {
 
   let body: ReactNode;
   if (isLoading) {
-    body = <div className="h-16 animate-pulse rounded-sm bg-surface-container-low" />;
+    body = (
+      <SkeletonRegion>
+        <Skeleton className="h-16 rounded-sm" />
+      </SkeletonRegion>
+    );
   } else if (isError) {
     body = (
       <Alert variant="destructive">

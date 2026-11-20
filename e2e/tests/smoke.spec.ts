@@ -44,7 +44,7 @@ test.describe("smoke", () => {
 
     for (const [name, path] of pages) {
       await page.goto(path, { waitUntil: "networkidle" });
-      await page.waitForTimeout(500);
+      await expect(page.getByRole("heading").first()).toBeVisible();
       const overflow = await page.evaluate(
         () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
       );

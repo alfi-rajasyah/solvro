@@ -14,7 +14,7 @@ function stamp(): string {
 
 async function gotoGantt(page: Page, projectId: number): Promise<void> {
   await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
+  await expect(page.locator('[data-slot="gantt-tree-pane"] [data-gantt-row-id]').first()).toBeVisible();
 }
 
 /** The bar's wrapper button, located from Solvro's content span inside it. */
@@ -179,7 +179,8 @@ test.describe("gantt keyboard — arrow-key move and resize (desktop)", () => {
     await page.keyboard.press("Escape");
     await expect(barButton(page, task.id)).toHaveAttribute("aria-label", labelBefore!);
 
-    // Well past the 600 ms commit delay: still the original dates.
+    // Well past the 600 ms commit delay: still the original dates. Negative
+    // assertion, so the elapsed window is the check — no DOM signal exists.
     await page.waitForTimeout(1500);
     expect(await datesOf(base, token, projectId, task.id)).toEqual({
       start: isoDateOffset(0),
@@ -208,6 +209,7 @@ test.describe("gantt keyboard — arrow-key move and resize (desktop)", () => {
 
     await barButton(page, task.id).focus();
     await page.keyboard.press("Alt+ArrowLeft"); // refused for a milestone, but must not go Back
+    // Negative assertion: a wrongly-fired history Back has no DOM signal to await.
     await page.waitForTimeout(500);
     expect(page.url()).toBe(ganttUrl);
     await expect(barButton(page, task.id)).toBeFocused();
@@ -244,7 +246,10 @@ test.describe("gantt keyboard — arrow-key move and resize (desktop)", () => {
     for (let i = 1; i <= 4; i++) await page.mouse.move(from.x + (Math.max(200, box!.width) * i) / 4, from.y);
     await page.mouse.up();
 
-    await page.waitForTimeout(1800); // past the keyboard commit delay
+    // Must outlast the 600 ms keyboard commit delay: the check is that the
+    // superseded keyboard commit never lands after the drag's, which has no
+    // DOM signal to await.
+    await page.waitForTimeout(1800);
     const after = await datesOf(base, token, projectId, task.id);
     // The keyboard-only result would be start = +1; the drag moved further.
     expect(after.start > isoDateOffset(1)).toBe(true);
@@ -298,6 +303,7 @@ test.describe("gantt keyboard — read-only user (desktop)", () => {
       await bar.focus();
       await page.keyboard.press("ArrowRight");
       await page.keyboard.press("Alt+ArrowRight");
+      // Negative assertion: waits out the commit delay to prove nothing was sent.
       await page.waitForTimeout(1500);
       await expect(bar).toHaveAttribute("aria-label", label!);
       expect(await datesOf(base, token, projectId, task.id)).toEqual({

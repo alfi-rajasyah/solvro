@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AccountHeader, sumProjectHealth } from "@/components/customer/AccountHeader";
@@ -170,7 +172,9 @@ export function CustomerDetail() {
 
   if (isLoading) {
     return (
-      <div className="m-6 h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+      <SkeletonRegion className="m-6">
+        <Skeleton className="h-64 rounded-sm" />
+      </SkeletonRegion>
     );
   }
   if (isError || !customer) {

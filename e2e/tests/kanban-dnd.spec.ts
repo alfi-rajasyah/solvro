@@ -11,7 +11,7 @@ import {
   captureTaskRequests,
 } from "../fixtures/test";
 import { getTasks, setWipLimits, type SeededTask, createEpic } from "../fixtures/seed";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 // Ported from the QA gate script qa-wave2.mjs, then rewritten against the
 // ReUI board (docs/archive/plans/kanban-reui-swap/plan.md, T10) per the binding
@@ -108,17 +108,33 @@ async function createSubtask(
  * the page to this fixture's own customer first via the Customer filter
  * (`TasksFilter.customerId`, frontend/src/lib/queries.ts) — driven through
  * the ReUI Filters chip toolbar by the customer's display name. */
+/** Resolves once the locator's box is identical across two consecutive 100 ms
+ * samples, i.e. dnd-kit's post-filter reflow transition has finished. */
+async function waitForStableBox(locator: Locator): Promise<void> {
+  let prev: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const box = await locator.boundingBox();
+        const cur = box ? JSON.stringify(box) : null;
+        const stable = cur !== null && cur === prev;
+        prev = cur;
+        return stable;
+      },
+      { intervals: [100] },
+    )
+    .toBe(true);
+}
+
 async function openTasksPage(page: Page, customerName: string): Promise<void> {
   await page.goto(`/tasks`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
   // The customer filter is a ReUI Filters chip flow (2026-07-31): open the
   // "+ Filter" menu, hover the Customer field to open its option submenu,
   // pick the fixture customer by exact display name.
   await page.getByRole("button", { name: /filter/i }).first().click();
   await page.getByRole("option", { name: "Customer", exact: true }).hover();
-  await page.waitForTimeout(400);
   await page.getByRole("option", { name: customerName, exact: true }).click();
-  await page.waitForTimeout(500);
+  await expect(page.getByRole("option", { name: customerName, exact: true })).toHaveCount(0);
 }
 
 /** `/tasks` lists tasks across EVERY project, and this file's generic seeded
@@ -216,7 +232,12 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await page.keyboard.press("Space");
     await expect(status).not.toBeEmpty();
     await page.keyboard.press("ArrowRight");
-    await page.waitForTimeout(300);
+    // The live-region text can read the same before and after the move (the
+    // lifted card is "over" itself in both columns), so wait on the DOM: the
+    // lifted Beta card renders inside the In Progress column.
+    await expect(
+      page.locator('[data-slot="kanban-column"][data-value="IN_PROGRESS"]').getByText("Beta", { exact: true }),
+    ).toBeVisible();
     await page.keyboard.press("Space");
 
     await expect
@@ -545,6 +566,8 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
       await page.mouse.move(grip!.x, grip!.y);
       await page.mouse.down();
       await page.mouse.move(grip!.x + 2, grip!.y + 1);
+      // Negative assertion (no request fires): a drag that never registers has
+      // no DOM signal, so hold the press for a window before releasing.
       await page.waitForTimeout(150);
       await page.mouse.up();
     });
@@ -610,9 +633,12 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
       await page.mouse.down();
       for (let i = 1; i <= 8; i++) {
         await page.mouse.move(from.x + ((to.x - from.x) * i) / 8, from.y + ((to.y - from.y) * i) / 8);
+        // Gesture pacing so the sensor sees intermediate pointer positions.
         await page.waitForTimeout(35);
       }
       await page.keyboard.press("Escape");
+      // The cancelled drag has no DOM signal; let the cancel settle before
+      // releasing so the pointer-up is proven to start no new drop.
       await page.waitForTimeout(300);
       await page.mouse.up();
     });
@@ -691,7 +717,7 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // otherwise-identical runs of this case, and looping the gesture with
     // an added settle pause here made every offset in a 0-82px sweep pass
     // consistently — a settle wait, not a geometry tweak, was the fix.
-    await page.waitForTimeout(400);
+    await waitForStableBox(page.getByText(v2.title, { exact: true }).first());
 
     const grip = await gripFor(page, v2.title, "Drag to reorder");
     // T10 stabilization: FULL card box (`cardBoxFor`) — v1 is picked
@@ -771,7 +797,8 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // T10 stabilization: same settle wait as G9a above — let the remaining
     // cards' post-filter reflow transition (`animateLayoutChanges`) finish
     // before measuring geometry, not just before the drag starts.
-    await page.waitForTimeout(400);
+    await waitForStableBox(page.getByText(source.title, { exact: true }).first());
+    await waitForStableBox(page.getByText(visibleOther.title, { exact: true }).first());
 
     const grip = await gripFor(page, source.title, "Drag to reorder");
     const lastVisibleBox = await page.getByText(visibleOther.title, { exact: true }).first().boundingBox();
@@ -849,6 +876,8 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
       await page.mouse.move(grip!.x, grip!.y);
       await page.mouse.down();
       await page.mouse.move(grip!.x + 2, grip!.y + 1);
+      // Negative assertion (no request fires): a drag that never registers has
+      // no DOM signal, so hold the press for a window before releasing.
       await page.waitForTimeout(150);
       await page.mouse.up();
     });
@@ -929,7 +958,6 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // param) and confirm the status committed by the filtered drag persisted
     // server-side and renders correctly once more, unfiltered.
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     const afterReload = await getTasks(base, token, projectId);
     expect(byTitle(afterReload, tagged.title)?.status).toBe("IN_PROGRESS");
     const reloadedCard = page
@@ -955,7 +983,6 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await openTasksPage(page, seededProject.customerName);
 
     await page.getByRole("checkbox", { name: "Top-level only" }).uncheck();
-    await page.waitForTimeout(500);
 
     await clickTaskRow(page, seededProject.projectId, "Sub one");
     const dialog = page.getByRole("dialog", { name: "Edit task" });
@@ -978,7 +1005,9 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await parentSelect.selectOption(String(seededProject.delta.id));
 
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
-    await page.waitForTimeout(600);
+    await expect
+      .poll(async () => byTitle(await getTasks(base, seededProject.token, seededProject.projectId), "Sub one")?.parentTaskId)
+      .toBe(seededProject.delta.id);
 
     const tasks = await getTasks(base, seededProject.token, seededProject.projectId);
     const s = byTitle(tasks, "Sub one");
@@ -1004,7 +1033,6 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
 
     await openTasksPage(page, seededProject.customerName);
     await page.getByRole("checkbox", { name: "Top-level only" }).uncheck();
-    await page.waitForTimeout(500);
 
     await clickTaskRow(page, seededProject.projectId, "Sub two");
     const dialog = page.getByRole("dialog", { name: "Edit task" });
@@ -1020,7 +1048,9 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await statusSelect.selectOption("DONE");
 
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
-    await page.waitForTimeout(600);
+    await expect
+      .poll(async () => byTitle(await getTasks(base, seededProject.token, seededProject.projectId), "Sub two")?.status)
+      .toBe("DONE");
 
     const tasks = await getTasks(base, seededProject.token, seededProject.projectId);
     const s = byTitle(tasks, "Sub two");
@@ -1102,7 +1132,6 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     expect(expectedOrder.length).toBeGreaterThan(0);
 
     await page.goto(`/projects/${seededProject.projectId}/list`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     const positioned: Array<{ title: string; y: number }> = [];
     for (const title of expectedOrder) {
@@ -1203,13 +1232,14 @@ test.describe("kanban drag & drop — mobile (touch)", () => {
     await expect(sheet).toBeVisible({ timeout: 3000 });
 
     await page.getByText("Done", { exact: true }).last().click();
-    await page.waitForTimeout(1000);
-
-    const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
-    const moved = tasks.some(
-      (x) => x.parentTaskId === null && x.status === "DONE" && ["Gamma", "Alpha"].includes(x.title),
-    );
-    expect(moved).toBe(true);
+    await expect
+      .poll(async () => {
+        const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
+        return tasks.some(
+          (x) => x.parentTaskId === null && x.status === "DONE" && ["Gamma", "Alpha"].includes(x.title),
+        );
+      })
+      .toBe(true);
   });
 
   test("no page errors during mobile drag/action-sheet interactions", async ({ page, seededProject }) => {

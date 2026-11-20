@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { Modal } from "@/components/Modal";
 import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
@@ -193,11 +194,11 @@ function ProjectShareDialog({
           {links.isLoading ? (
             <SkeletonRegion className="space-y-2">
               {[0, 1].map((i) => (
-                <div
+                <Skeleton
                   key={i}
                   aria-hidden="true"
                   data-testid="share-links-loading"
-                  className="h-12 animate-pulse rounded-sm bg-surface-container-low"
+                  className="h-12 rounded-sm"
                 />
               ))}
             </SkeletonRegion>
