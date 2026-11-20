@@ -231,9 +231,13 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     const status = page.locator('[id^="DndLiveRegion"]').first();
     await page.keyboard.press("Space");
     await expect(status).not.toBeEmpty();
-    const pickedUp = await status.textContent();
     await page.keyboard.press("ArrowRight");
-    await expect(status).not.toHaveText(pickedUp ?? "");
+    // The live-region text can read the same before and after the move (the
+    // lifted card is "over" itself in both columns), so wait on the DOM: the
+    // lifted Beta card renders inside the In Progress column.
+    await expect(
+      page.locator('[data-slot="kanban-column"][data-value="IN_PROGRESS"]').getByText("Beta", { exact: true }),
+    ).toBeVisible();
     await page.keyboard.press("Space");
 
     await expect
