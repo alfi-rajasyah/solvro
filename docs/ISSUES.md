@@ -23,20 +23,12 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Grant PersonalToken read to the TAM profile or add an iTop-side whoami extension; verify the code-100 path against the real install and record it. Also check there: a profile without read rights may get an empty PersonalToken result instead of an error, which shows `itop_token_not_yours` where `itop_token_unverified` would tell the admin what to fix (still fails closed).
 - **Source:** snapshot line 2048, section "iTop integration (personal tokens, ticket actions) — deferred findings (ported 2026-10-04)"; merged duplicates at snapshot lines 2233
 
-### ISS-003 · P2 · GET /itop/services returns every organisation's services, unscoped
+### ISS-005 · P2 · Block task comments for STAKEHOLDER and SA; built-in roles stay admin-editable
 
-- **Type:** decision · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** itopRouter.get('/services') in backend/src/routes/itop.ts (line ~987)
-- **Problem:** Question for the user: scope services to the target customer's organisation (lnkCustomerContractToService), or accept and document org-wide visibility? Today any signed-in user can read every iTop organisation name via providerName.
-- **Why deferred / fix direction:** Filter by the target customer's org once a customerId is known, or document the accepted visibility before the endpoint is reused.
-- **Source:** snapshot line 2117, section "iTop integration (board, new tickets) — deferred findings (ported 2026-10-04)"
-
-### ISS-005 · P2 · Product decisions: STAKEHOLDER/SA task comments; built-in role policy
-
-- **Type:** decision · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-10-22 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** task comment routes in backend/src/routes/tasks.ts; built-in roles in backend/prisma/seed.ts
 - **Problem:** Two product questions are unanswered: may STAKEHOLDER (project:read) and the SA role (pipeline:view) post task comments, and should built-in roles stay admin-editable (policy A) or become code-owned and read-only in the Roles UI (policy B).
-- **Why deferred / fix direction:** Needs a user ruling. Until then comments stay open to both roles and built-ins stay editable.
+- **Why deferred / fix direction:** User decision 2026-11-20. Comment routes need task:write (or project:write); STAKEHOLDER (project:read) and SA (pipeline:view) are refused. Built-in roles stay editable (policy A), no change there.
 - **Source:** snapshot line 2368, section "Application review 2026-10-22 — remaining open items"
 
 ### ISS-009 · P3 · Secrets at rest: no AAD, no key rotation
@@ -178,12 +170,12 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Delete dead classes, add hover/focus styles, show Ctrl K off macOS.
 - **Source:** snapshot line 708, section "Global search & ⌘K command palette — deferred findings (2026-07-27)"
 
-### ISS-054 · P3 · Stat-card Frame evaluation for Overview and Executive deferred
+### ISS-054 · P3 · Move Overview and Executive KPI stat cards into the vendored Frame
 
-- **Type:** decision · **Found:** 2026-07-31 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-07-31 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** KPI stat cards in pages/Overview.tsx and pages/Executive.tsx
 - **Problem:** Whether the KPI stat cards should adopt the vendored Frame was never decided. Question for the user: adopt Frame for stat cards, or close this as not needed?
-- **Why deferred / fix direction:** Decide, then either migrate or drop the entry.
+- **Why deferred / fix direction:** User decision 2026-11-20. Migrate both pages' stat cards to Frame. Visible change: Delivery Gate.
 - **Source:** snapshot line 1161, section "ReUI Presentation Set — deferred findings (2026-07-31)"
 
 ### ISS-055 · P3 · Pointer-dependent initial submenu highlight
@@ -194,12 +186,12 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Not worth a vendored patch; revisit only if reported.
 - **Source:** snapshot line 1231, section "ReUI Filters phase — deferred findings (2026-07-31)"
 
-### ISS-056 · P3 · Toolbar text-size drift in migrated filter rows
+### ISS-056 · P3 · Filter toolbar rows: align text to the uniform 12-13px density
 
-- **Type:** decision · **Found:** 2026-07-31 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-07-31 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** filter toolbar rows in frontend/src/components/reui/filters.tsx
 - **Problem:** Migrated filter rows mix 15px, 13px and 12px text where the old dropdowns used a uniform 12-13px. Question for the user: match the old uniform density or keep the mixed scale?
-- **Why deferred / fix direction:** Decide the density, then align or close.
+- **Why deferred / fix direction:** User decision 2026-11-20. Align every migrated filter row to the old uniform 12-13px scale.
 - **Source:** snapshot line 1255, section "ReUI Filters phase — deferred findings (2026-07-31)"
 
 ### ISS-065 · P3 · useItopTicket utcOffsetMinutes isn't part of its query key
@@ -282,12 +274,12 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Fix contrast or delete the variants before anyone wires one up; chips stay bespoke per standing decision.
 - **Source:** snapshot line 1272, section "ReUI Data Grid phase — deferred findings (2026-08-01)"
 
-### ISS-090 · P3 · Dark primary on dark surface-container-high is 4.4986:1
+### ISS-090 · P3 · Dark primary contrast 4.4986:1: nudge the dark token to 4.5:1
 
-- **Type:** decision · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** dark tokens in frontend/src/index.css (lines ~251, ~259)
 - **Problem:** Dark brand green falls 0.0014 short of 4.5:1 on hovered rows and tinted cards. Question: may the brand green be adjusted, or is the gap accepted?
-- **Why deferred / fix direction:** Brand value deliberately untouched; needs a user ruling.
+- **Why deferred / fix direction:** User decision 2026-11-20. Lighten the dark primary token by the minimum that reaches 4.5:1; sync docs/DESIGN.md.
 - **Source:** snapshot line 2420, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
 ## Open — Gantt
@@ -308,12 +300,12 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Trigger: a project rendering low hundreds of bars at once. Then share a single observer.
 - **Source:** snapshot line 519, section "Plan B Task 9 deferred findings — ReUI Gantt swap (2026-07-25)"
 
-### ISS-105 · P3 · Dark-theme Gantt bar ring contrast for the Critical Path mark
+### ISS-105 · P3 · Gantt Critical Path ring: fixed violet in both themes
 
-- **Type:** decision · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-09-02 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** critical-path ring in frontend/src/components/gantt-v2/SolvroBar.tsx (line ~328)
 - **Problem:** Question for the user: keep `chip-violet-text` (near-white `#ddd6fe` in dark mode, close to the selection outline) or use a fixed violet in both themes for the Gantt ring only?
-- **Why deferred / fix direction:** Awaiting the user's call; option (b) mirrors CRITICAL_PATH_HEX used by the exports.
+- **Why deferred / fix direction:** User decision 2026-11-20. Use CRITICAL_PATH_HEX (the export colour) for the bar ring in both themes; chips keep chip-violet-text.
 - **Source:** snapshot line 1738, section "Critical Path mark — deferred findings (2026-09-02)"
 
 ## Open — Boards & drag
@@ -386,12 +378,12 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Not fixable by changing format. Options: reach app via localhost forward/reverse proxy, HTTPS with internal CA (declined), or PDF View -> Save as PDF. Last observed 2026-07-31.
 - **Source:** snapshot line 70, section "Known bugs / inconsistencies"; merged duplicates at snapshot lines 77, 86, 92
 
-### ISS-140 · P3 · Gantt Excel export has no iTop ticket column
+### ISS-140 · P3 · Gantt Excel export: add an iTop ticket column
 
-- **Type:** decision · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** buildTasksSheet in frontend/src/lib/gantt/exportExcel.ts (line ~87)
 - **Problem:** Question for the user: should the Gantt Excel export show a task's pinned itopTicketRef? It needs the field threaded through the Gantt row adapter; the ref is customer-safe but exports are customer-facing.
-- **Why deferred / fix direction:** Add a column and thread t.itopTicketRef onto Row if approved (spine: Gantt exports).
+- **Why deferred / fix direction:** User decision 2026-11-20. Thread t.itopTicketRef onto Row and add the column in buildTasksSheet (spine: Gantt exports).
 - **Source:** snapshot line 2006, section "iTop integration (webhook, task ticket links) — deferred findings (ported 2026-10-04)"
 
 ### ISS-141 · P3 · Guest page still loads Google Fonts from Google
@@ -453,12 +445,12 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 
 ## Open — Dev env & ops
 
-### ISS-171 · P3 · Pipeline cutover checklist: retire standalone Velora stack
+### ISS-171 · P3 · Delete backend/scripts/import-velora.ts; Velora stack retired
 
-- **Type:** watch · **Found:** 2026-08-15 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-08-15 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** external /opt/velora deploy (not in repo); backend/scripts/import-velora.ts still present
 - **Problem:** The remaining cutover step is retiring the standalone Velora production stack, which cannot be verified from code.
-- **Why deferred / fix direction:** Confirm with the user that the standalone stack is retired, then close; delete import-velora.ts if never needed.
+- **Why deferred / fix direction:** User decision 2026-11-20. The standalone Velora stack is retired (user confirmation 2026-11-20). Delete the one-time import script and any package.json script entry.
 - **Source:** snapshot line 1539, section "Pipeline native port — accepted risks & deferred items (2026-08-15)"
 
 ### ISS-175 · P3 · Bundle budget headroom is about 43 kB
@@ -628,3 +620,4 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-167 · Resolved 2026-11-20 · Merged into ISS-145 in triage 2026-11-20 · taskReorderConcurrency.test.ts:114 timed out once in a loaded gates run
 - ISS-008 · Resolved 2026-11-20 · Merged into ISS-011 in triage 2026-11-20 · Rate limiter is in-process only
 - ISS-173 · Resolved 2026-11-20 · Merged into ISS-011 in triage 2026-11-20 · setup.sh TRUST_PROXY default trusts every private address
+- ISS-003 · Resolved 2026-11-20 · Accepted as is by user decision 2026-11-20, documented in docs/CONFIGURATION.md §2.17 · GET /itop/services returns every organisation's services, unscoped
