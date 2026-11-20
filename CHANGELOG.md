@@ -17,9 +17,9 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Fixed — 2026-11-20 — Hover contrast, secondary text, focus borders, badge variants
 
-- Primary buttons stay readable on hover in the light theme: about 27 hover states now pair the pale green background with its dark text colour (contrast 1.3:1 to 11.4:1).
+- Primary buttons stay readable on hover: a new `primary-hover` utility in `frontend/src/index.css` replaces 27 hand-written hover classes. Light uses the pale green fill with dark text (1.3:1 to 11.4:1); dark uses the primary green at 90% and keeps its dark text (3.7:1 to 4.6:1).
 - Empty-value marks on Admin and the footer text on the sign-in page use the full secondary text colour (3.1:1 to 8.9:1).
-- Vendored form controls (select, input, textarea, checkbox, scroll area, button, badge, calendar, Gantt bar and splitter) no longer change their border on focus; the primary focus ring is the only focus change. A new `design-focus-ring-vendored` check in `.claude/scripts/gates.sh` keeps `components/ui` and `components/reui` on this rule.
+- Vendored form controls (select, input, input group, textarea, checkbox, scroll area, button, badge, calendar, Gantt bar and splitter) no longer change their border on focus; the primary focus ring is the only focus change. A new `design-focus-ring-vendored` check in `.claude/scripts/gates.sh` keeps `components/ui` and `components/reui` on this rule.
 - Removed the unused solid info, success, warning and destructive badge variants in `reui/badge.tsx`, which failed contrast.
 
 ### Changed — 2026-11-20 — Loading placeholders, out-of-range iTop durations
@@ -29,7 +29,7 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ### Changed — 2026-11-20 — End-to-end waits, search spec, colour-by reload test
 
-- End-to-end tests: about 125 fixed-delay waits are now condition-based waits (retrying assertions, polling and response-driven checks) across 23 spec files in `e2e/tests/`. The 17 remaining fixed delays cover checks that nothing happens, gesture timing and screenshot settles, each with a comment.
+- End-to-end tests: about 135 fixed-delay waits are now condition-based waits (retrying assertions, polling and response-driven checks) across 23 spec files in `e2e/tests/` and the shared sign-in, Kanban-open and drag helpers in `e2e/fixtures/test.ts`. The 22 remaining fixed delays cover checks that nothing happens, gesture timing and screenshot settles, each with a comment.
 - `e2e/tests/search.spec.ts` waits for the top bar search button before pressing the palette shortcut, checks API responses and anchors the deep-link URL match.
 - `e2e/tests/gantt-legend.spec.ts` checks that the Gantt "Color by" choice survives a full page reload.
 

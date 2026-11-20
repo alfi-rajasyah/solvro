@@ -91,8 +91,8 @@ test.describe("filters — duplicate-chip guard (desktop)", () => {
     // field with no existing chip.
     await addChipViaLongPress("Priority", "High");
 
-    await expect(chipsFor("Status")).toHaveCount(1);
     await expect(chipsFor("Priority")).toHaveCount(1);
+    await expect(chipsFor("Status")).toHaveCount(1);
 
     // Reset leaves no chips behind (sanity check the toolbar is otherwise
     // unaffected by the guard).

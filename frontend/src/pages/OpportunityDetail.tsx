@@ -573,7 +573,7 @@ export function OpportunityDetail() {
                 setHandoffOpen(true);
                 setJustWonOffer(false);
               }}
-              className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container"
+              className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary primary-hover"
             >
               Create project
             </button>

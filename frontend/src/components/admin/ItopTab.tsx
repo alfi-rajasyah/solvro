@@ -428,7 +428,7 @@ function ConnectionCard() {
           type="button"
           onClick={() => void handleSave()}
           disabled={!dirty || updateSettings.isPending}
-          className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50"
+          className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary primary-hover disabled:opacity-50"
         >
           {updateSettings.isPending ? "Saving…" : "Save"}
         </button>

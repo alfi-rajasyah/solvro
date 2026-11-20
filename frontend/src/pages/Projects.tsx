@@ -342,7 +342,7 @@ function EmptyState({ onCreate }: { onCreate?: () => void }) {
         <button
           type="button"
           onClick={onCreate}
-          className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container hover:text-on-primary-container"
+          className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary primary-hover"
         >
           <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
           Create your first project

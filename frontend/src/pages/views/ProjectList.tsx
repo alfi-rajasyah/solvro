@@ -610,7 +610,7 @@ export function ProjectList() {
             <button
               type="submit"
               disabled={createSection.isPending || !newSectionName.trim()}
-              className="rounded-sm bg-primary px-2 py-1 font-display text-xs text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50 font-semibold"
+              className="rounded-sm bg-primary px-2 py-1 font-display text-xs text-on-primary primary-hover disabled:opacity-50 font-semibold"
             >
               Add
             </button>

@@ -212,10 +212,28 @@ function cardRoot(page: Page, stage: string, cardTitle: string): Locator {
  * it. Anchoring near the top avoids ever needing to know (or scroll to) the
  * bottom of a column that may already hold many pre-existing dev-DB deals.
  */
+/** Resolves once the locator's box is identical across two consecutive 100 ms
+ * samples, i.e. the scroll and any layout transition have finished. */
+async function waitForStableBox(locator: Locator): Promise<void> {
+  let prev: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const box = await locator.boundingBox();
+        const cur = box ? JSON.stringify(box) : null;
+        const stable = cur !== null && cur === prev;
+        prev = cur;
+        return stable;
+      },
+      { intervals: [100] },
+    )
+    .toBe(true);
+}
+
 async function dragCardIntoColumn(page: Page, cardTitle: string, targetStage: string): Promise<void> {
   const col = column(page, targetStage);
   await col.scrollIntoViewIfNeeded();
-  await expect(col).toBeInViewport();
+  await waitForStableBox(col);
 
   const grip = await gripFor(page, cardTitle, "Drag to reorder");
   const box = await col.boundingBox();

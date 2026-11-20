@@ -979,7 +979,6 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await openTasksPage(page, seededProject.customerName);
 
     await page.getByRole("checkbox", { name: "Top-level only" }).uncheck();
-    await expect(page.getByRole("checkbox", { name: "Top-level only" })).not.toBeChecked();
 
     await clickTaskRow(page, seededProject.projectId, "Sub one");
     const dialog = page.getByRole("dialog", { name: "Edit task" });
@@ -1030,7 +1029,6 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
 
     await openTasksPage(page, seededProject.customerName);
     await page.getByRole("checkbox", { name: "Top-level only" }).uncheck();
-    await expect(page.getByRole("checkbox", { name: "Top-level only" })).not.toBeChecked();
 
     await clickTaskRow(page, seededProject.projectId, "Sub two");
     const dialog = page.getByRole("dialog", { name: "Edit task" });

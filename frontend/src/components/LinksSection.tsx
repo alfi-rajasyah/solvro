@@ -181,7 +181,7 @@ export function LinksSection({
               type="button"
               onClick={handleAdd}
               disabled={addLink.isPending}
-              className={`rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50 ${FIELD_FOCUS}`}
+              className={`rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary primary-hover disabled:opacity-50 ${FIELD_FOCUS}`}
             >
               {addLink.isPending ? "Saving…" : "Save"}
             </button>
@@ -339,7 +339,7 @@ function LinkRow({
             type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className={`rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50 ${FIELD_FOCUS}`}
+            className={`rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary primary-hover disabled:opacity-50 ${FIELD_FOCUS}`}
           >
             {isSaving ? "Saving…" : "Save"}
           </button>

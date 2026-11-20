@@ -206,7 +206,7 @@ type SettingsTab = "account" | "appearance" | "integrations" | "catalogue";
 
 const INPUT_CLASS = `w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm ${FIELD_FOCUS}`;
 const PRIMARY_BUTTON_CLASS =
-  "rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-60";
+  "rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary primary-hover disabled:opacity-60";
 
 // One settings section: its name and a one-line explanation on the left, its
 // controls on the right, a hairline above. Rows instead of boxed cards, so

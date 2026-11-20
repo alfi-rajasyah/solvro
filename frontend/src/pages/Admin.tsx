@@ -598,7 +598,7 @@ function UsersTab() {
             !newUsername.trim() ||
             newPassword.length < 8
           }
-          className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-60 md:w-auto"
+          className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary primary-hover disabled:opacity-60 md:w-auto"
         >
           {createUser.isPending ? "Adding…" : "Add user"}
         </button>
@@ -883,7 +883,7 @@ function RolesTab() {
                   type="button"
                   onClick={() => saveEdit(r)}
                   disabled={updatePerms.isPending}
-                  className="rounded-sm bg-primary px-2 py-1 font-display text-sm text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50 font-semibold"
+                  className="rounded-sm bg-primary px-2 py-1 font-display text-sm text-on-primary primary-hover disabled:opacity-50 font-semibold"
                 >
                   Save
                 </button>
@@ -1059,7 +1059,7 @@ function RolesTab() {
           <button
             type="submit"
             disabled={createRole.isPending || !newName.trim()}
-            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary primary-hover disabled:opacity-60"
           >
             {createRole.isPending ? "Adding…" : "Add role"}
           </button>
@@ -1201,7 +1201,7 @@ function SignInTab() {
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary primary-hover"
           >
             {connected ? "Manage" : "Connect"}
           </button>
@@ -1412,7 +1412,7 @@ function SignInModal({
             type="button"
             onClick={save}
             disabled={!dirty || update.isPending}
-            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container disabled:opacity-50"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary primary-hover disabled:opacity-50"
           >
             {update.isPending ? "Saving…" : "Save"}
           </button>

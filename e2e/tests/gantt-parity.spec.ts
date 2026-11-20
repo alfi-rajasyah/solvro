@@ -852,6 +852,9 @@ test.describe("gantt parity — ReUI engine (desktop)", () => {
     await expect
       .poll(() => page.evaluate(() => Number(localStorage.getItem("solvro.gantt.treeWidth.v4"))))
       .toBe(610);
+    // No extra negative window for the v3/v2/legacy checks: the migration and
+    // the v4 write happen in one mount-time effect, so once v4 has landed (polled
+    // above) every other key is already in its final state.
     const stored = await page.evaluate(() => ({
       v4: localStorage.getItem("solvro.gantt.treeWidth.v4"),
       v3: localStorage.getItem("solvro.gantt.treeWidth.v3"),
