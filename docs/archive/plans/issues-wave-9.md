@@ -1,6 +1,6 @@
 # Issues wave 9: user decisions, section colours, small UI and backend fixes
 
-Status: in progress, branch `fix/issues-wave-9`. Archive path: `docs/archive/plans/issues-wave-9.md`.
+Status: shipped 2026-11-20, branch `fix/issues-wave-9`. Archive path: `docs/archive/plans/issues-wave-9.md`.
 
 Lane P. One PR into `develop`; each group is one task and one commit.
 
@@ -38,4 +38,7 @@ AF is backend only. AG and AH are frontend; they share `TaskPanel.tsx` only if t
 
 ## Delivery Gate
 
-Pending.
+PASS, 2026-11-20, light and dark at 375px and 1280px (Overview, project List, task panel, Gantt, Executive).
+- Overview Frame tiles: 4px corners, tops aligned, stack on a phone.
+- Top bar search trigger reads "Ctrl+K"; task panel comment box renders as a one-line textarea.
+- Not exercised visually: the Critical Path ring and section preset colours (test project 299 has no critical-path task and no sections); covered by unit tests and the parity gate.
