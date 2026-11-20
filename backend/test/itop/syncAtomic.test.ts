@@ -145,3 +145,30 @@ describe("syncTickets and a mapping saved mid-run (ISS-186)", () => {
     expect(config.lastFullSyncAt).not.toBeNull();
   });
 });
+
+describe("syncTickets and an org unmapped mid-run (ISS-202)", () => {
+  it("stores the tickets of an org unmapped after the snapshot without a customer", async () => {
+    const baseUrl = await startFake(seedFakeItop());
+    await configureItop(baseUrl);
+    await createMappedCustomer(1);
+    await createMappedCustomer(2);
+
+    // Unmap org 1's customer right after the run has read its customer snapshot.
+    const original = prisma.customer.findMany.bind(prisma.customer);
+    vi.spyOn(prisma.customer, "findMany").mockImplementationOnce(((args: never) =>
+      original(args).then(async (rows) => {
+        await prisma.customer.updateMany({ where: { itopOrgId: 1 }, data: { itopOrgId: null, itopOrgName: null } });
+        return rows;
+      })) as never);
+
+    const summary = await syncTickets({ full: true });
+    expect(summary.error).toBeUndefined();
+
+    const org1 = await prisma.itopTicket.findMany({ where: { orgId: 1 } });
+    expect(org1.length).toBeGreaterThan(0);
+    expect(org1.every((t) => t.customerId === null)).toBe(true);
+    const org2 = await prisma.itopTicket.findMany({ where: { orgId: 2 } });
+    expect(org2.length).toBeGreaterThan(0);
+    expect(org2.every((t) => t.customerId !== null)).toBe(true);
+  });
+});

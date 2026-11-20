@@ -27,6 +27,8 @@ export async function diffProjectSeats(
   tx: Tx,
   before: ProjectSeats,
   after: { tamId: number; saId: number | null },
+  /** Holders already loaded by the caller; when given, no user is queried. */
+  holders?: ReadonlyMap<number, SeatHolder>,
 ): Promise<ActivityChanges> {
   const changes: ActivityChanges = {};
   for (const [key, beforeId, afterId] of [
@@ -37,7 +39,9 @@ export async function diffProjectSeats(
     const to =
       afterId === null
         ? null
-        : await tx.user.findUnique({ where: { id: afterId }, select: { id: true, username: true } });
+        : holders
+          ? (holders.get(afterId) ?? null)
+          : await tx.user.findUnique({ where: { id: afterId }, select: { id: true, username: true } });
     changes[key] = { from: key === "tam" ? before.tam : before.sa, to } as Prisma.InputJsonObject;
   }
   return changes;

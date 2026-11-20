@@ -198,7 +198,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
             <AutocompleteInput
               autoFocus
               placeholder="Search projects, tasks, customers, deals…"
-              className="flex-1 border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant dark:bg-transparent rounded-none h-auto px-0 focus-visible:ring-0 focus-visible:border-transparent"
+              className="flex-1 border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant dark:bg-transparent rounded-none h-auto px-0 focus-visible:ring-0"
             />
             <span className="rounded-sm border border-outline-variant bg-surface-container-low px-1.5 py-0.5 font-mono text-meta text-on-surface-variant">
               esc
@@ -244,7 +244,7 @@ export function CommandPalette({ open, onClose }: { open: boolean; onClose: () =
                         key={item.value}
                         value={item}
                         onClick={() => handleSelect(item)}
-                        className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-xs text-on-surface data-highlighted:bg-surface-container"
+                        className="flex cursor-pointer items-center gap-2 rounded-sm px-3 py-2 text-xs text-on-surface"
                       >
                         {item.icon && (
                           <span aria-hidden="true" className="material-symbols-outlined text-base text-on-surface-variant">

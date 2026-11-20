@@ -1,6 +1,7 @@
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { FIELD_FOCUS, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_BUTTON_OUTLINE, TOOLBAR_BOX } from "@/lib/utils";
 import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
+import { resolveSectionColor, resolveSectionColors } from "@/lib/gantt/palette";
 import {
   DndContext,
   KeyboardSensor,
@@ -184,6 +185,7 @@ export function ProjectList() {
   // rendered `visibleGrouped` projection below — mirrors SolvroKanban.tsx's
   // `topLevelAll` (unfiltered, drop-math source) vs `derivedColumns`
   // (filtered, render-only) split.
+  const sectionColors = useMemo(() => resolveSectionColors(sections ?? []), [sections]);
   const grouped = useMemo(() => groupBySection(tasks ?? [], sections ?? []), [tasks, sections]);
 
   const isTaskVisible = useCallback(
@@ -548,6 +550,7 @@ export function ProjectList() {
             <SectionGroup
               key={g.section?.id ?? "none"}
               section={g.section}
+              sectionColors={sectionColors}
               nodes={g.tasks}
               collapsed={collapsed.has(groupKeyOf(g.section?.id ?? null))}
               canEdit={canEdit}
@@ -654,6 +657,7 @@ export function ProjectList() {
 
 interface SectionGroupProps {
   section: Section | null;
+  sectionColors: ReadonlyMap<number, string>;
   nodes: TaskNode[];
   collapsed: boolean;
   canEdit: boolean;
@@ -682,6 +686,7 @@ interface SectionGroupProps {
 
 function SectionGroup({
   section,
+  sectionColors,
   nodes,
   collapsed,
   canEdit,
@@ -731,7 +736,7 @@ function SectionGroup({
             {collapsed ? "chevron_right" : "expand_more"}
           </span>
         </button>
-        {section && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: section.color }} />}
+        {section && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: resolveSectionColor(sectionColors, section) }} />}
         {isRenaming ? (
           <form onSubmit={(e) => onRenameSubmit(key, e)} className="flex items-center gap-2">
             <input

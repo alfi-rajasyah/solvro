@@ -853,7 +853,13 @@ export const queryKeys = {
   myItopToken: ["itop", "me", "token"] as const,
   // Single ticket + its public/private log (Task 5.4) — distinct subtree
   // from `itopTicketByRef` below (keyed by id, not ref).
-  itopTicket: (id: number) => ["itop", "tickets", id] as const,
+  // `itopTicketRoot` is the prefix for invalidation; `itopTicket` adds the
+  // viewer's UTC offset because `myMinutesThisWeek` is bucketed by the local
+  // ISO week, so a timezone or DST change fetches fresh instead of reading
+  // the old week's figure.
+  itopTicketRoot: (id: number) => ["itop", "tickets", id] as const,
+  itopTicket: (id: number, utcOffsetMinutes: number) =>
+    [...queryKeys.itopTicketRoot(id), utcOffsetMinutes] as const,
   // Task ticket ref lookup (Task 4.2) — one entry per ref rather than a
   // customer-scoped key: a task's pinned ref may belong to a customer the
   // viewer hasn't opened, and `GET /itop/tickets/by-ref/:ref` does its own
@@ -3786,20 +3792,18 @@ export interface ItopTicketTeamOption {
   name: string;
 }
 
+/** Local minus UTC, in minutes: the offset the iTop endpoints bucket by. */
+function currentUtcOffsetMinutes(): number {
+  return -new Date().getTimezoneOffset();
+}
+
 export function useItopTicket(id: number | null) {
   // Local minus UTC, in minutes — same computation as `useItopDaily`/
-  // `useUtilization` (Task 7.1): the backend buckets `myMinutesThisWeek` by
-  // the CALLER's local ISO week. Deliberately NOT folded into the query key
-  // below (unlike those two hooks) — `queryKeys.itopTicket(id)` is also the
-  // exact key `useTicketActionFor`/`useAddTicketLog`/`useCreateTicket`/
-  // `useLogTicketTimeFor` read and write via `setQueryData`/`invalidateQueries`
-  // elsewhere in this file; splitting the cache entry by offset would break
-  // those cache writes for no real benefit (a viewer's UTC offset changing
-  // mid-session is a non-event this field can tolerate being briefly stale
-  // for, unlike a whole day/week bucket flipping).
-  const utcOffsetMinutes = -new Date().getTimezoneOffset();
+  // `useUtilization`: the backend buckets `myMinutesThisWeek` by the CALLER's
+  // local ISO week, so the offset is part of the query key.
+  const utcOffsetMinutes = currentUtcOffsetMinutes();
   return useQuery({
-    queryKey: queryKeys.itopTicket(id ?? -1),
+    queryKey: queryKeys.itopTicket(id ?? -1, utcOffsetMinutes),
     queryFn: ({ signal }) =>
       apiRequest<ItopTicketDetail>(
         `/itop/tickets/${id}?utcOffsetMinutes=${utcOffsetMinutes}`,
@@ -3879,7 +3883,7 @@ export function useLogTicketTimeFor() {
       // "this week" figure updates as soon as that refetch lands (it's an
       // active query while the panel's open, so `invalidateQueries` fires it
       // immediately) rather than from this mutation's own response.
-      qc.invalidateQueries({ queryKey: queryKeys.itopTicket(variables.ticketId) });
+      qc.invalidateQueries({ queryKey: queryKeys.itopTicketRoot(variables.ticketId) });
       qc.invalidateQueries({ queryKey: queryKeys.utilizationRoot });
       // Defensive, matching the sibling ticket-write mutations' own
       // invalidation of the customer's ticket list — logging time doesn't
@@ -3942,7 +3946,7 @@ export function useTicketActionFor(customerId: number) {
       }),
     onSuccess: (fresh, variables) => {
       if (fresh.staleAfterWrite) {
-        qc.invalidateQueries({ queryKey: queryKeys.itopTicket(variables.ticketId) });
+        qc.invalidateQueries({ queryKey: queryKeys.itopTicketRoot(variables.ticketId) });
       } else {
         // The action route's `core/get` echo doesn't compute
         // `myMinutesThisWeek` — merging in the
@@ -3950,7 +3954,7 @@ export function useTicketActionFor(customerId: number) {
         // keeps the panel's "this week" figure from flashing to "0.0 h"
         // after every action, until the next full refetch.
         qc.setQueryData(
-          queryKeys.itopTicket(variables.ticketId),
+          queryKeys.itopTicket(variables.ticketId, currentUtcOffsetMinutes()),
           (prev: ItopTicketDetail | undefined) => ({
             ...fresh,
             myMinutesThisWeek: fresh.myMinutesThisWeek ?? prev?.myMinutesThisWeek ?? 0,
@@ -3986,12 +3990,12 @@ export function useAddTicketLog(ticketId: number, customerId: number) {
       }),
     onSuccess: (fresh) => {
       if (fresh.staleAfterWrite) {
-        qc.invalidateQueries({ queryKey: queryKeys.itopTicket(ticketId) });
+        qc.invalidateQueries({ queryKey: queryKeys.itopTicketRoot(ticketId) });
       } else {
         // Same merge rationale as `useTicketActionFor` above — the log
         // route's echo doesn't carry `myMinutesThisWeek` either.
         qc.setQueryData(
-          queryKeys.itopTicket(ticketId),
+          queryKeys.itopTicket(ticketId, currentUtcOffsetMinutes()),
           (prev: ItopTicketDetail | undefined) => ({
             ...fresh,
             myMinutesThisWeek: fresh.myMinutesThisWeek ?? prev?.myMinutesThisWeek ?? 0,
@@ -4085,7 +4089,7 @@ export function useCreateTicket(customerId: number) {
         // A brand-new ticket has no prior cache entry to merge a
         // `myMinutesThisWeek` from, so 0 is simply
         // right for a ticket nobody has logged time on yet.
-        qc.setQueryData(queryKeys.itopTicket(result.id), {
+        qc.setQueryData(queryKeys.itopTicket(result.id, currentUtcOffsetMinutes()), {
           ...result,
           myMinutesThisWeek: result.myMinutesThisWeek ?? 0,
         });

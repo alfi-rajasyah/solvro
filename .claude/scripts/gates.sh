@@ -175,6 +175,21 @@ if grep -q gantt-task-react backend/package.json frontend/package.json 2>/dev/nu
   fail guardrail-no-gantt-lib "gantt-task-react found in a package.json (Guardrail: never install)"
 else pass guardrail-no-gantt-lib; fi
 
+# Section colour sentinel parity (ISS-096): Prisma's Section.color default must equal
+# the frontend's DEFAULT_SECTION_COLOR byte for byte, or legacy uncustomized sections
+# stop being recognised as unset and render the stored slate instead of a preset. The
+# frontend container cannot see backend/, so this is a gate, not a vitest.
+section_color_parity() {
+  local prisma front
+  prisma="$(awk '/^model Section \{/{f=1} f&&/^[[:space:]]*color[[:space:]]/{print; exit} f&&/^\}/{exit}' backend/prisma/schema.prisma \
+    | grep -oE '@default\("[^"]*"\)' | sed -E 's/@default\("(.*)"\)/\1/')"
+  front="$(grep -E '^export const DEFAULT_SECTION_COLOR *=' frontend/src/lib/gantt/palette.ts | grep -oE '"[^"]*"' | head -1 | tr -d '"')"
+  [ -n "$prisma" ] || { echo "no Section.color @default found in backend/prisma/schema.prisma"; return 1; }
+  [ -n "$front" ] || { echo "no DEFAULT_SECTION_COLOR found in frontend/src/lib/gantt/palette.ts"; return 1; }
+  [ "$prisma" = "$front" ] || { echo "Section.color default \"$prisma\" != DEFAULT_SECTION_COLOR \"$front\""; return 1; }
+}
+run_gate section-color-parity section_color_parity
+
 # Notes-never-exported guardrail. The Reports export packet was removed
 # 2026-08-03 and the note visibility column was dropped 2026-11-12, so no note
 # is ever safe to export. If frontend/src/lib/export/ comes back, it must not
@@ -231,7 +246,7 @@ else fail guardrail-sortable-vendor "frontend/src/components/reui/sortable.tsx m
 # — since only the last three are reachable for this app's actual filter
 # fields (all `type: "select"` with populated options, so `addFilter` itself
 # is a fallback path, not the one users hit in practice)).
-EXPECTED_FILTERS_PATCHES=19
+EXPECTED_FILTERS_PATCHES=20
 if [ -f frontend/src/components/reui/filters.tsx ]; then
   N="$(grep -c 'SOLVRO PATCH' frontend/src/components/reui/filters.tsx)"
   if [ "$N" -eq "$EXPECTED_FILTERS_PATCHES" ]; then pass guardrail-filters-vendor

@@ -77,6 +77,9 @@ const PRIMARY_TEXT_SURFACES = [
   "surface-container-lowest",
   "surface-container-low",
   "surface-container",
+  // Hovered rows and tinted cards. Dark Elitery Green was #3aae51 (4.4986:1
+  // here, ISS-090) until its green channel moved up one step.
+  "surface-container-high",
 ];
 
 describe.each([":root", ".dark"] as const)("primary as text in %s", (selector) => {
@@ -85,16 +88,6 @@ describe.each([":root", ".dark"] as const)("primary as text in %s", (selector) =
   it.each(PRIMARY_TEXT_SURFACES)("--primary on --%s is at least 4.5:1", (surface) => {
     expect(tokens[surface], `--${surface} missing`).toBeDefined();
     expect(contrast(tokens.primary, tokens[surface])).toBeGreaterThanOrEqual(4.5);
-  });
-});
-
-// The hover tint is pinned for light only. Dark Elitery Green (#3aae51) on
-// dark surface-container-high measures 4.4986:1, a hair under 4.5, and the
-// dark brand green is not this test's to move.
-describe("primary as text on the hover tint", () => {
-  it("light --primary on --surface-container-high is at least 4.5:1", () => {
-    const light = block(":root");
-    expect(contrast(light.primary, light["surface-container-high"])).toBeGreaterThanOrEqual(4.5);
   });
 });
 

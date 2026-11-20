@@ -6,6 +6,7 @@ import {
 } from "@/components/portfolio/PortfolioCalendar";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { EmptyState } from "@/components/EmptyState";
+import { Frame, FramePanel } from "@/components/reui/frame";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -79,7 +80,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
   return (
     <>
       {/* Work tiles — each is a link to the list it counts */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <Frame spacing="sm" className="grid [--frame-radius:var(--radius-sm)]! [--frame-panel-radius:var(--radius-sm)] sm:grid-cols-3">
         <Kpi
           label="Overdue"
           value={overdue}
@@ -113,7 +114,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
           to="/daily-review"
           ariaLabel={`Open risks: ${openRisks}`}
         />
-      </div>
+      </Frame>
 
       {/* Projects needing attention */}
       <div className="min-w-0 rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
@@ -244,24 +245,26 @@ function Kpi({ label, value, hint, icon, tone, to, ariaLabel }: KpiProps) {
   const iconColor =
     tone === "primary" ? "text-primary" : tone === "error" ? "text-error" : "text-on-surface-variant";
   return (
-    <Link
-      to={to}
-      aria-label={ariaLabel}
-      className="block rounded-sm border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary"
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
-        <span aria-hidden="true" className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
-      </div>
-      <div className="mt-2 flex items-baseline gap-2">
-        <span
-          className={`text-3xl font-bold tabular-nums ${tone === "error" ? "text-error" : "text-on-surface"}`}
-        >
-          {value}
-        </span>
-        {hint && <span className="text-meta text-on-surface-variant">{hint}</span>}
-      </div>
-    </Link>
+    <FramePanel className="mt-0! p-0 transition-colors hover:border-primary">
+      <Link
+        to={to}
+        aria-label={ariaLabel}
+        className="block h-full px-(--frame-panel-px) py-(--frame-panel-py) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
+          <span aria-hidden="true" className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
+        </div>
+        <div className="mt-2 flex items-baseline gap-2">
+          <span
+            className={`text-3xl font-bold tabular-nums ${tone === "error" ? "text-error" : "text-on-surface"}`}
+          >
+            {value}
+          </span>
+          {hint && <span className="text-meta text-on-surface-variant">{hint}</span>}
+        </div>
+      </Link>
+    </FramePanel>
   );
 }
 
@@ -350,11 +353,11 @@ function EmptyHint({ label }: { label: string }) {
 function SkeletonGrid() {
   return (
     <>
-      <div className="grid gap-4 sm:grid-cols-3">
+      <Frame spacing="sm" className="grid [--frame-radius:var(--radius-sm)]! [--frame-panel-radius:var(--radius-sm)] sm:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-24 animate-pulse rounded-sm bg-surface-container-low" />
+          <FramePanel key={i} className="mt-0! h-24 animate-pulse" />
         ))}
-      </div>
+      </Frame>
       <div className="h-40 animate-pulse rounded-sm bg-surface-container-low" />
       <div className="h-64 animate-pulse rounded-sm bg-surface-container-low" />
       <div className="h-64 animate-pulse rounded-sm bg-surface-container-low" />

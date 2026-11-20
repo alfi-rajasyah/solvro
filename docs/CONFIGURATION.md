@@ -58,7 +58,7 @@ The frontend has **no runtime env vars**. The compiled bundle uses the literal s
 
 ### The Pipeline module
 
-The Pipeline module (the SA opportunity tracker ported from Velora) is part of Solvro itself: `opportunities`/`opportunity_activities`/`opportunity_links`/`pipeline_import_logs` tables in the `solvro` database, `/opportunities` routes in the backend, `/pipeline` pages in the frontend, gated by six `pipeline:*` permission strings (the SA role is seeded with view/create/edit_own/delete_own). The only Velora-shaped thing left is the one-time migration script — see [2.16](#216--the-pipeline-module-native).
+The Pipeline module (the SA opportunity tracker ported from Velora) is part of Solvro itself: `opportunities`/`opportunity_activities`/`opportunity_links`/`pipeline_import_logs` tables in the `solvro` database, `/opportunities` routes in the backend, `/pipeline` pages in the frontend, gated by six `pipeline:*` permission strings (the SA role is seeded with view/create/edit_own/delete_own). The standalone Velora tracker and its one-time import script are retired.
 
 ### Secrets discipline
 
@@ -374,22 +374,9 @@ The Pipeline module is ordinary Solvro code — nothing here needs separate conf
 - **`xlsx` (SheetJS)** is a frontend dependency for the Excel/CSV import dialog, lazy-loaded only when the dialog opens. The container-written-lockfile trap (root CLAUDE.md) applies to it like any dependency.
 - **Handoff's customer picker needs `project:view-all`**: `POST /opportunities/:id/handoff` lets the caller pick which customer the new project links to, from the same visible set `customerVisibilityFilter` (`backend/src/lib/visibility.ts`) grants everywhere else — unowned customers, customers the caller owns as TAM, and customers of a project the caller can already see. A custom role that hands off won deals (the `pipeline:*` write permissions plus `project:write`) but lacks `project:view-all` therefore sees only unowned customers and customers of its own projects in that picker. Grant `project:view-all` in Admin > Roles to any role that should hand off to any customer.
 
-#### One-time data migration (cutover)
+#### One-time data migration (retired)
 
-[backend/scripts/import-velora.ts](../backend/scripts/import-velora.ts) copies opportunities, activity history, and links from a Velora database into the native tables, matching Velora profiles to Solvro users by email (never creating accounts).
-
-```
-docker compose exec \
-  -e VELORA_DATABASE_URL="postgresql://<user>:<pass>@<host>:5432/<restored_velora_db>" \
-  backend npx tsx scripts/import-velora.ts --yes
-```
-
-- The target is the backend's own `DATABASE_URL`; the script refuses to run unless that database is literally named `solvro` (or ends in `_test`), and refuses without `--yes`/`CONFIRM=1`.
-- Idempotent per id — but a re-run is a **full overwrite sync**, not a merge. Never re-run after go-live once users have edited imported deals.
-- The run report lists unmatched profiles (their deals import unassigned), over-length fields (imported verbatim; shorten them or the deal's first UI edit will be rejected), non-dense stage orders, and Hold deals missing a pre-hold stage.
-- Won deals get `won_at` from their last update time — Velora never had a won-date column; this mirrors its own KPI proxy.
-
-Cutover order: freeze edits in the standalone tracker → dump its database (plain format — it runs Postgres 16, Solvro's server runs 15) → restore it somewhere the backend container can reach → run the script → verify in the UI → retire the standalone `/opt/velora` stack and its GitLab CI deploy.
+The one-time copy from the standalone Velora tracker into the native tables was retired on 2026-11-20 together with that tracker; its import script is removed from the repo. Nothing to run or configure.
 
 ### 2.17 — iTop integration
 

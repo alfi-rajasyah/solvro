@@ -40,7 +40,7 @@ export async function computePortfolioRows(
       tam: { select: { username: true } },
       customer: { select: { id: true, name: true } },
       sections: {
-        orderBy: { position: "asc" },
+        orderBy: [{ position: "asc" }, { id: "asc" }],
         select: { id: true, name: true, color: true },
       },
       tasks: {

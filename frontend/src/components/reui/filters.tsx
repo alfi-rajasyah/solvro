@@ -64,6 +64,12 @@ import {
 // call sites below are swapped for direct lucide-react imports.
 import { AlertCircleIcon, CheckIcon, PlusIcon, XIcon } from "lucide-react"
 
+// SOLVRO PATCH — ISS-056: every filter toolbar row (field label, operator,
+// value, add button, menu rows, popover search) shares one 13px text size
+// (DESIGN.md `xs`), matching the dropdowns these filters replaced. Upstream
+// mixed 15px (`text-sm`) buttons and menus with 13px chips.
+const FILTER_TEXT = "text-xs"
+
 // i18n Configuration Interface
 export interface FilterI18nConfig {
   // UI Labels
@@ -852,7 +858,7 @@ function FilterOperatorDropdown<T = unknown>({
           <Button
             variant="outline"
             size={context.size}
-            className="text-muted-foreground hover:text-foreground"
+            className={cn(FILTER_TEXT, "text-muted-foreground hover:text-foreground")}
           >
             {operatorLabel}
           </Button>
@@ -864,6 +870,7 @@ function FilterOperatorDropdown<T = unknown>({
             key={op.value}
             onClick={() => onChange(op.value)}
             className={cn(
+              FILTER_TEXT,
               "data-highlighted:bg-accent data-highlighted:text-accent-foreground flex items-center justify-between"
             )}
           >
@@ -1013,6 +1020,7 @@ function SelectOptionsPopover<T = unknown>({
         onMouseEnter={() => setHighlightedIndex(overallIndex)}
         checked={isSelected}
         className={cn(
+          FILTER_TEXT,
           "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
           option.className
         )}
@@ -1053,7 +1061,8 @@ function SelectOptionsPopover<T = unknown>({
               field.label || ""
             )}
             className={cn(
-              "border-input h-8 rounded-none border-0 bg-transparent! px-2 text-sm shadow-none",
+              "border-input h-8 rounded-none border-0 bg-transparent! px-2 shadow-none",
+              FILTER_TEXT,
               "focus-visible:border-border focus-visible:ring-0 focus-visible:ring-offset-0",
               open && "placeholder:text-foreground"
             )}
@@ -1120,16 +1129,16 @@ function SelectOptionsPopover<T = unknown>({
           id={`${baseId}-listbox`}
         >
           {isAsync && loading && allFilteredOptions.length === 0 ? (
-            <div className="text-muted-foreground py-2 text-center text-sm">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {context.i18n.loadingOptions ?? DEFAULT_I18N.loadingOptions}
             </div>
           ) : isAsync && error ? (
-            <div className="text-muted-foreground py-2 text-center text-sm">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {context.i18n.errorLoadingOptions ??
                 DEFAULT_I18N.errorLoadingOptions}
             </div>
           ) : allFilteredOptions.length === 0 ? (
-            <div className="text-muted-foreground py-2 text-center text-sm">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {context.i18n.noResultsFound}
             </div>
           ) : field.renderOptionList ? (
@@ -1189,7 +1198,7 @@ function SelectOptionsPopover<T = unknown>({
     >
       <DropdownMenuTrigger
         render={
-          <Button variant="outline" size={context.size}>
+          <Button variant="outline" size={context.size} className={FILTER_TEXT}>
             <div className="flex items-center gap-1.5">
               {field.customValueRenderer ? (
                 field.customValueRenderer(
@@ -1239,7 +1248,7 @@ function FilterValueSelector<T = unknown>({
 
   if (field.customRenderer) {
     return (
-      <ButtonGroupText className="hover:bg-accent aria-expanded:bg-accent bg-background dark:bg-input/30 text-start whitespace-nowrap outline-hidden">
+      <ButtonGroupText className={cn(FILTER_TEXT, "hover:bg-accent aria-expanded:bg-accent bg-background dark:bg-input/30 text-start whitespace-nowrap outline-hidden")}>
         {field.customRenderer({ field, values, onChange, operator })}
       </ButtonGroupText>
     )
@@ -1349,7 +1358,7 @@ export const FiltersContent = <T = unknown,>({
             // reads as one underlined group instead of mixing boxes and rules.
             className=""
           >
-            <ButtonGroupText>
+            <ButtonGroupText className={FILTER_TEXT}>
               {field.icon && field.icon}
               {field.label}
             </ButtonGroupText>
@@ -1498,6 +1507,7 @@ function FilterSubmenuContent<T = unknown>({
         onMouseEnter={() => setHighlightedIndex(index)}
         checked={isSelected}
         className={cn(
+          FILTER_TEXT,
           "data-highlighted:bg-accent data-highlighted:text-accent-foreground",
           option.className
         )}
@@ -1542,7 +1552,8 @@ function FilterSubmenuContent<T = unknown>({
             }
             placeholder={i18n.placeholders.searchField(field.label || "")}
             className={cn(
-              "h-8 rounded-none border-0 bg-transparent! px-2 text-sm shadow-none",
+              "h-8 rounded-none border-0 bg-transparent! px-2 shadow-none",
+              FILTER_TEXT,
               "focus-visible:border-border focus-visible:ring-0 focus-visible:ring-offset-0",
               isActive && "placeholder:text-foreground"
             )}
@@ -1651,15 +1662,15 @@ function FilterSubmenuContent<T = unknown>({
           }}
         >
           {isAsync && loading && filteredOptions.length === 0 ? (
-            <div className="text-muted-foreground py-2 text-center text-sm">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {i18n.loadingOptions ?? DEFAULT_I18N.loadingOptions}
             </div>
           ) : isAsync && error ? (
-            <div className="text-muted-foreground py-2 text-center text-sm">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {i18n.errorLoadingOptions ?? DEFAULT_I18N.errorLoadingOptions}
             </div>
           ) : filteredOptions.length === 0 ? (
-            <div className="text-muted-foreground py-2 text-center text-sm">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {i18n.noResultsFound}
             </div>
           ) : field.renderOptionList ? (
@@ -1901,7 +1912,7 @@ export function Filters<T = unknown>({
       // SOLVRO PATCH — the default trigger carried no `size`, so it rendered
       // h-9 next to h-8 chips at size="sm". Match the Filters size so the
       // whole toolbar row shares one control height.
-      <Button variant="outline" size={size}>
+      <Button variant="outline" size={size} className={FILTER_TEXT}>
         <PlusIcon />
         {mergedI18n.addFilter}
       </Button>
@@ -1999,7 +2010,8 @@ export function Filters<T = unknown>({
                       }
                       placeholder={mergedI18n.searchFields}
                       className={cn(
-                        "h-8 rounded-none border-0 bg-transparent! px-2 text-sm shadow-none",
+                        "h-8 rounded-none border-0 bg-transparent! px-2 shadow-none",
+                        FILTER_TEXT,
                         "focus-visible:border-border focus-visible:ring-0 focus-visible:ring-offset-0",
                         activeMenu === "root" && "placeholder:text-foreground"
                       )}
@@ -2095,7 +2107,7 @@ export function Filters<T = unknown>({
                     {(() => {
                       if (filteredFields.length === 0) {
                         return (
-                          <div className="text-muted-foreground py-2 text-center text-sm">
+                          <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
                             {mergedI18n.noFieldsFound}
                           </div>
                         )
@@ -2142,7 +2154,7 @@ export function Filters<T = unknown>({
                                   setHighlightedIndex(index)
                                   setActiveMenu("root")
                                 }}
-                                className="data-popup-open:bg-accent data-popup-open:text-accent-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                                className={cn(FILTER_TEXT, "data-popup-open:bg-accent data-popup-open:text-accent-foreground data-highlighted:bg-accent data-highlighted:text-accent-foreground")}
                               >
                                 {field.icon}
                                 <span>{field.label}</span>
@@ -2265,7 +2277,7 @@ export function Filters<T = unknown>({
                             data-highlighted={isHighlighted || undefined}
                             onMouseEnter={() => setHighlightedIndex(index)}
                             onClick={() => field.key && addFilter(field.key)}
-                            className="data-highlighted:bg-accent data-highlighted:text-accent-foreground"
+                            className={cn(FILTER_TEXT, "data-highlighted:bg-accent data-highlighted:text-accent-foreground")}
                           >
                             {field.icon}
                             <span>{field.label}</span>
@@ -2294,7 +2306,7 @@ export function Filters<T = unknown>({
               // one underlined group instead of mixing boxes and rules.
               className=""
             >
-              <ButtonGroupText className="bg-background dark:bg-input/30">
+              <ButtonGroupText className={cn(FILTER_TEXT, "bg-background dark:bg-input/30")}>
                 {field.icon && field.icon}
                 {field.label}
               </ButtonGroupText>

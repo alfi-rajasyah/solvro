@@ -15,6 +15,31 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-20 — Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet
+
+- Filter toolbar rows (field, operator, value, add button, menus and popover search) use one 13px text size, matching the older dropdowns (vendored `reui/filters.tsx`).
+- The task comment box is an auto-growing textarea: Enter sends, Shift+Enter starts a new line (`CommentMentions.tsx`). It is hidden for roles without `task:write` or `project:write` (`TaskPanel.tsx`).
+- The top bar search trigger has hover and keyboard-focus styles and reads "Ctrl+K" off macOS and "⌘K" on macOS (`layout/TopBar.tsx`, new `lib/platform.ts`); dead classes were removed from the search palette (`CommandPalette.tsx`).
+- The iTop ticket's "hours this week" figure refetches when the viewer's UTC offset changes, because the offset is now part of the ticket query key (`useItopTicket` in `lib/queries.ts`).
+- The Material Symbols stylesheet is preloaded from `frontend/index.html`, so its request starts with the page instead of after the app stylesheet.
+- The PWA end-to-end spec skips itself against the Vite dev server instead of failing (`e2e/tests/pwa.spec.ts`).
+
+### Changed — 2026-11-20 — Dark primary contrast, Critical Path ring, section colours, stat cards, Excel iTop column
+
+- Dark-theme primary green moved from `#3aae51` to `#3aaf51` (`frontend/src/index.css`, `docs/DESIGN.md`; also the browser theme colour in `frontend/index.html` and the PWA manifest in `frontend/vite.config.ts`) so primary text reaches 4.5:1 on hovered rows and tinted cards; `frontend/src/lib/tokenContrast.test.ts` now pins that surface in both themes.
+- The Gantt Critical Path ring and its legend swatch use the fixed export violet in both themes, so the ring no longer reads as the selection outline in dark mode (`gantt-v2/SolvroBar.tsx`, `gantt-v2/SolvroGantt.tsx`).
+- The Overview KPI tiles use the shared Frame component, with small corners and aligned tops (`pages/Overview.tsx`). The empty-state frame now keeps its small corners too; its radius override lost to the Frame default (`components/EmptyState.tsx`).
+- Gantt Excel export: a new "iTop ticket" column with each task's pinned ticket reference (`lib/gantt/exportExcel.ts`).
+- Sections with no chosen colour now show the same preset colour in the List tab, the task panel, the section reorder dialog and the Executive roll-up as on the Gantt, instead of grey (`resolveSectionColor` in `lib/gantt/palette.ts`).
+- A `section-color-parity` check in `.claude/scripts/gates.sh` fails when the database default for a section colour and the frontend default differ.
+
+### Changed — 2026-11-20 — Task comment access, large offboardings, Velora import retired
+
+- Posting a task comment now needs `task:write` or `project:write` (`backend/src/routes/tasks.ts`). Read-only roles such as stakeholders and Solution Architects still read the thread but get a 403 when they post.
+- Offboarding a user now hands over up to 5000 projects in one request (was 500). The per-project writes (seat changes, task and epic moves, members, notes, activity events, notifications) are batched, so a 500-project handover takes under a second instead of about 10 seconds (`backend/src/lib/offboarding.ts`, `backend/src/lib/notifications.ts`, `backend/src/lib/projectSeats.ts`, `backend/src/routes/admin.ts`). The lock order is unchanged.
+- An iTop sync that runs while a customer's organisation is unmapped no longer re-attaches that organisation's tickets: each ticket page re-reads the mapped customers under a share lock (`backend/src/lib/itop/sync.ts`).
+- Removed the one-time Velora import script `backend/scripts/import-velora.ts` and its test; the standalone Velora tracker is retired. `README.md` and `docs/CONFIGURATION.md` are updated.
+
 ### Added — 2026-11-19 — Frontend lint and test cleanups
 
 - Frontend lint: ESLint with the React hooks rules (`rules-of-hooks`, `exhaustive-deps`) via `npm run lint` in `frontend/`, run in CI. New dev dependencies: `eslint` 10.14.0, `typescript-eslint` 8.72.1, `eslint-plugin-react-hooks` 7.1.1.

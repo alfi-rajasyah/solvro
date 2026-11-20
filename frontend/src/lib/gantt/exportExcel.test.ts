@@ -98,6 +98,7 @@ describe("buildTasksSheet", () => {
       "Section",
       "Epic",
       "Title",
+      "iTop ticket",
       "Status",
       "Priority",
       "Critical Path",
@@ -121,12 +122,36 @@ describe("buildTasksSheet", () => {
       "Section",
       "Epic",
       "Title",
+      "iTop ticket",
       "Status",
       "Priority",
       "Start",
       "Due",
     ]);
     for (const row of rows) expect(row.criticalPath).toBeUndefined();
+  });
+});
+
+describe("buildTasksSheet — iTop ticket column", () => {
+  it("shows the pinned ticket ref, and an empty cell when none is pinned", () => {
+    const pinned: Row = {
+      ...taskRow("t1"),
+      task: taskFixture({ itopTicketRef: "R-000123" }),
+    };
+    const unpinned: Row = { ...taskRow("t2"), task: taskFixture() };
+    const { rows } = buildTasksSheet([section, pinned, unpinned]);
+    expect(rows[0].itopTicket).toBe("R-000123");
+    expect(rows[1].itopTicket).toBe("");
+  });
+
+  it("emits only the known cell keys and no note or description text", () => {
+    const row: Row = {
+      ...taskRow("t1"),
+      task: taskFixture({ description: "SECRET-DESC", itopTicketRef: "R-000001" }),
+    };
+    const { columns, rows } = buildTasksSheet([section, row]);
+    expect(Object.keys(rows[0]).sort()).toEqual(columns.map((c) => c.key).sort());
+    expect(JSON.stringify(rows)).not.toContain("SECRET-DESC");
   });
 });
 

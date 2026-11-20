@@ -21,7 +21,7 @@ export const PRIORITY_BORDER_HEX: Record<Priority, string> = {
 
 export const WEEKEND_HEX = "#e2e8f0";  // slate-200, very subtle
 export const HOLIDAY_HEX = "#fecaca";  // rose-200
-export const TODAY_HEX = "#3aae51";    // primary green — Gantt v2 today line/pill
+export const TODAY_HEX = "#3aaf51";    // primary green — Gantt v2 today line/pill
 // Critical Path mark (plan critical-path-mark.md §3) — light-theme
 // `chip-violet-text` (index.css's `:root` block). Both exporters are
 // light-background-only (PDF: always; Excel: no dark-mode concept), so this
@@ -237,6 +237,20 @@ export function resolveSectionColors(
     );
   });
   return map;
+}
+
+/**
+ * One section's display colour from a map built by `resolveSectionColors`.
+ * Every surface that paints a section dot (List tab, task panel, Executive
+ * roll-up) goes through this so an uncustomized section shows the same preset
+ * it has on the Gantt, never the raw schema sentinel. A section missing from
+ * the map falls back to its stored colour, then the neutral default.
+ */
+export function resolveSectionColor(
+  colors: ReadonlyMap<number, string>,
+  section: { id: number; color?: string | null },
+): string {
+  return colors.get(section.id) ?? (section.color?.trim() || DEFAULT_SECTION_COLOR);
 }
 
 export function legendEntries(

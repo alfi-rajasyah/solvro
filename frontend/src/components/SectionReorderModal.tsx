@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { resolveSectionColor, resolveSectionColors } from "@/lib/gantt/palette";
 import { Modal } from "@/components/Modal";
 import {
   Sortable,
@@ -31,6 +32,8 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
   // a fresh request. A cold cache would seed `order` empty (below) and pin
   // the "No sections to reorder" state.
   const { data: sections } = useProjectSections(projectId);
+  // Resolved from the saved list, not the draft order, so a dot keeps its colour while rows move.
+  const sectionColors = useMemo(() => resolveSectionColors(sections ?? []), [sections]);
   const updateSection = useUpdateSection(projectId);
   const qc = useQueryClient();
   const { user } = useAuth();
@@ -159,7 +162,7 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
             >
               <span
                 className="h-2 w-2 shrink-0 rounded-full"
-                style={{ backgroundColor: section.color }}
+                style={{ backgroundColor: resolveSectionColor(sectionColors, section) }}
               />
               <span className="flex-1 truncate text-sm text-on-surface">{section.name}</span>
               <SortableItemHandle
