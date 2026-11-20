@@ -1092,7 +1092,7 @@ function PanelLinks({ taskId, projectId, canEdit }: { taskId: number; projectId:
 }
 
 /**
- * Comment thread + single-line composer per the mockup ("Write a comment…"
+ * Comment thread + composer per the mockup ("Write a comment…"
  * placeholder + green send icon), backed by useComments / useAddComment.
  * This is the app's only comment UI (the former standalone CommentThread
  * component was never mounted and has been removed).
@@ -1100,6 +1100,10 @@ function PanelLinks({ taskId, projectId, canEdit }: { taskId: number; projectId:
 function PanelComments({ taskId, projectId }: { taskId: number; projectId: number }) {
   const { data: comments, isLoading, isError, error } = useComments(taskId);
   const addComment = useAddComment(taskId, projectId);
+  // The comment routes need task:write or project:write; a read-only role
+  // (stakeholder, SA) sees the thread without the box the server would refuse.
+  const { user: authUser } = useAuth();
+  const canComment = hasPermission(authUser, "task:write") || hasPermission(authUser, "project:write");
   const { data: project } = useProject(projectId);
   const { data: members } = useProjectMembers(projectId);
 
@@ -1157,14 +1161,16 @@ function PanelComments({ taskId, projectId }: { taskId: number; projectId: numbe
         </ol>
       )}
 
-      <CommentComposer
-        candidates={mentionCandidates}
-        isPending={addComment.isPending}
-        error={addComment.error ? (addComment.error as Error).message : null}
-        onSend={async (body, mentionedUserIds) => {
-          await addComment.mutateAsync({ body, mentionedUserIds });
-        }}
-      />
+      {canComment && (
+        <CommentComposer
+          candidates={mentionCandidates}
+          isPending={addComment.isPending}
+          error={addComment.error ? (addComment.error as Error).message : null}
+          onSend={async (body, mentionedUserIds) => {
+            await addComment.mutateAsync({ body, mentionedUserIds });
+          }}
+        />
+      )}
     </div>
   );
 }

@@ -15,6 +15,15 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-20 — Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet
+
+- Filter toolbar rows (field, operator, value, add button, menus and popover search) use one 13px text size, matching the older dropdowns (vendored `reui/filters.tsx`).
+- The task comment box is an auto-growing textarea: Enter sends, Shift+Enter starts a new line (`CommentMentions.tsx`). It is hidden for roles without `task:write` or `project:write` (`TaskPanel.tsx`).
+- The top bar search trigger has hover and keyboard-focus styles and reads "Ctrl K" off macOS and "⌘K" on macOS (`layout/TopBar.tsx`, new `lib/platform.ts`); dead classes were removed from the search palette (`CommandPalette.tsx`).
+- The iTop ticket's "hours this week" figure refetches when the viewer's UTC offset changes, because the offset is now part of the ticket query key (`useItopTicket` in `lib/queries.ts`).
+- The Material Symbols stylesheet is preloaded from `frontend/index.html`, so its request starts with the page instead of after the app stylesheet.
+- The PWA end-to-end spec skips itself against the Vite dev server instead of failing (`e2e/tests/pwa.spec.ts`).
+
 ### Changed — 2026-11-20 — Dark primary contrast, Critical Path ring, section colours, stat cards, Excel iTop column
 
 - Dark-theme primary green moved from `#3aae51` to `#3aaf51` (`frontend/src/index.css`, `docs/DESIGN.md`) so primary text reaches 4.5:1 on hovered rows and tinted cards; `frontend/src/lib/tokenContrast.test.ts` now pins that surface in both themes.

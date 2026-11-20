@@ -246,7 +246,7 @@ else fail guardrail-sortable-vendor "frontend/src/components/reui/sortable.tsx m
 # — since only the last three are reachable for this app's actual filter
 # fields (all `type: "select"` with populated options, so `addFilter` itself
 # is a fallback path, not the one users hit in practice)).
-EXPECTED_FILTERS_PATCHES=19
+EXPECTED_FILTERS_PATCHES=20
 if [ -f frontend/src/components/reui/filters.tsx ]; then
   N="$(grep -c 'SOLVRO PATCH' frontend/src/components/reui/filters.tsx)"
   if [ "$N" -eq "$EXPECTED_FILTERS_PATCHES" ]; then pass guardrail-filters-vendor
