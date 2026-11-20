@@ -1,6 +1,6 @@
 // API helpers for the project-lifecycle / offboarding specs: throwaway users,
 // customers and projects created through the admin API, so every spec file
-// owns all of its data (CI shards by test onto separate fresh stacks).
+// owns all of its data (CI shards by spec file onto separate fresh stacks).
 
 import { login } from "./seed";
 
