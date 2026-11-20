@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "react-router-dom";
 import { PipelineOverviewPanel } from "@/components/pipeline/PipelineOverviewPanel";
 import {
@@ -277,11 +279,11 @@ function RecentNotesFeed() {
   const { data, isLoading, isError } = useRecentNotes();
   if (isLoading) {
     return (
-      <div className="space-y-3">
+      <SkeletonRegion className="space-y-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-10 animate-pulse rounded-sm bg-surface-container-low" />
+          <Skeleton key={i} className="h-10 rounded-sm" />
         ))}
-      </div>
+      </SkeletonRegion>
     );
   }
   // No data at all (the first load failed) vs. a failed background refetch
@@ -352,16 +354,16 @@ function EmptyHint({ label }: { label: string }) {
 
 function SkeletonGrid() {
   return (
-    <>
-      <Frame spacing="sm" className="grid [--frame-radius:var(--radius-sm)]! [--frame-panel-radius:var(--radius-sm)] sm:grid-cols-3">
+    <SkeletonRegion className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <FramePanel key={i} className="mt-0! h-24 animate-pulse" />
+          <Skeleton key={i} className="h-24 rounded-sm" />
         ))}
-      </Frame>
-      <div className="h-40 animate-pulse rounded-sm bg-surface-container-low" />
-      <div className="h-64 animate-pulse rounded-sm bg-surface-container-low" />
-      <div className="h-64 animate-pulse rounded-sm bg-surface-container-low" />
-    </>
+      </div>
+      <Skeleton className="h-40 rounded-sm" />
+      <Skeleton className="h-64 rounded-sm" />
+      <Skeleton className="h-64 rounded-sm" />
+    </SkeletonRegion>
   );
 }
 

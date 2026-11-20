@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { FIELD_FOCUS, TOOLBAR_BUTTON_OUTLINE, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_STAT } from "@/lib/utils";
 import { useId, useMemo, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 import { CHIP_BASE, Chip } from "@/components/StatusChip";
@@ -266,7 +268,9 @@ export function ServiceMappingList({
       )}
 
       {isLoading ? (
-        <div className="h-24 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+        <SkeletonRegion>
+          <Skeleton className="h-24 rounded-sm" />
+        </SkeletonRegion>
       ) : !catalogue || catalogue.length === 0 ? (
         <EmptyState
           icon="category"

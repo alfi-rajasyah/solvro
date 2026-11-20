@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-20 — Loading placeholders, out-of-range iTop durations
+
+- Loading placeholders on Projects, Overview, Executive, customer, iTop ticket, Utilization, Weekly Sync, Daily Review, guest-link and project views use the shared skeleton components inside a `SkeletonRegion` (150 ms delay) instead of bare pulsing blocks or "Loading…" text. The placeholders lose their old border and tint.
+- An iTop time entry with a negative or out-of-range duration is skipped and counted, with one warning per entry, instead of failing the database write on every sync (`upsertTimeEntry` in `backend/src/lib/itop/sync.ts`).
+
 ### Changed — 2026-11-20 — End-to-end waits, search spec, colour-by reload test
 
 - End-to-end tests: about 125 fixed-delay waits are now condition-based waits (retrying assertions, polling and response-driven checks) across 23 spec files in `e2e/tests/`. The 17 remaining fixed delays cover checks that nothing happens, gesture timing and screenshot settles, each with a comment.

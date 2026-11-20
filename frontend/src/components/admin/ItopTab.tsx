@@ -5,6 +5,8 @@
 // router, not routes/admin.ts). Mirrors the in-file tab-as-function
 // convention Admin.tsx already uses for its Users/Roles/Sign-in tabs,
 // rather than splitting into separate component files.
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { FIELD_FOCUS } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
@@ -145,9 +147,13 @@ function ConnectionCard() {
     return (
       <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
         <h2 className="font-display text-sm font-semibold text-on-surface">Connection</h2>
-        <p className="mt-2 text-sm text-on-surface-variant">
-          {isError ? "Failed to load iTop settings." : "Loading…"}
-        </p>
+        {isError ? (
+          <p className="mt-2 text-sm text-on-surface-variant">Failed to load iTop settings.</p>
+        ) : (
+          <SkeletonRegion className="mt-2">
+            <Skeleton className="h-10 rounded-sm" />
+          </SkeletonRegion>
+        )}
       </section>
     );
   }

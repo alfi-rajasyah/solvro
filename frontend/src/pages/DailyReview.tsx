@@ -1,3 +1,4 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { CustomerGroup } from "@/components/daily-review/CustomerGroup";
@@ -180,10 +181,10 @@ export function DailyReview() {
 
 function DailyReviewSkeleton() {
   return (
-    <div className="space-y-4">
+    <SkeletonRegion className="space-y-4">
       {[0, 1, 2].map((i) => (
         <Skeleton key={i} className="h-52 w-full rounded-sm" />
       ))}
-    </div>
+    </SkeletonRegion>
   );
 }

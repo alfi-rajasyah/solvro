@@ -19,6 +19,8 @@
 // optimistic PATCH-position contract that doesn't apply to tickets at all).
 // `./boardAdapter.ts` and `./dropMapper.ts` are this task's pure ticket
 // equivalents.
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/reui/alert";
@@ -179,14 +181,11 @@ export function TicketBoard({
 
   if (ongoing.isLoading || resolvedWeek.isLoading) {
     return (
-      <div className="grid gap-3 md:grid-cols-5">
+      <SkeletonRegion className="grid gap-3 md:grid-cols-5">
         {BOARD_COLUMNS.map((c) => (
-          <div
-            key={c}
-            className="h-48 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low"
-          />
+          <Skeleton key={c} className="h-48 rounded-sm" />
         ))}
-      </div>
+      </SkeletonRegion>
     );
   }
 

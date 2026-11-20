@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TOOLBAR_BUTTON_PRIMARY } from "@/lib/utils";
 // Customer detail page's "Tickets" tab (Task 1.8): composes the filter
 // chips, the ticket list, and the synced/refresh row. Rendered by
@@ -91,11 +93,11 @@ export function TicketsTab({
 
   if (isLoading || !data) {
     return (
-      <div className="space-y-2">
+      <SkeletonRegion className="space-y-2">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-10 animate-pulse rounded-sm bg-surface-container-low" />
+          <Skeleton key={i} className="h-10 rounded-sm" />
         ))}
-      </div>
+      </SkeletonRegion>
     );
   }
 

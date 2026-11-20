@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { TOOLBAR_BUTTON_PRIMARY } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
@@ -370,13 +372,10 @@ function FilteredEmptyState({ filterName, onClear }: { filterName: string; onCle
 
 function SkeletonGrid() {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <SkeletonRegion className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
       {Array.from({ length: 3 }).map((_, i) => (
-        <div
-          key={i}
-          className="h-40 animate-pulse rounded-sm bg-surface-container-low"
-        />
+        <Skeleton key={i} className="h-40 rounded-sm" />
       ))}
-    </div>
+    </SkeletonRegion>
   );
 }

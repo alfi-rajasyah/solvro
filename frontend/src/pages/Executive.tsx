@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo, useState } from "react";
 import { resolveSectionColor, resolveSectionColors } from "@/lib/gantt/palette";
 import { Link } from "react-router-dom";
@@ -34,7 +36,9 @@ export function Executive() {
       </div>
 
       {isLoading && (
-        <div className="h-32 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+        <SkeletonRegion>
+          <Skeleton className="h-32 rounded-sm" />
+        </SkeletonRegion>
       )}
 
       {isError && (

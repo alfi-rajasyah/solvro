@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { FIELD_FOCUS, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_BUTTON_OUTLINE, TOOLBAR_BOX } from "@/lib/utils";
 import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
@@ -417,7 +419,9 @@ export function ProjectList() {
 
   if (tasksLoading || sectionsLoading) {
     return (
-      <div className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+      <SkeletonRegion>
+        <Skeleton className="h-64 rounded-sm" />
+      </SkeletonRegion>
     );
   }
 
