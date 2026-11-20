@@ -4,9 +4,10 @@
 // the advisory-lock single-runner guarantee, and iTop-error handling. See
 // docs/archive/plans/itop-integration.md Task 1.4.
 import "../env.js";
-import { afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Server } from "node:http";
 import { prisma } from "../../src/prisma.js";
+import { logger } from "../../src/logger.js";
 import { seal } from "../../src/lib/secretBox.js";
 import { bustItopConfigCache } from "../../src/lib/itop/config.js";
 import {
@@ -899,7 +900,7 @@ describe("syncTimeEntries", () => {
     expect(await prisma.itopTimeEntry.count({ where: { itopUserId: 1 } })).toBeGreaterThan(0);
   });
 
-  it("a TimeSpent row that throws on upsert (an out-of-range duration) is counted in skipped, and a previously stored copy survives the full-sync prune", async () => {
+  it("a TimeSpent row skipped for an out-of-range duration is counted in skipped, and a previously stored copy survives the full-sync prune", async () => {
     const state = seedFakeItop();
     const { baseUrl } = await startFake(state);
     await configureItop(baseUrl, "app-token-readonly");
@@ -917,9 +918,9 @@ describe("syncTimeEntries", () => {
     const stored = await prisma.itopTimeEntry.findUniqueOrThrow({ where: { id: targetId } });
 
     // iTop now returns that same row with a duration whose minute count
-    // overflows the integer column: the upsert itself throws (a garbage
-    // user_id can't be used here — the fake's `user_id IN (...)` filter would
-    // simply not return the row), the loop counts it in `skipped` and carries on.
+    // overflows the integer column: the range check skips it before the upsert
+    // (a garbage user_id can't be used here — the fake's `user_id IN (...)`
+    // filter would simply not return the row) and the loop carries on.
     target.duration = "9999999999999";
 
     const second = await syncTimeEntries({ full: true });
@@ -934,6 +935,50 @@ describe("syncTimeEntries", () => {
     expect(after!.itopUserId).toBe(stored.itopUserId);
     expect(after!.durationMinutes).toBe(stored.durationMinutes);
     expect(second.removed).toBe(0);
+  });
+
+  it("skips an out-of-range or negative duration before the upsert, counts it, and warns once per entry across ticks", async () => {
+    const state = seedFakeItop();
+    const { baseUrl } = await startFake(state);
+    await configureItop(baseUrl, "app-token-readonly");
+
+    const userA = await createUserWithRole("TAM");
+    await prisma.user.update({ where: { id: userA.userId }, data: { email: "rina.s@example.co.id" } });
+    await syncUsers();
+
+    const makeEntry = (duration: string, title: string) => {
+      const id = state.nextId++;
+      state.timeSpent.set(id, {
+        id,
+        user_id: "1",
+        org_id: "1",
+        start_date: "2999-01-01 00:00:00",
+        end_date: "",
+        duration,
+        title,
+        ticketRef: "R-004512",
+      });
+      return id;
+    };
+    const hugeId = makeEntry("166666666667", "huge");
+    const negativeId = makeEntry("-60", "negative");
+
+    const warnSpy = vi.spyOn(logger, "warn").mockImplementation(() => undefined);
+    try {
+      const first = await syncTimeEntries({ full: true });
+      const second = await syncTimeEntries({ full: true });
+      expect(first.error).toBeUndefined();
+      expect(first.skipped).toBe(2);
+      expect(second.skipped).toBe(2);
+      expect(await prisma.itopTimeEntry.findUnique({ where: { id: hugeId } })).toBeNull();
+      expect(await prisma.itopTimeEntry.findUnique({ where: { id: negativeId } })).toBeNull();
+
+      const rangeWarnings = warnSpy.mock.calls.filter(([, msg]) => String(msg).includes("does not fit the stored column"));
+      expect(rangeWarnings).toHaveLength(2);
+      expect(warnSpy.mock.calls.some(([, msg]) => String(msg).includes("failed to upsert"))).toBe(false);
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 
   it("a full sync drops an entry iTop no longer returns, within the pull window", async () => {

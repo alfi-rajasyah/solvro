@@ -22,3 +22,5 @@ process.env.LOG_LEVEL = process.env.LOG_LEVEL ?? "error";
 // Pinned, not defaulted: requestLogger.test.ts asserts the 1-hop clientIp, and a
 // dev compose TRUST_PROXY (e.g. 2 for a tunnel) must not leak into the suite.
 process.env.TRUST_PROXY = "1";
+// Blank, not defaulted: guest links stay relative unless a test sets it, and a dev compose value must not leak in.
+process.env.PUBLIC_BASE_URL = "";

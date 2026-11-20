@@ -1,3 +1,4 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
 import { useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
@@ -178,11 +179,11 @@ export function Utilization() {
       </div>
 
       {(!authResolved || isLoading) && (
-        <div className="space-y-2">
+        <SkeletonRegion className="space-y-2">
           {[0, 1, 2].map((i) => (
             <Skeleton key={i} className="h-12 w-full rounded-sm" />
           ))}
-        </div>
+        </SkeletonRegion>
       )}
 
       {authResolved && isError && (

@@ -26,7 +26,7 @@ export function NotFound() {
         action={
           <Link
             to="/overview"
-            className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-sm font-semibold text-on-primary hover:bg-primary-container hover:text-on-primary-container focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+            className="inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-sm font-semibold text-on-primary primary-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
           >
             <span aria-hidden="true" className="material-symbols-outlined text-base">
               dashboard

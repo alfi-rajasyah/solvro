@@ -168,7 +168,7 @@ export function TicketLog({
             <button
               type="submit"
               disabled={adding || !text.trim()}
-              className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary primary-hover disabled:opacity-50"
             >
               {adding ? "Adding…" : "Add entry"}
             </button>

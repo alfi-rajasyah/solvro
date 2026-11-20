@@ -27,7 +27,7 @@
 //   detail page's own Edit button (OpportunityDetail.tsx), out of this
 //   task's scope.
 //
-// 2026-09-25 flow redesign (docs/plans/opportunity-flow-redesign.md §4.4,
+// 2026-09-25 flow redesign (docs/archive/plans/opportunity-flow-redesign.md §4.4,
 // D11): this view is no longer self-contained — Pipeline.tsx now owns the
 // single `useOpportunities()` fetch and the Active/Closed switch, passing
 // `deals` (already filtered to the active side or the closed side),

@@ -44,9 +44,15 @@ export function CommentBody({
           <span
             key={i}
             data-testid="mention-chip"
-            className="rounded-sm bg-primary/10 px-1 py-px font-semibold text-primary"
+            title={piece.inactive ? "Deactivated user" : undefined}
+            className={
+              piece.inactive
+                ? "rounded-sm bg-surface-container-high px-1 py-px font-semibold text-on-surface-variant"
+                : "rounded-sm bg-primary/10 px-1 py-px font-semibold text-primary"
+            }
           >
             {piece.text}
+            {piece.inactive && <span className="sr-only"> (deactivated)</span>}
           </span>
         ) : (
           <span key={i}>{piece.text}</span>
@@ -57,8 +63,8 @@ export function CommentBody({
 }
 
 /**
- * The comment box: a single-line input whose `@` opens a picker of the
- * candidate people. It is an ARIA combobox — the field owns focus and points
+ * The comment box: an auto-growing textarea (Enter sends, Shift+Enter adds a
+ * line) whose `@` opens a picker of the candidate people. It is an ARIA combobox — the field owns focus and points
  * at the listbox with `aria-controls` / `aria-activedescendant`.
  *
  * `variant="note"` is the Pipeline deal-note box: the same picker over a
@@ -119,9 +125,25 @@ export function CommentComposer({
     setHighlight(0);
   }
 
+  // Grow the comment textarea with its content, up to a cap, then scroll.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (isNote || !el) return;
+    el.style.height = "auto";
+    el.style.height = `${Math.min(el.scrollHeight, 160)}px`;
+  }, [body, isNote]);
+
   function handleKeyDown(e: KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) {
     // Enter/Tab/arrows during IME composition belong to the IME, not the picker.
-    if (!open || e.nativeEvent.isComposing) return;
+    if (e.nativeEvent.isComposing) return;
+    // The comment box was a single-line input where Enter sent; keep that,
+    // with Shift+Enter for a new line. The note box keeps Enter as a newline.
+    if (!open && !isNote && e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      e.currentTarget.form?.requestSubmit();
+      return;
+    }
+    if (!open) return;
     if (e.key === "ArrowDown") {
       e.preventDefault();
       setHighlight((active + 1) % matches.length);
@@ -183,7 +205,7 @@ export function CommentComposer({
         className={
           isNote
             ? "relative space-y-2 border-t border-outline-variant pt-3"
-            : `relative flex items-center gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 ${FIELD_FOCUS_WITHIN}`
+            : `relative flex items-end gap-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 ${FIELD_FOCUS_WITHIN}`
         }
       >
         {isNote ? (
@@ -195,12 +217,12 @@ export function CommentComposer({
             className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant ${FIELD_FOCUS}`}
           />
         ) : (
-          <input
+          <textarea
             {...fieldProps}
-            type="text"
+            rows={1}
             maxLength={5000}
             placeholder="Write a comment…"
-            className="min-w-0 flex-1 border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden"
+            className="max-h-40 min-w-0 flex-1 resize-none border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden"
           />
         )}
         {isNote ? (
@@ -209,7 +231,7 @@ export function CommentComposer({
             <button
               type="submit"
               disabled={isPending || !body.trim()}
-              className="inline-flex shrink-0 items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-sm bg-primary px-3 py-1.5 font-display text-xs font-bold text-on-primary primary-hover disabled:opacity-50"
             >
               <span className="material-symbols-outlined text-base" aria-hidden="true">
                 send

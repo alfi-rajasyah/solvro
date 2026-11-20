@@ -1,3 +1,4 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
 import { FIELD_FOCUS, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_STAT } from "@/lib/utils";
 import { useMemo, useState } from "react";
 import {
@@ -17,6 +18,7 @@ import { DataGridTable } from "@/components/reui/data-grid/data-grid-table";
 import { RiskFormModal } from "@/components/RiskFormModal";
 import { RiskScoreChip } from "@/components/RiskScoreChip";
 import { Chip, type Tone } from "@/components/StatusChip";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { hasPermission, useAuth } from "@/lib/auth";
 import { RISK_CATEGORY_LABEL, RISK_STATUS_LABEL } from "@/lib/labels";
@@ -62,6 +64,44 @@ const CATEGORIES: (RiskCategory | "ALL")[] = [
 const STATUSES: (RiskStatus | "ALL")[] = ["ALL", "OPEN", "MITIGATED", "CLOSED"];
 
 const SCALE = [1, 2, 3, 4, 5];
+const SCALE_OPTIONS = SCALE.map((n) => ({ value: String(n), label: String(n) }));
+const STATUS_OPTIONS = (Object.keys(RISK_STATUS_LABEL) as RiskStatus[]).map((s) => ({
+  value: s,
+  label: RISK_STATUS_LABEL[s],
+}));
+
+// Inline-edit cell select on the vendored ui/select (replaces a native <select>);
+// className overrides the trigger to a 28px height (h-7, near the old native select) so
+// grid rows keep their density, and drops the border change on focus (DESIGN.md §4:
+// ring only).
+function InlineSelect({
+  value,
+  items,
+  ariaLabel,
+  onChange,
+  className,
+}: {
+  value: string;
+  items: { value: string; label: string }[];
+  ariaLabel: string;
+  onChange: (value: string) => void;
+  className?: string;
+}) {
+  return (
+    <Select items={items} value={value} onValueChange={(v) => v != null && onChange(String(v))}>
+      <SelectTrigger size="sm" aria-label={ariaLabel} className={`px-2 data-[size=sm]:h-7 ${className ?? ""}`}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {items.map((o) => (
+          <SelectItem key={o.value} value={o.value}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+}
 
 export function ProjectRisks() {
   const { project } = useProjectContext();
@@ -109,7 +149,9 @@ export function ProjectRisks() {
 
   if (isLoading) {
     return (
-      <div className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+      <SkeletonRegion>
+        <Skeleton className="h-64 rounded-sm" />
+      </SkeletonRegion>
     );
   }
 
@@ -151,7 +193,7 @@ export function ProjectRisks() {
           aria-label="Search risks"
           className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-1.5 text-sm text-on-surface placeholder:text-on-surface-variant ${FIELD_FOCUS} sm:w-72`}
         />
-        <Select
+        <FilterSelect
           label="Category"
           value={categoryFilter}
           onChange={(v) => setCategoryFilter(v as RiskCategory | "ALL")}
@@ -160,7 +202,7 @@ export function ProjectRisks() {
             label: c === "ALL" ? "All categories" : RISK_CATEGORY_LABEL[c],
           }))}
         />
-        <Select
+        <FilterSelect
           label="Status"
           value={statusFilter}
           onChange={(v) => setStatusFilter(v as RiskStatus | "ALL")}
@@ -312,7 +354,8 @@ function RisksDataGrid({
                 // Prose-overflow sweep (GH #57 convention): the pre-DataGrid
                 // table's `max-w-md` cell had no wrap-hardening, so a long
                 // unbroken description could stretch the table past its
-                // `overflow-x-auto` bound (docs/ISSUES.md deferred finding).
+                // `overflow-x-auto` bound (docs/archive/ISSUES-2026-11-18-phase-log.md, "Unswept
+                // prose-overflow surfaces" entry).
                 // `whitespace-pre-wrap` preserves operator-entered line
                 // breaks (this text comes from a `<textarea>`); `wrap-
                 // break-word` is Tailwind v4's renamed `break-words` (see
@@ -366,27 +409,20 @@ function RisksDataGrid({
         accessorKey: "probability",
         header: ({ column }) => <DataGridColumnHeader column={column} title="Prob" />,
         // A 1-5 scale-select control, not a magnitude column a user scans
-        // for ordering — left unsortable so its header can stay centered
-        // (the vendored DataGridColumnHeader's sortable path only supports
-        // left/right alignment, not center — see gantt/data-grid-column-
-        // header.tsx's `alignEnd`), matching the pre-DataGrid table's own
-        // `text-center` treatment exactly.
+        // for ordering — left unsortable, matching the pre-DataGrid table's
+        // own `text-center` treatment. (The vendored header can center a
+        // sortable column too, via `meta.headerClassName: "text-center"`.)
         enableSorting: false,
         cell: ({ row }) => {
           const risk = row.original;
           return canEdit ? (
-            <select
-              value={risk.probability}
-              aria-label={`Probability of risk: ${risk.description}`}
-              onChange={(e) => onChange(risk.id, { probability: Number(e.target.value) })}
-              className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
-            >
-              {SCALE.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+            <InlineSelect
+              value={String(risk.probability)}
+              items={SCALE_OPTIONS}
+              ariaLabel={`Probability of risk: ${risk.description}`}
+              onChange={(v) => onChange(risk.id, { probability: Number(v) })}
+              className="mx-auto font-mono text-xs"
+            />
           ) : (
             <span className="font-mono text-xs">{risk.probability}</span>
           );
@@ -406,18 +442,13 @@ function RisksDataGrid({
         cell: ({ row }) => {
           const risk = row.original;
           return canEdit ? (
-            <select
-              value={risk.impact}
-              aria-label={`Impact of risk: ${risk.description}`}
-              onChange={(e) => onChange(risk.id, { impact: Number(e.target.value) })}
-              className="rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-mono text-xs"
-            >
-              {SCALE.map((n) => (
-                <option key={n} value={n}>
-                  {n}
-                </option>
-              ))}
-            </select>
+            <InlineSelect
+              value={String(risk.impact)}
+              items={SCALE_OPTIONS}
+              ariaLabel={`Impact of risk: ${risk.description}`}
+              onChange={(v) => onChange(risk.id, { impact: Number(v) })}
+              className="mx-auto font-mono text-xs"
+            />
           ) : (
             <span className="font-mono text-xs">{risk.impact}</span>
           );
@@ -454,18 +485,13 @@ function RisksDataGrid({
         cell: ({ row }) => {
           const risk = row.original;
           return canEdit ? (
-            <select
+            <InlineSelect
               value={risk.status}
-              aria-label={`Status of risk: ${risk.description}`}
-              onChange={(e) => onChange(risk.id, { status: e.target.value as RiskStatus })}
-              className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 font-display text-meta font-semibold ${STATUS_TEXT[risk.status]} ${FIELD_FOCUS}`}
-            >
-              {(Object.keys(RISK_STATUS_LABEL) as RiskStatus[]).map((s) => (
-                <option key={s} value={s}>
-                  {RISK_STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
+              items={STATUS_OPTIONS}
+              ariaLabel={`Status of risk: ${risk.description}`}
+              onChange={(v) => onChange(risk.id, { status: v as RiskStatus })}
+              className={`w-full font-display text-meta font-semibold ${STATUS_TEXT[risk.status]}`}
+            />
           ) : (
             <Chip tone={STATUS_TONE[risk.status]}>{RISK_STATUS_LABEL[risk.status]}</Chip>
           );
@@ -515,7 +541,7 @@ function RisksDataGrid({
     getRowId: (row) => String(row.id),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    // Pagination stays OFF (pilot verdict — docs/plans/reui-data-grid.md
+    // Pagination stays OFF (pilot verdict — docs/archive/plans/reui-data-grid.md
     // Checkpoint B): no getPaginationRowModel, so the full sorted row model
     // renders. `pageSize` here only sizes the loading-skeleton row count.
     initialState: { pagination: { pageSize: 8 } },
@@ -612,7 +638,7 @@ function RiskCard({
   );
 }
 
-function Select({
+function FilterSelect({
   label,
   value,
   onChange,

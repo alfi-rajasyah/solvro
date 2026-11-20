@@ -109,12 +109,13 @@ describe("handover receivers and stale mapping", () => {
     expect(e).toMatchObject({ stale: true, projectId: 4, message: "Choose a new TAM for this project." });
   });
 
-  it("excludes the leaver, inactive and PENDING users", () => {
+  it("excludes the leaver, inactive users and any role without access (PENDING or a custom empty role)", () => {
     const users = [
-      { id: 1, active: true, role: "TAM" },
-      { id: 2, active: false, role: "TAM" },
-      { id: 3, active: true, role: "PENDING" },
-      { id: 4, active: true, role: "ADMIN" },
+      { id: 1, active: true, hasAccess: true },
+      { id: 2, active: false, hasAccess: true },
+      { id: 3, active: true, hasAccess: false },
+      { id: 4, active: true, hasAccess: true },
+      { id: 5, active: true, hasAccess: false },
     ];
     expect(handoverReceivers(users, 4).map((u) => u.id)).toEqual([1]);
   });

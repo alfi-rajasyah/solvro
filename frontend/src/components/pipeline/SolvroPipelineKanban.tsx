@@ -34,7 +34,7 @@
 // (reui/kanban.tsx's `MOUSE_SENSOR_OPTIONS`) is what keeps a real drag from
 // ever registering as a click in the first place.
 //
-// 2026-09-25 flow redesign (docs/plans/opportunity-flow-redesign.md §4.4):
+// 2026-09-25 flow redesign (docs/archive/plans/opportunity-flow-redesign.md §4.4):
 // - This container no longer fetches its own opportunity list — Pipeline.tsx
 //   now owns the single `useOpportunities()` call and the Active/Closed
 //   switch (D11), passing this component the ACTIVE deals only (a closed
@@ -313,7 +313,7 @@ export const SolvroPipelineKanban = forwardRef<SolvroPipelineKanbanHandle, Solvr
                   setHandoffDeal(justWonDeal);
                   setJustWonDeal(null);
                 }}
-                className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container"
+                className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary primary-hover"
               >
                 Create project
               </button>
@@ -472,7 +472,7 @@ function EmptyBoardState({ onCreate }: { onCreate?: () => void }) {
         <button
           type="button"
           onClick={onCreate}
-          className="mt-2 inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary hover:bg-primary-container"
+          className="mt-2 inline-flex items-center gap-2 rounded-sm bg-primary px-4 py-2 font-display text-xs font-bold text-on-primary primary-hover"
         >
           <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
           New opportunity

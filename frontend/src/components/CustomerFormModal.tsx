@@ -12,6 +12,7 @@ import {
   useUpdateCustomer,
   useUsers,
 } from "@/lib/queries";
+import { selectableUsers } from "@/lib/selectableUsers";
 
 interface Props {
   open: boolean;
@@ -49,14 +50,15 @@ export function CustomerFormModal({ open, onClose, customer, canChangeOwner = tr
   const [confirmReassignOpen, setConfirmReassignOpen] = useState(false);
   const [pendingPayload, setPendingPayload] = useState<CustomerInput | null>(null);
 
-  // Solution Architect dropdown lists all users — role names no longer
-  // gate eligibility. Account Manager is a free-text field — AMs may
+  // Solution Architect dropdown lists every active user — role names no
+  // longer gate eligibility. Account Manager is a free-text field — AMs may
   // not have user accounts in this system at all (external sales
-  // contacts, etc.). TAM shares the same options list (`useUsers()` — no
-  // `active` flag on `UserSummary` today, so there's nothing to filter).
+  // contacts, etc.). The TAM picker shares the same list. A deactivated
+  // account stays listed only while it is the current value (the backend
+  // refuses a newly assigned inactive TAM but accepts a re-save).
   const solutionArchitectOptions = useMemo(
-    () => users ?? [],
-    [users],
+    () => selectableUsers(users, [customer?.tamId]),
+    [users, customer?.tamId],
   );
 
   useEffect(() => {

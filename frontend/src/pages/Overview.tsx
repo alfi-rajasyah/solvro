@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Link } from "react-router-dom";
 import { PipelineOverviewPanel } from "@/components/pipeline/PipelineOverviewPanel";
 import {
@@ -6,6 +8,7 @@ import {
 } from "@/components/portfolio/PortfolioCalendar";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { EmptyState } from "@/components/EmptyState";
+import { Frame, FramePanel } from "@/components/reui/frame";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { hasPermission, useAuth } from "@/lib/auth";
@@ -79,7 +82,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
   return (
     <>
       {/* Work tiles — each is a link to the list it counts */}
-      <div className="grid gap-4 sm:grid-cols-3">
+      <Frame spacing="sm" className="grid [--frame-radius:var(--radius-sm)]! [--frame-panel-radius:var(--radius-sm)] sm:grid-cols-3">
         <Kpi
           label="Overdue"
           value={overdue}
@@ -113,7 +116,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
           to="/daily-review"
           ariaLabel={`Open risks: ${openRisks}`}
         />
-      </div>
+      </Frame>
 
       {/* Projects needing attention */}
       <div className="min-w-0 rounded-sm border border-outline-variant bg-surface-container-lowest p-5">
@@ -164,7 +167,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
                       to={`/projects/${p.id}`}
                       className="flex flex-wrap items-center gap-x-3 gap-y-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-3 py-2 transition-colors hover:border-primary md:flex-nowrap"
                     >
-                      <span className="font-mono text-meta text-on-surface-variant">P-{String(p.id).padStart(3, "0")}</span>
+                      <span className="font-mono text-data-mono text-on-surface-variant">P-{String(p.id).padStart(3, "0")}</span>
                       <span className="min-w-0 flex-1 basis-[70%] text-sm font-semibold text-on-surface md:basis-auto md:truncate">{p.name}</span>
                       {overdueTasks > 0 && (
                         <span
@@ -244,24 +247,26 @@ function Kpi({ label, value, hint, icon, tone, to, ariaLabel }: KpiProps) {
   const iconColor =
     tone === "primary" ? "text-primary" : tone === "error" ? "text-error" : "text-on-surface-variant";
   return (
-    <Link
-      to={to}
-      aria-label={ariaLabel}
-      className="block rounded-sm border border-outline-variant bg-surface-container-lowest p-4 transition-colors hover:border-primary"
-    >
-      <div className="flex items-center justify-between">
-        <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
-        <span aria-hidden="true" className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
-      </div>
-      <div className="mt-2 flex items-baseline gap-2">
-        <span
-          className={`text-3xl font-bold tabular-nums ${tone === "error" ? "text-error" : "text-on-surface"}`}
-        >
-          {value}
-        </span>
-        {hint && <span className="text-meta text-on-surface-variant">{hint}</span>}
-      </div>
-    </Link>
+    <FramePanel className="mt-0! p-0 transition-colors hover:border-primary">
+      <Link
+        to={to}
+        aria-label={ariaLabel}
+        className="block h-full px-(--frame-panel-px) py-(--frame-panel-py) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/30"
+      >
+        <div className="flex items-center justify-between">
+          <span className="text-label-caps uppercase text-on-surface-variant">{label}</span>
+          <span aria-hidden="true" className={`material-symbols-outlined text-base ${iconColor}`}>{icon}</span>
+        </div>
+        <div className="mt-2 flex items-baseline gap-2">
+          <span
+            className={`text-3xl font-bold tabular-nums ${tone === "error" ? "text-error" : "text-on-surface"}`}
+          >
+            {value}
+          </span>
+          {hint && <span className="text-meta text-on-surface-variant">{hint}</span>}
+        </div>
+      </Link>
+    </FramePanel>
   );
 }
 
@@ -274,11 +279,11 @@ function RecentNotesFeed() {
   const { data, isLoading, isError } = useRecentNotes();
   if (isLoading) {
     return (
-      <div className="space-y-3">
+      <SkeletonRegion className="space-y-3">
         {Array.from({ length: 4 }).map((_, i) => (
-          <div key={i} className="h-10 animate-pulse rounded-sm bg-surface-container-low" />
+          <Skeleton key={i} className="h-10 rounded-sm" />
         ))}
-      </div>
+      </SkeletonRegion>
     );
   }
   // No data at all (the first load failed) vs. a failed background refetch
@@ -349,16 +354,16 @@ function EmptyHint({ label }: { label: string }) {
 
 function SkeletonGrid() {
   return (
-    <>
-      <div className="grid gap-4 sm:grid-cols-3">
+    <SkeletonRegion className="space-y-6">
+      <div className="grid gap-3 sm:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <div key={i} className="h-24 animate-pulse rounded-sm bg-surface-container-low" />
+          <Skeleton key={i} className="h-24 rounded-sm" />
         ))}
       </div>
-      <div className="h-40 animate-pulse rounded-sm bg-surface-container-low" />
-      <div className="h-64 animate-pulse rounded-sm bg-surface-container-low" />
-      <div className="h-64 animate-pulse rounded-sm bg-surface-container-low" />
-    </>
+      <Skeleton className="h-40 rounded-sm" />
+      <Skeleton className="h-64 rounded-sm" />
+      <Skeleton className="h-64 rounded-sm" />
+    </SkeletonRegion>
   );
 }
 

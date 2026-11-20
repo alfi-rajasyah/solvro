@@ -1,4 +1,5 @@
 import { test, expect, loginViaUi, apiBase } from "../fixtures/test";
+import type { Page } from "@playwright/test";
 
 // The palette is desktop-first (⌘K + top-bar box are md:-gated); the mobile
 // entry point is the TopBar search icon. Desktop assertions skip the mobile
@@ -28,14 +29,14 @@ async function createUniqueTask(
  * 24/40 chars, 7px at 60, 836px at 200 — so the short title from
  * `createUniqueTask` structurally cannot stress the row this test exists to
  * guard. Padded to ~100+ chars (well under the server's 200-char `title`
- * cap, `backend/src/routes/tasks.ts:22`) so a truncation regression has
+ * cap in `backend/src/routes/tasks.ts`) so a truncation regression has
  * something to actually overflow. Kept separate from `createUniqueTask`
  * rather than adding a parameter to it, since every other test in this file
  * relies on that helper producing a short, readable title.
  *
  * Returns a separate `query` (the unpadded prefix) alongside the full
  * `title`: `GET /search`'s own `q` param is capped at 100 chars
- * (`backend/src/routes/search.ts:12`, `z.string().min(2).max(100)`), so
+ * (`searchQuerySchema` in `backend/src/routes/search.ts`, `z.string().min(2).max(100)`), so
  * filling the palette input with the full ~100+ char padded title fails
  * that validation outright (discovered by running this test — the search
  * request 400s and no rows render, timing out `toBeVisible()`). Searching
@@ -61,6 +62,16 @@ async function createLongUniqueTask(
   return { id: body.id, title, query };
 }
 
+/**
+ * Presses the palette shortcut only once the app shell has rendered. The ⌘K
+ * listener is attached by the shell next to the TopBar, so a press before
+ * the TopBar search trigger exists can be dropped under load.
+ */
+async function pressPaletteShortcut(page: Page): Promise<void> {
+  await expect(page.locator('button[aria-label="Open search"]:visible').first()).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+k");
+}
+
 test.describe("global search palette", () => {
   test("⌘K opens the palette and a task hit deep-links into List with the panel param", async ({ page, seededProject }, testInfo) => {
     test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
@@ -72,7 +83,7 @@ test.describe("global search palette", () => {
 
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await expect(dialog).toBeVisible();
@@ -83,7 +94,7 @@ test.describe("global search palette", () => {
     await hit.click();
 
     await page.waitForURL(
-      new RegExp(`/projects/${seededProject.projectId}/list\\?task=${target.id}`),
+      new RegExp(`/projects/${seededProject.projectId}/list\\?task=${target.id}$`),
       { timeout: 10_000 },
     );
   });
@@ -94,11 +105,12 @@ test.describe("global search palette", () => {
     const res = await fetch(`${apiBase(testInfo)}/api/projects/${seededProject.projectId}`, {
       headers: { Authorization: `Bearer ${seededProject.token}` },
     });
+    expect(res.ok, `project fetch failed: ${res.status}`).toBe(true);
     const project = (await res.json()) as { name: string };
 
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await dialog.getByPlaceholder(/search projects/i).fill(project.name);
@@ -132,7 +144,7 @@ test.describe("global search palette", () => {
     test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await expect(dialog).toBeVisible();
@@ -142,6 +154,30 @@ test.describe("global search palette", () => {
 
     await input.press("Escape"); // Addendum #1: dispatched from the focused input itself
     await expect(dialog).toHaveCount(0);
+  });
+
+  // The palette input is the vendored reui AutocompleteInput with className
+  // overrides (CommandPalette.tsx) that strip its bordered-field look. Guard the
+  // cascade: if a reui re-pull reorders classes, these computed values regress.
+  test("palette input keeps its borderless, transparent overrides over the reui defaults", async ({ page }, testInfo) => {
+    test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
+    await loginViaUi(page);
+    await page.goto("/overview", { waitUntil: "networkidle" });
+    await pressPaletteShortcut(page);
+
+    const input = page
+      .getByRole("dialog", { name: /global search/i })
+      .getByPlaceholder(/search projects/i);
+    await expect(input).toBeFocused();
+
+    await expect(input).toHaveCSS("border-top-width", "0px");
+    await expect(input).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+    await expect(input).toHaveCSS("border-top-left-radius", "0px");
+    await expect(input).toHaveCSS("padding-left", "0px");
+    await expect(input).toHaveCSS("font-size", "13px");
+    // Focus ring is suppressed while focused (focus-visible:ring-0): a 2px ring
+    // would put a "0px 0px 0px 2px" layer in box-shadow.
+    await expect(input).not.toHaveCSS("box-shadow", /0px 0px 0px 2px/);
   });
 
   // Addendum #3 (B1 regression guard): the fix-round-1 CHANGELOG entry
@@ -165,7 +201,7 @@ test.describe("global search palette", () => {
 
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     let dialog = page.getByRole("dialog", { name: /global search/i });
     await dialog.getByPlaceholder(/search projects/i).fill(target.title);
@@ -174,7 +210,7 @@ test.describe("global search palette", () => {
     await page.keyboard.press("Escape");
     await expect(dialog).toHaveCount(0);
 
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
     dialog = page.getByRole("dialog", { name: /global search/i });
     await expect(dialog).toBeVisible();
 
@@ -223,7 +259,7 @@ test.describe("global search palette", () => {
   // dialog is `w-full` inside `fixed inset-0 flex items-stretch
   // justify-center`, so `{x: 0, y: 0, height: <viewport height>}` is
   // structurally guaranteed regardless of content — they added no coverage.
-  // Ledger item 7 (docs/ISSUES.md, "⌘K toggle-close is effectively
+  // Ledger item 7 (docs/archive/ISSUES-2026-11-18-phase-log.md, "⌘K toggle-close is effectively
   // unreachable"): the palette autofocuses its own input the instant it
   // opens (AutocompleteInput's `autoFocus`), so a second ⌘K press almost
   // always fires with focus already inside that input. The fix checks
@@ -234,7 +270,7 @@ test.describe("global search palette", () => {
     test.skip(testInfo.project.name === "mobile", "⌘K entry point is desktop-only");
     await loginViaUi(page);
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await expect(dialog).toBeVisible();
@@ -245,7 +281,7 @@ test.describe("global search palette", () => {
     await expect(dialog).toHaveCount(0);
   });
 
-  // Ledger item 4 (docs/ISSUES.md, "Palette result-state machine: error
+  // Ledger item 4 (docs/archive/ISSUES-2026-11-18-phase-log.md, "Palette result-state machine: error
   // state indistinguishable from empty"): `useSearch`'s `error` was never
   // destructured, so a failed `/search` rendered the same `No results for
   // "x"` copy as a genuine zero-hit query. Assert the failure copy is
@@ -271,7 +307,7 @@ test.describe("global search palette", () => {
       }),
     );
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
 
     const dialog = page.getByRole("dialog", { name: /global search/i });
     await dialog.getByPlaceholder(/search projects/i).fill("zzzz-search-failure-probe");
@@ -283,7 +319,7 @@ test.describe("global search palette", () => {
   });
   });
 
-  // Ledger item 6 (docs/ISSUES.md, "Shared body-scroll-lock helper needed"):
+  // Ledger item 6 (docs/archive/ISSUES-2026-11-18-phase-log.md, "Shared body-scroll-lock helper needed"):
   // Modal.tsx and CommandPalette.tsx each wrote `document.body.style.overflow`
   // directly with no ref-count, so closing the palette while a Modal was
   // still open behind it unlocked the page. `useBodyScrollLock` fixes this
@@ -312,7 +348,7 @@ test.describe("global search palette", () => {
     // focus off the input before invoking the palette, same as a real user
     // clicking anywhere non-editable in the modal chrome first.
     await modal.getByText("New customer", { exact: true }).click();
-    await page.keyboard.press("ControlOrMeta+k");
+    await pressPaletteShortcut(page);
     const palette = page.getByRole("dialog", { name: /global search/i });
     await expect(palette).toBeVisible();
 

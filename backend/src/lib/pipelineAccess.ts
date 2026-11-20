@@ -35,7 +35,7 @@ export function assertCanWriteOpportunity(
 }
 
 /**
- * Gate for `POST /opportunities/:id/assign` (docs/plans/claim-unassigned-deals.md
+ * Gate for `POST /opportunities/:id/assign` (docs/archive/plans/claim-unassigned-deals.md
  * D1/D4): `pipeline:edit_all` (or "*") may assign a PIC to any deal, any
  * time. `pipeline:edit_own` may assign a PIC only to a deal that has none
  * yet (`picId === null`) — D1's "assign first" rule keeps an unassigned deal

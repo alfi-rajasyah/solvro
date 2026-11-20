@@ -33,9 +33,9 @@ const Textarea = React.forwardRef<
         // 2px primary focus outline is the app-wide contract (see
         // CustomerFormModal.tsx/TaskFormModal.tsx's hand-written inputs):
         // replaced `focus-visible:border-ring focus-visible:ring-[3px]
-        // focus-visible:ring-ring/50` with the canonical 2px/30%-opacity
-        // treatment.
-        "flex field-sizing-content min-h-16 w-full rounded-sm border border-input bg-surface-container-lowest px-3 py-2 text-base transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40",
+        // focus-visible:ring-ring/50` with the reduced 2px/30%-opacity
+        // ring; the border never changes on focus.
+        "flex field-sizing-content min-h-16 w-full rounded-sm border border-input bg-surface-container-lowest px-3 py-2 text-base transition-[color,box-shadow] outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 md:text-sm dark:aria-invalid:ring-destructive/40",
         className
       )}
       {...props}

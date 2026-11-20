@@ -464,7 +464,7 @@ describe("DELETE /opportunities/:id — closes the stage-order gap it leaves (S4
     // untouched — this describe block runs after several earlier tests in
     // this file that create/move rows into WAITING_RESPONSE (D3's owner/
     // subStatus coverage), so an absolute 0/1/2 assumption would be exactly
-    // the order-dependent trap docs/ISSUES.md:196 flagged for a different
+    // the order-dependent trap docs/archive/ISSUES-2026-11-18-phase-log.md ("opportunities.test.ts flakes under a full gates run") flagged for a different
     // stage/test (fix direction generalized here too).
     const before = await prisma.opportunity.count({ where: { stage: "WAITING_RESPONSE" } });
     const first = await createOpportunity(sa.token, { picId: sa.userId, stage: "WAITING_RESPONSE" });
@@ -743,13 +743,13 @@ describe("Permission gates on single-opportunity / create routes", () => {
 });
 
 describe("POST /opportunities/:id/move — cross-stage repacking", () => {
-  it("repacks the SOURCE stage densely after a cross-stage move (relative order — docs/ISSUES.md:196)", async () => {
+  it("repacks the SOURCE stage densely after a cross-stage move (relative order)", async () => {
     const sa = await createSaLikeUser();
     // Asserts RELATIVE order among this test's own three rows, not absolute
     // stageOrder — a full gates.sh run shares one `solvro_test` DB across
     // every test file, so DELIVER_PROPOSAL's absolute sibling count can be
-    // shifted by another file's rows landing in it first (docs/ISSUES.md
-    // line 196, opportunities.test.ts:439 in the pre-redesign file).
+    // shifted by another file's rows landing in it first (docs/archive/ISSUES-2026-11-18-phase-log.md,
+    // "opportunities.test.ts flakes under a full gates run"; opportunities.test.ts:439 in the pre-redesign file).
     const before = await prisma.opportunity.count({ where: { stage: "DELIVER_PROPOSAL" } });
     const a = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });
     const b = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });
@@ -1042,5 +1042,108 @@ describe("POST /opportunities/:id/assign — concurrent claims", () => {
     const res = await assignOpportunity(manager.token, id, { picId: manager.userId });
     expect(res.status).toBe(200);
     expect(res.body.pic.id).toBe(manager.userId);
+  });
+});
+
+describe("stage re-pack under concurrency (ISS-116)", () => {
+  // Earlier tests in this file leave deals in these stages; the dense-position
+  // checks below look at whole stages, so start from an empty board.
+  beforeAll(async () => {
+    await prisma.opportunity.deleteMany();
+  });
+
+  it("two parallel deletes in one stage both succeed and leave dense positions", async () => {
+    const sa = await createSaLikeUser();
+    // Several rounds: the deadlock needed an unlucky interleave to show.
+    for (let round = 0; round < 4; round++) {
+      const ids: string[] = [];
+      for (let i = 0; i < 6; i++) {
+        const created = await createOpportunity(sa.token, { picId: sa.userId, stage: "DELIVER_PROPOSAL" });
+        expect(created.status).toBe(201);
+        ids.push(created.body.id as string);
+      }
+
+      const doomed = [ids[1], ids[4], ids[2], ids[3]];
+      const statuses = await Promise.all(doomed.map((id) => deleteOpportunity(sa.token, id).then((r) => r.status)));
+      expect(statuses).toEqual([204, 204, 204, 204]);
+
+      const left = await prisma.opportunity.findMany({
+        where: { stage: "DELIVER_PROPOSAL" },
+        orderBy: { stageOrder: "asc" },
+        select: { id: true, stageOrder: true },
+      });
+      expect(left.map((o) => o.id)).toEqual([ids[0], ids[5]]);
+      expect(left.map((o) => o.stageOrder)).toEqual([0, 1]);
+      await prisma.opportunity.deleteMany({ where: { id: { in: [ids[0], ids[5]] } } });
+    }
+  });
+
+  it("a delete that lost the race to a move answers 409 stale_stage and re-packs nothing", async () => {
+    const sa = await createSaLikeUser();
+    const a = (await createOpportunity(sa.token, { picId: sa.userId, stage: "ASSESSMENT" })).body.id as string;
+    const b = (await createOpportunity(sa.token, { picId: sa.userId, stage: "ASSESSMENT" })).body.id as string;
+    // Hold the stage lock in an open transaction, start a delete that read
+    // the deal in ASSESSMENT, then move the deal away before releasing.
+    let release!: () => void;
+    let held!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const holding = new Promise<void>((r) => (held = r));
+    const holder = prisma.$transaction(async (tx) => {
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext('pipeline_stage:ASSESSMENT'))`;
+      await tx.$executeRaw`UPDATE opportunities SET stage = 'poc'::"PipelineStage", stage_order = 0 WHERE id = ${a}`;
+      held();
+      await gate;
+    });
+    await holding;
+    // supertest sends lazily; .then starts the request now.
+    const del = deleteOpportunity(sa.token, a).then((r) => r);
+    // Wait until the DELETE's backend is queued on the stage lock, i.e. it
+    // has done its pre-transaction read of the deal (still in ASSESSMENT).
+    const deadline = Date.now() + 10_000;
+    for (;;) {
+      const waiting = await prisma.$queryRaw<{ n: number }[]>`
+        SELECT count(*)::int AS n FROM pg_locks
+        WHERE locktype = 'advisory' AND NOT granted
+          AND objid = (hashtext('pipeline_stage:ASSESSMENT')::bigint & 4294967295)`;
+      if (waiting[0].n > 0) break;
+      if (Date.now() > deadline) throw new Error("DELETE never queued on the stage lock");
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    release();
+    await holder;
+    const res = await del;
+    expect(res.status).toBe(409);
+    expect(res.body.code).toBe("stale_stage");
+    expect(await prisma.opportunity.count({ where: { id: { in: [a, b] } } })).toBe(2);
+    await prisma.opportunity.deleteMany({ where: { id: { in: [a, b] } } });
+  });
+
+  it("opposite cross-stage moves at the same time do not deadlock and keep both stages dense", async () => {
+    const sa = await createSaLikeUser();
+    const make = async (stage: string) => {
+      const r = await createOpportunity(sa.token, { picId: sa.userId, stage });
+      return r.body.id as string;
+    };
+    const rfp = [await make("RFP"), await make("RFP"), await make("RFP")];
+    const poc = [await make("POC"), await make("POC"), await make("POC")];
+
+    const [a, b] = await Promise.all([
+      moveOpportunity(sa.token, rfp[0], { stage: "POC", stageOrder: 1 }),
+      moveOpportunity(sa.token, poc[0], { stage: "RFP", stageOrder: 1 }),
+    ]);
+    expect(a.status).toBe(200);
+    expect(b.status).toBe(200);
+
+    const rows = await prisma.opportunity.findMany({
+      where: { id: { in: [...rfp, ...poc] } },
+      select: { id: true, stage: true, stageOrder: true },
+    });
+    for (const stage of ["RFP", "POC"] as const) {
+      const orders = rows
+        .filter((o) => o.stage === stage)
+        .map((o) => o.stageOrder)
+        .sort((x, y) => x - y);
+      expect(orders).toEqual([0, 1, 2]);
+    }
   });
 });

@@ -111,7 +111,7 @@ function checkPutTokenRateLimit(userId: number): void {
   const now = Date.now();
   const recent = (putTokenAttempts.get(userId) ?? []).filter((t) => now - t < PUT_TOKEN_RATE_WINDOW_MS);
   if (recent.length >= PUT_TOKEN_RATE_LIMIT) {
-    throw new HttpError(429, "rate_limited", "Too many personal token save attempts — wait a few minutes and try again.");
+    throw new HttpError(429, "rate_limited", "Too many personal token save attempts. Wait a few minutes and try again.");
   }
   recent.push(now);
   putTokenAttempts.set(userId, recent);
@@ -138,6 +138,12 @@ itopUserRouter.put(
 
     const client = makeItopClient(config.baseUrl, token);
     const notYoursMessage = `This token does not belong to an iTop person with your email (${user.email}).`;
+    // Fail closed (user decision 2026-11-18, docs/ISSUES.md ISS-004): a token is
+    // saved only when iTop proves it is this user's OWN token. If the token
+    // cannot read its own User and PersonalToken rows, ownership is unproven,
+    // and an unproven token is refused, never accepted on the email match alone.
+    const unverifiedMessage =
+      "Solvro could not confirm that this token is yours. Ask your iTop admin to give your iTop profile read access to the User and PersonalToken classes, then try again.";
 
     let personResult: ItopGetResult<ItopPersonFields>;
     try {
@@ -177,18 +183,26 @@ itopUserRouter.put(
       logger.debug({ err: errorMessage(err) }, "iTop list_operations probe failed while saving a personal token; skipping");
     }
 
-    // Best-effort itopUserId + expiry — resolved with the user's OWN token,
-    // never the application token. Neither failure rejects the token itself.
-    let resolvedItopUserId: number | null = null;
+    // The iTop logins behind the person, resolved with the user's OWN token,
+    // never the application token. One person can own several logins (a
+    // local one plus LDAP or SSO, or an old disabled one), so every login is
+    // kept; the ownership check below finds the one this token belongs to.
+    // No login at all means ownership cannot be proven, so the token is refused.
+    let personUserIds: number[];
     try {
       const userResult = await client.get<ItopUserFields>(
         "User",
         `SELECT User WHERE contactid = ${personId}`,
         ITOP_USER_OUTPUT_FIELDS,
       );
-      if (userResult.objects[0]) resolvedItopUserId = userResult.objects[0].key;
+      personUserIds = userResult.objects.map((u) => u.key);
+      if (personUserIds.length === 0) {
+        throw new HttpError(400, "itop_token_unverified", unverifiedMessage);
+      }
     } catch (err) {
-      logger.debug({ err: errorMessage(err) }, "iTop User lookup failed while saving a personal token; itopUserId left as-is");
+      if (err instanceof HttpError) throw err;
+      logger.debug({ err: errorMessage(err) }, "iTop User lookup failed while saving a personal token; refusing it");
+      throw new HttpError(400, "itop_token_unverified", unverifiedMessage);
     }
 
     // Ownership corroboration + best-effort expiry, from the SAME
@@ -199,30 +213,31 @@ itopUserRouter.put(
     // own token comes back with ZERO rows here — a signal
     // list_operations can't give us, since it reports every operation the
     // server supports regardless of profile. A class that isn't readable at
-    // all (rights, missing extension, ...) is inconclusive, not disproof —
-    // that's still accepted as before, with expiresAt left null.
+    // all (rights, missing extension, ...) proves nothing either way, so the
+    // token is refused as unverified (fail closed, ISS-004).
+    // The row that comes back also names the login this token belongs to,
+    // which is the iTop user id Solvro stores.
     let expiresAt: Date | null = null;
-    if (resolvedItopUserId !== null) {
-      try {
-        const tokenResult = await client.get<ItopPersonalTokenFields>(
-          "PersonalToken",
-          `SELECT PersonalToken WHERE user_id = ${resolvedItopUserId}`,
-          ITOP_PERSONAL_TOKEN_OUTPUT_FIELDS,
-        );
-        if (tokenResult.objects.length === 0) {
-          throw new HttpError(400, "itop_token_not_yours", notYoursMessage);
-        }
-        const raw = tokenResult.objects[0]?.fields.expiration_date;
-        // The server's own zone (`config.timezone`), same contract as every
-        // other iTop datetime this integration reads.
-        expiresAt = raw ? parseItopDate(raw, config.timezone) : null;
-      } catch (err) {
-        if (err instanceof HttpError) throw err;
-        logger.debug(
-          { err: errorMessage(err) },
-          "iTop PersonalToken read failed while saving a personal token; accepting the token, expiresAt left null",
-        );
+    let resolvedItopUserId: number;
+    try {
+      const tokenResult = await client.get<ItopPersonalTokenFields>(
+        "PersonalToken",
+        `SELECT PersonalToken WHERE user_id IN (${personUserIds.join(",")})`,
+        ITOP_PERSONAL_TOKEN_OUTPUT_FIELDS,
+      );
+      const own = tokenResult.objects.find((t) => personUserIds.includes(Number(t.fields.user_id)));
+      if (!own) {
+        throw new HttpError(400, "itop_token_not_yours", notYoursMessage);
       }
+      resolvedItopUserId = Number(own.fields.user_id);
+      const raw = own.fields.expiration_date;
+      // The server's own zone (`config.timezone`), same contract as every
+      // other iTop datetime this integration reads.
+      expiresAt = raw ? parseItopDate(raw, config.timezone) : null;
+    } catch (err) {
+      if (err instanceof HttpError) throw err;
+      logger.debug({ err: errorMessage(err) }, "iTop PersonalToken read failed while saving a personal token; refusing it");
+      throw new HttpError(400, "itop_token_unverified", unverifiedMessage);
     }
 
     const data: Prisma.UserUpdateInput = {
@@ -232,7 +247,7 @@ itopUserRouter.put(
       itopTokenExpiresAt: expiresAt,
     };
     if (user.itopPersonId === null) data.itopPersonId = personId;
-    if (resolvedItopUserId !== null && user.itopUserId !== resolvedItopUserId) data.itopUserId = resolvedItopUserId;
+    if (user.itopUserId !== resolvedItopUserId) data.itopUserId = resolvedItopUserId;
 
     try {
       await prisma.user.update({ where: { id: user.id }, data });

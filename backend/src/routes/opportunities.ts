@@ -8,6 +8,7 @@ import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { isValidDayString, utcMidnightOfDayString } from "../lib/dateBoundary.js";
 import { isCustomerVisible } from "../lib/visibility.js";
+import { lockStages } from "../lib/pipelineStageLock.js";
 import { assertCanAssignOpportunity, assertCanWriteOpportunity, PIC_SELECT } from "../lib/pipelineAccess.js";
 import { computeIdle } from "../lib/pipelineSla.js";
 import { recordActivity, shortLabel } from "../lib/activity.js";
@@ -19,7 +20,9 @@ import {
 } from "../lib/opportunityActivity.js";
 import { notifyForEvent } from "../lib/notifications.js";
 import { logger } from "../logger.js";
-import { ImportFileError, parseImportFile } from "../lib/pipelineImport/index.js";
+import { ImportFileError } from "../lib/pipelineImport/index.js";
+import { ImportAbortedError, ImportQueueFullError, parseImportFileOffThread } from "../lib/pipelineImport/offThread.js";
+import { createRateLimiter } from "../http/rateLimit.js";
 // Anti-drift seam (finding S6): the handoff body is byte-for-byte the same
 // shape as a plain project create, so this reuses routes/projects.ts's own
 // `createProjectSchema` (which already composes `wipLimitsSchema`) instead
@@ -30,7 +33,7 @@ import { ImportFileError, parseImportFile } from "../lib/pipelineImport/index.js
 import { createProjectSchema } from "./projects.js";
 import { assertActiveUser } from "../lib/users.js";
 
-// Pipeline module (native port of Velora — docs/plans/pipeline-native-port-plan.md).
+// Pipeline module (native port of Velora — docs/archive/plans/pipeline-native-port-plan.md).
 // CRUD + the single stage-transition writer for Opportunity. Deal visibility
 // is global for any pipeline:view holder (PRD §5) — no per-user list
 // scoping, unlike projects/visibility.ts. Ownership (`picId`) gates writes
@@ -155,7 +158,7 @@ const OUTCOME_REASON_LABELS: Record<PipelineOutcomeReason, string> = {
 };
 
 // `.strict()`: the only writable field is the new PIC — this route exists
-// specifically to hand a PIC to an unassigned deal (docs/plans/
+// specifically to hand a PIC to an unassigned deal (docs/archive/plans/
 // claim-unassigned-deals.md D2), not as a partial PATCH.
 const assignOpportunitySchema = z.object({ picId: z.number().int().positive() }).strict();
 
@@ -335,21 +338,52 @@ async function findOpportunityOr404(id: string): Promise<Opportunity> {
 
 type Tx = Prisma.TransactionClient;
 
-async function stageSiblingIds(tx: Tx, stage: PipelineStage, excludeId: string): Promise<string[]> {
-  const rows = await tx.opportunity.findMany({
-    where: { stage, id: { not: excludeId } },
-    orderBy: [{ stageOrder: "asc" }, { id: "asc" }],
-    select: { id: true },
-  });
-  return rows.map((r) => r.id);
+/*
+ * Stage re-packs take `lockStages` (lib/pipelineStageLock.ts) before any
+ * opportunity row lock. Without it, two same-stage deletes each hold their own
+ * deleted row and then update the other's, which Postgres reports as a
+ * deadlock (40P01; docs/ISSUES.md ISS-116).
+ */
+// Raw SQL sees the enum's @map'd labels (the lowercase name), not the Prisma name.
+const dbStage = (stage: PipelineStage): string => stage.toLowerCase();
+
+/**
+ * After `lockStages`, re-reads the deal under a row lock and refuses when it
+ * is no longer in the stage that was locked (a concurrent move got there
+ * first): the `current` row the handler read before the transaction is stale
+ * then, and re-packing the old stage would be the wrong one. Only the stage
+ * already locked is checked; locking the new one too would break the sorted
+ * lock order.
+ */
+async function assertStillInStage(tx: Tx, oppId: string, lockedStage: PipelineStage): Promise<void> {
+  const rows = await tx.$queryRaw<{ stage: string }[]>`
+    SELECT stage::text AS stage FROM opportunities WHERE id = ${oppId} FOR NO KEY UPDATE`;
+  if (rows.length === 0) throw new HttpError(404, "not_found", "Opportunity not found");
+  if (rows[0].stage !== dbStage(lockedStage)) {
+    throw new HttpError(409, "stale_stage", "This deal was just moved. Refresh and try again.");
+  }
+}
+
+/**
+ * Locks every deal of `stage` ORDER BY id, the order offboarding locks deals
+ * in. Runs under the stage advisory lock (`lib/pipelineStageLock.ts`), which is
+ * what serialises against offboarding; this keeps the re-pack's row locks
+ * id-ordered too, instead of scan-ordered.
+ */
+async function lockStageRows(tx: Tx, stage: PipelineStage): Promise<void> {
+  await tx.$queryRaw`
+    SELECT id FROM opportunities
+    WHERE stage = ${dbStage(stage)}::"PipelineStage"
+    ORDER BY id FOR NO KEY UPDATE`;
 }
 
 /**
  * Inserts `oppId` into `stage`'s sibling list at `requestedPosition`
- * (clamped to [0, siblings.length]), then re-packs the whole list to dense
- * 0..n-1 — mirrors `lib/taskOrdering.ts`'s `insertAt`, scoped to `stage`
- * instead of (projectId, parentTaskId). Must run inside a
- * `prisma.$transaction`. Returns the final stageOrder assigned to `oppId`.
+ * (clamped to [0, siblings.length]) by shifting the siblings from that slot
+ * on up by one, in one set-based UPDATE (the siblings are first re-packed
+ * dense 0..n-1 around the gap). The caller then writes the returned stageOrder
+ * to `oppId` itself. Must run inside a `prisma.$transaction` that holds
+ * `lockStages` for `stage`. Returns the final stageOrder assigned to `oppId`.
  */
 async function insertAtStage(
   tx: Tx,
@@ -357,25 +391,43 @@ async function insertAtStage(
   oppId: string,
   requestedPosition: number,
 ): Promise<number> {
-  const others = await stageSiblingIds(tx, stage, oppId);
-  const clamped = Math.max(0, Math.min(requestedPosition, others.length));
-  const ordered = [...others];
-  ordered.splice(clamped, 0, oppId);
-  for (let i = 0; i < ordered.length; i++) {
-    await tx.opportunity.update({ where: { id: ordered[i] }, data: { stageOrder: i } });
-  }
+  const siblings = await tx.opportunity.count({ where: { stage, id: { not: oppId } } });
+  const clamped = Math.max(0, Math.min(requestedPosition, siblings));
+  // Deterministic lock order (same as offboarding's deal reassignment): take the
+  // stage's row locks by id before the re-pack so the two cannot deadlock.
+  await lockStageRows(tx, stage);
+  await tx.$executeRaw`
+    UPDATE opportunities AS o
+    SET stage_order = r.pos + CASE WHEN r.pos >= ${clamped} THEN 1 ELSE 0 END
+    FROM (
+      SELECT id, (ROW_NUMBER() OVER (ORDER BY stage_order, id) - 1)::int AS pos
+      FROM opportunities
+      WHERE stage = ${dbStage(stage)}::"PipelineStage" AND id <> ${oppId}
+    ) AS r
+    WHERE o.id = r.id
+      AND o.stage_order <> r.pos + CASE WHEN r.pos >= ${clamped} THEN 1 ELSE 0 END`;
   return clamped;
 }
 
 /**
  * Re-packs `stage`'s remaining siblings to dense 0..n-1 after `oppId` leaves
- * it on a cross-stage move — mirrors `lib/taskOrdering.ts`'s `closeGap`.
+ * it (a cross-stage move or a delete), in one set-based UPDATE that touches
+ * only the rows whose position changes. Must run inside a transaction that
+ * holds `lockStages` for `stage`.
  */
 async function closeGapInStage(tx: Tx, stage: PipelineStage, oppId: string): Promise<void> {
-  const remaining = await stageSiblingIds(tx, stage, oppId);
-  for (let i = 0; i < remaining.length; i++) {
-    await tx.opportunity.update({ where: { id: remaining[i] }, data: { stageOrder: i } });
-  }
+  // Deterministic lock order (same as offboarding's deal reassignment): take the
+  // stage's row locks by id before the re-pack so the two cannot deadlock.
+  await lockStageRows(tx, stage);
+  await tx.$executeRaw`
+    UPDATE opportunities AS o
+    SET stage_order = r.pos
+    FROM (
+      SELECT id, (ROW_NUMBER() OVER (ORDER BY stage_order, id) - 1)::int AS pos
+      FROM opportunities
+      WHERE stage = ${dbStage(stage)}::"PipelineStage" AND id <> ${oppId}
+    ) AS r
+    WHERE o.id = r.id AND o.stage_order <> r.pos`;
 }
 
 export const opportunitiesRouter = Router();
@@ -391,7 +443,7 @@ export const opportunitiesRouter = Router();
 opportunitiesRouter.use(requireAuth);
 
 // Full list, no pagination (SA-team scale — client-side filtering per
-// docs/plans/pipeline-native-port-plan.md). Board column order: stage, then
+// docs/archive/plans/pipeline-native-port-plan.md). Board column order: stage, then
 // stageOrder within it.
 opportunitiesRouter.get("/", requirePermission("pipeline:view"), async (_req, res) => {
   // One `now` shared across every row's `idle` computation (§3.1) — so a
@@ -485,9 +537,12 @@ opportunitiesRouter.post(
     // `COALESCE(MAX(stage_order), -1) + 1` (VeloraApp's opportunities
     // route) and lib/taskOrdering.ts's append-at-end (finding S6). The
     // stage's existing siblings are already dense 0..n-1, so a plain count
-    // is the next slot; wrapped in a transaction so a concurrent create
-    // into the same stage can't race to the same stageOrder.
+    // is the next slot. The per-stage lock (not the transaction alone, which
+    // does not stop two creates reading the same count) is what keeps a
+    // concurrent create, import row, move or delete in the same stage from
+    // taking that slot too.
     const created = await prisma.$transaction(async (tx) => {
+      await lockStages(tx, stage);
       const stageOrder = await tx.opportunity.count({ where: { stage } });
       const row = await tx.opportunity.create({
         data: { ...data, stageOrder },
@@ -520,10 +575,25 @@ opportunitiesRouter.post(
 // reader's own limits (ZIP expansion, row and cell counts, 16 columns) bound
 // the work one request can cause.
 const IMPORT_FILE_LIMIT = "1mb";
+// Per user, not per address: the route needs a sign-in, and a user behind a
+// shared address must not starve colleagues. A person previews a file a few
+// times; 10 a minute leaves room for that and stops a loop from filling the
+// two parse slots (lib/pipelineImport/offThread.ts).
+export const importPreviewLimiter = createRateLimiter({ limit: 10, windowMs: 60_000 });
+// Before the body parser, so a refused request is not uploaded and buffered first.
+const limitImportPreview: express.RequestHandler = (req, res, next) => {
+  const limited = importPreviewLimiter.hit(`user:${req.user!.sub}`);
+  if (limited.blocked) {
+    res.setHeader("Retry-After", String(limited.retryAfterSec));
+    throw new HttpError(429, "rate_limited", "Too many requests");
+  }
+  next();
+};
 
 opportunitiesRouter.post(
   "/import/preview",
   requirePermission("pipeline:create"),
+  limitImportPreview,
   express.raw({ type: "application/octet-stream", limit: IMPORT_FILE_LIMIT }),
   async (req, res) => {
     if (!Buffer.isBuffer(req.body)) {
@@ -538,9 +608,21 @@ opportunitiesRouter.post(
     for (const u of users) {
       if (permissionsOf(u.role.permissions).length > 0) picByUsername.set(u.username.toLowerCase(), u.id);
     }
+    // `res` closes before it finishes only when the client went away (nginx
+    // gives up after 60 s). `req` "close" is no signal: it fires once the body
+    // has been read.
+    const gone = new AbortController();
+    res.once("close", () => {
+      if (!res.writableFinished) gone.abort();
+    });
     try {
-      res.json({ rows: parseImportFile(req.body, picByUsername) });
+      res.json({ rows: await parseImportFileOffThread(req.body, picByUsername, gone.signal) });
     } catch (err) {
+      if (err instanceof ImportAbortedError) return; // no one is waiting for an answer
+      if (err instanceof ImportQueueFullError) {
+        res.setHeader("Retry-After", "60");
+        throw new HttpError(503, "import_busy", err.message);
+      }
       if (err instanceof ImportFileError) throw new HttpError(400, err.code, err.message);
       throw err;
     }
@@ -601,7 +683,7 @@ opportunitiesRouter.post(
         const stage = stageRaw ? normalizeStageLiteral(stageRaw) : undefined;
         if (!stage) {
           reasons.push(
-            `Invalid stage "${raw.stage ?? ""}" — must be one of: ${Object.keys(IMPORT_STAGE_MAP).join(", ")}`,
+            `Invalid stage "${raw.stage ?? ""}". It must be one of: ${Object.keys(IMPORT_STAGE_MAP).join(", ")}`,
           );
         }
 
@@ -668,7 +750,9 @@ opportunitiesRouter.post(
 
         const created = await prisma.$transaction(async (tx) => {
           // Same bottom-append ordering POST "/" uses (finding S6): next
-          // stageOrder is the current sibling count in that stage.
+          // stageOrder is the current sibling count in that stage, read
+          // under the stage lock (each row is its own transaction).
+          await lockStages(tx, stage);
           const stageOrder = await tx.opportunity.count({ where: { stage } });
           const data: Prisma.OpportunityCreateInput = {
             title,
@@ -915,6 +999,8 @@ opportunitiesRouter.post(
     const sameStage = current.stage === body.stage;
 
     const updated = await prisma.$transaction(async (tx) => {
+      await lockStages(tx, current.stage, body.stage);
+      await assertStillInStage(tx, id, current.stage);
       if (!sameStage) {
         await closeGapInStage(tx, current.stage, id);
       }
@@ -1132,7 +1218,7 @@ opportunitiesRouter.post("/:id/reopen", validate("params", idParamSchema), async
 });
 
 // The one writer of a PIC on an unassigned deal for `pipeline:edit_own`
-// holders (docs/plans/claim-unassigned-deals.md D1/D2/D4) — PATCH keeps
+// holders (docs/archive/plans/claim-unassigned-deals.md D1/D2/D4) — PATCH keeps
 // serving `edit_all` holders (any deal, any time) and a deal's own PIC
 // (their own deal only); an unassigned deal stays locked for every other
 // write (drag, edit, stage change, link, delete) until this route gives it
@@ -1237,6 +1323,8 @@ opportunitiesRouter.delete("/:id", validate("params", idParamSchema), async (req
   const current = await findOpportunityOr404(id);
   assertCanWriteOpportunity(req.user!, "delete", current);
   await prisma.$transaction(async (tx) => {
+    await lockStages(tx, current.stage);
+    await assertStillInStage(tx, id, current.stage);
     await tx.opportunity.delete({ where: { id } });
     await closeGapInStage(tx, current.stage, id);
   });
@@ -1292,7 +1380,7 @@ opportunitiesRouter.post(
     // caller becomes the project's TAM.
     const tamId = body.tamId ?? req.user!.sub;
 
-    // Customer Visibility (docs/plans/customer-visibility-spec.md §5.5,
+    // Customer Visibility (docs/archive/plans/customer-visibility-spec.md §5.5,
     // Decision 7): same rule routes/projects.ts applies on POST / and
     // PATCH /:id — a customerId the caller can't see 400s before the deal
     // or any project row is touched. Checked at the "own" level: attaching a

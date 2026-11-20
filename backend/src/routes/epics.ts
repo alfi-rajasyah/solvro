@@ -10,7 +10,7 @@ import { ensureProjectVisible } from "../lib/visibility.js";
 import { recordActivity, shortLabel } from "../lib/activity.js";
 import { diffEpicChanges, epicSnapshotSelect } from "../lib/epicActivity.js";
 import { COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
-import { assertActiveUser } from "../lib/users.js";
+import { assertActiveUser, assertEpicOwnerInProject } from "../lib/users.js";
 import { lockProject, repackToOrder } from "../lib/positionRepack.js";
 
 // Resolve the epic's owning project and 404 if the caller can't see it.
@@ -158,13 +158,17 @@ epicsRouter.patch(
       // epic row, so overlapping identical saves serialise and record one event.
       await lockProject(tx, projectId);
       await tx.$queryRaw`SELECT id FROM epics WHERE id = ${id} FOR NO KEY UPDATE`;
-      if (body.ownerId != null) {
-        await assertActiveUser(tx, body.ownerId, "owner", { requireActive: false });
-      }
       const before = await tx.epic.findUniqueOrThrow({
         where: { id },
         select: epicSnapshotSelect,
       });
+      // A changed owner must be active and one of the project's people; an
+      // unchanged one passes even if that user has since left or been
+      // deactivated.
+      if (body.ownerId != null && body.ownerId !== before.owner?.id) {
+        await assertActiveUser(tx, body.ownerId, "owner");
+        await assertEpicOwnerInProject(tx, projectId, body.ownerId);
+      }
       if (Object.keys(data).length > 0) {
         await tx.epic.update({ where: { id }, data });
       }

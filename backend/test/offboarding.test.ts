@@ -507,6 +507,26 @@ describe("POST /admin/users/:id/offboard", () => {
   });
 });
 
+describe("POST /admin/users/:id/offboard — many customers", () => {
+  it("accepts more than 500 customer owner choices", async () => {
+    const w = await world();
+    await prisma.customer.createMany({
+      data: Array.from({ length: 600 }, (_, i) => ({
+        name: uniq(`Bulk${i}`),
+        description: "",
+        tamId: w.leaver.userId,
+      })),
+    });
+    const owned = await prisma.customer.findMany({ where: { tamId: w.leaver.userId }, select: { id: true } });
+    const res = await offboard(w, {
+      projects: [],
+      customers: owned.map((c) => ({ customerId: c.id, newOwnerId: w.receiver.userId })),
+    });
+    expect(res.status).toBe(200);
+    expect(await prisma.customer.count({ where: { tamId: w.receiver.userId } })).toBe(600);
+  }, 60_000);
+});
+
 describe("POST /admin/users/:id/offboard — receiver rules and late failures", () => {
   it("rolls back project, customer and note writes when the deal step fails", async () => {
     const w = await world();
@@ -579,6 +599,62 @@ describe("POST /admin/users/:id/offboard — receiver rules and late failures", 
       expect(bad.body.details).toEqual({ customerId: customer.id });
     }
     expect((await prisma.user.findUniqueOrThrow({ where: { id: w.leaver.userId } })).active).toBe(true);
+  });
+
+  it("refuses a PENDING or zero-permission receiver for every seat, with the row id", async () => {
+    const w = await world();
+    const pending = await createUserWithRole("PENDING");
+    await prisma.role.upsert({ where: { roleName: "EMPTY" }, update: { permissions: [] }, create: { roleName: "EMPTY", permissions: [] } });
+    const empty = await createUserWithRole("EMPTY");
+    const sa = await prisma.project.create({
+      data: { name: uniq("S"), tamId: w.leaver.userId, saId: w.leaver.userId, status: "ACTIVE" },
+    });
+    const customer = await prisma.customer.create({
+      data: { name: uniq("C"), description: "d", tamId: w.leaver.userId },
+    });
+    const ok = { projectId: sa.id, assignTasksTo: null as number | null, newTamId: w.newTam.userId, newSaId: w.newSa.userId };
+    for (const receiver of [pending.userId, empty.userId]) {
+      for (const [patch, code] of [
+        [{ assignTasksTo: receiver }, "assignee_cannot_receive"],
+        [{ newTamId: receiver }, "tam_cannot_receive"],
+        [{ newSaId: receiver }, "sa_cannot_receive"],
+      ] as const) {
+        const res = await offboard(w, {
+          projects: [{ ...ok, ...patch }],
+          customers: [{ customerId: customer.id, newOwnerId: w.receiver.userId }],
+        });
+        expect(res.status).toBe(400);
+        expect(res.body.code).toBe(code);
+        expect(res.body.details).toEqual({ projectId: sa.id });
+      }
+      const owner = await offboard(w, {
+        projects: [ok],
+        customers: [{ customerId: customer.id, newOwnerId: receiver }],
+      });
+      expect(owner.status).toBe(400);
+      expect(owner.body.code).toBe("owner_cannot_receive");
+      expect(owner.body.details).toEqual({ customerId: customer.id });
+    }
+    expect((await prisma.user.findUniqueOrThrow({ where: { id: w.leaver.userId } })).active).toBe(true);
+    expect((await prisma.customer.findUniqueOrThrow({ where: { id: customer.id } })).tamId).toBe(w.leaver.userId);
+  });
+
+  it("moves several customers to the same and to different owners in one handover", async () => {
+    const w = await world();
+    const mk = () =>
+      prisma.customer.create({ data: { name: uniq("C"), description: "d", tamId: w.leaver.userId } });
+    const [a, b, c] = [await mk(), await mk(), await mk()];
+    const res = await offboard(w, {
+      projects: [],
+      customers: [
+        { customerId: a.id, newOwnerId: w.receiver.userId },
+        { customerId: b.id, newOwnerId: w.newTam.userId },
+        { customerId: c.id, newOwnerId: w.receiver.userId },
+      ],
+    });
+    expect(res.status).toBe(200);
+    const owners = await prisma.customer.findMany({ where: { id: { in: [a.id, b.id, c.id] } }, orderBy: { id: "asc" } });
+    expect(owners.map((o) => o.tamId)).toEqual([w.receiver.userId, w.newTam.userId, w.receiver.userId]);
   });
 
   it("refuses a deal receiver without pipeline:view; accepts one with it", async () => {

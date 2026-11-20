@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-table";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
 import { LabelChip } from "@/components/LabelChip";
+import { CriticalPathMark } from "@/components/CriticalPathMark";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { Tabs } from "@/components/Tabs";
@@ -19,6 +20,7 @@ import { FIELD_FOCUS } from "@/lib/utils";
 import { useAuth } from "@/lib/auth";
 import { dateToDay } from "@/lib/dateField";
 import { isTaskShownOverdue, showsPlainDue } from "@/lib/taskOverdue";
+import { IS_OPERATOR } from "@/lib/filterOperators";
 import { fmtDay, fmtDue } from "@/lib/formatDate";
 import { parseWeekKey, weekKeyOf } from "@/lib/isoWeek";
 import { priorityOptions, taskStatusOptions } from "@/lib/labels";
@@ -39,7 +41,6 @@ import {
   type TaskWithProject,
   type TasksFilter,
   useCustomers,
-  useProjects,
   useTasksWithTotal,
   useUsers,
 } from "@/lib/queries";
@@ -51,14 +52,6 @@ const PRIORITY_ORDER: Record<Priority, number> = { URGENT: 0, HIGH: 1, MEDIUM: 2
 // avoids a fresh `[]` literal (and therefore a new TanStack row model) on
 // every render that a `tasks ?? []` inline fallback would produce.
 const EMPTY_TASKS: TaskWithProject[] = [];
-
-// Only the affirmative "is" operator is offered on every filter field below —
-// the derivation in Tasks() reads just `.values[0]` per field, so a
-// select-type field's other vendored-default operators ("is not", "is
-// empty", "is not empty") would render a chip whose label lies about what's
-// actually being sent to useTasks (e.g. a "Status is not DONE" chip would
-// still filter as "Status is DONE"). Same fix as Projects.tsx's customer field.
-const ONLY_IS_OPERATOR = [{ value: "is", label: "is" }];
 
 // Saved views, synced to `?view=`. "open" is the default and is written to the
 // URL as the absence of the param, so `/tasks` and `/tasks?view=open` agree.
@@ -117,13 +110,6 @@ export function Tasks() {
 
   const { data: users } = useUsers();
   const { data: customers } = useCustomers();
-  // The task list does not carry project status; the (cached) project list
-  // does. A task of an on-hold project is never painted overdue.
-  const { data: projectList, isLoading: projectsLoading } = useProjects();
-  const projectStatusById = useMemo(
-    () => new Map((projectList ?? []).map((p) => [p.id, p.status] as const)),
-    [projectList],
-  );
 
   const filterFields = useMemo<FilterFieldConfig<string>[]>(
     () => [
@@ -131,28 +117,28 @@ export function Tasks() {
         key: "status",
         label: "Status",
         type: "select",
-        operators: ONLY_IS_OPERATOR,
+        operators: IS_OPERATOR,
         options: taskStatusOptions,
       },
       {
         key: "priority",
         label: "Priority",
         type: "select",
-        operators: ONLY_IS_OPERATOR,
+        operators: IS_OPERATOR,
         options: priorityOptions,
       },
       {
         key: "assignedToId",
         label: "Assignee",
         type: "select",
-        operators: ONLY_IS_OPERATOR,
+        operators: IS_OPERATOR,
         options: (users ?? []).map((u) => ({ value: String(u.id), label: u.username })),
       },
       {
         key: "customerId",
         label: "Customer",
         type: "select",
-        operators: ONLY_IS_OPERATOR,
+        operators: IS_OPERATOR,
         options: (customers ?? []).map((c) => ({ value: String(c.id), label: c.name })),
       },
     ],
@@ -291,7 +277,12 @@ export function Tasks() {
         id: "priority",
         accessorFn: (row) => PRIORITY_ORDER[row.priority],
         header: ({ column }) => <DataGridColumnHeader column={column} title="Priority" />,
-        cell: ({ row }) => <PriorityBadge priority={row.original.priority} compact />,
+        cell: ({ row }) => (
+          <div className="flex items-center gap-1">
+            <PriorityBadge priority={row.original.priority} compact />
+            {row.original.isCriticalPath && <CriticalPathMark variant="glyph" />}
+          </div>
+        ),
         meta: { skeleton: <Skeleton className="h-4 w-10 rounded-full" /> },
       },
       {
@@ -311,9 +302,9 @@ export function Tasks() {
           // Compare calendar days, not instants — lexicographic "yyyy-MM-dd"
           // comparison is calendar-correct (dateField.ts). `todayDay` is
           // hoisted above (once per render, not once per cell).
-          // Until the project list loads we cannot rule out an on-hold project,
-          // so nothing is painted overdue (no flash of red that then clears).
-          const projectStatus = projectsLoading ? "ON_HOLD" : projectStatusById.get(task.projectId);
+          // The list payload carries the project's status; a task of an
+          // on-hold project is never painted overdue.
+          const projectStatus = task.project.status;
           const isOverdue = isTaskShownOverdue(task.status, task.dueDate, todayDay, projectStatus);
           return (
             <span
@@ -337,7 +328,7 @@ export function Tasks() {
         meta: { skeleton: <Skeleton className="h-4 w-16 rounded-full" /> },
       },
     ],
-    [todayDay, projectStatusById, projectsLoading],
+    [todayDay],
   );
 
   const table = useReactTable({
@@ -348,7 +339,7 @@ export function Tasks() {
     getRowId: (row) => String(row.id),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    // Pagination stays OFF (pilot verdict — see docs/plans/reui-data-grid.md
+    // Pagination stays OFF (pilot verdict — see docs/archive/plans/reui-data-grid.md
     // Checkpoint B): no getPaginationRowModel, so the full sorted row model
     // renders. `pageSize` here only sizes the loading-skeleton row count.
     initialState: { pagination: { pageSize: 8 } },

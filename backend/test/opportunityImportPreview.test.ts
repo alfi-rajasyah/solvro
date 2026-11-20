@@ -1,5 +1,5 @@
 import "./env.js";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
 import { prisma } from "../src/prisma.js";
@@ -8,6 +8,17 @@ import { buildXlsx } from "./xlsxFixture.js";
 
 // POST /opportunities/import/preview: the backend parse that replaced the
 // browser-side SheetJS parse (B-18). Nothing is written by this route.
+
+// Delegates to the real off-thread parser unless a test sets `forceQueueFull`.
+const queue = vi.hoisted(() => ({ forceQueueFull: false }));
+vi.mock("../src/lib/pipelineImport/offThread.js", async (importActual) => {
+  const actual = await importActual<typeof import("../src/lib/pipelineImport/offThread.js")>();
+  return {
+    ...actual,
+    parseImportFileOffThread: (...args: Parameters<typeof actual.parseImportFileOffThread>) =>
+      queue.forceQueueFull ? Promise.reject(new actual.ImportQueueFullError()) : actual.parseImportFileOffThread(...args),
+  };
+});
 
 const app = createApp();
 let counter = 0;
@@ -99,5 +110,31 @@ describe("POST /opportunities/import/preview", () => {
     const res = await preview(token, Buffer.alloc(1024 * 1024 + 1, 0x41));
     expect(res.status).toBe(413);
     expect(res.body.code).toBe("payload_too_large");
+  });
+
+  it("answers 429 past 10 previews a minute for one user, and counts per user", async () => {
+    const { token } = await createUser(["pipeline:view", "pipeline:create"]);
+    const { token: other } = await createUser(["pipeline:view", "pipeline:create"]);
+    const csv = Buffer.from(`${HEADER}\n`);
+    for (let i = 0; i < 10; i++) expect((await preview(token, csv)).status).not.toBe(429);
+    const res = await preview(token, csv);
+    expect(res.status).toBe(429);
+    expect(res.body.code).toBe("rate_limited");
+    expect(Number(res.headers["retry-after"])).toBeGreaterThan(0);
+    expect((await preview(other, csv)).status).not.toBe(429);
+  });
+
+  it("answers 503 import_busy with a plain message when the parse queue is full", async () => {
+    const { token } = await createUser(["pipeline:view", "pipeline:create"]);
+    queue.forceQueueFull = true;
+    try {
+      const res = await preview(token, Buffer.from(`${HEADER}\n`));
+      expect(res.status).toBe(503);
+      expect(res.body.code).toBe("import_busy");
+      expect(res.body.error).toBe("Other imports are being read right now. Try again in a minute.");
+      expect(Number(res.headers["retry-after"])).toBeGreaterThan(0);
+    } finally {
+      queue.forceQueueFull = false;
+    }
   });
 });

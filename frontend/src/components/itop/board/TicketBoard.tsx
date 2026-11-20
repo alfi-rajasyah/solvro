@@ -19,6 +19,8 @@
 // optimistic PATCH-position contract that doesn't apply to tickets at all).
 // `./boardAdapter.ts` and `./dropMapper.ts` are this task's pure ticket
 // equivalents.
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { Alert, AlertDescription } from "@/components/reui/alert";
@@ -33,6 +35,7 @@ import {
 } from "@/components/reui/kanban";
 import { ApiError } from "@/lib/api";
 import { hasPermission, useAuth } from "@/lib/auth";
+import { useDragActivityGuard } from "@/lib/dragActivity";
 import {
   useCustomerTickets,
   useItopStatus,
@@ -79,6 +82,7 @@ export function TicketBoard({
   const actionsEnabled = status.data?.actionsEnabled ?? false;
   const tokenSet = myToken.data?.set ?? false;
   const { user } = useAuth();
+  const dragActivity = useDragActivityGuard();
   const canWrite = hasPermission(user, "task:write");
   const canAct = canWrite && actionsEnabled && tokenSet;
 
@@ -177,14 +181,11 @@ export function TicketBoard({
 
   if (ongoing.isLoading || resolvedWeek.isLoading) {
     return (
-      <div className="grid gap-3 md:grid-cols-5">
+      <SkeletonRegion className="grid gap-3 md:grid-cols-5">
         {BOARD_COLUMNS.map((c) => (
-          <div
-            key={c}
-            className="h-48 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low"
-          />
+          <Skeleton key={c} className="h-48 rounded-sm" />
         ))}
-      </div>
+      </SkeletonRegion>
     );
   }
 
@@ -236,12 +237,19 @@ export function TicketBoard({
         onMove={handleMove}
         getItemValue={getItemValue}
         onDragStart={(event) => {
+          dragActivity.begin();
           setDragFromColumn(findColumnOf(String(event.active.id)));
           if (forbiddenTimerRef.current) clearTimeout(forbiddenTimerRef.current);
           setForbiddenNotice(null);
         }}
-        onDragEnd={() => setDragFromColumn(null)}
-        onDragCancel={() => setDragFromColumn(null)}
+        onDragEnd={() => {
+          dragActivity.end();
+          setDragFromColumn(null);
+        }}
+        onDragCancel={() => {
+          dragActivity.end();
+          setDragFromColumn(null);
+        }}
       >
         {/* Own layout div, `KanbanBoard` reduced to `className="contents"`
             — mirrors

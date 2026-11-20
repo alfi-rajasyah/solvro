@@ -137,7 +137,7 @@ export function LinksSection({
               setFormOpen((v) => !v);
               setFormError(null);
             }}
-            className="inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2 py-1 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary"
+            className={`inline-flex items-center gap-1 rounded-sm border border-outline-variant px-2 py-1 font-display text-xs font-semibold text-on-surface-variant hover:border-primary hover:text-primary ${FIELD_FOCUS}`}
           >
             <span aria-hidden="true" className="material-symbols-outlined text-base">add</span>
             Add link
@@ -173,7 +173,7 @@ export function LinksSection({
                 setFormOpen(false);
                 setFormError(null);
               }}
-              className="rounded-sm px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
+              className={`rounded-sm px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container ${FIELD_FOCUS}`}
             >
               Cancel
             </button>
@@ -181,7 +181,7 @@ export function LinksSection({
               type="button"
               onClick={handleAdd}
               disabled={addLink.isPending}
-              className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-50"
+              className={`rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary primary-hover disabled:opacity-50 ${FIELD_FOCUS}`}
             >
               {addLink.isPending ? "Saving…" : "Save"}
             </button>
@@ -331,7 +331,7 @@ function LinkRow({
           <button
             type="button"
             onClick={() => setEditing(false)}
-            className="rounded-sm px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container"
+            className={`rounded-sm px-2.5 py-1 text-xs font-semibold text-on-surface-variant hover:bg-surface-container ${FIELD_FOCUS}`}
           >
             Cancel
           </button>
@@ -339,7 +339,7 @@ function LinkRow({
             type="button"
             onClick={handleSave}
             disabled={isSaving}
-            className="rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className={`rounded-sm bg-primary px-3 py-1 font-display text-xs font-semibold text-on-primary primary-hover disabled:opacity-50 ${FIELD_FOCUS}`}
           >
             {isSaving ? "Saving…" : "Save"}
           </button>
@@ -357,7 +357,7 @@ function LinkRow({
         href={link.url}
         target="_blank"
         rel="noopener noreferrer"
-        className="min-w-0 flex-1 truncate text-sm font-medium text-primary hover:underline"
+        className={`min-w-0 flex-1 truncate rounded-sm text-sm font-medium text-primary hover:underline ${FIELD_FOCUS}`}
       >
         {link.label}
       </a>
@@ -370,7 +370,7 @@ function LinkRow({
             type="button"
             onClick={startEdit}
             aria-label="Edit link"
-            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary"
+            className={`tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-primary ${FIELD_FOCUS}`}
           >
             <span aria-hidden="true" className="material-symbols-outlined text-[16px]">edit</span>
           </button>
@@ -378,7 +378,7 @@ function LinkRow({
             type="button"
             onClick={onDelete}
             aria-label="Delete link"
-            className="tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-error"
+            className={`tap-target rounded-sm p-1 text-on-surface-variant hover:bg-surface-container hover:text-error ${FIELD_FOCUS}`}
           >
             <span aria-hidden="true" className="material-symbols-outlined text-[16px]">delete</span>
           </button>

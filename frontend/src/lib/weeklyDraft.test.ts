@@ -55,7 +55,7 @@ function project(id: number, name: string, notes: DailyReviewNote[]): DailyRevie
     status: "ACTIVE",
     customerId: 1,
     baselineLockedAt: null,
-    phase: "—",
+    phase: null,
     progress: { done: 0, total: 0 },
     slipDays: null,
     overdueTasks: [],

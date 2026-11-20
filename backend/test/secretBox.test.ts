@@ -51,6 +51,26 @@ describe("secretBox", () => {
     expect(() => open(tampered)).toThrow(SecretBoxError);
   });
 
+  it("refuses a truncated auth tag (Node would otherwise accept a short GCM tag)", () => {
+    const [version, iv, tag, ciphertext] = seal("do-not-touch").split(":");
+    const short = Buffer.from(tag, "base64").subarray(0, 8).toString("base64");
+    expect(() => open([version, iv, short, ciphertext].join(":"))).toThrow(SecretBoxError);
+    const empty = [version, iv, "", ciphertext].join(":");
+    expect(() => open(empty)).toThrow(SecretBoxError);
+  });
+
+  it("still opens a value sealed with Node's default (16-byte) tag", () => {
+    // Values written before authTagLength was pinned used the default.
+    const key = Buffer.from(process.env.SECRETS_KEY!, "base64");
+    const iv = crypto.randomBytes(12);
+    const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+    const ct = Buffer.concat([cipher.update("legacy-value", "utf8"), cipher.final()]);
+    const tag = cipher.getAuthTag();
+    expect(tag.length).toBe(16);
+    const sealed = ["v1", iv.toString("base64"), tag.toString("base64"), ct.toString("base64")].join(":");
+    expect(open(sealed)).toBe("legacy-value");
+  });
+
   it("throws SecretBoxError when a different key is used", () => {
     // env.ts parses process.env once at import time into a static `env`
     // object, so seal()/open() always use the suite's fixed SECRETS_KEY —

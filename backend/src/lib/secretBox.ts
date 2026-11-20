@@ -9,6 +9,7 @@ import { env } from "../env.js";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 12;
+const TAG_LENGTH = 16;
 const FORMAT_VERSION = "v1";
 
 /** Thrown by `open()` on malformed input, a tampered tag/ciphertext, or the wrong key. Never carries plaintext. */
@@ -26,7 +27,7 @@ function getKey(): Buffer {
 /** Encrypts `plain` with a fresh random IV. Never throws on well-formed input. */
 export function seal(plain: string): string {
   const iv = crypto.randomBytes(IV_LENGTH);
-  const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv);
+  const cipher = crypto.createCipheriv(ALGORITHM, getKey(), iv, { authTagLength: TAG_LENGTH });
   const ciphertext = Buffer.concat([cipher.update(plain, "utf8"), cipher.final()]);
   const tag = cipher.getAuthTag();
   return [FORMAT_VERSION, iv.toString("base64"), tag.toString("base64"), ciphertext.toString("base64")].join(":");
@@ -48,8 +49,13 @@ export function open(sealed: string): string {
     throw new SecretBoxError("Invalid secret format: unexpected IV length");
   }
 
+  // Node otherwise accepts a truncated GCM tag (ISS-009). `seal()` always wrote 16 bytes.
+  if (tag.length !== TAG_LENGTH) {
+    throw new SecretBoxError("Invalid secret format: unexpected tag length");
+  }
+
   try {
-    const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv);
+    const decipher = crypto.createDecipheriv(ALGORITHM, getKey(), iv, { authTagLength: TAG_LENGTH });
     decipher.setAuthTag(tag);
     const plaintext = Buffer.concat([decipher.update(ciphertext), decipher.final()]);
     return plaintext.toString("utf8");

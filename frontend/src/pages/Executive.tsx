@@ -1,4 +1,7 @@
-import { useState } from "react";
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useMemo, useState } from "react";
+import { resolveSectionColor, resolveSectionColors } from "@/lib/gantt/palette";
 import { Link } from "react-router-dom";
 import { EmptyState } from "@/components/EmptyState";
 import {
@@ -33,7 +36,9 @@ export function Executive() {
       </div>
 
       {isLoading && (
-        <div className="h-32 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+        <SkeletonRegion>
+          <Skeleton className="h-32 rounded-sm" />
+        </SkeletonRegion>
       )}
 
       {isError && (
@@ -275,6 +280,11 @@ function PortfolioList({ projects }: { projects: PortfolioProjectRow[] }) {
 function TimelineRow({ project: p }: { project: PortfolioProjectRow }) {
   const hasSchedule = p.start !== null && p.end !== null;
   const fillTone = p.isOverdue ? "bg-error" : "bg-primary";
+  // The portfolio query already orders sections by position.
+  const sectionColors = useMemo(
+    () => resolveSectionColors(p.sections.map((s, position) => ({ ...s, position }))),
+    [p.sections],
+  );
 
   return (
     <div className="space-y-2 rounded-sm border border-outline-variant bg-surface-container-lowest px-4 py-3">
@@ -326,7 +336,7 @@ function TimelineRow({ project: p }: { project: PortfolioProjectRow }) {
             >
               <span
                 className="h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: s.color }}
+                style={{ backgroundColor: resolveSectionColor(sectionColors, s) }}
               />
               {s.name}
             </span>

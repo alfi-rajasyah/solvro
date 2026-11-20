@@ -293,6 +293,7 @@ describe("GET /itop/status", () => {
     expect(res.status).toBe(200);
     expect(res.body.configured).toBe(false);
     expect(res.body.baseUrl).toBeNull();
+    expect(res.body.lastSyncFailed).toBe(false);
     expect(res.body).not.toHaveProperty("lastSyncError");
   });
 
@@ -313,6 +314,7 @@ describe("GET /itop/status", () => {
     expect(res.body.configured).toBe(true);
     expect(res.body.baseUrl).toBe("https://itop.example.com");
     expect(res.body.lastSyncOk).toBe(false);
+    expect(res.body.lastSyncFailed).toBe(true);
     expect(res.body).not.toHaveProperty("lastSyncError");
     expect(JSON.stringify(res.body)).not.toContain("app-token");
     expect(JSON.stringify(res.body)).not.toContain("internal-itop.corp.local");

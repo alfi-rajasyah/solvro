@@ -2,7 +2,7 @@ import { test, expect, loginViaUi, apiBase } from "../fixtures/test";
 import { createTask, createSection, isoDateOffset } from "../fixtures/seed";
 import type { Locator, Page } from "@playwright/test";
 
-// Coverage for docs/plans/duplicate-tasks-sections.md's four v1 surfaces
+// Coverage for docs/archive/plans/duplicate-tasks-sections.md's four v1 surfaces
 // (§3 Decision 12): the Task panel's "Duplicate task" menu item, a
 // subtask row's "Duplicate <title>" button, the Gantt row context menu's
 // "Duplicate" item, and the List view section header's "Duplicate section"
@@ -17,7 +17,6 @@ function stamp(): string {
 
 async function openTaskPanel(page: Page, projectId: number, taskId: number): Promise<Locator> {
   await page.goto(`/projects/${projectId}/list?task=${taskId}`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
   const panel = page.getByRole("dialog", { name: "Task details" });
   await expect(panel).toBeVisible();
   return panel;
@@ -58,7 +57,9 @@ test.describe("Duplicate — Task panel, subtask row, section header (desktop + 
     const panel = await openTaskPanel(page, projectId, task.id);
     await panel.getByRole("button", { name: "Task options" }).click();
     await panel.getByRole("button", { name: "Duplicate task", exact: true }).click();
-    await page.waitForTimeout(900);
+    await expect
+      .poll(() => new URL(page.url()).searchParams.get("task"))
+      .not.toBe(String(task.id));
 
     const newTaskId = new URL(page.url()).searchParams.get("task");
     expect(newTaskId).not.toBeNull();
@@ -90,7 +91,6 @@ test.describe("Duplicate — Task panel, subtask row, section header (desktop + 
     // visible (same reasoning subtask-edit.spec.ts's rename tests document).
     await panel.getByRole("button", { name: child.title, exact: true }).hover();
     await panel.getByRole("button", { name: `Duplicate ${child.title}`, exact: true }).click();
-    await page.waitForTimeout(900);
 
     await expect(panel.getByRole("button", { name: child.title, exact: true })).toHaveCount(2);
   });
@@ -108,14 +108,13 @@ test.describe("Duplicate — Task panel, subtask row, section header (desktop + 
     await createTask(base, token, projectId, { title: `DupSecB ${s}`, sectionId: section.id });
 
     await page.goto(`/projects/${projectId}/list`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     // The "No section" pseudo-group is not a real Section row — it must
     // never offer a Duplicate button (ProjectList.tsx gates the button on
     // `section` being non-null).
-    const noneRow = page
-      .getByRole("heading", { level: 2, name: "No section", exact: true })
-      .locator("xpath=..");
+    const noneHeading = page.getByRole("heading", { level: 2, name: "No section", exact: true });
+    await expect(noneHeading).toBeVisible();
+    const noneRow = noneHeading.locator("xpath=..");
     await expect(noneRow.getByRole("button", { name: "Duplicate section", exact: true })).toHaveCount(
       0,
     );
@@ -127,7 +126,6 @@ test.describe("Duplicate — Task panel, subtask row, section header (desktop + 
     // header on the page carries a "Duplicate section" button.
     const sourceRow = headings.first().locator("xpath=..");
     await sourceRow.getByRole("button", { name: "Duplicate section", exact: true }).click();
-    await page.waitForTimeout(900);
 
     await expect(headings).toHaveCount(2);
 
@@ -169,7 +167,6 @@ test.describe("Duplicate — Gantt row context menu (desktop)", () => {
     });
 
     await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     const taskRow = page.locator(
       `[data-slot="gantt-row-group"][data-gantt-row-id="task-${task.id}"]`,
@@ -179,7 +176,6 @@ test.describe("Duplicate — Gantt row context menu (desktop)", () => {
     const duplicateItem = page.getByRole("menuitem", { name: "Duplicate", exact: true });
     await expect(duplicateItem).toBeVisible();
     await duplicateItem.click();
-    await page.waitForTimeout(900);
 
     const treePane = page.locator('[data-slot="gantt-tree-pane"]');
     await expect(treePane.getByText(title, { exact: true })).toHaveCount(2);

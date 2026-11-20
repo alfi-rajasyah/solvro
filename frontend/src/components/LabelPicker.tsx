@@ -1,6 +1,7 @@
 import { FIELD_FOCUS } from "@/lib/utils";
 import { useState } from "react";
 import { LabelChip } from "./LabelChip";
+import { ApiError } from "@/lib/api";
 import { useCreateLabel, useProjectLabels, type Label } from "@/lib/queries";
 
 // No red or near-red: a label must never read as an error.
@@ -15,14 +16,25 @@ const PALETTE = [
   "#64748b",
 ];
 
+/** A 409 on label create is the (project, name) unique constraint: say so in plain words. */
+export function labelCreateErrorMessage(error: Error): string {
+  if (error instanceof ApiError && error.status === 409) {
+    return "A label with this name already exists.";
+  }
+  return error.message;
+}
+
 export function LabelPicker({
   projectId,
   selectedIds,
   onChange,
+  canCreate = true,
 }: {
   projectId: number;
   selectedIds: number[];
   onChange: (ids: number[]) => void;
+  /** Creating a label needs task:write; read-only viewers get no "Add label" control. */
+  canCreate?: boolean;
 }) {
   const { data: labels } = useProjectLabels(projectId);
   const createLabel = useCreateLabel(projectId);
@@ -72,7 +84,7 @@ export function LabelPicker({
             </button>
           );
         })}
-        {!creating && (
+        {canCreate && !creating && (
           <button
             type="button"
             onClick={() => {
@@ -86,9 +98,9 @@ export function LabelPicker({
         )}
       </div>
 
-      {creating && (
+      {canCreate && creating && (
         <div className="rounded-sm border border-outline-variant bg-surface-container-low p-2">
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <input
               autoFocus
               type="text"
@@ -104,13 +116,13 @@ export function LabelPicker({
               placeholder="Label name"
               aria-label="Label name"
               maxLength={50}
-              className={`flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs ${FIELD_FOCUS}`}
+              className={`min-w-0 flex-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1 text-xs ${FIELD_FOCUS}`}
             />
             <button
               type="button"
               onClick={() => void handleCreate()}
               disabled={createLabel.isPending || !newName.trim()}
-              className="rounded-sm bg-primary px-2 py-1 font-display text-xs text-on-primary hover:bg-primary-container disabled:opacity-50 font-semibold"
+              className="rounded-sm bg-primary px-2 py-1 font-display text-xs text-on-primary primary-hover disabled:opacity-50 font-semibold"
             >
               {createLabel.isPending ? "…" : "Add"}
             </button>
@@ -126,7 +138,7 @@ export function LabelPicker({
               Cancel
             </button>
           </div>
-          <div className="mt-2 flex items-center gap-1">
+          <div className="mt-2 flex flex-wrap items-center gap-1">
             <span className="text-label-caps uppercase text-on-surface-variant">
               Color
             </span>
@@ -146,7 +158,7 @@ export function LabelPicker({
           </div>
           {createLabel.error && (
             <p className="mt-1 text-xs text-error">
-              {(createLabel.error as Error).message}
+              {labelCreateErrorMessage(createLabel.error)}
             </p>
           )}
         </div>

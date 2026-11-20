@@ -1,6 +1,9 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { FIELD_FOCUS, TOOLBAR_BUTTON_PRIMARY, TOOLBAR_BUTTON_OUTLINE, TOOLBAR_BOX } from "@/lib/utils";
 import { useCallback, useId, useMemo, useState, type FormEvent } from "react";
+import { resolveSectionColor, resolveSectionColors } from "@/lib/gantt/palette";
 import {
   DndContext,
   KeyboardSensor,
@@ -55,6 +58,7 @@ import {
   useUpdateTask,
   useUsers,
 } from "@/lib/queries";
+import { selectableUsers } from "@/lib/selectableUsers";
 
 const PRIORITY_ORDER: Priority[] = ["LOW", "MEDIUM", "HIGH"];
 const PRIORITY_ICON_CLASS: Record<Priority, string> = {
@@ -117,6 +121,9 @@ export function ProjectList() {
   const { project } = useProjectContext();
   const { user } = useAuth();
   const canEdit = hasPermission(user, "task:write");
+  // Section routes (create, rename, reorder, duplicate, delete) require
+  // project:write, a different permission from the task rows' task:write.
+  const canEditSections = hasPermission(user, "project:write");
   const [, setSearchParams] = useSearchParams();
 
   const { data: tasks, isLoading: tasksLoading, isError, error } = useProjectTasks(project.id);
@@ -180,6 +187,7 @@ export function ProjectList() {
   // rendered `visibleGrouped` projection below — mirrors SolvroKanban.tsx's
   // `topLevelAll` (unfiltered, drop-math source) vs `derivedColumns`
   // (filtered, render-only) split.
+  const sectionColors = useMemo(() => resolveSectionColors(sections ?? []), [sections]);
   const grouped = useMemo(() => groupBySection(tasks ?? [], sections ?? []), [tasks, sections]);
 
   const isTaskVisible = useCallback(
@@ -271,7 +279,7 @@ export function ProjectList() {
     }
   }
 
-  // One click, no confirm dialog (Decision 7, docs/plans/duplicate-tasks-sections.md) —
+  // One click, no confirm dialog (Decision 7, docs/archive/plans/duplicate-tasks-sections.md) —
   // same error-surfacing pattern as handleDeleteSection above.
   async function handleDuplicateSection(s: Section) {
     setActionError(null);
@@ -411,7 +419,9 @@ export function ProjectList() {
 
   if (tasksLoading || sectionsLoading) {
     return (
-      <div className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+      <SkeletonRegion>
+        <Skeleton className="h-64 rounded-sm" />
+      </SkeletonRegion>
     );
   }
 
@@ -484,7 +494,7 @@ export function ProjectList() {
             </>
           )}
         </div>
-        {canEdit && (sections?.length ?? 0) >= 2 && (
+        {canEditSections && (sections?.length ?? 0) >= 2 && (
           <button
             type="button"
             onClick={() => setReorderingSections(true)}
@@ -494,7 +504,7 @@ export function ProjectList() {
             Reorder sections
           </button>
         )}
-        {canEdit && (
+        {canEditSections && (
           <button
             type="button"
             onClick={() => setAddingSection(true)}
@@ -544,9 +554,11 @@ export function ProjectList() {
             <SectionGroup
               key={g.section?.id ?? "none"}
               section={g.section}
+              sectionColors={sectionColors}
               nodes={g.tasks}
               collapsed={collapsed.has(groupKeyOf(g.section?.id ?? null))}
               canEdit={canEdit}
+              canEditSections={canEditSections}
               users={users ?? []}
               epicMap={epicMap}
               onToggle={() => toggleGroup(groupKeyOf(g.section?.id ?? null))}
@@ -598,7 +610,7 @@ export function ProjectList() {
             <button
               type="submit"
               disabled={createSection.isPending || !newSectionName.trim()}
-              className="rounded-sm bg-primary px-2 py-1 font-display text-xs text-on-primary hover:bg-primary-container disabled:opacity-50 font-semibold"
+              className="rounded-sm bg-primary px-2 py-1 font-display text-xs text-on-primary primary-hover disabled:opacity-50 font-semibold"
             >
               Add
             </button>
@@ -649,9 +661,11 @@ export function ProjectList() {
 
 interface SectionGroupProps {
   section: Section | null;
+  sectionColors: ReadonlyMap<number, string>;
   nodes: TaskNode[];
   collapsed: boolean;
   canEdit: boolean;
+  canEditSections: boolean;
   users: { id: number; username: string }[];
   epicMap: Map<number, Epic>;
   onToggle: () => void;
@@ -676,9 +690,11 @@ interface SectionGroupProps {
 
 function SectionGroup({
   section,
+  sectionColors,
   nodes,
   collapsed,
   canEdit,
+  canEditSections,
   users,
   epicMap,
   onToggle,
@@ -724,7 +740,7 @@ function SectionGroup({
             {collapsed ? "chevron_right" : "expand_more"}
           </span>
         </button>
-        {section && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: section.color }} />}
+        {section && <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: resolveSectionColor(sectionColors, section) }} />}
         {isRenaming ? (
           <form onSubmit={(e) => onRenameSubmit(key, e)} className="flex items-center gap-2">
             <input
@@ -760,7 +776,7 @@ function SectionGroup({
         <span className="rounded-full bg-surface-container-high px-1.5 py-0 font-mono text-meta text-on-surface-variant">
           {nodes.length}
         </span>
-        {canEdit && !isRenaming && (
+        {canEditSections && !isRenaming && (
           <div className="ml-auto flex items-center gap-1">
             <button
               type="button"
@@ -1074,7 +1090,7 @@ function SubtaskRow({
       style={style}
       onClick={() => onOpenTask(task.id)}
       className={[
-        "flex cursor-pointer items-center gap-2 border-t border-outline-variant bg-surface-container-low/40 py-1 pl-[34px] pr-3 text-[12.5px] hover:bg-surface-container-low",
+        "flex cursor-pointer items-center gap-2 border-t border-outline-variant bg-surface-container-low/40 py-1 pl-[34px] pr-3 text-meta hover:bg-surface-container-low",
         isDragging ? "opacity-40" : "",
       ].join(" ")}
     >
@@ -1109,7 +1125,7 @@ function SubtaskRow({
         {done && <span aria-hidden="true" className="material-symbols-outlined text-meta leading-none">check</span>}
       </button>
       <span className="flex min-w-0 items-center gap-1">
-        <span className={["truncate", done || task.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
+        <span className={["truncate font-[450]", done || task.status === "CANCELLED" ? "text-on-surface-variant line-through" : "text-on-surface"].join(" ")}>
           {task.title}
         </span>
         {task.isCriticalPath && <CriticalPathMark variant="glyph" className="shrink-0" />}
@@ -1169,7 +1185,7 @@ function AssigneeOptions({
   value,
   onPick,
 }: {
-  users: { id: number; username: string }[];
+  users: { id: number; username: string; active?: boolean }[];
   projectId: number;
   value: number | null;
   onPick: (id: number | null) => void;
@@ -1184,7 +1200,7 @@ function AssigneeOptions({
       >
         Unassigned
       </button>
-      {users.map((u) => (
+      {selectableUsers(users, [value]).map((u) => (
         <button
           key={u.id}
           type="button"

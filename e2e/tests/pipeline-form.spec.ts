@@ -141,7 +141,6 @@ test.afterAll(async ({}, workerInfo) => {
 
 async function openPipeline(page: Page): Promise<void> {
   await page.goto("/pipeline", { waitUntil: "networkidle" });
-  await page.waitForTimeout(500);
 }
 
 /** Locates the board's stage column by the vendored Kanban engine's own
@@ -199,7 +198,6 @@ test.describe("Pipeline opportunity form — desktop", () => {
     await expect(column.getByRole("link", { name: title })).toBeVisible();
 
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
     await expect(stageColumn(page, "RFP").getByRole("link", { name: title })).toBeVisible();
   });
 
@@ -269,7 +267,6 @@ test.describe("Pipeline opportunity form — desktop", () => {
 
     await loginViaUi(page);
     await page.goto(`/pipeline/${created.id}`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     await page.getByRole("button", { name: "Edit" }).click();
     const dialog = page.getByRole("dialog", { name: "Edit opportunity" });
@@ -302,7 +299,6 @@ test.describe("Pipeline opportunity form — desktop", () => {
 
     await loginViaUi(page);
     await page.goto(`/pipeline/${created.id}`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     // --- Activity: newest note first ---------------------------------
     const noteInput = page.getByPlaceholder("Add a note…");
@@ -606,7 +602,7 @@ test.describe("Pipeline assign PIC — desktop", () => {
 
     // Admin-created, no `picId` — the deal this SA will claim through the
     // dialog rather than through Edit (Edit stays gated off until it has a
-    // PIC — D1 in docs/plans/claim-unassigned-deals.md).
+    // PIC — D1 in docs/archive/plans/claim-unassigned-deals.md).
     const title = `${PREFIX} Assign ${stamp()}`;
     const created = await apiCreateOpportunity(ctx, {
       title,
@@ -616,7 +612,6 @@ test.describe("Pipeline assign PIC — desktop", () => {
 
     await loginViaUi(page, email, password);
     await page.goto(`/pipeline/${created.id}`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
     await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
 
     // Before assignment: no Edit/Delete (D1), Assign PIC is the one
@@ -663,7 +658,6 @@ test.describe("Pipeline assign PIC — desktop", () => {
 
     // Server-persisted, not just a client-side optimistic update.
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
     await expect(page.getByRole("button", { name: "Edit" })).toBeVisible();
   });
 });

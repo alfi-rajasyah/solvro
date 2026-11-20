@@ -97,14 +97,15 @@ export interface ItopLnkPersonToTeamFields {
 }
 
 /**
- * `PersonalToken` fields for the best-effort expiry read in
- * `routes/itopUser.ts` (`PUT /itop/me/token`). Real installs may refuse this
- * class to a non-admin token — callers treat any failure here as "expiry
- * unknown", never as a reason to reject the token itself.
+ * `PersonalToken` fields for the ownership proof in `routes/itopUser.ts`
+ * (`PUT /itop/me/token`). A token sees only its own row, so a non-empty
+ * result proves ownership and names the owning login (`user_id`). A failed
+ * read refuses the token (fail closed, docs/ISSUES.md ISS-004).
  */
-export const ITOP_PERSONAL_TOKEN_OUTPUT_FIELDS = "expiration_date";
+export const ITOP_PERSONAL_TOKEN_OUTPUT_FIELDS = "user_id,expiration_date";
 
 export interface ItopPersonalTokenFields {
+  user_id: string;
   expiration_date: string;
 }
 

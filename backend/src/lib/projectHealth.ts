@@ -106,20 +106,19 @@ export async function computeProjectHealth(
   return result;
 }
 
-// --- Ports of frontend/src/pages/DailyReview.tsx's currentPhase() /
-// scheduleSignal(), computed server-side so payloads ship the finished value
-// instead of raw task lists. Shared by Daily Review and the project detail.
+// --- Phase and schedule signals, computed server-side so payloads ship the
+// finished value instead of raw task lists. Shared by Daily Review and the
+// project detail.
 
 export interface PhaseTask {
   status: string;
   section: { id: number; name: string; position: number } | null;
 }
 
-// Earliest section (by position) that still has a still-open task (cancelled tasks do not count). Mirrors
-// currentPhase() in the frontend exactly, including the two terminal
-// strings ("All phases complete" when every section is done, "—" when the
-// project has no sections at all).
-export function currentPhase(tasks: PhaseTask[]): string {
+// Earliest section (by position) that still has a still-open task (cancelled
+// tasks do not count). Two terminal results: "All phases complete" when every
+// section is done, null when the project has no sections at all.
+export function currentPhase(tasks: PhaseTask[]): string | null {
   const bySection = new Map<
     number,
     { name: string; pos: number; total: number; done: number }
@@ -140,7 +139,7 @@ export function currentPhase(tasks: PhaseTask[]): string {
   const ordered = [...bySection.values()].sort((a, b) => a.pos - b.pos);
   const cur = ordered.find((s) => s.done < s.total);
   if (cur) return cur.name;
-  return ordered.length > 0 ? "All phases complete" : "—";
+  return ordered.length > 0 ? "All phases complete" : null;
 }
 
 export interface SlipTask {
@@ -150,8 +149,8 @@ export interface SlipTask {
   baselineDueDate: Date | null;
 }
 
-// Mirrors scheduleSignal()'s slip math, minus the label/tone — the frontend
-// derives its own chip from this number. null whenever there is no baseline
+// Slip in days against the baseline; the frontend derives its own chip from
+// this number. null whenever there is no baseline
 // lock, or either side of the comparison has no dated tasks.
 export function computeSlipDays(
   baselineLockedAt: Date | null,

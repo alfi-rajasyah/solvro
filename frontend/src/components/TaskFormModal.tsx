@@ -41,6 +41,7 @@ import {
   useUpdateTask,
   useUsers,
 } from "@/lib/queries";
+import { selectableUsers } from "@/lib/selectableUsers";
 
 const PRIORITIES: Priority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
@@ -191,9 +192,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
     if (parentTaskId !== "") setEpicId("");
   }, [parentTaskId]);
 
-  const possibleParents = (projectTasks ?? []).filter(
-    (t) => !editingTask || (t.id !== editingTask.id && t.parentTaskId === null),
-  );
+  const possibleParents = filterPossibleParents(projectTasks ?? [], editingTask?.id);
   const subtasks = editingTask
     ? (projectTasks ?? [])
         .filter((t) => t.parentTaskId === editingTask.id)
@@ -504,10 +503,10 @@ export function TaskFormModal(props: TaskFormModalProps) {
               disabled={!canEdit}
               aria-label="Assignee"
               {...invalidProps("assignedToId")}
-              className={`cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default ${FIELD_FOCUS}`}
+              className={`max-w-full cursor-pointer border-none bg-transparent text-xs font-semibold text-on-surface focus:outline-hidden disabled:cursor-default ${FIELD_FOCUS}`}
             >
               <option value="">Unassigned</option>
-              {(users ?? []).map((u) => (
+              {selectableUsers(users, [assignedToId]).map((u) => (
                 <option key={u.id} value={u.id}>
                   {u.username} · {u.role}
                 </option>
@@ -612,6 +611,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               projectId={projectId}
               selectedIds={labelIds}
               onChange={canEdit ? setLabelIds : () => {}}
+              canCreate={canEdit}
             />
           </FieldRow>
 
@@ -715,6 +715,17 @@ export function TaskFormModal(props: TaskFormModalProps) {
   );
 }
 
+/**
+ * Tasks that may become a parent: top-level only (the server's max-depth guard
+ * rejects a subtask as parent), and never the task being edited.
+ */
+export function filterPossibleParents<T extends Pick<Task, "id" | "parentTaskId">>(
+  tasks: T[],
+  editingTaskId?: number,
+): T[] {
+  return tasks.filter((t) => t.parentTaskId === null && t.id !== editingTaskId);
+}
+
 /** One subtask line of the edit form: done checkbox, title, reorder buttons. */
 export function SubtaskRow({
   subtask: s,
@@ -736,7 +747,7 @@ export function SubtaskRow({
       <input
         type="checkbox"
         checked={s.status === "DONE"}
-        disabled={s.status === "CANCELLED"}
+        disabled={!canEdit || s.status === "CANCELLED"}
         title={s.status === "CANCELLED" ? "Cancelled. Change its status to reopen" : undefined}
         // A checkbox with no label has no accessible name
         // (docs/archive/plans/application-review-2026-10-22.md, F-37).
@@ -793,7 +804,7 @@ function FieldRow({
         {icon}
       </span>
       <span className="w-20 shrink-0 text-xs text-on-surface-variant">{label}</span>
-      <div className="flex-1">
+      <div className="min-w-0 flex-1">
         {children}
         <FieldError id={errorId} message={error} />
       </div>

@@ -33,8 +33,12 @@ interface Entry {
 
 export interface ZipArchive {
   has(name: string): boolean;
-  /** Expanded bytes of one entry, or null when the archive has no such entry. */
-  read(name: string): Buffer | null;
+  /**
+   * Expanded bytes of one entry, or null when the archive has no such entry.
+   * `maxBytes` caps this entry's expanded size below the archive budget; the
+   * inflate stops at the cap instead of expanding the rest.
+   */
+  read(name: string, maxBytes?: number): Buffer | null;
 }
 
 function findEocd(buf: Buffer): number {
@@ -79,7 +83,7 @@ export function openZip(buf: Buffer, limits: ZipLimits): ZipArchive {
 
   return {
     has: (name) => entries.has(name),
-    read(name) {
+    read(name, maxBytes) {
       const e = entries.get(name);
       if (!e) return null;
       const lo = e.localOffset;
@@ -88,20 +92,22 @@ export function openZip(buf: Buffer, limits: ZipLimits): ZipArchive {
       const end = start + e.compressedSize;
       if (end > buf.length) throw new ZipError("Entry data out of range");
       const data = buf.subarray(start, end);
+      const cap = Math.min(budget, maxBytes ?? budget);
       let out: Buffer;
       if (e.method === 0) {
+        if (data.length > cap) throw new ZipError("Entry expands too far");
         out = Buffer.from(data);
       } else if (e.method === 8) {
         if (budget <= 0) throw new ZipError("Archive expands too far");
         try {
-          out = inflateRawSync(data, { maxOutputLength: budget });
+          out = inflateRawSync(data, { maxOutputLength: cap });
         } catch {
           throw new ZipError("Entry cannot be inflated or expands too far");
         }
       } else {
         throw new ZipError("Unsupported compression method");
       }
-      if (out.length > budget) throw new ZipError("Archive expands too far");
+      if (out.length > cap) throw new ZipError("Archive expands too far");
       budget -= out.length;
       return out;
     },

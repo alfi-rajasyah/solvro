@@ -254,6 +254,30 @@ describe("parseImportRow", () => {
     expect(row.status).toBe("valid");
   });
 
+  it("flags a filled but unreadable win probability as invalid instead of defaulting it", () => {
+    const cells = [...validCells];
+    cells[7] = "high";
+    const row = parseImportRow(cells, 0, noPics);
+    expect(row.status).toBe("invalid");
+    expect(row.errors.some((e) => e.includes("Win Probability"))).toBe(true);
+  });
+
+  it.each(["0.7", "12abc", "1e2", "-5", "1,5"])("flags win probability %j as not a number", (cell) => {
+    const cells = [...validCells];
+    cells[7] = cell;
+    const row = parseImportRow(cells, 0, noPics);
+    expect(row.status).toBe("invalid");
+    expect(row.errors).toContain("Win Probability must be a number between 0 and 100.");
+  });
+
+  it("accepts a win probability written with a percent sign", () => {
+    const cells = [...validCells];
+    cells[7] = "70%";
+    const row = parseImportRow(cells, 0, noPics);
+    expect(row.winProbability).toBe(70);
+    expect(row.status).toBe("valid");
+  });
+
   it("flags a win probability outside 0-100 as invalid", () => {
     const cells = [...validCells];
     cells[7] = "150";

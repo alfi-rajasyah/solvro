@@ -1,8 +1,8 @@
 import type { Locator, Page } from "@playwright/test";
 import { apiBase, expect, loginViaUi, test } from "../fixtures/test";
-import { createTask, isoDateOffset } from "../fixtures/seed";
+import { createTask, isoDateOffset, login } from "../fixtures/seed";
 
-// Daily Review v2 (docs/plans/daily-review-v2-spec.md §9; weekly sync tables
+// Daily Review v2 (docs/archive/plans/daily-review-v2-spec.md §9; weekly sync tables
 // per docs/archive/plans/weekly-sync-tables.md): one end-to-end pass through the
 // rewritten /daily-review page — a project note, an operations note, Mark
 // reviewed, an overdue-task status change, the Reflection sync modal's
@@ -27,13 +27,12 @@ import { createTask, isoDateOffset } from "../fixtures/seed";
 // pollution approach pipeline-board.spec.ts uses for its column-value-sum
 // assertions (a fresh API read rather than a hardcoded total).
 //
-// Note for whoever re-runs this spec repeatedly against the same dev DB:
-// unlike other fixtures (which leave their seeded project PLANNING and so
-// invisible to Daily Review), this spec flips its project ACTIVE and its
-// customer's `tamId` to the admin permanently — there is no DELETE
-// endpoint for either, so each run leaves one more ACTIVE project/customer
-// in scope forever. The baseline-delta approach above is exactly what
-// keeps the assertions correct regardless of how much of that accumulates.
+// Cleanup: this spec flips its seeded project ACTIVE and creates a customer
+// with `tamId` set to the admin, which would put both in scope for every
+// later run. The afterAll below deletes the project and the customer through
+// the existing DELETE routes so the shared dev DB does not accumulate them.
+// The baseline-delta approach above still keeps the assertions correct if a
+// run is interrupted before cleanup.
 //
 // e2e/ is its own standalone TS project with no dependency on frontend/src
 // (confirmed precedent: pipeline-board.spec.ts's header comment) — the ISO
@@ -43,9 +42,28 @@ import { createTask, isoDateOffset } from "../fixtures/seed";
 
 test.describe.configure({ mode: "serial" });
 
+// Collected by the test, torn down once in afterAll (project first: its
+// customerId link is SetNull, but deleting the project first keeps the
+// customer delete independent of it).
+let createdProjectId: number | null = null;
+let createdCustomerId: number | null = null;
+
+test.afterAll(async ({}, workerInfo) => {
+  if (createdProjectId === null && createdCustomerId === null) return;
+  const base = new URL(workerInfo.project.use.baseURL ?? "http://localhost:8080").origin;
+  const { token } = await login(base);
+  const headers = { Authorization: `Bearer ${token}` };
+  if (createdProjectId !== null) {
+    await fetch(`${base}/api/projects/${createdProjectId}`, { method: "DELETE", headers }).catch(() => {});
+  }
+  if (createdCustomerId !== null) {
+    await fetch(`${base}/api/customers/${createdCustomerId}`, { method: "DELETE", headers }).catch(() => {});
+  }
+});
+
 async function readCount(page: Page, testId: string): Promise<number> {
   const el = page.getByTestId(testId);
-  await expect(el).toBeVisible();
+  await expect(el).toHaveText(/^\s*\d+\s*$/);
   const text = (await el.textContent())?.trim() ?? "";
   const n = Number(text);
   if (Number.isNaN(n)) throw new Error(`stat "${testId}": expected a number, got "${text}"`);
@@ -59,7 +77,7 @@ interface Fraction {
 
 async function readFraction(page: Page, testId: string): Promise<Fraction> {
   const el = page.getByTestId(testId);
-  await expect(el).toBeVisible();
+  await expect(el).toHaveText(/^\s*\d+\s+of\s+\d+\s*$/);
   const text = (await el.textContent())?.trim() ?? "";
   const m = /^(\d+)\s+of\s+(\d+)$/.exec(text);
   if (!m) throw new Error(`stat "${testId}": expected "count of total", got "${text}"`);
@@ -128,7 +146,6 @@ test.describe("Daily Review v2", () => {
     // point, so it contributes nothing to any stats-bar tile yet — see
     // header comment.
     await page.goto("/daily-review", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
     const baseReviewed = await readFraction(page, "stat-reviewed-today");
     const baseWeekly = await readFraction(page, "stat-weekly-updates");
     const baseOverdue = await readCount(page, "stat-overdue-tasks");
@@ -148,6 +165,8 @@ test.describe("Daily Review v2", () => {
     });
     expect(customerRes.ok, `create customer: ${customerRes.status}`).toBeTruthy();
     const customer = (await customerRes.json()) as { id: number };
+    createdCustomerId = customer.id;
+    createdProjectId = projectId;
 
     const projectRes = await fetch(`${base}/api/projects/${projectId}`, {
       method: "PATCH",
@@ -166,7 +185,6 @@ test.describe("Daily Review v2", () => {
     });
 
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
 
     // ------------------------------------------------------------------
     // 1. Page title, week label, our customer group + project card.
@@ -293,7 +311,6 @@ test.describe("Daily Review v2", () => {
     await customerHeading.getByRole("link", { name: customerName }).click();
     await expect(page).toHaveURL(new RegExp(`/customers/${customer.id}$`));
     await page.waitForLoadState("networkidle");
-    await page.waitForTimeout(500);
     const weeklySection = page
       .getByRole("heading", { name: "Weekly updates" })
       .locator("xpath=ancestor::section[1]");
@@ -305,7 +322,6 @@ test.describe("Daily Review v2", () => {
     // 8. /projects/:id/overview — Notes panel shows today's project note.
     // ------------------------------------------------------------------
     await page.goto(`/projects/${projectId}/overview`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
     const notesPanel = page
       .getByRole("heading", { name: "Notes", exact: true })
       .locator("xpath=ancestor::section[1]");
@@ -316,7 +332,6 @@ test.describe("Daily Review v2", () => {
     //     and the operations note (its title), newest first.
     // ------------------------------------------------------------------
     await page.goto("/overview", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
     const recentNotes = page
       .getByRole("heading", { name: "Recent notes" })
       .locator("xpath=ancestor::div[1]");
@@ -328,7 +343,6 @@ test.describe("Daily Review v2", () => {
     // 9. Week navigation: Previous changes ?week=, Next returns to it.
     // ------------------------------------------------------------------
     await page.goto("/daily-review", { waitUntil: "networkidle" });
-    await page.waitForTimeout(500);
     await expect(page).toHaveURL(/[?&]week=\d{4}-W\d{2}/);
     const currentWeekKey = new URL(page.url()).searchParams.get("week")!;
     const currentWeekLabel = (await page.getByText(/^Week \d+$/).textContent())?.trim();

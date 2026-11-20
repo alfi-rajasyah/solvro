@@ -28,7 +28,7 @@ export function AssignPicModal({ open, onClose, opportunity }: Props) {
   const [error, setError] = useState<string | null>(null);
 
   // Reset to the caller on the OPEN TRANSITION only — deliberately `[open]`
-  // in the deps (this repo has no exhaustive-deps lint to satisfy), reading
+  // in the deps (hence the exhaustive-deps disable below), reading
   // the current `user`/`users` directly rather than listing them: `useUsers`
   // can refetch in the background (window focus, an unrelated invalidation)
   // and hand back a new array reference while the dialog is already open,
@@ -43,6 +43,7 @@ export function AssignPicModal({ open, onClose, opportunity }: Props) {
     const list = users ?? [];
     const callerIsListed = user != null && list.some((u) => u.id === user.id);
     setPicId(callerIsListed ? user.id : (list[0]?.id ?? ""));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open-transition only; see the comment above.
   }, [open]);
 
   // `useUsers()` can still be loading (or mid-refetch) at the moment the

@@ -58,7 +58,7 @@ async function callItop<T>(fn: () => Promise<T>): Promise<T> {
       throw new HttpError(
         409,
         "itop_token_unreadable",
-        "The stored iTop token could not be decrypted (SECRETS_KEY changed?) — enter it again.",
+        "The stored iTop token could not be decrypted (SECRETS_KEY changed?). Enter it again.",
       );
     }
     if (err instanceof ItopError) {
@@ -491,7 +491,8 @@ itopAdminRouter.post(
 
     const client = makeItopClient(baseUrl, token);
     const probes = await client.probe(); // never throws — unreachable/invalid still yields ok:false entries
-    res.json({ ok: probes.every((p) => p.ok), probes });
+    // TimeSpent is informational (the Time Tracking extension is optional): it never fails the aggregate.
+    res.json({ ok: probes.every((p) => p.ok || p.informational), probes });
   },
 );
 
@@ -592,7 +593,7 @@ async function setCustomerOrgMapping(
   customerId: number,
   mapping: { itopOrgId: number; itopOrgName: string } | null,
 ) {
-  return prisma.$transaction(async (tx) => {
+  const updated = await prisma.$transaction(async (tx) => {
     const updated = await tx.customer.update({
       where: { id: customerId },
       data: { itopOrgId: mapping?.itopOrgId ?? null, itopOrgName: mapping?.itopOrgName ?? null },
@@ -609,9 +610,15 @@ async function setCustomerOrgMapping(
         where: { orgId: mapping.itopOrgId },
         data: { customerId },
       });
+      // The incremental pull only fetches tickets changed since the watermark,
+      // so a newly mapped org's older tickets would wait for the daily full
+      // sync. Clearing lastFullSyncAt makes the next sync a full one (ISS-131).
+      await tx.itopConfig.updateMany({ where: { id: "default" }, data: { lastFullSyncAt: null } });
     }
     return updated;
   });
+  if (mapping) bustItopConfigCache();
+  return updated;
 }
 
 const idParamSchema = z.object({ id: z.coerce.number().int().positive() });

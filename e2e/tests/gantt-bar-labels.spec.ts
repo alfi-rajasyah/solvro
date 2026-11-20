@@ -57,7 +57,7 @@ test.describe("gantt bar labels — desktop", () => {
 
     await loginViaUi(page);
     await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
+    await expect(page.locator('[data-slot="gantt-tree-pane"] [data-gantt-row-id]').first()).toBeVisible();
 
     // Alpha: 5-day bar (~100px) vs "Alpha" (~27px @11px font) → INSIDE: no
     // `data-label-outside` attribute, no floated label child, and the name

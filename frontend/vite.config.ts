@@ -15,7 +15,7 @@ export default defineConfig({
         name: "Solvro",
         short_name: "Solvro",
         description: "Solvro — project management for teams.",
-        theme_color: "#3aae51",
+        theme_color: "#3aaf51",
         background_color: "#1a1a18",
         display: "standalone",
         start_url: "/",
@@ -31,6 +31,12 @@ export default defineConfig({
             sizes: "512x512",
             type: "image/png",
             purpose: "any",
+          },
+          {
+            src: "/icons/icon-maskable-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "maskable",
           },
           {
             src: "/icons/icon-maskable-512.png",

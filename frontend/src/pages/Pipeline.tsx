@@ -44,7 +44,7 @@ const VIEW_MODES: { id: ViewMode; label: string; icon: string }[] = [
   { id: "quarter", label: "Quarter", icon: "calendar_view_month" },
 ];
 
-// Active/Closed switch (docs/plans/opportunity-flow-redesign.md §4.4, D11)
+// Active/Closed switch (docs/archive/plans/opportunity-flow-redesign.md §4.4, D11)
 // — same `?deals=` functional setSearchParams pattern as `?view=` above.
 // "active" is the default and stays out of the URL.
 const DEALS_FILTERS: { id: DealsFilter; label: string }[] = [
@@ -140,7 +140,7 @@ export function Pipeline() {
   // keep their own `useOpportunities()` call, which shares this same cache
   // entry (`pipelineKeys.list`) rather than firing a second network request.
   const { data: deals, isLoading, isError, error } = useOpportunities();
-  const allDeals = deals ?? [];
+  const allDeals = useMemo(() => deals ?? [], [deals]);
   const activeDeals = useMemo(() => allDeals.filter(isActiveDeal), [allDeals]);
   const closedDeals = useMemo(() => allDeals.filter(isClosed), [allDeals]);
   const visibleDeals = dealsFilter === "active" ? activeDeals : closedDeals;

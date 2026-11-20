@@ -772,9 +772,9 @@ model ProjectReview {
 }
 
 // Pipeline module (Solution Architect sales tracker) — native port of
-// Velora (docs/plans/pipeline-native-port-plan.md). UUID ids are preserved
+// Velora (docs/archive/plans/pipeline-native-port-plan.md). UUID ids are preserved
 // verbatim from the Velora source so the one-time data import
-// (backend/scripts/import-velora.ts) can copy rows and their foreign keys
+// (since retired) could copy rows and their foreign keys
 // without minting new identifiers.
 model Opportunity {
   id              String                @id @default(uuid())
@@ -886,7 +886,7 @@ model CustomerLink {
 }
 
 // Same shape on a task (task panel, "Links"). Internal only, same as
-// ProjectLink. Not copied when a task is duplicated.
+// ProjectLink. Copied as new rows (same label and url) when a task is duplicated.
 model TaskLink {
   id        String   @id @default(uuid())
   taskId    Int      @map("task_id")

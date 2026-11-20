@@ -35,7 +35,7 @@ import { assertEpicNotOnSubtask, assertValidEpic } from "../lib/epics.js";
 import { computeProjectHealth, computeSlipDays } from "../lib/projectHealth.js";
 import { COUNTED_TASKS_COUNT, COUNTED_TASK_STATUS_FILTER } from "../lib/taskStatus.js";
 import { ensureAssigneeIsMember } from "../lib/projectMembers.js";
-import { assertActiveUser } from "../lib/users.js";
+import { assertActiveUser, assertEpicOwnerInProject } from "../lib/users.js";
 import {
   diffProjectChanges,
   recordActivity,
@@ -54,6 +54,7 @@ import {
   onHoldSinceFor,
   shiftOpenDates,
 } from "../lib/projectLifecycle.js";
+import { assertNoNewInactiveServices } from "../lib/serviceAssignment.js";
 import { MAX_LABEL_IDS, MAX_SERVICE_ASSIGNMENTS, MAX_SERVICE_TOOLS } from "../lib/limits.js";
 
 // Kanban WIP limits — one optional positive-int cap per top-level status
@@ -113,8 +114,8 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 // of POST /:id/baseline (previously duplicated three times). Keep list-view
 // includes (GET /, /:id/tasks, etc.) separate — they're intentionally lighter.
 const projectDetailInclude = {
-  sa: { select: { id: true, username: true, email: true, avatarUrl: true } },
-  tam: { select: { id: true, username: true, email: true, avatarUrl: true } },
+  sa: { select: { id: true, username: true, email: true, avatarUrl: true, active: true } },
+  tam: { select: { id: true, username: true, email: true, avatarUrl: true, active: true } },
   customer: { select: { id: true, name: true, tamId: true } },
   baselineLockedBy: { select: { id: true, username: true } },
   // Cancelled tasks are in no total; the delete confirmation says so
@@ -399,6 +400,12 @@ projectsRouter.put(
       if (found !== uniqueIds.length) {
         throw new HttpError(400, "service_not_found", "One or more services do not exist");
       }
+      await assertNoNewInactiveServices(
+        uniqueIds,
+        (await prisma.projectService.findMany({ where: { projectId: id }, select: { serviceId: true } })).map(
+          (r) => r.serviceId,
+        ),
+      );
     }
     await prisma.$transaction([
       prisma.projectService.deleteMany({
@@ -498,15 +505,14 @@ projectsRouter.patch(
       });
       // A changed TAM or SA must exist (400 instead of a missing-row 404 /
       // foreign-key 500; docs/archive/plans/application-review-2026-10-22.md,
-      // F-23). An inactive account is still accepted here — activity.test.ts
-      // pins that an inactive new SA can be set and is simply not notified —
-      // unlike POST /projects, which requires an active one. Re-saving the
-      // current seat holder is not a change.
+      // F-23). Like POST /projects, a NEW holder must be active; re-saving the
+      // current seat holder is not a change and passes even if they have been
+      // deactivated since.
       if (body.tamId !== undefined && body.tamId !== before.tam.id) {
-        await assertActiveUser(tx, body.tamId, "tam", { requireActive: false });
+        await assertActiveUser(tx, body.tamId, "tam");
       }
       if (body.saId != null && body.saId !== before.sa?.id) {
-        await assertActiveUser(tx, body.saId, "sa", { requireActive: false });
+        await assertActiveUser(tx, body.saId, "sa");
       }
       // Lifecycle side effects ride the same transaction as the status write
       // (docs/archive/plans/feedback-round-lifecycle-spec.md F1, F7).
@@ -606,6 +612,17 @@ projectsRouter.post(
 
     const status = body.status ?? "TODO";
 
+    // Same rule PATCH /tasks/:id applies (ISS-028): a milestone's start is its
+    // due date, so only a plain task can arrive inverted.
+    if (
+      !body.isMilestone &&
+      body.startDate &&
+      body.dueDate &&
+      utcMidnightOf(body.dueDate).getTime() < utcMidnightOf(body.startDate).getTime()
+    ) {
+      throw new HttpError(400, "invalid_date_range", "Due date cannot be before the start date");
+    }
+
     const task = await prisma.$transaction(async (tx) => {
       // The append position below is a sibling count: serialise with any
       // in-flight re-pack in this project so the new row can't collide.
@@ -630,7 +647,7 @@ projectsRouter.post(
       // Assigning someone who cannot see the project adds them as a member
       // (same transaction as the task write).
       if (body.assignedToId != null) {
-        await assertActiveUser(tx, body.assignedToId, "assignee", { requireActive: false });
+        await assertActiveUser(tx, body.assignedToId, "assignee");
         const added = await ensureAssigneeIsMember(tx, id, body.assignedToId, req.user!.sub);
         if (added) {
           await recordActivity(tx, {
@@ -721,17 +738,22 @@ projectsRouter.post(
     const { id } = req.params as unknown as z.infer<typeof idParamSchema>;
     const body = req.body as z.infer<typeof createSectionSchema>;
     await ensureProjectVisible(req.user!, id);
-    const max = await prisma.section.aggregate({
-      where: { projectId: id },
-      _max: { position: true },
-    });
-    const section = await prisma.section.create({
-      data: {
-        projectId: id,
-        name: body.name,
-        position: body.position ?? (max._max.position ?? -1) + 1,
-        ...(body.color !== undefined && { color: body.color }),
-      },
+    // max(position) + 1 is read under the project lock so concurrent creates
+    // get distinct positions (docs/ISSUES.md ISS-029).
+    const section = await prisma.$transaction(async (tx) => {
+      await lockProject(tx, id);
+      const max = await tx.section.aggregate({
+        where: { projectId: id },
+        _max: { position: true },
+      });
+      return tx.section.create({
+        data: {
+          projectId: id,
+          name: body.name,
+          position: body.position ?? (max._max.position ?? -1) + 1,
+          ...(body.color !== undefined && { color: body.color }),
+        },
+      });
     });
     res.status(201).json(section);
   },
@@ -790,20 +812,21 @@ projectsRouter.post(
     const body = req.body as z.infer<typeof createEpicSchema>;
     await ensureProjectVisible(req.user!, id);
 
-    // Appends at the end. Epics have no re-pack on delete (unlike tasks'
-    // countSiblings, which is safe because DELETE /tasks/:id never re-packs
-    // either, but nothing here re-packs the epic list after a delete), so a
-    // plain count would collide with — or land before — an existing epic
+    // Appends at the end. Nothing re-packs the epic list after a delete
+    // (DELETE /tasks/:id re-packs task siblings, but epics have no such
+    // step), so a plain count would collide with — or land before — an existing epic
     // once any earlier epic has been deleted (count != max position + 1).
     // max(position) + 1 mirrors the sections POST /:id/sections above.
-    const max = await prisma.epic.aggregate({
-      where: { projectId: id },
-      _max: { position: true },
-    });
-    const position = (max._max.position ?? -1) + 1;
     const epic = await prisma.$transaction(async (tx) => {
+      await lockProject(tx, id);
+      const max = await tx.epic.aggregate({
+        where: { projectId: id },
+        _max: { position: true },
+      });
+      const position = (max._max.position ?? -1) + 1;
       if (body.ownerId != null) {
-        await assertActiveUser(tx, body.ownerId, "owner", { requireActive: false });
+        await assertActiveUser(tx, body.ownerId, "owner");
+        await assertEpicOwnerInProject(tx, id, body.ownerId);
       }
       const created = await tx.epic.create({
         data: {
@@ -1274,7 +1297,7 @@ projectsRouter.get(
 
 projectsRouter.post(
   "/:id/labels",
-  requirePermission("project:write"),
+  requirePermission("task:write"),
   validate("params", idParamSchema),
   validate("body", createLabelSchema),
   async (req, res) => {

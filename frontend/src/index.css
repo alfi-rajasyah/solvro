@@ -1,5 +1,33 @@
+/* Material Symbols stylesheet. It is imported into its own `icons` layer so
+   its unlayered-by-default rules cannot beat Tailwind utilities (`hidden`,
+   `sm:inline`, `text-base`, `text-[20px]` on an icon element). Vite hoists
+   this @import above the layer-order statement in a production build, which
+   makes `icons` the lowest layer; the `@layer base` block after the Tailwind
+   import therefore restates the icon-font essentials, so an icon on a
+   <button> keeps its font against preflight's `button { font: inherit }`
+   whatever the import order. */
+@import url("https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap")
+  layer(icons);
 @import "tailwindcss";
 @import "tw-animate-css";
+
+@layer base {
+  .material-symbols-outlined {
+    font-family: "Material Symbols Outlined";
+    font-weight: normal;
+    font-style: normal;
+    font-size: 24px;
+    line-height: 1;
+    letter-spacing: normal;
+    text-transform: none;
+    display: inline-block;
+    white-space: nowrap;
+    word-wrap: normal;
+    direction: ltr;
+    font-feature-settings: "liga";
+    -webkit-font-smoothing: antialiased;
+  }
+}
 
 /* Class-driven dark mode — theme.tsx toggles `.dark` on <html>; this variant
    replaces the v3 `darkMode: "class"` config. */
@@ -157,8 +185,8 @@
      warning reuse the chip-emerald and chip-amber text values (Alert draws
      a single solid tone with its own opacity modifiers, the same shape as
      --error, not a separate background/text pair). info uses the
-     chip-violet family: the only chip hue with no status meaning assigned
-     elsewhere. invert reuses inverse-surface and inverse-on-surface: a
+     chip-violet family: no status chip uses violet; its other use is the
+     Critical Path mark on the Gantt (SolvroBar, CriticalPathMark). invert reuses inverse-surface and inverse-on-surface: a
      flipped-polarity filled alert is exactly what that pair already means.
      invert-foreground pairs with invert; the other three tones have no
      foreground companion because alert.tsx never references one (it pairs
@@ -210,7 +238,7 @@
     --on-primary: 255 255 255;
     --primary-container: 200 230 207;
     --on-primary-container: 15 43 22;
-    --inverse-primary: 58 174 81;
+    --inverse-primary: 58 175 81;
     --secondary: 95 94 87;
     --on-secondary: 255 255 255;
     --secondary-container: 224 223 216;
@@ -256,7 +284,7 @@
     --inverse-on-surface: 35 35 33;
     --outline: 74 74 71;
     --outline-variant: 58 58 55;
-    --primary: 58 174 81;
+    --primary: 58 175 81;
     --on-primary: 15 43 22;
     --primary-container: 45 144 66;
     --on-primary-container: 232 247 235;
@@ -345,6 +373,22 @@
 @layer components {
   .material-symbols-outlined {
     font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
+  }
+}
+
+/* Hover state for a solid `bg-primary text-on-primary` button. Light: the pale
+   container with its dark pair (11.4:1). Dark: the container is a mid green
+   that no token text clears 4.5:1 on, so dark keeps the resting text and
+   fades the fill to 90% (4.6:1 over --surface, 4.57:1 over the darkest
+   surface). One class so the pair is not hand-copied per button. */
+@utility primary-hover {
+  &:hover {
+    background-color: var(--color-primary-container);
+    color: var(--color-on-primary-container);
+  }
+  &:where(.dark, .dark *):hover {
+    background-color: color-mix(in srgb, var(--color-primary) 90%, transparent);
+    color: var(--color-on-primary);
   }
 }
 

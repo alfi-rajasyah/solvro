@@ -50,8 +50,10 @@ async function setWebhookSecret(secret: string): Promise<void> {
   bustItopConfigCache();
 }
 
-function post(secretHeader?: string) {
-  const req = request(app).post("/webhook/itop");
+function post(secretHeader?: string, ip?: string) {
+  let req = request(app).post("/webhook/itop");
+  // TRUST_PROXY is 1 hop in tests, so the X-Forwarded-For value is the client IP.
+  if (ip) req = req.set("X-Forwarded-For", ip);
   return secretHeader === undefined ? req : req.set(HEADER, secretHeader);
 }
 
@@ -146,18 +148,41 @@ describe("POST /webhook/itop — no auth required, but secret-gated", () => {
     expect(res.status).toBe(202);
   });
 
-  it("429s rate_limited on the 61st call within 60s, regardless of secret validity", async () => {
+  it("429s rate_limited on the 61st call within 60s across clients, regardless of secret validity", async () => {
     // No webhook secret configured at all — every one of the first 60 calls
     // 404s on its own, but the wider all-calls window (checked before the
-    // config read / secret compare) trips independently of that, proving
-    // it's not merely counting accepted or even secret-checked calls.
+    // config read / secret compare) trips independently of that. Distinct
+    // client IPs keep the per-IP window out of it.
     for (let i = 0; i < 60; i++) {
-      const res = await post("whatever");
+      const res = await post("whatever", `10.0.0.${i + 1}`);
       expect(res.status, `call ${i + 1}`).toBe(404);
     }
-    const res61 = await post("whatever");
+    const res61 = await post("whatever", "10.0.1.1");
     expect(res61.status).toBe(429);
     expect(res61.body.code).toBe("rate_limited");
+  });
+
+  it("a flooding IP is throttled on its own 31st call and does not starve another client", async () => {
+    await setWebhookSecret("correct-secret-value");
+    for (let i = 0; i < 30; i++) {
+      const res = await post("nope", "10.0.0.1");
+      expect(res.status, `call ${i + 1}`).toBe(401);
+    }
+    const flooded = await post("correct-secret-value", "10.0.0.1");
+    expect(flooded.status).toBe(429);
+    expect(flooded.body.code).toBe("rate_limited");
+    expect(flooded.headers["retry-after"]).toBeDefined();
+
+    const other = await post("correct-secret-value", "10.0.0.2");
+    expect(other.status).toBe(202);
+  });
+
+  it("marks every answer no-store and noindex", async () => {
+    await setWebhookSecret("correct-secret-value");
+    for (const res of [await post("nope"), await post("correct-secret-value")]) {
+      expect(res.headers["cache-control"]).toBe("no-store");
+      expect(res.headers["x-robots-tag"]).toBe("noindex");
+    }
   });
 
   it("logs at most one rejection warning per window for a burst of bad-secret calls", async () => {

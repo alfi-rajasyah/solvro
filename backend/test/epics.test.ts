@@ -554,3 +554,59 @@ describe("Solution Architect is read-only on epics", () => {
     expect(detail.status).toBe(404);
   });
 });
+
+describe("epic owner must be one of the project's people", () => {
+  const bearer = (t: string) => ({ Authorization: `Bearer ${t}` });
+
+  it("accepts the TAM, the SA and a member; refuses anyone else with 400 owner_not_in_project", async () => {
+    const tam = await createUserWithRole("TAM");
+    const sa = await createUserWithRole("SA");
+    const member = await createUserWithRole("TAM");
+    const stranger = await createUserWithRole("TAM");
+    const project = await prisma.project.create({
+      data: { name: `Owners ${Date.now()}-${Math.random()}`, tamId: tam.userId, saId: sa.userId, status: "ACTIVE" },
+    });
+    await prisma.projectMember.create({ data: { projectId: project.id, userId: member.userId } });
+
+    for (const id of [tam.userId, sa.userId, member.userId]) {
+      await createEpic(project.id, { ownerId: id });
+    }
+    const refused = await request(app)
+      .post(`/projects/${project.id}/epics`)
+      .set(bearer(token))
+      .send({ title: "No", ownerId: stranger.userId });
+    expect(refused.status).toBe(400);
+    expect(refused.body.code).toBe("owner_not_in_project");
+
+    const epic = await createEpic(project.id, { ownerId: null });
+    const patched = await patchEpic(epic.id, { ownerId: stranger.userId });
+    expect(patched.status).toBe(400);
+    expect(patched.body.code).toBe("owner_not_in_project");
+    expect((await patchEpic(epic.id, { ownerId: member.userId })).status).toBe(200);
+    expect((await patchEpic(epic.id, { ownerId: null })).status).toBe(200);
+  });
+
+  it("an unchanged owner passes even after leaving the project or being deactivated; a changed inactive owner is refused", async () => {
+    const tam = await createUserWithRole("TAM");
+    const member = await createUserWithRole("TAM");
+    const project = await prisma.project.create({
+      data: { name: `Owners ${Date.now()}-${Math.random()}`, tamId: tam.userId, status: "ACTIVE" },
+    });
+    await prisma.projectMember.create({ data: { projectId: project.id, userId: member.userId } });
+    const epic = await createEpic(project.id, { ownerId: member.userId });
+
+    await prisma.projectMember.delete({
+      where: { projectId_userId: { projectId: project.id, userId: member.userId } },
+    });
+    const resave = await patchEpic(epic.id, { title: "Renamed", ownerId: member.userId });
+    expect(resave.status).toBe(200);
+    expect(resave.body.ownerId).toBe(member.userId);
+
+    const other = await createUserWithRole("TAM");
+    await prisma.projectMember.create({ data: { projectId: project.id, userId: other.userId } });
+    await prisma.user.update({ where: { id: other.userId }, data: { active: false } });
+    const refused = await patchEpic(epic.id, { ownerId: other.userId });
+    expect(refused.status).toBe(400);
+    expect(refused.body.code).toBe("owner_not_found");
+  });
+});

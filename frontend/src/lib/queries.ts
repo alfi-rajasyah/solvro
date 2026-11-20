@@ -49,6 +49,8 @@ export interface UserSummary {
   role: Role;
   /** Can open the Pipeline (`pipeline:view` or `*`) — the one permission fact the directory exposes. */
   pipelineAccess: boolean;
+  /** The role grants at least one permission: the one receiver rule for handover and reassign pickers. */
+  hasAccess: boolean;
   /** Inactive accounts stay in the list; pickers filter them out. */
   active: boolean;
   avatarUrl: string | null;
@@ -155,6 +157,9 @@ export interface ProjectServiceAssignment {
 }
 
 export interface CustomerDetail extends CustomerSummary {
+  /** iTop organisation this customer is mapped to (GET /customers/:id returns the scalar columns). */
+  itopOrgId: number | null;
+  itopOrgName: string | null;
   projects: ProjectSummary[];
   services: CustomerServiceAssignment[];
 }
@@ -210,10 +215,10 @@ export interface ProjectSummary {
 }
 
 export interface ProjectDetail extends ProjectSummary {
-  sa: { id: number; username: string; email: string; avatarUrl?: string | null } | null;
+  sa: { id: number; username: string; email: string; avatarUrl?: string | null; active?: boolean } | null;
   /** Present on GET /projects/:id; adds the baseline slip (whole days, null without a baseline). */
   health?: ProjectHealth & { slipDays: number | null };
-  tam: { id: number; username: string; email: string; avatarUrl?: string | null };
+  tam: { id: number; username: string; email: string; avatarUrl?: string | null; active?: boolean };
   /** `tamId` is the customer's owner (null = unowned). */
   customer: { id: number; name: string; tamId?: number | null } | null;
   baselineLockedBy: { id: number; username: string } | null;
@@ -230,6 +235,8 @@ export interface ProjectMember {
   username: string;
   email: string;
   avatarUrl: string | null;
+  /** False once the account is deactivated; the member row stays. */
+  active: boolean;
   addedAt: string;
   addedBy: { id: number; username: string } | null;
   /** Tasks in this project assigned to the member; removing them unassigns these. */
@@ -375,6 +382,7 @@ export interface TaskWithProject extends Task {
   project: {
     id: number;
     name: string;
+    status: ProjectStatus;
     customer: { id: number; name: string } | null;
   };
 }
@@ -567,7 +575,7 @@ export interface ProjectsFilter {
 
 // ─────────────────────────────────────────────────────────────────────────
 // Daily Review v2 — mirrors backend/src/routes/dailyReview.ts's response
-// shape 1:1 (docs/plans/daily-review-v2-spec.md §5.1). Date fields
+// shape 1:1 (docs/archive/plans/daily-review-v2-spec.md §5.1). Date fields
 // (`noteDate`, `weekStart`, `dueDate`, `doneAt`, `updatedAt`, `createdAt`,
 // `reviewDate`) all arrive as ISO strings — the backend's `@db.Date` columns
 // serialise as `T00:00:00.000Z` instants; read the calendar day via
@@ -688,7 +696,7 @@ export interface DailyReviewProject {
   status: ProjectStatus;
   customerId: number | null;
   baselineLockedAt: string | null;
-  phase: string;
+  phase: string | null;
   progress: { done: number; total: number };
   slipDays: number | null;
   // The backend filters to `dueDate !== null` before building this list
@@ -845,7 +853,13 @@ export const queryKeys = {
   myItopToken: ["itop", "me", "token"] as const,
   // Single ticket + its public/private log (Task 5.4) — distinct subtree
   // from `itopTicketByRef` below (keyed by id, not ref).
-  itopTicket: (id: number) => ["itop", "tickets", id] as const,
+  // `itopTicketRoot` is the prefix for invalidation; `itopTicket` adds the
+  // viewer's UTC offset because `myMinutesThisWeek` is bucketed by the local
+  // ISO week, so a timezone or DST change fetches fresh instead of reading
+  // the old week's figure.
+  itopTicketRoot: (id: number) => ["itop", "tickets", id] as const,
+  itopTicket: (id: number, utcOffsetMinutes: number) =>
+    [...queryKeys.itopTicketRoot(id), utcOffsetMinutes] as const,
   // Task ticket ref lookup (Task 4.2) — one entry per ref rather than a
   // customer-scoped key: a task's pinned ref may belong to a customer the
   // viewer hasn't opened, and `GET /itop/tickets/by-ref/:ref` does its own
@@ -1771,6 +1785,33 @@ export interface ServiceAssignmentInput {
   tools: string[];
 }
 
+// Optimistic services[] for the service-mapping PUTs: keeps rows already
+// assigned (so their ids and createdAt survive), builds a new row from the
+// existing assignment's service or the services catalogue cache, and drops a
+// serviceId neither knows — the settle refetch brings that one in.
+function optimisticAssignments<A extends { serviceId: number; service: Service; tools: string[] }>(
+  prev: A[],
+  inputs: ServiceAssignmentInput[],
+  catalogue: Service[] | undefined,
+  build: (service: Service, tools: string[]) => A,
+): A[] {
+  const out: A[] = [];
+  for (const input of inputs) {
+    const existing = prev.find((a) => a.serviceId === input.serviceId);
+    if (existing) {
+      out.push({ ...existing, tools: input.tools });
+      continue;
+    }
+    const service = catalogue?.find((s) => s.id === input.serviceId);
+    if (service) out.push(build(service, input.tools));
+  }
+  // Codepoint compare, not localeCompare: closer to the server's ordering and
+  // independent of the host locale (same choice as the pipeline helpers below).
+  return out.sort((a, b) =>
+    a.service.name < b.service.name ? -1 : a.service.name > b.service.name ? 1 : 0,
+  );
+}
+
 export function useUpdateCustomerServices(customerId: number) {
   const qc = useQueryClient();
   return useMutation({
@@ -1779,7 +1820,29 @@ export function useUpdateCustomerServices(customerId: number) {
         method: "PUT",
         body: { assignments },
       }),
-    onSuccess: () => {
+    onMutate: async (assignments) => {
+      await qc.cancelQueries({ queryKey: queryKeys.customer(customerId) });
+      const prev = qc.getQueryData<CustomerDetail>(queryKeys.customer(customerId));
+      if (prev) {
+        const catalogue = qc.getQueryData<Service[]>(["services"]);
+        qc.setQueryData<CustomerDetail>(queryKeys.customer(customerId), {
+          ...prev,
+          services: optimisticAssignments(prev.services, assignments, catalogue, (service, tools) => ({
+            id: -service.id,
+            customerId,
+            serviceId: service.id,
+            service,
+            tools,
+            createdAt: new Date().toISOString(),
+          })),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(queryKeys.customer(customerId), ctx.prev);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.customer(customerId) });
       qc.invalidateQueries({ queryKey: queryKeys.customers });
     },
@@ -1794,7 +1857,29 @@ export function useUpdateProjectServices(projectId: number) {
         method: "PUT",
         body: { assignments },
       }),
-    onSuccess: () => {
+    onMutate: async (assignments) => {
+      await qc.cancelQueries({ queryKey: queryKeys.project(projectId) });
+      const prev = qc.getQueryData<ProjectDetail>(queryKeys.project(projectId));
+      if (prev) {
+        const catalogue = qc.getQueryData<Service[]>(["services"]);
+        qc.setQueryData<ProjectDetail>(queryKeys.project(projectId), {
+          ...prev,
+          services: optimisticAssignments(prev.services, assignments, catalogue, (service, tools) => ({
+            id: -service.id,
+            projectId,
+            serviceId: service.id,
+            service,
+            tools,
+            createdAt: new Date().toISOString(),
+          })),
+        });
+      }
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) qc.setQueryData(queryKeys.project(projectId), ctx.prev);
+    },
+    onSettled: () => {
       qc.invalidateQueries({ queryKey: queryKeys.project(projectId) });
       qc.invalidateQueries({ queryKey: ["projects"] });
     },
@@ -1855,6 +1940,22 @@ function siblingListId(t: Pick<Task, "parentTaskId" | "status">): string {
   return t.parentTaskId === null ? "top" : `sub:${t.parentTaskId}`;
 }
 
+// The nested `section` is what TaskPanel's chip reads: on a section change
+// take it from the sections cache (null when unassigned). Without the cache
+// entry the old object is kept and the settle refetch corrects it.
+function nestedSectionFor(
+  current: Pick<Task, "sectionId" | "section">,
+  nextSectionId: number | null,
+  sections: Pick<Section, "id" | "name" | "position" | "color">[] | undefined,
+): Task["section"] {
+  if (nextSectionId === current.sectionId) return current.section;
+  if (nextSectionId === null) return null;
+  const found = sections?.find((s) => s.id === nextSectionId);
+  return found
+    ? { id: found.id, name: found.name, position: found.position, color: found.color }
+    : current.section;
+}
+
 /**
  * Reorders/re-parents `id` inside a locally-cached task list exactly the way
  * the backend's moveTaskWithinSiblings does: remove from the old sibling
@@ -1872,6 +1973,7 @@ export function reorderTasksLocally(
   tasks: Task[],
   id: number,
   patch: Pick<UpdateTaskInput, "status" | "parentTaskId" | "position" | "sectionId">,
+  sections?: Pick<Section, "id" | "name" | "position" | "color">[],
 ): Task[] {
   const current = tasks.find((t) => t.id === id);
   if (!current) return tasks;
@@ -1886,6 +1988,7 @@ export function reorderTasksLocally(
     status: nextStatus,
     parentTaskId: nextParentTaskId,
     sectionId: nextSectionId,
+    section: nestedSectionFor(current, nextSectionId, sections),
     // Mirror the backend: re-parenting under a parent clears epicId in the
     // same transaction (§4) — a subtask never carries its own epic link.
     epicId: nextParentTaskId !== null ? null : current.epicId,
@@ -2015,8 +2118,9 @@ export function useUpdateTask(projectId: number) {
               status: patch.status ?? current.status,
             });
         const touchesOrdering = patch.position !== undefined || listChanged;
+        const sectionsCache = qc.getQueryData<Section[]>(queryKeys.projectSections(projectId));
         const next = touchesOrdering
-          ? reorderTasksLocally(prev, id, patch)
+          ? reorderTasksLocally(prev, id, patch, sectionsCache)
           : prev.map((t) =>
               t.id === id
                 ? ({
@@ -2025,6 +2129,9 @@ export function useUpdateTask(projectId: number) {
                     // Same server mirror as reorderTasksLocally above, for
                     // whichever plain-merge patch also touches parentTaskId.
                     ...(patch.parentTaskId != null ? { epicId: null } : {}),
+                    ...(patch.sectionId !== undefined
+                      ? { section: nestedSectionFor(t, patch.sectionId, sectionsCache) }
+                      : {}),
                   } as Task)
                 : t,
             );
@@ -2183,6 +2290,8 @@ export function useCreateTask(projectId: number) {
       qc.invalidateQueries({ queryKey: queryKeys.overview });
       invalidateProjectHealth(qc, projectId);
       invalidateProjectActivity(qc, projectId);
+      // A new overdue TODO task changes the Daily Review attention lists.
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
       // Same as useUpdateTask: an assignee who is not yet a member becomes one.
       if (variables.assignedToId != null) {
         qc.invalidateQueries({ queryKey: queryKeys.projectMembers(projectId) });
@@ -2202,28 +2311,27 @@ export function useDuplicateTask(projectId: number) {
   return useMutation({
     mutationFn: (taskId: number) =>
       apiRequest<Task>(`/tasks/${taskId}/duplicate`, { method: "POST" }),
-    // Returning the Promise.all here (rather than firing invalidations without
-    // awaiting) makes React Query await the refetches before resolving
-    // mutateAsync — TaskPanel's handleDuplicate awaits the copy and then
-    // re-targets the panel at it, so the refetched list is already in cache
-    // by the time that happens, avoiding a "Loading task…" flash.
-    onSuccess: (data) =>
-      Promise.all([
-        qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) }),
-        qc.invalidateQueries({ queryKey: ["tasks"] }),
-        qc.invalidateQueries({ queryKey: queryKeys.overview }),
-        invalidateProjectHealth(qc, projectId),
-        invalidateProjectActivity(qc, projectId),
-        // Same rationale as useUpdateTask/useDeleteTask above — a duplicated
-        // task can newly appear in the Daily Review page's attention lists.
-        qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot }),
-        // lib/duplicate.ts copies keep `epicId` (§4) — the duplicate can
-        // count toward the same epic's total.
-        qc.invalidateQueries({ queryKey: queryKeys.projectEpics(projectId) }),
-        ...(data.epicId !== null
-          ? [qc.invalidateQueries({ queryKey: queryKeys.epic(data.epicId) })]
-          : []),
-      ]),
+    // Only the projectTasks refetch is returned, so only it is awaited: React
+    // Query holds mutateAsync until it settles, and TaskPanel's handleDuplicate
+    // re-targets the panel at the copy afterwards, so the refetched list is
+    // already in cache by then (no "Loading task…" flash). The rest fire
+    // un-awaited so isPending does not wait on them.
+    onSuccess: (data) => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: queryKeys.overview });
+      invalidateProjectHealth(qc, projectId);
+      invalidateProjectActivity(qc, projectId);
+      // Same rationale as useUpdateTask/useDeleteTask above — a duplicated
+      // task can newly appear in the Daily Review page's attention lists.
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      // lib/duplicate.ts copies keep `epicId` (§4) — the duplicate can
+      // count toward the same epic's total.
+      qc.invalidateQueries({ queryKey: queryKeys.projectEpics(projectId) });
+      if (data.epicId !== null) {
+        qc.invalidateQueries({ queryKey: queryKeys.epic(data.epicId) });
+      }
+      return qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
+    },
   });
 }
 
@@ -2349,9 +2457,14 @@ export function useUpdateSection(projectId: number) {
         qc.setQueryData(queryKeys.projectSections(projectId), ctx.prev);
     },
     onSettled: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
       // Tasks carry `section: { color }`; invalidate so the diagram repaints.
       qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) });
+      // The snapshot restored on error predates this mutation's queued
+      // successors, so after a failure their PATCHes would run against a
+      // server that never applied this one. Re-seed from the server and
+      // return the promise: it holds the scope's queue until the cache is
+      // authoritative again.
+      return qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) });
     },
   });
 }
@@ -2375,26 +2488,26 @@ export function useDuplicateSection(projectId: number) {
       apiRequest<{ section: Section; taskCount: number }>(`/sections/${sectionId}/duplicate`, {
         method: "POST",
       }),
-    // Same shape as useDuplicateTask above — Promise.all so the invalidated
-    // queries have refetched before mutateAsync resolves, plus
-    // projectSections (the new group header) alongside the task-shaped
-    // invalidations every task-tree write already does.
-    onSuccess: () =>
-      Promise.all([
-        qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) }),
+    // Like useDuplicateTask above, but projectSections is awaited too: the
+    // list groups by sections, so isPending holds until the copy (new group
+    // header and its tasks) is visible. The rest fire un-awaited.
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: queryKeys.overview });
+      invalidateProjectHealth(qc, projectId);
+      qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot });
+      invalidateProjectActivity(qc, projectId);
+      // The section's duplicated tasks keep their `epicId` (§4) — their
+      // epics' done/total counts can change. Which epics is unknown here
+      // (the response is just `{ section, taskCount }`), so bust every
+      // open epic-detail cache alongside the list.
+      qc.invalidateQueries({ queryKey: queryKeys.projectEpics(projectId) });
+      qc.invalidateQueries({ queryKey: ["epics"] });
+      return Promise.all([
         qc.invalidateQueries({ queryKey: queryKeys.projectTasks(projectId) }),
-        qc.invalidateQueries({ queryKey: ["tasks"] }),
-        qc.invalidateQueries({ queryKey: queryKeys.overview }),
-        invalidateProjectHealth(qc, projectId),
-        qc.invalidateQueries({ queryKey: queryKeys.dailyReviewRoot }),
-        invalidateProjectActivity(qc, projectId),
-        // The section's duplicated tasks keep their `epicId` (§4) — their
-        // epics' done/total counts can change. Which epics is unknown here
-        // (the response is just `{ section, taskCount }`), so bust every
-        // open epic-detail cache alongside the list.
-        qc.invalidateQueries({ queryKey: queryKeys.projectEpics(projectId) }),
-        qc.invalidateQueries({ queryKey: ["epics"] }),
-      ]),
+        qc.invalidateQueries({ queryKey: queryKeys.projectSections(projectId) }),
+      ]);
+    },
   });
 }
 
@@ -3389,6 +3502,7 @@ export interface ItopStatus {
   baseUrl: string | null;
   lastSyncAt: string | null;
   lastSyncOk: boolean | null;
+  lastSyncFailed: boolean;
   // `lastSyncError` is deliberately NOT part of this response — the raw
   // iTop error text is admin-only (see the Admin "iTop" tab / GET
   // /admin/itop/settings for that). Non-admin callers only learn
@@ -3513,6 +3627,19 @@ export function useCustomerTickets(
     poll = false,
   }: { scope: ItopTicketScope; cls?: ItopTicketClass; enabled?: boolean; poll?: boolean },
 ) {
+  const qc = useQueryClient();
+  // Re-render when the drag/mutation gate flips so the poll below is cleared
+  // on pause and re-armed on resume (see `useLiveRefresh`). Only a polling
+  // caller subscribes; the gate-check callers stay inert.
+  const subscribeGate = useCallback(
+    (listener: () => void) => (poll ? subscribeRefreshGate(qc, listener) : () => {}),
+    [qc, poll],
+  );
+  const getGateSnapshot = useCallback(
+    () => poll && shouldPauseRefresh(qc.isMutating()),
+    [qc, poll],
+  );
+  useSyncExternalStore(subscribeGate, getGateSnapshot);
   return useQuery({
     queryKey: queryKeys.customerTickets(customerId, scope, cls),
     queryFn: ({ signal }) => {
@@ -3525,15 +3652,20 @@ export function useCustomerTickets(
     },
     enabled,
     staleTime: 30_000,
-    // The first `refetchInterval` in the app — keep it scoped to this hook
-    // only. Backs the Tickets tab's "refreshed every 5 minutes" promise
+    // A 60 s poll scoped to this hook (the project queries use
+    // `useLiveRefresh` instead). Backs the Tickets tab's "refreshed every 5 minutes" promise
     // (docs/archive/plans/itop-integration-spec.md's mockup) while resting on
     // top of the backend's own sync cadence; `refetchIntervalInBackground:
     // false` so a backgrounded tab stops polling. `poll` defaults false so
     // CustomerDetail.tsx's own tab-visibility gate call (every customer page
     // load) doesn't quietly turn into a background poll for every visitor —
     // only TicketsTab.tsx's own call (the tab actually open) passes `true`.
-    refetchInterval: poll ? 60_000 : false,
+    // The poll holds off while a board drag or a mutation is live
+    // (`shouldPauseRefresh`), so a refetch never re-renders the ticket board
+    // under the cursor.
+    refetchInterval: () =>
+      poll && !shouldPauseRefresh(qc.isMutating()) ? 60_000 : false,
+    refetchOnWindowFocus: () => !shouldPauseRefresh(qc.isMutating()),
     refetchIntervalInBackground: false,
   });
 }
@@ -3660,20 +3792,18 @@ export interface ItopTicketTeamOption {
   name: string;
 }
 
+/** Local minus UTC, in minutes: the offset the iTop endpoints bucket by. */
+function currentUtcOffsetMinutes(): number {
+  return -new Date().getTimezoneOffset();
+}
+
 export function useItopTicket(id: number | null) {
   // Local minus UTC, in minutes — same computation as `useItopDaily`/
-  // `useUtilization` (Task 7.1): the backend buckets `myMinutesThisWeek` by
-  // the CALLER's local ISO week. Deliberately NOT folded into the query key
-  // below (unlike those two hooks) — `queryKeys.itopTicket(id)` is also the
-  // exact key `useTicketActionFor`/`useAddTicketLog`/`useCreateTicket`/
-  // `useLogTicketTimeFor` read and write via `setQueryData`/`invalidateQueries`
-  // elsewhere in this file; splitting the cache entry by offset would break
-  // those cache writes for no real benefit (a viewer's UTC offset changing
-  // mid-session is a non-event this field can tolerate being briefly stale
-  // for, unlike a whole day/week bucket flipping).
-  const utcOffsetMinutes = -new Date().getTimezoneOffset();
+  // `useUtilization`: the backend buckets `myMinutesThisWeek` by the CALLER's
+  // local ISO week, so the offset is part of the query key.
+  const utcOffsetMinutes = currentUtcOffsetMinutes();
   return useQuery({
-    queryKey: queryKeys.itopTicket(id ?? -1),
+    queryKey: queryKeys.itopTicket(id ?? -1, utcOffsetMinutes),
     queryFn: ({ signal }) =>
       apiRequest<ItopTicketDetail>(
         `/itop/tickets/${id}?utcOffsetMinutes=${utcOffsetMinutes}`,
@@ -3753,7 +3883,7 @@ export function useLogTicketTimeFor() {
       // "this week" figure updates as soon as that refetch lands (it's an
       // active query while the panel's open, so `invalidateQueries` fires it
       // immediately) rather than from this mutation's own response.
-      qc.invalidateQueries({ queryKey: queryKeys.itopTicket(variables.ticketId) });
+      qc.invalidateQueries({ queryKey: queryKeys.itopTicketRoot(variables.ticketId) });
       qc.invalidateQueries({ queryKey: queryKeys.utilizationRoot });
       // Defensive, matching the sibling ticket-write mutations' own
       // invalidation of the customer's ticket list — logging time doesn't
@@ -3816,7 +3946,7 @@ export function useTicketActionFor(customerId: number) {
       }),
     onSuccess: (fresh, variables) => {
       if (fresh.staleAfterWrite) {
-        qc.invalidateQueries({ queryKey: queryKeys.itopTicket(variables.ticketId) });
+        qc.invalidateQueries({ queryKey: queryKeys.itopTicketRoot(variables.ticketId) });
       } else {
         // The action route's `core/get` echo doesn't compute
         // `myMinutesThisWeek` — merging in the
@@ -3824,7 +3954,7 @@ export function useTicketActionFor(customerId: number) {
         // keeps the panel's "this week" figure from flashing to "0.0 h"
         // after every action, until the next full refetch.
         qc.setQueryData(
-          queryKeys.itopTicket(variables.ticketId),
+          queryKeys.itopTicket(variables.ticketId, currentUtcOffsetMinutes()),
           (prev: ItopTicketDetail | undefined) => ({
             ...fresh,
             myMinutesThisWeek: fresh.myMinutesThisWeek ?? prev?.myMinutesThisWeek ?? 0,
@@ -3860,12 +3990,12 @@ export function useAddTicketLog(ticketId: number, customerId: number) {
       }),
     onSuccess: (fresh) => {
       if (fresh.staleAfterWrite) {
-        qc.invalidateQueries({ queryKey: queryKeys.itopTicket(ticketId) });
+        qc.invalidateQueries({ queryKey: queryKeys.itopTicketRoot(ticketId) });
       } else {
         // Same merge rationale as `useTicketActionFor` above — the log
         // route's echo doesn't carry `myMinutesThisWeek` either.
         qc.setQueryData(
-          queryKeys.itopTicket(ticketId),
+          queryKeys.itopTicket(ticketId, currentUtcOffsetMinutes()),
           (prev: ItopTicketDetail | undefined) => ({
             ...fresh,
             myMinutesThisWeek: fresh.myMinutesThisWeek ?? prev?.myMinutesThisWeek ?? 0,
@@ -3959,7 +4089,7 @@ export function useCreateTicket(customerId: number) {
         // A brand-new ticket has no prior cache entry to merge a
         // `myMinutesThisWeek` from, so 0 is simply
         // right for a ticket nobody has logged time on yet.
-        qc.setQueryData(queryKeys.itopTicket(result.id), {
+        qc.setQueryData(queryKeys.itopTicket(result.id, currentUtcOffsetMinutes()), {
           ...result,
           myMinutesThisWeek: result.myMinutesThisWeek ?? 0,
         });
@@ -4095,6 +4225,8 @@ export interface AdminUser {
   email: string;
   active: boolean;
   role: Role;
+  /** The role grants at least one permission (project-reassign receiver rule). */
+  hasAccess: boolean;
   createdAt: string;
   provider: "google" | "password";
   avatarUrl: string | null;
@@ -4150,6 +4282,8 @@ export interface AdminRole {
   permissions: string[];
   userCount: number;
   builtIn: boolean;
+  /** Created by the seed; a role without this is a custom one. */
+  seeded: boolean;
 }
 
 export function useAdminRoles() {
@@ -4457,6 +4591,8 @@ export interface ItopProbeResult {
   name: string;
   ok: boolean;
   message: string;
+  /** An optional probe: a failure is shown but does not fail the connection test. */
+  informational?: boolean;
 }
 
 export interface ItopSettings {
@@ -4850,7 +4986,7 @@ export function useExecutiveReport() {
 // ─────────────────────────────────────────────────────────────────────────
 // Pipeline (Solution Architect) — Opportunity CRUD, activities, links, and
 // the board's stage-move mutation. Mirrors backend/src/routes/opportunities.ts
-// and routes/opportunityItems.ts verbatim (docs/plans/pipeline-native-port-plan.md).
+// and routes/opportunityItems.ts verbatim (docs/archive/plans/pipeline-native-port-plan.md).
 // Own key namespace (`pipelineKeys`) — separate from `queryKeys`/`adminQueryKeys`
 // per frontend/CLAUDE.md.
 // ─────────────────────────────────────────────────────────────────────────

@@ -1,4 +1,7 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { resolveSectionColor, resolveSectionColors } from "@/lib/gantt/palette";
 import { AssigneeAvatar } from "./AssigneeAvatar";
 import { ConfirmModal } from "./ConfirmModal";
 import { CopyLinkButton } from "./CopyLinkButton";
@@ -58,6 +61,7 @@ import {
   useUpdateTask,
   useUsers,
 } from "@/lib/queries";
+import { selectableUsers } from "@/lib/selectableUsers";
 
 const STATUSES: TaskStatus[] = ["TODO", "IN_PROGRESS", "DONE", "CANCELLED"];
 
@@ -107,8 +111,9 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
   // this panel needs for that field.
   const { data: project } = useProject(projectId);
 
-  const { data: tasks } = useProjectTasks(projectId);
+  const { data: tasks, isError: tasksFailed, refetch: refetchTasks } = useProjectTasks(projectId);
   const { data: sections } = useProjectSections(projectId);
+  const sectionColors = useMemo(() => resolveSectionColors(sections ?? []), [sections]);
   const { data: epics, isLoading: epicsLoading } = useProjectEpics(projectId);
   const { data: users } = useUsers();
   const { data: labels } = useProjectLabels(projectId);
@@ -220,14 +225,26 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
     // `tasks` undefined = still loading; once it has loaded, a missing task was
     // deleted (or is not visible to this user) — say so instead of spinning.
     const notFound = tasks !== undefined;
+    const loadFailed = tasks === undefined && tasksFailed;
     return (
       <aside
         ref={panelRef}
         className="fixed right-0 top-14 bottom-0 z-40 flex w-full flex-col border-l border-outline-variant bg-surface-container px-5 py-4 md:w-[380px]"
       >
         <div className="flex items-center justify-between">
-          <span className="text-sm text-on-surface-variant">
-            {notFound ? "Task not found" : "Loading task…"}
+          <span className="flex items-center gap-3 text-sm text-on-surface-variant">
+            <span role="status">
+              {notFound ? "Task not found." : loadFailed ? "Could not load the task." : "Loading task…"}
+            </span>
+            {loadFailed && (
+              <button
+                type="button"
+                onClick={() => void refetchTasks()}
+                className={`rounded-sm font-semibold text-primary hover:underline ${FIELD_FOCUS}`}
+              >
+                Try again
+              </button>
+            )}
           </span>
           <button
             type="button"
@@ -500,6 +517,14 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
           </button>
         </div>
 
+        {/* Outside the scroll area so a failed header-menu action is visible
+            however far the subtasks list has scrolled. */}
+        {error && (
+          <Alert variant="destructive" className="mx-4 mt-3 w-auto shrink-0">
+            <AlertDescription className="text-xs">{error}</AlertDescription>
+          </Alert>
+        )}
+
         <div className="flex-1 overflow-y-auto px-4 py-4">
           {/* Parent breadcrumb — the only way back out of a subtask. */}
           {parentTask && (
@@ -571,7 +596,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                   className={`w-full rounded-sm border border-outline-variant bg-surface-container-lowest px-1.5 py-1 text-xs text-on-surface ${FIELD_FOCUS}`}
                 >
                   <option value="">Unassigned</option>
-                  {(users ?? []).map((u) => (
+                  {selectableUsers(users, [task.assignedToId]).map((u) => (
                     <option key={u.id} value={u.id}>
                       {`${u.username}${assigneeAddsMember(u.id) ? " (not on project)" : ""}`}
                     </option>
@@ -725,7 +750,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                   {task.section && (
                     <span
                       className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: task.section.color }}
+                      style={{ backgroundColor: resolveSectionColor(sectionColors, task.section) }}
                     />
                   )}
                   <span className="text-on-surface">{sectionName}</span>
@@ -772,10 +797,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                       className="flex items-center gap-1.5 rounded-sm px-1 py-0.5 text-left hover:bg-surface-container-high disabled:cursor-default"
                     >
                       {taskEpicPending ? (
-                        <span
-                          aria-hidden="true"
-                          className="h-4 w-16 animate-pulse rounded-full bg-surface-container-high"
-                        />
+                        <Skeleton aria-hidden="true" className="h-4 w-16 rounded-full" />
                       ) : taskEpic ? (
                         <EpicChip epic={taskEpic} compact />
                       ) : (
@@ -814,6 +836,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
               projectId={projectId}
               selectedIds={task.labels.map((l) => l.id)}
               onChange={canEdit ? (ids) => patch({ labelIds: ids }) : () => {}}
+              canCreate={canEdit}
             />
           </div>
 
@@ -956,7 +979,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                           <button
                             type="button"
                             aria-label="Reorder subtask"
-                            className="material-symbols-outlined shrink-0 touch-none rounded-sm text-sm text-on-surface-variant/60 cursor-grab active:cursor-grabbing outline-none focus-visible:outline-solid focus-visible:outline-2 focus-visible:outline-ring"
+                            className={`material-symbols-outlined shrink-0 touch-none rounded-sm text-sm text-on-surface-variant/60 cursor-grab active:cursor-grabbing ${FIELD_FOCUS}`}
                           />
                         }
                       >
@@ -987,12 +1010,6 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
           <div className="mt-4">
             <PanelLinks taskId={task.id} projectId={projectId} canEdit={canEdit} />
           </div>
-
-          {error && (
-            <Alert variant="destructive" className="mt-4">
-              <AlertDescription className="text-xs">{error}</AlertDescription>
-            </Alert>
-          )}
 
           {/* Comments */}
           <div className="mt-5 border-t border-outline-variant pt-4">
@@ -1074,7 +1091,7 @@ function PanelLinks({ taskId, projectId, canEdit }: { taskId: number; projectId:
 }
 
 /**
- * Comment thread + single-line composer per the mockup ("Write a comment…"
+ * Comment thread + composer per the mockup ("Write a comment…"
  * placeholder + green send icon), backed by useComments / useAddComment.
  * This is the app's only comment UI (the former standalone CommentThread
  * component was never mounted and has been removed).
@@ -1082,6 +1099,10 @@ function PanelLinks({ taskId, projectId, canEdit }: { taskId: number; projectId:
 function PanelComments({ taskId, projectId }: { taskId: number; projectId: number }) {
   const { data: comments, isLoading, isError, error } = useComments(taskId);
   const addComment = useAddComment(taskId, projectId);
+  // The comment routes need task:write or project:write; a read-only role
+  // (stakeholder, SA) sees the thread without the box the server would refuse.
+  const { user: authUser } = useAuth();
+  const canComment = hasPermission(authUser, "task:write") || hasPermission(authUser, "project:write");
   const { data: project } = useProject(projectId);
   const { data: members } = useProjectMembers(projectId);
 
@@ -1109,7 +1130,9 @@ function PanelComments({ taskId, projectId }: { taskId: number; projectId: numbe
       </h2>
 
       {isLoading && (
-        <div className="h-12 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+        <SkeletonRegion>
+          <Skeleton className="h-12 rounded-sm" />
+        </SkeletonRegion>
       )}
 
       {isError && (
@@ -1139,14 +1162,16 @@ function PanelComments({ taskId, projectId }: { taskId: number; projectId: numbe
         </ol>
       )}
 
-      <CommentComposer
-        candidates={mentionCandidates}
-        isPending={addComment.isPending}
-        error={addComment.error ? (addComment.error as Error).message : null}
-        onSend={async (body, mentionedUserIds) => {
-          await addComment.mutateAsync({ body, mentionedUserIds });
-        }}
-      />
+      {canComment && (
+        <CommentComposer
+          candidates={mentionCandidates}
+          isPending={addComment.isPending}
+          error={addComment.error ? (addComment.error as Error).message : null}
+          onSend={async (body, mentionedUserIds) => {
+            await addComment.mutateAsync({ body, mentionedUserIds });
+          }}
+        />
+      )}
     </div>
   );
 }

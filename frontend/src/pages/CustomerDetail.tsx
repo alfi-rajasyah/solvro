@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AccountHeader, sumProjectHealth } from "@/components/customer/AccountHeader";
@@ -47,11 +49,11 @@ export function CustomerDetail() {
 
   // iTop Tickets tab gating (Task 1.8): the tab only exists when iTop is
   // configured AND this customer is mapped to an iTop organisation. GET
-  // /customers/:id doesn't expose itopOrgId/itopOrgName (see routes/
-  // customers.ts's select), so "mapped" is derived from the tickets
-  // endpoint's own `mapped` flag instead of a second backend change — this
-  // gate query (scope "ongoing") also doubles as the data the Tickets tab
-  // itself first renders with, since react-query dedupes the identical key.
+  // /customers/:id returns itopOrgId/itopOrgName, but the tab also needs the
+  // tickets endpoint's own `mapped` flag (the mapping can point at an org
+  // iTop no longer knows), so that gate query (scope "ongoing") decides and
+  // doubles as the data the Tickets tab itself first renders with, since
+  // react-query dedupes the identical key.
   // Both hooks below run unconditionally (hook-order rule); `enabled` does
   // the gating so a not-yet-loaded customerId or unconfigured iTop just
   // skips the fetch rather than skipping the hook call.
@@ -170,7 +172,9 @@ export function CustomerDetail() {
 
   if (isLoading) {
     return (
-      <div className="m-6 h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+      <SkeletonRegion className="m-6">
+        <Skeleton className="h-64 rounded-sm" />
+      </SkeletonRegion>
     );
   }
   if (isError || !customer) {
@@ -204,7 +208,9 @@ export function CustomerDetail() {
 
   const totals = sumProjectHealth(customer.projects);
   const itopOrgName =
-    ticketsAvailable && itopTicketsGate.data?.mapped ? (itopTicketsGate.data.orgName ?? EMPTY_VALUE) : null;
+    ticketsAvailable && itopTicketsGate.data?.mapped
+      ? (customer.itopOrgName ?? itopTicketsGate.data.orgName ?? EMPTY_VALUE)
+      : null;
 
   return (
     <div className="space-y-6">

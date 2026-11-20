@@ -23,14 +23,14 @@ const addMemberSchema = z.object({ userId: z.number().int().positive() });
 const memberSelect = {
   userId: true,
   createdAt: true,
-  user: { select: { username: true, email: true, avatarUrl: true } },
+  user: { select: { username: true, email: true, avatarUrl: true, active: true } },
   addedBy: { select: { id: true, username: true } },
 } as const;
 
 type MemberRow = {
   userId: number;
   createdAt: Date;
-  user: { username: string; email: string; avatarUrl: string | null };
+  user: { username: string; email: string; avatarUrl: string | null; active: boolean };
   addedBy: { id: number; username: string } | null;
 };
 
@@ -40,6 +40,7 @@ function toMemberDto(m: MemberRow, assignedTaskCount = 0) {
     username: m.user.username,
     email: m.user.email,
     avatarUrl: m.user.avatarUrl,
+    active: m.user.active,
     addedAt: m.createdAt.toISOString(),
     addedBy: m.addedBy,
     assignedTaskCount,

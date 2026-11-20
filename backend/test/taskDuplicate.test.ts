@@ -6,7 +6,7 @@ import { prisma } from "../src/prisma.js";
 import { createAdminAndToken, createUserWithRole, seedRoles } from "./testAuth.js";
 import { duplicateTaskTree } from "../src/lib/duplicate.js";
 
-// POST /tasks/:id/duplicate — docs/plans/duplicate-tasks-sections.md §3-4.
+// POST /tasks/:id/duplicate — docs/archive/plans/duplicate-tasks-sections.md §3-4.
 // Settled rules: title copied verbatim; status resets to TODO for the copy
 // AND every copied subtask; baselineStartDate/baselineDueDate reset to
 // null; no TaskDependency rows for the copy or its subtasks; comments never
@@ -191,6 +191,22 @@ describe("POST /tasks/:id/duplicate", () => {
       email: otherUser.email,
     });
     expect(copy.section).toEqual({ id: section, name: "Kickoff", position: 0, color: "#94a3b8" });
+  });
+
+  it("copies a task whose assignee was deactivated as unassigned, keeping an active assignee", async () => {
+    const projectId = await createProject(admin.userId);
+    const gone = await createUserWithRole("TAM");
+    const stays = await createUserWithRole("TAM");
+    const sourceGone = await createTask(projectId, admin.token, { title: "Gone", assignedToId: gone.userId });
+    const sourceStays = await createTask(projectId, admin.token, { title: "Stays", assignedToId: stays.userId });
+    await prisma.user.update({ where: { id: gone.userId }, data: { active: false } });
+
+    const copyGone = (await duplicateTask(sourceGone.id, admin.token)).body as TaskRow;
+    const copyStays = (await duplicateTask(sourceStays.id, admin.token)).body as TaskRow;
+    expect(copyGone.assignedToId).toBeNull();
+    expect(copyStays.assignedToId).toBe(stays.userId);
+    // The source keeps its (now deactivated) assignee.
+    expect((await prisma.task.findUniqueOrThrow({ where: { id: sourceGone.id } })).assignedToId).toBe(gone.userId);
   });
 
   // docs/archive/plans/epics-spec.md §4: "lib/duplicate.ts copies keep epicId (same

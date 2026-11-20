@@ -22,6 +22,10 @@ import {
 
 const MAX_AVATARS = 3;
 
+const SA_BUTTON_NOTE = "The TAM and added members. The SA is not counted.";
+const SA_NOT_COUNTED =
+  "The project's SA can already see it, so the SA is not added as a member or counted on the button.";
+
 export function ProjectMembersButton({
   project,
   canManage,
@@ -33,14 +37,17 @@ export function ProjectMembersButton({
   const { data: members } = useProjectMembers(project.id);
   const { visible, overflow } = splitMemberOverflow(members ?? [], MAX_AVATARS);
   const count = (members?.length ?? 0) + 1;
+  // The count and avatars are the TAM plus added members; the SA sees the
+  // project through its own visibility arm and is never a member row.
+  const saNote = project.sa ? SA_BUTTON_NOTE : undefined;
 
   return (
     <>
       <button
         type="button"
         onClick={() => setOpen(true)}
-        aria-label={`Project members (${count})`}
-        title="Project members"
+        aria-label={`Project members (${count})${saNote ? `. ${saNote}` : ""}`}
+        title={saNote ? `Project members. ${saNote}` : "Project members"}
         data-testid="project-members-button"
         className="flex h-8 items-center gap-1 rounded-sm border border-outline-variant bg-surface-container-lowest px-2 outline-hidden transition-colors hover:bg-surface-container focus-visible:ring-2 focus-visible:ring-primary/30"
       >
@@ -145,8 +152,10 @@ function ProjectMembersDialog({
     <Modal open={open} onClose={close} title="Project members">
       <div className="space-y-4">
         <p className="text-xs text-on-surface-variant">
-          Members can view and edit everything in this project, like its TAM. The project's SA
-          can already see it and isn't added as a member.
+          Members can view and edit everything in this project, like its TAM.
+          {project.sa && (
+            <span data-testid="project-members-sa-note"> {SA_NOT_COUNTED}</span>
+          )}
         </p>
 
         {error && (

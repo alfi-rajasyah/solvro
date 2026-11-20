@@ -1,6 +1,7 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState, type CSSProperties } from "react";
 import type { GanttRenderEventProps } from "@/components/reui/gantt/gantt";
 import {
+  CRITICAL_PATH_HEX,
   DEFAULT_SECTION_COLOR,
   HATCH_CANVAS_HEX_DARK,
   HATCH_CANVAS_HEX_LIGHT,
@@ -314,6 +315,7 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
             Task 4 review finding). */}
         <span
           aria-hidden
+          data-milestone-glyph
           className={cn(
             "bg-primary inline-block size-2.5 shrink-0 rotate-45",
             // Critical Path mark (plan §3): an outline (not the wrapper's
@@ -325,8 +327,11 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
             // title; the extra margin restores clearance without widening
             // the gap for the unmarked (common) case.
             task.isCriticalPath &&
-              "me-1 outline outline-2 outline-offset-1 outline-chip-violet-text",
+              "me-1 outline outline-2 outline-offset-1",
           )}
+          // ISS-105: the ring is the fixed export violet in both themes;
+          // `chip-violet-text` is near-white in dark and reads as the selection outline.
+          style={task.isCriticalPath ? { outlineColor: CRITICAL_PATH_HEX } : undefined}
         />
         {/* Decorative — the button's own aria-label (gantt-bar.tsx) already
             announces the title, so this visual duplicate stays out of the a11y tree. */}
@@ -425,7 +430,8 @@ export function SolvroBar({ occurrence, segment, isSelected, canEdit }: SolvroBa
         <span
           aria-hidden
           data-slot="solvro-bar-critical"
-          className="pointer-events-none absolute inset-0 rounded-[inherit] ring-2 ring-inset ring-chip-violet-text"
+          className="pointer-events-none absolute inset-0 rounded-[inherit] ring-2 ring-inset"
+          style={{ "--tw-ring-color": CRITICAL_PATH_HEX } as CSSProperties}
         />
       )}
     </span>

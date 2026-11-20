@@ -329,7 +329,7 @@ export function DateRangeField({
               <button
                 type="button"
                 onClick={handleApply}
-                className="rounded-sm bg-primary px-2 py-0.5 font-display text-sm text-on-primary hover:bg-primary-container font-semibold"
+                className="rounded-sm bg-primary px-2 py-0.5 font-display text-sm text-on-primary primary-hover font-semibold"
               >
                 Apply
               </button>

@@ -21,7 +21,7 @@ export const PRIORITY_BORDER_HEX: Record<Priority, string> = {
 
 export const WEEKEND_HEX = "#e2e8f0";  // slate-200, very subtle
 export const HOLIDAY_HEX = "#fecaca";  // rose-200
-export const TODAY_HEX = "#3aae51";    // primary green — Gantt v2 today line/pill
+export const TODAY_HEX = "#3aaf51";    // primary green — Gantt v2 today line/pill
 // Critical Path mark (plan critical-path-mark.md §3) — light-theme
 // `chip-violet-text` (index.css's `:root` block). Both exporters are
 // light-background-only (PDF: always; Excel: no dark-mode concept), so this
@@ -35,14 +35,7 @@ export const DEFAULT_SECTION_COLOR = "#94a3b8"; // slate-400
 // The completed portion of a bar renders solid in its resolved Color-by
 // color; the incomplete remainder renders hatched (see
 // `progressHatchBackground` below, Gantt visual refresh Task 3).
-// `PROGRESS_OVERLAY_ALPHA` is the exports' (exportPdf.ts) own progress
-// treatment — a darker overlay (black at this opacity) anchored to the left
-// edge, covering the completed portion of the bar. The live UI no longer
-// uses it: exports draw their own shapes independently and are out of scope
-// for the visual refresh, so this constant stays for exportPdf.ts's import
-// to keep working — screen (hatch) and PDF/Excel (overlay) now render
-// progress with two different treatments, an accepted divergence for T3.
-export const PROGRESS_OVERLAY_ALPHA = 0.28;
+// The PDF export draws the same hatch (exportPdf.ts's drawHatchedBar).
 
 // ---- Bar hatch treatment (Gantt visual refresh, Task 3) ----
 // The live bar's INCOMPLETE portion (progress% to 100%) renders as a 135°
@@ -184,9 +177,9 @@ export type ColorByMode = "status" | "section" | "priority";
 
 // Single fill-COLOR resolver for live bars AND both exports — keeps the
 // resolved hex in agreement across screen and generated documents whichever
-// colorBy mode is active. (The PROGRESS treatment built on top of that hex
-// diverges between the live UI's hatch and the exports' overlay — see
-// PROGRESS_OVERLAY_ALPHA above; this resolver itself is unaffected.)
+// colorBy mode is active. (The progress hatch built on top of that hex is
+// drawn by SolvroBar.tsx on screen and exportPdf.ts's drawHatchedBar in the
+// PDF; this resolver itself only picks the colour.)
 // TaskStatus and Priority are already imported at the top of this file, and
 // the two Records are strictly keyed — hence the enum-typed opts (not string).
 export function barFillHex(
@@ -229,6 +222,7 @@ export const SECTION_COLOR_PRESETS = [
 // assigned deterministically by (position, id) order; explicit picks always
 // win — the sentinel is excluded from SECTION_COLOR_PRESETS so a user pick
 // can never collide with it.
+/** Returns a Map whose iteration order is board order (position, then id). */
 export function resolveSectionColors(
   sections: ReadonlyArray<Pick<Section, "id" | "position" | "color">>,
 ): Map<number, string> {
@@ -243,6 +237,20 @@ export function resolveSectionColors(
     );
   });
   return map;
+}
+
+/**
+ * One section's display colour from a map built by `resolveSectionColors`.
+ * Every surface that paints a section dot (List tab, task panel, Executive
+ * roll-up) goes through this so an uncustomized section shows the same preset
+ * it has on the Gantt, never the raw schema sentinel. A section missing from
+ * the map falls back to its stored colour, then the neutral default.
+ */
+export function resolveSectionColor(
+  colors: ReadonlyMap<number, string>,
+  section: { id: number; color?: string | null },
+): string {
+  return colors.get(section.id) ?? (section.color?.trim() || DEFAULT_SECTION_COLOR);
 }
 
 export function legendEntries(
@@ -268,7 +276,8 @@ export function legendEntries(
   // Section mode: one entry per section in board order, resolved through the
   // same fallback cycling the bars use.
   const colors = resolveSectionColors(sections);
-  return [...sections]
-    .sort((a, b) => a.position - b.position || a.id - b.id)
-    .map((s): [string, string] => [s.name, colors.get(s.id) ?? DEFAULT_SECTION_COLOR]);
+  // The resolver's Map iterates in board order (position, then id), so no
+  // second sort is needed here.
+  const names = new Map(sections.map((s) => [s.id, s.name]));
+  return [...colors].map(([id, color]): [string, string] => [names.get(id) ?? "", color]);
 }

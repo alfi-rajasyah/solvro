@@ -10,6 +10,8 @@
 export interface MentionUser {
   id: number;
   username: string;
+  /** False for a deactivated account; absent means active or not known to be otherwise. */
+  active?: boolean;
 }
 
 /** The most ids one comment may carry (the server's limit). */
@@ -132,7 +134,7 @@ export function deriveMentionedIds(body: string, recorded: readonly MentionUser[
 
 export type CommentPiece =
   | { kind: "text"; text: string }
-  | { kind: "mention"; text: string; userId: number };
+  | { kind: "mention"; text: string; userId: number; inactive?: true };
 
 /**
  * Splits a stored comment body into plain text and mention pieces. Only
@@ -150,7 +152,12 @@ export function splitComment(
   let cursor = 0;
   for (const m of findMentions(body, known)) {
     if (m.start > cursor) pieces.push({ kind: "text", text: body.slice(cursor, m.start) });
-    pieces.push({ kind: "mention", text: body.slice(m.start, m.end), userId: m.user.id });
+    pieces.push({
+      kind: "mention",
+      text: body.slice(m.start, m.end),
+      userId: m.user.id,
+      ...(m.user.active === false ? { inactive: true as const } : {}),
+    });
     cursor = m.end;
   }
   if (cursor < body.length) pieces.push({ kind: "text", text: body.slice(cursor) });
@@ -195,10 +202,15 @@ export function taskMentionPeople(input: {
   ]);
   const activeIds = directory ? new Set(directory.filter((u) => u.active).map((u) => u.id)) : null;
   const candidates = activeIds ? project.filter((p) => activeIds.has(p.id)) : project;
+  // Chips keep resolving a deactivated user (history) but flag them so the
+  // chip can render muted.
+  const directoryActive = new Map((directory ?? []).map((u) => [u.id, u.active]));
+  const withActive = (p: MentionUser): MentionUser =>
+    directoryActive.get(p.id) === false ? { ...p, active: false } : p;
   const known = uniqueById<MentionUser>([
     ...project,
     ...(directory ?? []).map((u) => ({ id: u.id, username: u.username })),
-  ]);
+  ]).map(withActive);
   return { candidates, known };
 }
 

@@ -9,7 +9,6 @@ import { ensureProjectVisible } from "../lib/visibility.js";
 import { insertManyAfter, type SiblingKey } from "../lib/taskOrdering.js";
 import { lockProject, repackToOrder } from "../lib/positionRepack.js";
 import { duplicateTaskTree } from "../lib/duplicate.js";
-import { recordActivity } from "../lib/activity.js";
 
 // Resolve the section's owning project and 404 if the caller can't see it.
 // Permission alone (`project:write`) doesn't scope the caller to a project, so
@@ -153,7 +152,7 @@ sectionsRouter.patch(
 
 // Duplicate a section — its own name/color plus every top-level task
 // (sectionId = id, parentTaskId = null) and each of THEIR subtasks — no
-// body. See docs/plans/duplicate-tasks-sections.md §3-4 for the settled
+// body. See docs/archive/plans/duplicate-tasks-sections.md §3-4 for the settled
 // field rules (status -> TODO, baseline cleared, dependencies dropped,
 // comments never copied) implemented by duplicateTaskTree — the same
 // engine POST /tasks/:id/duplicate uses. The new section carries the
@@ -221,25 +220,24 @@ sectionsRouter.post(
           select: { id: true, title: true },
         });
         const titleById = new Map(copies.map((c) => [c.id, c.title]));
-        for (const copyId of newTopLevelIds) {
-          await recordActivity(tx, {
+        await tx.activityEvent.createMany({
+          data: newTopLevelIds.map((copyId) => ({
             projectId,
             actorId: req.user!.sub,
             entityType: "task",
             entityId: copyId,
             action: "created",
             entityLabel: titleById.get(copyId) ?? null,
-          });
-        }
+          })),
+        });
       }
 
       const finalSection = await tx.section.findUniqueOrThrow({ where: { id: newSection.id } });
       return { section: finalSection, taskCount };
     }, {
-      // The re-pack is a single statement now, but duplicateTaskTree still
-      // INSERTs per copied task (and subtask) and one activity event is
-      // recorded per copied top-level task, so a large section outgrows
-      // Prisma's default 5s interactive-transaction budget.
+      // The copies and their activity events go in as batched INSERTs, but the
+      // section re-pack and a large source section can still outgrow Prisma's
+      // default 5s interactive-transaction budget on a slow database.
       timeout: 30_000,
       maxWait: 10_000,
     });

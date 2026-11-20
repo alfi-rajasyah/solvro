@@ -5,6 +5,8 @@
 // router, not routes/admin.ts). Mirrors the in-file tab-as-function
 // convention Admin.tsx already uses for its Users/Roles/Sign-in tabs,
 // rather than splitting into separate component files.
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
 import { FIELD_FOCUS } from "@/lib/utils";
 import { useEffect, useMemo, useState } from "react";
@@ -145,9 +147,13 @@ function ConnectionCard() {
     return (
       <section className="rounded-sm border border-outline-variant bg-surface-container-lowest p-4">
         <h2 className="font-display text-sm font-semibold text-on-surface">Connection</h2>
-        <p className="mt-2 text-sm text-on-surface-variant">
-          {isError ? "Failed to load iTop settings." : "Loading…"}
-        </p>
+        {isError ? (
+          <p className="mt-2 text-sm text-on-surface-variant">Failed to load iTop settings.</p>
+        ) : (
+          <SkeletonRegion className="mt-2">
+            <Skeleton className="h-10 rounded-sm" />
+          </SkeletonRegion>
+        )}
       </section>
     );
   }
@@ -155,8 +161,10 @@ function ConnectionCard() {
   const patch = buildItopSettingsPatch(form, settings);
   const dirty = Object.keys(patch).length > 0;
   const testData = testConnection.data;
-  const totalProbes = testData?.probes.length ?? 0;
-  const passedProbes = testData?.probes.filter((p) => p.ok).length ?? 0;
+  // Optional (informational) probes are listed but never counted.
+  const requiredProbes = testData?.probes.filter((p) => !p.informational) ?? [];
+  const totalProbes = requiredProbes.length;
+  const passedProbes = requiredProbes.filter((p) => p.ok).length;
 
   const connectionStatus = !settings.baseUrl || !settings.appTokenSet
     ? { label: "Not connected", tone: "gray" as const }
@@ -420,7 +428,7 @@ function ConnectionCard() {
           type="button"
           onClick={() => void handleSave()}
           disabled={!dirty || updateSettings.isPending}
-          className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-50"
+          className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary primary-hover disabled:opacity-50"
         >
           {updateSettings.isPending ? "Saving…" : "Save"}
         </button>
@@ -470,12 +478,19 @@ function ProbeList({ probes }: { probes: ItopProbeResult[] }) {
         <li key={p.name} className="flex items-start gap-2 text-xs">
           <span
             aria-hidden="true"
-            className={`material-symbols-outlined shrink-0 text-[16px] ${p.ok ? "text-chip-emerald-text" : "text-error"}`}
+            className={`material-symbols-outlined shrink-0 text-[16px] ${
+              p.ok ? "text-chip-emerald-text" : p.informational ? "text-on-surface-variant" : "text-error"
+            }`}
           >
-            {p.ok ? "check_circle" : "cancel"}
+            {p.ok ? "check_circle" : p.informational ? "info" : "cancel"}
           </span>
-          <span className="sr-only">{p.ok ? "Passed" : "Failed"}</span>
+          <span className="sr-only">
+            {p.ok ? "Passed" : p.informational ? "Not available" : "Failed"}
+          </span>
           <span className="shrink-0 font-medium text-on-surface">{p.name}</span>
+          {p.informational && (
+            <span className="shrink-0 text-meta text-on-surface-variant">(optional)</span>
+          )}
           {p.name === "TimeSpent" ? (
             <span
               className="min-w-0 flex-1 truncate font-mono text-meta text-on-surface-variant"

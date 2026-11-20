@@ -1225,7 +1225,9 @@ interface GanttTreePanelConfig {
   /** Drag/keyboard splitter between the panels. Default true. */
   resizable?: boolean
   /** Width of the sticky name column in px. Default 208. */
-  nameColumnWidth?: number
+  // SOLVRO PATCH: also accepts a CSS length (e.g. a `var(...)`) so a consumer can
+  // retarget the column during a splitter drag without re-rendering every row.
+  nameColumnWidth?: number | string
   /** Fires after any user resize (drag release, keyboard, double-click reset). */
   onWidthChange?: (width: number) => void
 }

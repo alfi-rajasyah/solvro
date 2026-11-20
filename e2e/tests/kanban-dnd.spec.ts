@@ -11,11 +11,11 @@ import {
   captureTaskRequests,
 } from "../fixtures/test";
 import { getTasks, setWipLimits, type SeededTask, createEpic } from "../fixtures/seed";
-import type { Page } from "@playwright/test";
+import type { Locator, Page } from "@playwright/test";
 
 // Ported from the QA gate script qa-wave2.mjs, then rewritten against the
-// ReUI board (docs/plans/kanban-reui-swap/plan.md, T10) per the binding
-// scenario table (docs/plans/kanban-reui-swap/scenarios.md) and its e2e
+// ReUI board (docs/archive/plans/kanban-reui-swap/plan.md, T10) per the binding
+// scenario table (docs/archive/plans/kanban-reui-swap/scenarios.md) and its e2e
 // Coverage Audit (T2) section. `openKanban` (fixtures/test.ts) targets
 // `KANBAN_ROUTE` ("kanban" as of the T11 cutover).
 // Mouse-drag cases only make sense on the desktop project (dnd-kit
@@ -108,17 +108,33 @@ async function createSubtask(
  * the page to this fixture's own customer first via the Customer filter
  * (`TasksFilter.customerId`, frontend/src/lib/queries.ts) — driven through
  * the ReUI Filters chip toolbar by the customer's display name. */
+/** Resolves once the locator's box is identical across two consecutive 100 ms
+ * samples, i.e. dnd-kit's post-filter reflow transition has finished. */
+async function waitForStableBox(locator: Locator): Promise<void> {
+  let prev: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const box = await locator.boundingBox();
+        const cur = box ? JSON.stringify(box) : null;
+        const stable = cur !== null && cur === prev;
+        prev = cur;
+        return stable;
+      },
+      { intervals: [100] },
+    )
+    .toBe(true);
+}
+
 async function openTasksPage(page: Page, customerName: string): Promise<void> {
   await page.goto(`/tasks`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
   // The customer filter is a ReUI Filters chip flow (2026-07-31): open the
   // "+ Filter" menu, hover the Customer field to open its option submenu,
   // pick the fixture customer by exact display name.
   await page.getByRole("button", { name: /filter/i }).first().click();
   await page.getByRole("option", { name: "Customer", exact: true }).hover();
-  await page.waitForTimeout(400);
   await page.getByRole("option", { name: customerName, exact: true }).click();
-  await page.waitForTimeout(500);
+  await expect(page.getByRole("option", { name: customerName, exact: true })).toHaveCount(0);
 }
 
 /** `/tasks` lists tasks across EVERY project, and this file's generic seeded
@@ -193,6 +209,48 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     expect(order.indexOf("Gamma")).toBeLessThan(order.indexOf("Alpha"));
   });
 
+  test("keyboard drag via the handle: Beta -> next column with Space, ArrowRight, Space", async ({
+    page,
+    seededProject,
+  }) => {
+    await openKanban(page, seededProject.projectId);
+
+    // The handle is the focusable activator (role=button, tabindex 0); the
+    // card row itself is not in the tab order.
+    const card = page
+      .locator('[data-slot="kanban-item"]')
+      .filter({ has: page.getByText("Beta", { exact: true }) })
+      .first();
+    await expect(card).not.toHaveAttribute("tabindex", /.*/);
+    const handle = card.getByRole("button", { name: "Drag to reorder", exact: true });
+    await handle.focus();
+    await expect(handle).toBeFocused();
+
+    // Wait for the sensor to attach before moving (see the subtask keyboard
+    // test below): dnd-kit's live region turns non-empty on pick-up.
+    const status = page.locator('[id^="DndLiveRegion"]').first();
+    await page.keyboard.press("Space");
+    await expect(status).not.toBeEmpty();
+    await page.keyboard.press("ArrowRight");
+    // The live-region text can read the same before and after the move (the
+    // lifted card is "over" itself in both columns), so wait on the DOM: the
+    // lifted Beta card renders inside the In Progress column.
+    await expect(
+      page.locator('[data-slot="kanban-column"][data-value="IN_PROGRESS"]').getByText("Beta", { exact: true }),
+    ).toBeVisible();
+    await page.keyboard.press("Space");
+
+    await expect
+      .poll(
+        async () => {
+          const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
+          return byTitle(tasks, "Beta")?.status;
+        },
+        { timeout: 10_000 },
+      )
+      .toBe("IN_PROGRESS");
+  });
+
   test("cross-column drag: Beta -> In Progress column", async ({ page, seededProject }) => {
     await openKanban(page, seededProject.projectId);
 
@@ -237,7 +295,7 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // Sub one seeds at position 0, Sub two at 1 → Sub two owns the second
     // "Reorder subtask" handle in the panel's subtask list. exact: true —
     // dnd-kit also puts role="button" on each row, whose accessible name
-    // CONTAINS the handle's label (docs/ISSUES.md, sortable deferred #4).
+    // CONTAINS the handle's label (docs/ISSUES.md ISS-077).
     const handles = panel.getByRole("button", { name: "Reorder subtask", exact: true });
     await expect(handles).toHaveCount(2);
     const subTwoHandle = handles.nth(1);
@@ -454,27 +512,12 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // `arrayMove` swap cancels the move outright (zero PATCH — the captured
     // failure this fix addresses).
     //
-    // The prescribed fix is a KEYBOARD drag — dnd-kit's KeyboardSensor +
-    // sortableKeyboardCoordinates ARE wired in reui/kanban.tsx (`useSensors`
-    // includes `useSensor(KeyboardSensor, ...)`), and `KeyboardSensor
-    // .activators` is `[{ eventName: "onKeyDown", ... }]`. Investigated
-    // interactively against the running dev server before writing this:
-    // `attributes` (role="button", tabIndex=0 — what makes an element
-    // focusable/Tab-reachable) is spread only onto `KanbanItem`'s OUTER
-    // wrapper (reui/kanban.tsx ~line 796, `[data-slot="kanban-item"]`),
-    // while `listeners` (the actual onKeyDown activator) reaches only
-    // `KanbanItemHandle` via `ItemContext` (~line 838) and carries no
-    // tabIndex/role of its own. Confirmed via direct DOM inspection: the
-    // handle (`[aria-label="Drag to reorder"]`) has neither `tabindex` nor
-    // `role`, so it can never become `document.activeElement` — clicking it
-    // moves focus to the outer item wrapper instead, and pressing Space
-    // there never sets `data-dragging` because the wrapper has no onKeyDown
-    // listener. With `attributes` and `listeners` split across two different
-    // DOM nodes, no real keyboard interaction (Tab, click-then-Space) can
-    // ever reach the sensor's activator — keyboard drag is a dead end here,
-    // not a gesture-timing issue. Falling back to the prescribed mouse
-    // alternative: drag PAST the target's card so the pointer lands solidly
-    // below the post-reshuffle boundary rather than riding it.
+    // This test was written when keyboard drag on a Kanban card was
+    // unreachable (attributes on the row, listeners on the handle). The
+    // vendored Kanban now puts both on the handle (ISS-107), and the
+    // "keyboard drag via the handle" test above covers that path. This one
+    // keeps the mouse path: drag PAST the target's card so the pointer lands
+    // solidly below the post-reshuffle boundary rather than riding it.
     //
     // T10 stabilization: a height-*multiplied* overshoot (originally 1.5x)
     // doesn't scale safely — against a real 3-card TODO column where the
@@ -523,6 +566,8 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
       await page.mouse.move(grip!.x, grip!.y);
       await page.mouse.down();
       await page.mouse.move(grip!.x + 2, grip!.y + 1);
+      // Negative assertion (no request fires): a drag that never registers has
+      // no DOM signal, so hold the press for a window before releasing.
       await page.waitForTimeout(150);
       await page.mouse.up();
     });
@@ -588,9 +633,12 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
       await page.mouse.down();
       for (let i = 1; i <= 8; i++) {
         await page.mouse.move(from.x + ((to.x - from.x) * i) / 8, from.y + ((to.y - from.y) * i) / 8);
+        // Gesture pacing so the sensor sees intermediate pointer positions.
         await page.waitForTimeout(35);
       }
       await page.keyboard.press("Escape");
+      // The cancelled drag has no DOM signal; let the cancel settle before
+      // releasing so the pointer-up is proven to start no new drop.
       await page.waitForTimeout(300);
       await page.mouse.up();
     });
@@ -669,7 +717,7 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // otherwise-identical runs of this case, and looping the gesture with
     // an added settle pause here made every offset in a 0-82px sweep pass
     // consistently — a settle wait, not a geometry tweak, was the fix.
-    await page.waitForTimeout(400);
+    await waitForStableBox(page.getByText(v2.title, { exact: true }).first());
 
     const grip = await gripFor(page, v2.title, "Drag to reorder");
     // T10 stabilization: FULL card box (`cardBoxFor`) — v1 is picked
@@ -749,7 +797,8 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // T10 stabilization: same settle wait as G9a above — let the remaining
     // cards' post-filter reflow transition (`animateLayoutChanges`) finish
     // before measuring geometry, not just before the drag starts.
-    await page.waitForTimeout(400);
+    await waitForStableBox(page.getByText(source.title, { exact: true }).first());
+    await waitForStableBox(page.getByText(visibleOther.title, { exact: true }).first());
 
     const grip = await gripFor(page, source.title, "Drag to reorder");
     const lastVisibleBox = await page.getByText(visibleOther.title, { exact: true }).first().boundingBox();
@@ -827,6 +876,8 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
       await page.mouse.move(grip!.x, grip!.y);
       await page.mouse.down();
       await page.mouse.move(grip!.x + 2, grip!.y + 1);
+      // Negative assertion (no request fires): a drag that never registers has
+      // no DOM signal, so hold the press for a window before releasing.
       await page.waitForTimeout(150);
       await page.mouse.up();
     });
@@ -907,7 +958,6 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     // param) and confirm the status committed by the filtered drag persisted
     // server-side and renders correctly once more, unfiltered.
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
     const afterReload = await getTasks(base, token, projectId);
     expect(byTitle(afterReload, tagged.title)?.status).toBe("IN_PROGRESS");
     const reloadedCard = page
@@ -933,7 +983,6 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await openTasksPage(page, seededProject.customerName);
 
     await page.getByRole("checkbox", { name: "Top-level only" }).uncheck();
-    await page.waitForTimeout(500);
 
     await clickTaskRow(page, seededProject.projectId, "Sub one");
     const dialog = page.getByRole("dialog", { name: "Edit task" });
@@ -956,7 +1005,9 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await parentSelect.selectOption(String(seededProject.delta.id));
 
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
-    await page.waitForTimeout(600);
+    await expect
+      .poll(async () => byTitle(await getTasks(base, seededProject.token, seededProject.projectId), "Sub one")?.parentTaskId)
+      .toBe(seededProject.delta.id);
 
     const tasks = await getTasks(base, seededProject.token, seededProject.projectId);
     const s = byTitle(tasks, "Sub one");
@@ -982,7 +1033,6 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
 
     await openTasksPage(page, seededProject.customerName);
     await page.getByRole("checkbox", { name: "Top-level only" }).uncheck();
-    await page.waitForTimeout(500);
 
     await clickTaskRow(page, seededProject.projectId, "Sub two");
     const dialog = page.getByRole("dialog", { name: "Edit task" });
@@ -998,7 +1048,9 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     await statusSelect.selectOption("DONE");
 
     await dialog.getByRole("button", { name: "Save", exact: true }).click();
-    await page.waitForTimeout(600);
+    await expect
+      .poll(async () => byTitle(await getTasks(base, seededProject.token, seededProject.projectId), "Sub two")?.status)
+      .toBe("DONE");
 
     const tasks = await getTasks(base, seededProject.token, seededProject.projectId);
     const s = byTitle(tasks, "Sub two");
@@ -1080,7 +1132,6 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     expect(expectedOrder.length).toBeGreaterThan(0);
 
     await page.goto(`/projects/${seededProject.projectId}/list`, { waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     const positioned: Array<{ title: string; y: number }> = [];
     for (const title of expectedOrder) {
@@ -1181,13 +1232,14 @@ test.describe("kanban drag & drop — mobile (touch)", () => {
     await expect(sheet).toBeVisible({ timeout: 3000 });
 
     await page.getByText("Done", { exact: true }).last().click();
-    await page.waitForTimeout(1000);
-
-    const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
-    const moved = tasks.some(
-      (x) => x.parentTaskId === null && x.status === "DONE" && ["Gamma", "Alpha"].includes(x.title),
-    );
-    expect(moved).toBe(true);
+    await expect
+      .poll(async () => {
+        const tasks = await getTasks(apiBase(test.info()), seededProject.token, seededProject.projectId);
+        return tasks.some(
+          (x) => x.parentTaskId === null && x.status === "DONE" && ["Gamma", "Alpha"].includes(x.title),
+        );
+      })
+      .toBe(true);
   });
 
   test("no page errors during mobile drag/action-sheet interactions", async ({ page, seededProject }) => {

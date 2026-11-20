@@ -1,3 +1,4 @@
+import { Skeleton } from "@/components/ui/skeleton";
 import { useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { BrandMark } from "@/components/BrandMark";
@@ -94,15 +95,15 @@ function GuestSkeleton() {
   return (
     <SkeletonRegion className="space-y-6">
       <div aria-hidden="true" data-testid="guest-loading" className="space-y-3">
-        <div className="h-8 w-2/3 animate-pulse rounded-sm bg-surface-container" />
-        <div className="h-4 w-1/3 animate-pulse rounded-sm bg-surface-container" />
+        <Skeleton className="h-8 w-2/3 rounded-sm" />
+        <Skeleton className="h-4 w-1/3 rounded-sm" />
       </div>
       <div
         aria-hidden="true"
         className="space-y-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-4"
       >
         {[0, 1, 2].map((i) => (
-          <div key={i} className="h-10 animate-pulse rounded-sm bg-surface-container-low" />
+          <Skeleton key={i} className="h-10 rounded-sm" />
         ))}
       </div>
       <div
@@ -110,7 +111,7 @@ function GuestSkeleton() {
         className="space-y-3 rounded-sm border border-outline-variant bg-surface-container-lowest p-4"
       >
         {[0, 1].map((i) => (
-          <div key={i} className="h-8 animate-pulse rounded-sm bg-surface-container-low" />
+          <Skeleton key={i} className="h-8 rounded-sm" />
         ))}
       </div>
     </SkeletonRegion>

@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { formatElapsed, useRunningItopTimer } from "@/components/itop/useTicketTimer";
 import { useAuth } from "@/lib/auth";
+import { searchShortcutLabel } from "@/lib/platform";
 import { useCustomer, useOpportunity, useProject } from "@/lib/queries";
 import { buildCrumbs, documentTitle, matchRoute } from "@/lib/routeMeta";
 import { useTheme } from "@/lib/theme";
@@ -163,7 +164,7 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
           type="button"
           onClick={onOpenSearch}
           aria-label="Open search"
-          className="hidden min-w-[260px] cursor-text items-center gap-2 rounded-sm bg-surface-container px-3 py-1.5 md:flex"
+          className="hidden min-w-[260px] items-center gap-2 rounded-sm bg-surface-container px-3 py-1.5 hover:bg-surface-container-high focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 md:flex"
         >
           <span aria-hidden="true" className="material-symbols-outlined text-base text-on-surface-variant">
             search
@@ -172,7 +173,7 @@ export function TopBar({ onOpenSearch }: { onOpenSearch: () => void }) {
             Search projects, tasks, customers…
           </span>
           <span className="rounded-sm border border-outline-variant bg-surface-container-low px-1.5 py-0.5 font-mono text-meta text-on-surface-variant">
-            ⌘K
+            {searchShortcutLabel()}
           </span>
         </button>
 

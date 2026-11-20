@@ -15,6 +15,7 @@ import { Chip, ProjectStatusChip } from "@/components/StatusChip";
 import { Tabs } from "@/components/Tabs";
 import { ItopTab } from "@/components/admin/ItopTab";
 import { HandoverModal } from "@/components/admin/HandoverModal";
+import { useHandoverSession } from "@/components/admin/useHandoverSession";
 import { DeleteUserModal } from "@/components/admin/DeleteUserModal";
 import { ApiError } from "@/lib/api";
 import {
@@ -42,6 +43,7 @@ import {
 } from "@/lib/queries";
 import type { Role } from "@/lib/auth";
 import { TempPasswordNotice } from "@/components/admin/TempPasswordNotice";
+import { TamPicker } from "@/components/admin/TamPicker";
 import { PermissionPicker } from "@/components/admin/PermissionPicker";
 import { roleSaveErrorMessage } from "@/components/admin/roleErrors";
 import { useAuth } from "@/lib/auth";
@@ -127,7 +129,8 @@ function UsersTab() {
   const updateRole = useAdminUpdateRole();
   const setActive = useAdminSetActive();
   const fetchHandoverPreview = useAdminFetchHandoverPreview();
-  const [handover, setHandover] = useState<{ user: AdminUser; preview: HandoverPreview } | null>(null);
+  const { session: handover, open: openHandover, close: closeHandover, reload: reloadHandoverPreview } =
+    useHandoverSession(fetchHandoverPreview);
   const resetPassword = useAdminResetPassword();
   const [deletingUser, setDeletingUser] = useState<
     { user: AdminUser; customers: HandoverPreview["customers"] } | null
@@ -372,7 +375,7 @@ function UsersTab() {
     getRowId: (row) => String(row.id),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    // Pagination stays OFF (docs/plans/reui-data-grid.md Checkpoint B,
+    // Pagination stays OFF (docs/archive/plans/reui-data-grid.md Checkpoint B,
     // binding for every DataGrid table this phase): no
     // getPaginationRowModel, so the full sorted row model renders.
     // `pageSize` here only sizes the loading-skeleton row count.
@@ -427,7 +430,7 @@ function UsersTab() {
         // -> the plain deactivate below; otherwise the handover modal.
         const preview = await fetchHandoverPreview(u.id);
         if (!isHandoverPreviewEmpty(preview)) {
-          setHandover({ user: u, preview });
+          openHandover(u, preview);
           return;
         }
       }
@@ -439,7 +442,7 @@ function UsersTab() {
         try {
           const preview = await fetchHandoverPreview(u.id);
           if (!isHandoverPreviewEmpty(preview)) {
-            setHandover({ user: u, preview });
+            openHandover(u, preview);
             return;
           }
           // Nothing left to hand over any more: the plain deactivate now works.
@@ -451,19 +454,6 @@ function UsersTab() {
         }
       }
       setError(err instanceof ApiError ? err.message : "Failed to update status.");
-    }
-  }
-
-  // Resolves true once the modal has a fresh preview; false when the reload failed.
-  async function reloadHandoverPreview(): Promise<boolean> {
-    if (!handover) return false;
-    try {
-      const preview = await fetchHandoverPreview(handover.user.id);
-      if (isHandoverPreviewEmpty(preview)) setHandover(null);
-      else setHandover({ user: handover.user, preview });
-      return true;
-    } catch {
-      return false;
     }
   }
 
@@ -511,7 +501,7 @@ function UsersTab() {
   const adminCount = rows.filter((u) => u.role === "ADMIN").length;
   const pendingCount = rows.filter((u) => u.role === "PENDING").length;
   const customRoleCount = (roles ?? []).filter(
-    (r) => !["ADMIN", "TAM", "SA", "STAKEHOLDER", "PENDING"].includes(r.roleName),
+    (r) => !r.seeded,
   ).length;
 
   return (
@@ -608,7 +598,7 @@ function UsersTab() {
             !newUsername.trim() ||
             newPassword.length < 8
           }
-          className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60 md:w-auto"
+          className="w-full rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary primary-hover disabled:opacity-60 md:w-auto"
         >
           {createUser.isPending ? "Adding…" : "Add user"}
         </button>
@@ -657,8 +647,8 @@ function UsersTab() {
           open
           user={handover.user}
           preview={handover.preview}
-          onClose={() => setHandover(null)}
-          onDone={() => setHandover(null)}
+          onClose={closeHandover}
+          onDone={closeHandover}
           onStale={reloadHandoverPreview}
         />
       )}
@@ -843,7 +833,7 @@ function RolesTab() {
         return isEditing ? (
           <PermissionPicker value={editPerms} onChange={setEditPerms} />
         ) : r.permissions.length === 0 ? (
-          <span className="text-on-surface-variant/60">{EMPTY_VALUE}</span>
+          <span className="text-on-surface-variant">{EMPTY_VALUE}</span>
         ) : (
           <div className="flex flex-wrap gap-1">
             {r.permissions.map((p) => (
@@ -893,7 +883,7 @@ function RolesTab() {
                   type="button"
                   onClick={() => saveEdit(r)}
                   disabled={updatePerms.isPending}
-                  className="rounded-sm bg-primary px-2 py-1 font-display text-sm text-on-primary hover:bg-primary-container disabled:opacity-50 font-semibold"
+                  className="rounded-sm bg-primary px-2 py-1 font-display text-sm text-on-primary primary-hover disabled:opacity-50 font-semibold"
                 >
                   Save
                 </button>
@@ -1069,7 +1059,7 @@ function RolesTab() {
           <button
             type="submit"
             disabled={createRole.isPending || !newName.trim()}
-            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary hover:bg-primary-container disabled:opacity-60"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-bold text-on-primary primary-hover disabled:opacity-60"
           >
             {createRole.isPending ? "Adding…" : "Add role"}
           </button>
@@ -1211,7 +1201,7 @@ function SignInTab() {
           <button
             type="button"
             onClick={() => setModalOpen(true)}
-            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary primary-hover"
           >
             {connected ? "Manage" : "Connect"}
           </button>
@@ -1422,7 +1412,7 @@ function SignInModal({
             type="button"
             onClick={save}
             disabled={!dirty || update.isPending}
-            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary hover:bg-primary-container disabled:opacity-50"
+            className="rounded-sm bg-primary px-4 py-1.5 font-display text-xs font-semibold text-on-primary primary-hover disabled:opacity-50"
           >
             {update.isPending ? "Saving…" : "Save"}
           </button>
@@ -1581,10 +1571,10 @@ function ProjectsTab() {
   // No default sort — same rationale as the Users/Roles-tab pilots.
   const [sorting, setSorting] = useState<SortingState>([]);
 
-  // Any active user can be a project's TAM — no role-name gate (role names
-  // no longer drive who's eligible). Admin's choice.
+  // Any active user whose role grants access can be a project's TAM; the
+  // server refuses a receiver without access (`tam_has_no_access`).
   const tamCandidates = useMemo(
-    () => (users ?? []).filter((u) => u.active),
+    () => (users ?? []).filter((u) => u.active && u.hasAccess),
     [users],
   );
 
@@ -1678,28 +1668,19 @@ function ProjectsTab() {
       header: ({ column }) => (
         <DataGridColumnHeader column={column} title="Current TAM → Reassign" />
       ),
-      // An interactive <select>, not a single sortable value — same
+      // An interactive picker, not a single sortable value — same
       // exemption as UsersTab's "role"/"actions" columns.
       enableSorting: false,
       cell: ({ row }) => {
         const p = row.original;
         return (
-          <select
-            value={p.tamId}
-            aria-label={`Reassign TAM for ${p.name}`}
-            onChange={(e) => handleReassign(p, Number(e.target.value))}
-            className={`w-full rounded-sm border border-outline-variant bg-surface px-2 py-1 text-xs text-on-surface ${FIELD_FOCUS}`}
-          >
-            {tamCandidates.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.username} ({u.role})
-              </option>
-            ))}
-            {/* If the current TAM isn't in the candidate list (inactive or wrong role), show them anyway */}
-            {!tamCandidates.some((u) => u.id === p.tamId) && (
-              <option value={p.tamId}>{p.tam.username} (current)</option>
-            )}
-          </select>
+          <TamPicker
+            label={p.name}
+            currentId={p.tamId}
+            currentName={p.tam.username}
+            candidates={tamCandidates}
+            onPick={(id) => void handleReassign(p, id)}
+          />
         );
       },
       meta: { skeleton: <Skeleton className="h-7 w-40" /> },
@@ -1835,7 +1816,7 @@ function PipelineTab() {
       sortingFn: personNameSortingFn,
       cell: ({ row }) => {
         const user = row.original.user;
-        if (!user) return <span className="text-on-surface-variant/60">{EMPTY_VALUE}</span>;
+        if (!user) return <span className="text-on-surface-variant">{EMPTY_VALUE}</span>;
         return (
           <span className="flex min-w-0 items-center gap-1.5">
             <AssigneeAvatar user={user} size="xs" />
@@ -1935,7 +1916,7 @@ function PipelineTab() {
       enableSorting: false,
       cell: ({ row }) => {
         const msg = row.original.errorMessage;
-        if (!msg) return <span className="text-on-surface-variant/60">{EMPTY_VALUE}</span>;
+        if (!msg) return <span className="text-on-surface-variant">{EMPTY_VALUE}</span>;
         // Truncated in the grid; full text on hover via `title` per the
         // dispatch brief.
         return (

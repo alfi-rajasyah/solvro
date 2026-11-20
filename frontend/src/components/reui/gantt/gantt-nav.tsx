@@ -15,7 +15,6 @@ import { format } from "date-fns"
 
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import { Calendar } from "@/components/ui/calendar"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,11 +23,6 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover"
 import {
   Tooltip,
   TooltipContent,
@@ -347,68 +341,8 @@ function GanttScaleSwitcher({
   )
 }
 
-interface GanttDatePickerProps {
-  className?: string
-}
-
-/**
- * Compact go-to-date picker (shadcn Calendar in a popover). No tooltip by
- * design: it opens an overlay (see the NavButtonProps tooltip policy).
- */
-function GanttDatePicker({ className }: GanttDatePickerProps) {
-  const { date, goTo } = useGanttNavigation()
-  const settings = useGanttSettings()
-  const nav = useNavButtonProps()
-  const [open, setOpen] = useState(false)
-  const zoned = toZoned(date, settings.timeZone)
-
-  return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger
-        render={
-          <Button
-            variant={nav.variant}
-            size={nav.iconSize}
-            data-slot="gantt-date-picker"
-            aria-label={settings.i18n.labels.goToDate}
-            className={cn(className)}
-          />
-        }
-      >
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="size-4"
-          aria-hidden="true"
-        >
-          <path d="M8 2v4" />
-          <path d="M16 2v4" />
-          <rect width="18" height="18" x="3" y="4" rx="2" />
-          <path d="M3 10h18" />
-        </svg>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto p-0!">
-        <Calendar
-          mode="single"
-          selected={zoned}
-          defaultMonth={zoned}
-          locale={settings.locale}
-          weekStartsOn={settings.weekStartsOn}
-          onSelect={(next: Date | undefined) => {
-            if (next) {
-              goTo(next)
-              setOpen(false)
-            }
-          }}
-        />
-      </PopoverContent>
-    </Popover>
-  )
-}
+// SOLVRO PATCH: GanttDatePicker removed (unmounted anywhere in the app; its
+// popover carried the off-token shadow-md, docs/ISSUES.md ISS-102).
 
 type GanttToolbarProps = useRender.ComponentProps<"div">
 
@@ -435,8 +369,7 @@ interface GanttNavProps extends useRender.ComponentProps<"div"> {}
 
 /**
  * Default composed nav (event-calendar parity): Today, time-period switcher,
- * prev/next, title, spacer. GanttDatePicker stays available for custom
- * compositions. Pass children to use it as a pure layout shell instead.
+ * prev/next, title, spacer. Pass children to use it as a pure layout shell instead.
  */
 function GanttNav({ className, render, children, ...props }: GanttNavProps) {
   const viewConfig = useGanttViewConfig()
@@ -473,7 +406,6 @@ function GanttNav({ className, render, children, ...props }: GanttNavProps) {
 
 export {
   GANTT_SCALES,
-  GanttDatePicker,
   GanttNav,
   GanttNavNext,
   GanttNavPrev,

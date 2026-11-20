@@ -177,6 +177,23 @@ describe("createItopClient transport errors and request shape (mocked fetchImpl)
     });
   });
 
+  it("refuses a redirect (code 'redirect') and never follows it with the token", async () => {
+    let seenRedirect: RequestInit["redirect"];
+    let calls = 0;
+    const fetchImpl = (async (_url: unknown, init?: RequestInit) => {
+      calls += 1;
+      seenRedirect = init?.redirect;
+      return new Response(null, { status: 302, headers: { Location: "http://evil.invalid/" } });
+    }) as unknown as typeof fetch;
+
+    const client = createItopClient({ baseUrl: "https://example.invalid", token: "secret-token", fetchImpl });
+    const err = await client.get("Organization", 1, "id").catch((e: unknown) => e);
+    expect(err).toMatchObject({ code: "redirect", status: 302 });
+    expect(String((err as Error).message)).not.toContain("secret-token");
+    expect(seenRedirect).toBe("manual");
+    expect(calls).toBe(1);
+  });
+
   it("times out (code 'timeout') when fetchImpl never resolves", async () => {
     const fetchImpl = (() => new Promise<Response>(() => {})) as unknown as typeof fetch;
 

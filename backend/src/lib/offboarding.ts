@@ -1,14 +1,14 @@
-import { Prisma, type ProjectStatus } from "@prisma/client";
+import { Prisma, type ActivityEvent, type ProjectStatus } from "@prisma/client";
 import { permissionsOf } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { logger } from "../logger.js";
-import { recordActivity, shortLabel, type ActivityChanges } from "./activity.js";
+import { shortLabel, type ActivityChanges } from "./activity.js";
 import { utcMidnightOf } from "./dateBoundary.js";
-import { canUserSeePipeline, notifyForEvent } from "./notifications.js";
+import { canUserSeePipeline, notifyForEvent, notifyForProjectEvents } from "./notifications.js";
 import { recordOpportunityChange } from "./opportunityActivity.js";
+import { ALL_PIPELINE_STAGES, lockStages } from "./pipelineStageLock.js";
 import { lockProject } from "./positionRepack.js";
-import { ensureAssigneeIsMember } from "./projectMembers.js";
-import { diffProjectSeats, projectSeatsSelect, recordSeatChangeNotes } from "./projectSeats.js";
+import { diffProjectSeats, projectSeatsSelect, seatChangeSentences } from "./projectSeats.js";
 import { OPEN_TASK_STATUS_FILTER } from "./taskStatus.js";
 import { assertActiveUser } from "./users.js";
 
@@ -17,6 +17,9 @@ import { assertActiveUser } from "./users.js";
 // transaction before the account is deactivated.
 
 type Tx = Prisma.TransactionClient;
+
+/** Rows per batched insert; each row binds well under 10 parameters (limit 32767 per statement). */
+const BATCH_CHUNK = 1_000;
 
 /** A project whose TAM / SA seat is still "live" (the seat must be handed over). */
 const CLOSED_PROJECT_STATUSES: ProjectStatus[] = ["COMPLETED", "CANCELLED"];
@@ -132,6 +135,57 @@ function assertNotLeaver(id: number, leaverId: number, field: string): void {
   }
 }
 
+/**
+ * A receiver of handed-over work must be an active account whose role grants
+ * at least one permission: a PENDING account (or any role with none) could
+ * hold the work but not open it. Mirrors `handoverReceivers` in the frontend
+ * (frontend/src/lib/handover.ts). A missing or inactive account keeps the
+ * `<field>_not_found` code of `assertActiveUser`.
+ */
+async function assertReceiver(tx: Tx, id: number, field: string): Promise<void> {
+  const user = await tx.user.findUnique({
+    where: { id },
+    select: { active: true, role: { select: { permissions: true } } },
+  });
+  if (!user || !user.active) {
+    throw new HttpError(400, `${field}_not_found`, `The selected ${field} does not exist or is inactive`);
+  }
+  if (permissionsOf(user.role.permissions).length === 0) {
+    throw new HttpError(
+      400,
+      `${field}_cannot_receive`,
+      `The selected ${field} has no access yet, so cannot take over work. Give them a role first.`,
+    );
+  }
+}
+
+/**
+ * Validates each distinct new owner once (not once per customer) and groups
+ * the customers by the owner they move to, in ascending customer order. A
+ * rejected owner is blamed on the first customer that named them.
+ */
+async function groupCustomersByNewOwner(
+  tx: Tx,
+  leaverId: number,
+  rows: { customerId: number; newOwnerId: number }[],
+): Promise<Map<number, number[]>> {
+  const byOwner = new Map<number, number[]>();
+  for (const { customerId, newOwnerId } of rows) {
+    const group = byOwner.get(newOwnerId);
+    if (group) {
+      group.push(customerId);
+      continue;
+    }
+    await withRow({ customerId }, async () => {
+      assertNotLeaver(newOwnerId, leaverId, "owner");
+      // Active, unlike PATCH /customers/:id (see the SA seat in `offboardUser`).
+      await assertReceiver(tx, newOwnerId, "owner");
+    });
+    byOwner.set(newOwnerId, [customerId]);
+  }
+  return byOwner;
+}
+
 /** Runs `fn`; a 400 it throws without details gets `details` (the row the failure belongs to). */
 async function withRow<T>(details: Record<string, number>, fn: () => Promise<T> | T): Promise<T> {
   try {
@@ -187,10 +241,14 @@ export async function offboardUser(
   });
   if (!leaver) throw new HttpError(404, "user_not_found", "User not found");
 
-  // Lock order: projects (ascending id) -> customers (ascending id) -> the
-  // leaver's user row -> authoritative recompute -> deals (ascending id). The
-  // project lock always precedes any row lock
-  // (backend/CLAUDE.md, "Position re-packs take the project lock").
+  // Lock order: projects (ascending id) -> customers (ascending id) -> every
+  // pipeline stage's advisory lock (sorted) -> the leaver's user row ->
+  // authoritative recompute -> deals (ascending id). The project lock always
+  // precedes any row lock (backend/CLAUDE.md, "Position re-packs take the
+  // project lock"). The stage locks precede the user row because a deal write
+  // holds its stage lock and then takes FOR KEY SHARE on the user row it
+  // points at (PIC, activity actor); taking them the other way round would
+  // deadlock against this FOR UPDATE.
   const firstLook = await computeHandoverPreview(tx, leaverId);
   const lockIds = [
     ...new Set([...firstLook.projects.map((p) => p.id), ...body.projects.map((p) => p.projectId)]),
@@ -202,6 +260,7 @@ export async function offboardUser(
   if (customerLockIds.length > 0) {
     await tx.$queryRaw`SELECT id FROM customers WHERE id IN (${Prisma.join(customerLockIds)}) ORDER BY id FOR NO KEY UPDATE`;
   }
+  await lockStages(tx, ...ALL_PIPELINE_STAGES);
   // Any write that sets a foreign key to this user (a task assignment, a seat,
   // a customer owner, a deal PIC) takes FOR KEY SHARE on the row, so it either
   // commits before the recompute below (and is seen) or waits until after the
@@ -226,135 +285,250 @@ export async function offboardUser(
   const today = utcMidnightOf(new Date());
 
   // ---- Projects (ascending id) -------------------------------------------
-  for (const row of preview.projects) {
+  // Validated row by row in ascending id order (so a refusal names the same
+  // row as before), then written in batches: one statement per distinct
+  // choice rather than several per project (ISS-031).
+  const projectRows = preview.projects;
+  const beforeById = new Map(
+    (
+      await tx.project.findMany({
+        where: { id: { in: projectRows.map((r) => r.id) } },
+        select: { id: true, name: true, ...projectSeatsSelect },
+      })
+    ).map((r) => [r.id, r]),
+  );
+  const okReceivers = new Set<number>();
+  const checkReceiver = async (id: number, field: string) => {
+    assertNotLeaver(id, leaverId, field);
+    if (okReceivers.has(id)) return;
+    await assertReceiver(tx, id, field);
+    okReceivers.add(id);
+  };
+  type ProjectPlan = {
+    row: HandoverProject;
+    choice: OffboardInput["projects"][number];
+    receiverId: number | null;
+    before: NonNullable<ReturnType<typeof beforeById.get>>;
+    newTamId: number | null;
+    /** undefined: seat untouched; null: cleared; number: replaced. */
+    newSaId: number | null | undefined;
+  };
+  const plans: ProjectPlan[] = [];
+  for (const row of projectRows) {
     const choice = byProject.get(row.id)!;
     const receiverId = choice.assignTasksTo;
     const rowDetails = { projectId: row.id };
     if (receiverId !== null) {
-      await withRow(rowDetails, async () => {
-        assertNotLeaver(receiverId, leaverId, "assignee");
-        await assertActiveUser(tx, receiverId, "assignee");
-      });
+      await withRow(rowDetails, () => checkReceiver(receiverId, "assignee"));
     }
-
-    const before = await tx.project.findUniqueOrThrow({
-      where: { id: row.id },
-      select: { name: true, ...projectSeatsSelect },
-    });
+    const before = beforeById.get(row.id);
+    if (!before) throw new HttpError(404, "not_found", "Project not found", rowDetails);
 
     // Seats: the TAM is mandatory where the leaver holds it; the SA seat is
     // replaced or cleared. Same validation as PATCH /projects/:id (a changed
     // TAM / SA must exist; an inactive SA is tolerated there, so here too).
-    const seatData: Prisma.ProjectUpdateInput = {};
+    let newTamId: number | null = null;
+    let newSaId: number | null | undefined;
     if (row.isTam) {
       if (choice.newTamId === undefined) {
         throw new HttpError(400, "tam_required", `Choose a new TAM for "${row.name}"`, rowDetails);
       }
-      const newTamId = choice.newTamId;
-      await withRow(rowDetails, async () => {
-        assertNotLeaver(newTamId, leaverId, "tam");
-        await assertActiveUser(tx, newTamId, "tam");
-      });
-      seatData.tam = { connect: { id: choice.newTamId } };
+      newTamId = choice.newTamId;
+      const tamId = newTamId;
+      await withRow(rowDetails, () => checkReceiver(tamId, "tam"));
     }
     if (row.isSa) {
-      const newSaId = choice.newSaId ?? null;
-      if (newSaId === null) {
-        seatData.sa = { disconnect: true };
-      } else {
-        await withRow(rowDetails, async () => {
-          assertNotLeaver(newSaId, leaverId, "sa");
-          // Active, unlike PATCH /projects/:id: a handover must not hand a
-          // seat to another inactive account.
-          await assertActiveUser(tx, newSaId, "sa");
-        });
-        seatData.sa = { connect: { id: newSaId } };
+      newSaId = choice.newSaId ?? null;
+      if (newSaId !== null) {
+        const saId = newSaId;
+        // Active, unlike PATCH /projects/:id: a handover must not hand a
+        // seat to another inactive account.
+        await withRow(rowDetails, () => checkReceiver(saId, "sa"));
       }
     }
-    const changes: ActivityChanges = {};
-    if (Object.keys(seatData).length > 0) {
-      const after = await tx.project.update({ where: { id: row.id }, data: seatData });
-      Object.assign(changes, await diffProjectSeats(tx, before, after));
-      await recordSeatChangeNotes(tx, { projectId: row.id, actorId, changes, via: "Offboarding", noteDate: today });
-    }
+    plans.push({ row, choice, receiverId, before, newTamId, newSaId });
+  }
 
-    const { count: tasks } = await tx.task.updateMany({
-      where: { projectId: row.id, assignedToId: leaverId, status: OPEN_TASK_STATUS_FILTER },
+  // Seat writes, one updateMany per distinct (new TAM, new SA) pair.
+  const seatGroups = new Map<string, { data: Prisma.ProjectUncheckedUpdateManyInput; ids: number[] }>();
+  for (const plan of plans) {
+    if (plan.newTamId === null && plan.newSaId === undefined) continue;
+    const key = `${plan.newTamId ?? "-"}|${plan.newSaId === undefined ? "-" : (plan.newSaId ?? "x")}`;
+    let group = seatGroups.get(key);
+    if (!group) {
+      group = {
+        data: {
+          ...(plan.newTamId !== null ? { tamId: plan.newTamId } : {}),
+          ...(plan.newSaId !== undefined ? { saId: plan.newSaId } : {}),
+        },
+        ids: [],
+      };
+      seatGroups.set(key, group);
+    }
+    group.ids.push(plan.row.id);
+  }
+  for (const { data, ids } of seatGroups.values()) {
+    await tx.project.updateMany({ where: { id: { in: ids } }, data });
+  }
+
+  // Everyone the batch names, loaded once (usernames for the log and notes).
+  const namedIds = new Set<number>();
+  for (const plan of plans) {
+    if (plan.newTamId !== null) namedIds.add(plan.newTamId);
+    if (plan.newSaId != null) namedIds.add(plan.newSaId);
+    if (plan.receiverId !== null) namedIds.add(plan.receiverId);
+  }
+  const holders = new Map<number, { id: number; username: string }>(
+    (
+      await tx.user.findMany({
+        where: { id: { in: [...namedIds] } },
+        select: { id: true, username: true },
+      })
+    ).map((u) => [u.id, u]),
+  );
+
+  // Open tasks / epics of the leaver per project, then one updateMany per receiver.
+  const planIds = plans.map((p) => p.row.id);
+  const [taskCounts, epicCounts] = await Promise.all([
+    tx.task.groupBy({
+      by: ["projectId"],
+      where: { projectId: { in: planIds }, assignedToId: leaverId, status: OPEN_TASK_STATUS_FILTER },
+      _count: { _all: true },
+    }),
+    tx.epic.groupBy({
+      by: ["projectId"],
+      where: { projectId: { in: planIds }, ownerId: leaverId, status: OPEN_TASK_STATUS_FILTER },
+      _count: { _all: true },
+    }),
+  ]);
+  const taskCountBy = new Map(taskCounts.map((r) => [r.projectId, r._count._all]));
+  const epicCountBy = new Map(epicCounts.map((r) => [r.projectId, r._count._all]));
+  const byReceiver = new Map<number | null, number[]>();
+  for (const plan of plans) {
+    const group = byReceiver.get(plan.receiverId);
+    if (group) group.push(plan.row.id);
+    else byReceiver.set(plan.receiverId, [plan.row.id]);
+  }
+  for (const [receiverId, ids] of byReceiver) {
+    await tx.task.updateMany({
+      where: { projectId: { in: ids }, assignedToId: leaverId, status: OPEN_TASK_STATUS_FILTER },
       data: { assignedToId: receiverId },
     });
-    const { count: epics } = await tx.epic.updateMany({
-      where: { projectId: row.id, ownerId: leaverId, status: OPEN_TASK_STATUS_FILTER },
+    await tx.epic.updateMany({
+      where: { projectId: { in: ids }, ownerId: leaverId, status: OPEN_TASK_STATUS_FILTER },
       data: { ownerId: receiverId },
     });
+  }
 
-    // Receiver access exactly as a normal task assignment grants it, for the
-    // work that actually moved; the seat change above comes first so a
-    // receiver who became TAM / SA needs no member row.
-    if (receiverId !== null && (tasks > 0 || epics > 0)) {
-      const added = await withRow(rowDetails, () =>
-        ensureAssigneeIsMember(tx, row.id, receiverId, actorId),
+  // Receiver access exactly as a normal task assignment grants it, for the
+  // work that actually moved; the seat change above comes first so a receiver
+  // who became TAM / SA needs no member row. A receiver is already known to be
+  // active with a non-empty role (`checkReceiver`).
+  const memberCandidates = plans.filter((p) => {
+    if (p.receiverId === null) return false;
+    if ((taskCountBy.get(p.row.id) ?? 0) + (epicCountBy.get(p.row.id) ?? 0) === 0) return false;
+    const tamId = p.newTamId ?? p.before.tam.id;
+    const saId = p.newSaId === undefined ? (p.before.sa?.id ?? null) : p.newSaId;
+    return p.receiverId !== tamId && p.receiverId !== saId;
+  });
+  const addedMembers = new Set<number>();
+  for (let i = 0; i < memberCandidates.length; i += BATCH_CHUNK) {
+    const inserted = await tx.projectMember.createManyAndReturn({
+      data: memberCandidates
+        .slice(i, i + BATCH_CHUNK)
+        .map((p) => ({ projectId: p.row.id, userId: p.receiverId as number, addedById: actorId })),
+      skipDuplicates: true,
+      select: { projectId: true },
+    });
+    for (const m of inserted) addedMembers.add(m.projectId);
+  }
+
+  // Per-project log rows, assembled in project order and written in chunks.
+  const notes: Prisma.ProjectNoteCreateManyInput[] = [];
+  const eventInputs: Prisma.ActivityEventCreateManyInput[] = [];
+  const projectEventOpts = new Map<number, { tasksHandedOverTo: number | null }>();
+  for (const plan of plans) {
+    const { row, choice, receiverId, before } = plan;
+    const tasks = taskCountBy.get(row.id) ?? 0;
+    const epics = epicCountBy.get(row.id) ?? 0;
+    const changes: ActivityChanges = {};
+    if (plan.newTamId !== null || plan.newSaId !== undefined) {
+      Object.assign(
+        changes,
+        await diffProjectSeats(
+          tx,
+          before,
+          {
+            tamId: plan.newTamId ?? before.tam.id,
+            saId: plan.newSaId === undefined ? (before.sa?.id ?? null) : plan.newSaId,
+          },
+          holders,
+        ),
       );
-      if (added) {
-        await recordActivity(tx, {
-          projectId: row.id,
-          actorId,
-          entityType: "member",
-          entityId: receiverId,
-          action: "added",
-          entityLabel: added.username,
-        });
+      for (const body of seatChangeSentences(changes, "Offboarding")) {
+        notes.push({ projectId: row.id, authorId: actorId, body, noteDate: today });
       }
     }
-
-    const note = choice.note?.trim();
-    if (note) {
-      await tx.projectNote.create({
-        data: {
-          projectId: row.id,
-          authorId: actorId,
-          body: note,
-          noteDate: today,
-        },
+    if (addedMembers.has(row.id)) {
+      eventInputs.push({
+        projectId: row.id,
+        actorId,
+        entityType: "member",
+        entityId: receiverId,
+        action: "added",
+        entityLabel: holders.get(receiverId as number)?.username ?? null,
       });
     }
-
+    const note = choice.note?.trim();
+    if (note) notes.push({ projectId: row.id, authorId: actorId, body: note, noteDate: today });
     if (tasks > 0 || epics > 0) {
-      const to = receiverId === null ? null : await tx.user.findUnique({
-        where: { id: receiverId },
-        select: { username: true },
-      });
       // Usernames and counts only — never the note body.
       changes.handover = {
         from: leaver.username,
-        to: to?.username ?? null,
+        to: receiverId === null ? null : (holders.get(receiverId)?.username ?? null),
         tasks,
         ...(epics > 0 ? { epics } : {}),
       };
     }
-
-    const event = await recordActivity(tx, {
-      projectId: row.id,
-      actorId,
-      entityType: "project",
-      entityId: row.id,
-      action: "updated",
-      entityLabel: shortLabel(before.name),
-      changes,
-    });
-    await notifyForEvent(tx, event, { tasksHandedOverTo: tasks + epics > 0 ? receiverId : null });
+    // An `updated` event with nothing to list records nothing (recordActivity).
+    if (Object.keys(changes).length > 0) {
+      eventInputs.push({
+        projectId: row.id,
+        actorId,
+        entityType: "project",
+        entityId: row.id,
+        action: "updated",
+        entityLabel: shortLabel(before.name),
+        changes: changes as Prisma.InputJsonObject,
+      });
+      projectEventOpts.set(row.id, { tasksHandedOverTo: tasks + epics > 0 ? receiverId : null });
+    }
   }
+  for (let i = 0; i < notes.length; i += BATCH_CHUNK) {
+    await tx.projectNote.createMany({ data: notes.slice(i, i + BATCH_CHUNK) });
+  }
+  const projectEvents: { event: ActivityEvent; opts: { tasksHandedOverTo: number | null } }[] = [];
+  for (let i = 0; i < eventInputs.length; i += BATCH_CHUNK) {
+    const created = await tx.activityEvent.createManyAndReturn({ data: eventInputs.slice(i, i + BATCH_CHUNK) });
+    for (const event of created) {
+      const opts = event.entityType === "project" ? projectEventOpts.get(event.entityId as number) : undefined;
+      if (opts) projectEvents.push({ event, opts });
+    }
+  }
+  await notifyForProjectEvents(tx, projectEvents);
 
   // ---- Customers ---------------------------------------------------------
   const customerOwnerChanges: { customerId: number; from: number; to: number }[] = [];
-  for (const c of preview.customers) {
-    const { newOwnerId } = byCustomer.get(c.id)!;
-    await withRow({ customerId: c.id }, async () => {
-      assertNotLeaver(newOwnerId, leaverId, "owner");
-      // Active, unlike PATCH /customers/:id (see the SA seat above).
-      await assertActiveUser(tx, newOwnerId, "owner");
-    });
-    await tx.customer.update({ where: { id: c.id }, data: { tam: { connect: { id: newOwnerId } } } });
-    customerOwnerChanges.push({ customerId: c.id, from: leaverId, to: newOwnerId });
+  const ownerGroups = await groupCustomersByNewOwner(
+    tx,
+    leaverId,
+    preview.customers.map((c) => ({ customerId: c.id, newOwnerId: byCustomer.get(c.id)!.newOwnerId })),
+  );
+  for (const [newOwnerId, customerIds] of ownerGroups) {
+    await tx.customer.updateMany({ where: { id: { in: customerIds } }, data: { tamId: newOwnerId } });
+    for (const customerId of customerIds) {
+      customerOwnerChanges.push({ customerId, from: leaverId, to: newOwnerId });
+    }
   }
 
   // ---- Pipeline deals ----------------------------------------------------
@@ -480,24 +654,24 @@ export async function reassignOwnedCustomers(
     );
   }
   const changes: { customerId: number; from: number; to: number | null }[] = [];
-  for (const c of owned) {
-    const newOwnerId = byCustomer.get(c.id)!;
-    await withRow({ customerId: c.id }, async () => {
-      assertNotLeaver(newOwnerId, leaverId, "owner");
-      await assertActiveUser(tx, newOwnerId, "owner");
-    });
+  const ownerGroups = await groupCustomersByNewOwner(
+    tx,
+    leaverId,
+    owned.map((c) => ({ customerId: c.id, newOwnerId: byCustomer.get(c.id)! })),
+  );
+  for (const [newOwnerId, customerIds] of ownerGroups) {
     try {
-      await tx.customer.update({ where: { id: c.id }, data: { tam: { connect: { id: newOwnerId } } } });
+      await tx.customer.updateMany({ where: { id: { in: customerIds } }, data: { tamId: newOwnerId } });
     } catch (err) {
       // The new owner was deleted after the check above: blame the owner, not the leaver.
       if (err instanceof Prisma.PrismaClientKnownRequestError && (err.code === "P2003" || err.code === "P2025")) {
         throw new HttpError(400, "owner_not_found", "The selected owner does not exist or is inactive", {
-          customerId: c.id,
+          customerId: customerIds[0],
         });
       }
       throw err;
     }
-    changes.push({ customerId: c.id, from: leaverId, to: newOwnerId });
+    for (const customerId of customerIds) changes.push({ customerId, from: leaverId, to: newOwnerId });
   }
   return changes;
 }

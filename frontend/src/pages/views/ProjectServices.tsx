@@ -30,11 +30,12 @@ export function ProjectServices() {
 
   // Subscribed services not yet assigned at the project level — the set the
   // "Add customer's services" bulk action fills in, carrying over the customer's
-  // per-service tools for each newly-added row.
+  // per-service tools for each newly-added row. Inactive services are skipped:
+  // they cannot be newly linked.
   const missingSubscribed = useMemo(() => {
     if (!customer) return [];
     const assignedIds = new Set(project.services.map((a) => a.serviceId));
-    return customer.services.filter((a) => !assignedIds.has(a.serviceId));
+    return customer.services.filter((a) => a.service.active && !assignedIds.has(a.serviceId));
   }, [customer, project.services]);
 
   const showAddAll = canMutate && Boolean(customer) && missingSubscribed.length > 0;

@@ -83,7 +83,7 @@ jobs:
 
       - name: Typecheck backend
         working-directory: backend
-        run: npx tsc --noEmit
+        run: npx tsc -p tsconfig.check.json
 
       - name: npm ci (frontend, retry once on failure)
         working-directory: frontend
@@ -93,6 +93,10 @@ jobs:
       - name: Typecheck frontend
         working-directory: frontend
         run: npm run typecheck
+
+      - name: Lint frontend (React hooks rules)
+        working-directory: frontend
+        run: npm run lint
 
       - name: Run frontend test suite
         working-directory: frontend

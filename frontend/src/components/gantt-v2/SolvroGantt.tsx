@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { parseISO } from "date-fns";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import {
@@ -14,6 +14,7 @@ import { fmtDateTime } from "@/lib/formatDate";
 import { useGanttExport } from "@/lib/gantt/exportContext";
 import { addDays, buildRows, rowsDateRange, startOfDay, type Row } from "@/lib/gantt/geometry";
 import {
+  CRITICAL_PATH_HEX,
   DEFAULT_SECTION_COLOR,
   legendEntries,
   resolveSectionColors,
@@ -21,6 +22,7 @@ import {
 } from "@/lib/gantt/palette";
 import {
   type CreateDependencyInput,
+  type Section,
   type Task,
   useCreateDependency,
   useCreateSection,
@@ -72,6 +74,7 @@ import {
   buildRollupEvents,
   eventPatch,
   parseTaskId,
+  parseSectionId,
   sectionNodeId,
   taskNodeId,
 } from "./adapter";
@@ -226,8 +229,9 @@ const TREE_PANEL_MAX_WIDTH = 774;
 // min and the fixed columns clip again (a deliberate user narrowing, not
 // the default — was 256px pre-T2), and on narrow desktop viewports the
 // engine renders the pane narrower than `treeWidth` without reporting it
-// (clampContainer, gantt-view.tsx:977-987), so a wide persisted width can
-// still clip the columns there — docs/ISSUES.md.
+// (clampContainer in gantt-view.tsx); the name column therefore follows the
+// pane's measured width (ResizeObserver below), not `treeWidth`. The
+// remaining floor case is docs/ISSUES.md ISS-094.
 const TREE_DATES_COLUMN_WIDTH = 132;
 const TREE_COLOR_COLUMN_WIDTH = 24;
 // Height-style Status chip column. 100px comfortably fits the widest chip
@@ -246,6 +250,7 @@ const TREE_FIXED_COLUMNS_WIDTH =
   TREE_COLOR_COLUMN_WIDTH +
   TREE_STATUS_COLUMN_WIDTH;
 const TREE_NAME_COLUMN_MIN_WIDTH = 100;
+const NAME_COL_VAR = "--solvro-gantt-name-col";
 
 function clampTreeWidth(width: number): number {
   return Math.min(Math.max(width, TREE_PANEL_MIN_WIDTH), TREE_PANEL_MAX_WIDTH);
@@ -281,6 +286,100 @@ function readStoredTreeWidth(): number {
   return TREE_PANEL_DEFAULT_WIDTH;
 }
 
+// ---- Tree-row reorder planners (used by handleResourceReorder) ----
+// Pure: each takes the drop proposal plus the current data and returns what to
+// persist, or `false` to reject / no-op. They mirror GanttFrame.tsx:420-569.
+
+// Section-group reorder (root level only). Re-derives the desired root order
+// from the CURRENT (pre-drag) root list (sections, then the pseudo group last
+// if present), splices the move in at `index`, then returns a patch for every
+// REAL section whose position actually changed (GanttFrame.tsx:544-559).
+function planSectionReorder(
+  resourceId: string,
+  parentId: string | null,
+  index: number,
+  currentRootIds: string[],
+  sections: Section[],
+): Array<{ id: number; position: number }> | false {
+  // The "(No section)" pseudo-group has no backing Section row — old engine
+  // only starts a section drag when `sectionId !== null` (GanttFrame.tsx:539).
+  if (resourceId === sectionNodeId(null)) return false;
+  // Sections never nest under a task (GanttFrame.tsx:542).
+  if (parentId !== null) return false;
+
+  const others = currentRootIds.filter((id) => id !== resourceId);
+  const clamped = Math.max(0, Math.min(index, others.length));
+  const nextRootOrder = [...others];
+  nextRootOrder.splice(clamped, 0, resourceId);
+
+  const patches = nextRootOrder
+    .filter((id) => id !== sectionNodeId(null))
+    .map((nodeId, i) => ({ id: parseSectionId(nodeId), position: i }))
+    .filter((p): p is { id: number; position: number } => typeof p.id === "number")
+    .filter(({ id, position }) => sections.find((s) => s.id === id)?.position !== position);
+
+  return patches.length === 0 ? false : patches; // empty = no-op, nothing moved
+}
+
+// Subtask: reorder WITHIN its parent only — no re-parent via row drags
+// (GanttFrame.tsx:474-495). ReUI's `index` already counts only OTHER
+// same-parent rows above the drop point (gantt-view.tsx's `propose()`),
+// which is exactly the backend's insertAt convention. Returns the new position.
+function planSubtaskReorder(moved: Task, parentId: string | null, index: number): number | false {
+  if (parentId !== taskNodeId(moved.parentTaskId as number)) return false;
+  if (index === moved.position) return false; // no-op
+  return index;
+}
+
+// Top-level task: must land under a section group (real or the "(No section)"
+// pseudo group), never under a task node — promoting a top-level task into a
+// subtask (or vice versa) via drag isn't supported by the old engine.
+// `position` is one GLOBAL dense index across every top-level task in the
+// project (one canonical manual order; backend's sibling key for
+// parentTaskId===null is project-wide, taskOrdering.ts:17-19). Unifies
+// GanttFrame's two old drop paths (row-target :431-471, section-target
+// :500-536) into one index-based computation.
+function planTopLevelMove(
+  moved: Task,
+  parentId: string | null,
+  index: number,
+  tasks: Task[],
+): { sectionId?: number | null; position?: number } | false {
+  if (parentId === null || parseTaskId(parentId) !== null) return false;
+  const targetSectionId = parseSectionId(parentId);
+  if (targetSectionId === undefined) return false;
+
+  const topLevelOrdered = tasks
+    .filter((t) => t.parentTaskId === null)
+    .sort((a, b) => a.position - b.position || a.id - b.id);
+  const others = topLevelOrdered.filter((t) => t.id !== moved.id);
+  const targetSiblings = others.filter((t) => t.sectionId === targetSectionId);
+  const crossSection = targetSectionId !== moved.sectionId;
+
+  let position: number | undefined;
+  if (targetSiblings.length === 0) {
+    // No other task in the target section — GanttFrame.tsx:529's `last`
+    // undefined branch: omit position entirely (appends at the global end;
+    // harmless, since display groups by section anyway).
+    position = undefined;
+  } else if (index >= targetSiblings.length) {
+    const last = targetSiblings[targetSiblings.length - 1];
+    position = others.findIndex((t) => t.id === last.id) + 1;
+  } else {
+    const before = targetSiblings[index];
+    position = others.findIndex((t) => t.id === before.id);
+  }
+
+  if (!crossSection && (position === undefined || position === moved.position)) {
+    return false; // no-op — same section, same slot (or nothing to reorder against)
+  }
+
+  const patch: { sectionId?: number | null; position?: number } = {};
+  if (crossSection) patch.sectionId = targetSectionId;
+  if (position !== undefined) patch.position = position;
+  return patch;
+}
+
 // Plan B Task 7 (fix pass) — geometry's buildRows() takes a collapsed-row Set
 // keyed by the OLD engine's row-id shape (geometry.ts:458-467: section groups
 // are `sec-<id>` / `sec-none`; task-with-subtask groups are `task-<id>`,
@@ -294,13 +393,10 @@ function readStoredTreeWidth(): number {
 // ids onto geometry's shape; task ids pass through unchanged.
 function toGeometryCollapsedIds(resourceIds: string[]): Set<string> {
   return new Set(
-    resourceIds.map((id) =>
-      id === "section-none"
-        ? "sec-none"
-        : id.startsWith("section-")
-          ? `sec-${id.slice("section-".length)}`
-          : id,
-    ),
+    resourceIds.map((id) => {
+      const sectionId = parseSectionId(id);
+      return sectionId === undefined ? id : `sec-${sectionId ?? "none"}`;
+    }),
   );
 }
 
@@ -450,10 +546,17 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // (residuals in the constants block above), and every pixel of splitter
   // drag still goes to the name column 1:1, so dragging reveals more of a
   // truncated title without pushing the date range back out of view.
-  const nameColumnWidth = Math.max(
+  // The engine can render the pane narrower than `treeWidth` (container clamp
+  // on narrow viewports, live splitter drag) without reporting it, so the
+  // name column follows the MEASURED pane width, never the stored one
+  // (docs/ISSUES.md ISS-093, ISS-095). The measurement lands in a CSS
+  // variable on the pane (see the layout effect near `apiRef`), not React
+  // state, so a drag does not re-render every row per frame; the px fallback
+  // covers the frame before the first measure.
+  const nameColumnWidth = `var(${NAME_COL_VAR}, ${Math.max(
     TREE_NAME_COLUMN_MIN_WIDTH,
     treeWidth - TREE_FIXED_COLUMNS_WIDTH,
-  );
+  )}px)`;
   // Memoized: gantt.tsx:1623-1634 hands GanttViewConfigContext consumers the
   // PREVIOUS config object across renders unless a value actually changed
   // (shallowEqualRecord) — passing a fresh `treePanel` object literal every
@@ -601,53 +704,35 @@ export function SolvroGantt(props: SolvroGanttProps) {
   // spec) onto ReUI's single `{resourceId, parentId, index}` proposal shape.
   // Returns `false` to reject; per gantt.tsx:127 the real contract is
   // `void | false` (never `true` — unlike onEventUpdate's GanttUpdateResult,
-  // there is no accept-with-adjustment form here).
+  // there is no accept-with-adjustment form here). The three drop branches
+  // are pure planners (module scope, above); this callback only dispatches
+  // the mutation each plan asks for.
   const handleResourceReorder = useCallback(
     (proposal: GanttResourceReorder): void | false => {
       if (!canEdit) return false;
       const { resourceId, parentId, index } = proposal;
 
       // ---- Section-group reorder (root level only) ----
-      if (resourceId.startsWith("section-")) {
-        // The "(No section)" pseudo-group has no backing Section row — old
-        // engine only starts a section drag when `sectionId !== null`
-        // (GanttFrame.tsx:539).
-        if (resourceId === sectionNodeId(null)) return false;
-        // Sections never nest under a task (GanttFrame.tsx:542: dropping a
-        // section onto the pseudo group is rejected; dropping it under a
-        // task isn't even representable in the old engine's flat section
-        // list at all).
-        if (parentId !== null) return false;
-
-        // Re-derive the desired root order from the CURRENT (pre-drag) root
-        // list — same shape `resources` already is (sections, then the
-        // pseudo group last if present) — splice the move in at `index`,
-        // then patch every REAL section whose position actually changed.
-        // Mirrors GanttFrame.tsx:544-559's ordered/filtered/splice + diffed
-        // Promise.all of useUpdateSection calls.
-        const currentRootIds = resources.map((r) => r.id);
-        const others = currentRootIds.filter((id) => id !== resourceId);
-        const clamped = Math.max(0, Math.min(index, others.length));
-        const nextRootOrder = [...others];
-        nextRootOrder.splice(clamped, 0, resourceId);
-
-        const patches = nextRootOrder
-          .filter((id) => id !== sectionNodeId(null))
-          .map((id, i) => ({ id: Number(id.slice("section-".length)), position: i }))
-          .filter(({ id, position }) => sections.find((s) => s.id === id)?.position !== position);
-
-        if (patches.length === 0) return false; // no-op — nothing actually moved
-        setActionError(null);
-        patches.forEach(({ id, position }) =>
-          updateSection.mutate(
-            { id, patch: { position } },
-            {
-              onError: (err) => {
-                setActionError(err instanceof ApiError ? err.message : "Could not reorder sections.");
-              },
-            },
-          ),
+      if (parseSectionId(resourceId) !== undefined) {
+        const patches = planSectionReorder(
+          resourceId,
+          parentId,
+          index,
+          resources.map((r) => r.id),
+          sections,
         );
+        if (patches === false) return false;
+        setActionError(null);
+        // mutateAsync, not mutate + callbacks: TanStack fires mutate-level
+        // callbacks only for the latest call on a hook, and this fires
+        // several in a row (docs/ISSUES.md ISS-106).
+        void Promise.all(
+          patches.map(({ id, position }) =>
+            updateSection.mutateAsync({ id, patch: { position } }),
+          ),
+        ).catch((err: unknown) => {
+          setActionError(err instanceof ApiError ? err.message : "Could not reorder sections.");
+        });
         return;
       }
 
@@ -658,66 +743,17 @@ export function SolvroGantt(props: SolvroGanttProps) {
       if (!moved) return false;
 
       if (moved.parentTaskId !== null) {
-        // Subtask: reorder WITHIN its parent only — no re-parent via row
-        // drags (GanttFrame.tsx:474-495: "Ignore drops outside the sibling
-        // checklist"). ReUI's `index` already counts only OTHER same-parent
-        // rows above the drop point (gantt-view.tsx's `propose()`), which is
-        // exactly the backend's insertAt convention — no extra math needed,
-        // unlike the top-level case below.
-        if (parentId !== taskNodeId(moved.parentTaskId)) return false;
-        if (index === moved.position) return false; // no-op
+        const position = planSubtaskReorder(moved, parentId, index);
+        if (position === false) return false;
         setActionError(null);
-        void updateTask.mutateAsync({ id: taskId, patch: { position: index } }).catch((err: unknown) => {
+        void updateTask.mutateAsync({ id: taskId, patch: { position } }).catch((err: unknown) => {
           setActionError(err instanceof ApiError ? err.message : "Could not reorder subtask.");
         });
         return;
       }
 
-      // Top-level task: must land under a section group (real or the "(No
-      // section)" pseudo group), never under a task node — promoting a
-      // top-level task into a subtask (or vice versa) via drag isn't
-      // supported by the old engine's row-drag affordance.
-      if (parentId === null || parseTaskId(parentId) !== null) return false;
-      const targetSectionId =
-        parentId === sectionNodeId(null) ? null : Number(parentId.slice("section-".length));
-
-      // `position` is one GLOBAL dense index across every top-level task in
-      // the project (CLAUDE.md: "one canonical manual order"; backend's
-      // sibling key for parentTaskId===null is project-wide, not
-      // per-section — taskOrdering.ts:17-19). Unifies GanttFrame's two old
-      // drop paths — the row-target case (:431-471, arbitrary same/cross
-      // -section position via a specific target row) and the
-      // section-target case (:500-536, always append at the target
-      // section's block end) — into one index-based computation, since
-      // ReUI's `index` gives the precise slot in EITHER case.
-      const topLevelOrdered = tasks
-        .filter((t) => t.parentTaskId === null)
-        .sort((a, b) => a.position - b.position || a.id - b.id);
-      const others = topLevelOrdered.filter((t) => t.id !== taskId);
-      const targetSiblings = others.filter((t) => t.sectionId === targetSectionId);
-      const crossSection = targetSectionId !== moved.sectionId;
-
-      let position: number | undefined;
-      if (targetSiblings.length === 0) {
-        // No other task in the target section — GanttFrame.tsx:529's `last`
-        // undefined branch: omit position entirely (appends at the global
-        // end; harmless, since display groups by section anyway).
-        position = undefined;
-      } else if (index >= targetSiblings.length) {
-        const last = targetSiblings[targetSiblings.length - 1];
-        position = others.findIndex((t) => t.id === last.id) + 1;
-      } else {
-        const before = targetSiblings[index];
-        position = others.findIndex((t) => t.id === before.id);
-      }
-
-      if (!crossSection && (position === undefined || position === moved.position)) {
-        return false; // no-op — same section, same slot (or nothing to reorder against)
-      }
-
-      const patch: { sectionId?: number | null; position?: number } = {};
-      if (crossSection) patch.sectionId = targetSectionId;
-      if (position !== undefined) patch.position = position;
+      const patch = planTopLevelMove(moved, parentId, index, tasks);
+      if (patch === false) return false;
       setActionError(null);
       void updateTask.mutateAsync({ id: taskId, patch }).catch((err: unknown) => {
         setActionError(err instanceof ApiError ? err.message : "Could not move task.");
@@ -852,11 +888,8 @@ export function SolvroGantt(props: SolvroGanttProps) {
         width: TREE_COLOR_COLUMN_WIDTH,
         align: "center",
         render: (ctx) => {
-          if (ctx.resource.id === sectionNodeId(null) || !ctx.resource.id.startsWith("section-")) {
-            return null;
-          }
-          const sectionId = Number(ctx.resource.id.slice("section-".length));
-          if (!sectionColors.has(sectionId)) return null;
+          const sectionId = parseSectionId(ctx.resource.id);
+          if (typeof sectionId !== "number" || !sectionColors.has(sectionId)) return null;
           return (
             <SectionColorCell
               sectionId={sectionId}
@@ -985,6 +1018,30 @@ export function SolvroGantt(props: SolvroGanttProps) {
   );
 
   const apiRef = useRef<GanttApi<Task> | null>(null);
+
+  // Track the engine's tree pane (data-slot="gantt-tree-pane") so the name
+  // column follows its real width. ResizeObserver delivers at most once per
+  // frame, which also throttles the live splitter drag.
+  const ganttMounted = !isLoading && !isError && resources.length > 0;
+  // Layout effect: a clamped pane must not paint one frame with the stale width.
+  useLayoutEffect(() => {
+    if (!ganttMounted) return;
+    const pane = ganttContainerRef.current?.querySelector<HTMLElement>(
+      '[data-slot="gantt-tree-pane"]',
+    );
+    if (!pane) return;
+    const update = () => {
+      const w = Math.round(pane.getBoundingClientRect().width);
+      pane.style.setProperty(
+        NAME_COL_VAR,
+        `${Math.max(TREE_NAME_COLUMN_MIN_WIDTH, w - TREE_FIXED_COLUMNS_WIDTH)}px`,
+      );
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(pane);
+    return () => observer.disconnect();
+  }, [ganttMounted]);
 
   // Plan B Task 8 fix — Finding #1 (task-b8-report.md): the vendored engine
   // anchors its initial visible window on `new Date()` (gantt.tsx:342:
@@ -1329,7 +1386,8 @@ export function SolvroGantt(props: SolvroGanttProps) {
                         transparent center, and the 8px box keeps the label
                         column aligned with the mode swatches above. */}
                     <span
-                      className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-inset ring-chip-violet-text"
+                      className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-inset"
+                      style={{ "--tw-ring-color": CRITICAL_PATH_HEX } as CSSProperties}
                       aria-hidden="true"
                     />
                     <span className="truncate">{CRITICAL_PATH_LABEL}</span>
@@ -1407,7 +1465,7 @@ export function SolvroGantt(props: SolvroGanttProps) {
           <button
             type="submit"
             disabled={createSection.isPending || !newSectionName.trim()}
-            className="rounded-sm bg-primary px-2 py-1 font-display text-xs text-on-primary hover:bg-primary-container disabled:opacity-50 font-semibold"
+            className="rounded-sm bg-primary px-2 py-1 font-display text-xs text-on-primary primary-hover disabled:opacity-50 font-semibold"
           >
             Add
           </button>
@@ -1636,23 +1694,21 @@ export function SolvroGantt(props: SolvroGanttProps) {
                           spread, §4). `canEdit` only — this menu already is. */}
                         <ContextMenuItem
                           className="text-xs"
-                          onClick={() =>
-                            updateTask.mutate(
-                              {
+                          onClick={() => {
+                            setActionError(null);
+                            void updateTask
+                              .mutateAsync({
                                 id: task.id,
                                 patch: { isCriticalPath: !task.isCriticalPath },
-                              },
-                              {
-                                onError: (err) => {
-                                  setActionError(
-                                    err instanceof ApiError
-                                      ? err.message
-                                      : "Could not update the Critical Path mark.",
-                                  );
-                                },
-                              },
-                            )
-                          }
+                              })
+                              .catch((err: unknown) => {
+                                setActionError(
+                                  err instanceof ApiError
+                                    ? err.message
+                                    : "Could not update the Critical Path mark.",
+                                );
+                              });
+                          }}
                         >
                           <span
                             className="material-symbols-outlined text-sm text-on-surface-variant"

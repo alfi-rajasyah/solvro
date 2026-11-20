@@ -6,6 +6,7 @@
 import type { MouseEvent } from "react";
 import { Chip } from "@/components/StatusChip";
 import { KanbanItemHandle } from "@/components/reui/kanban";
+import { FIELD_FOCUS } from "@/lib/utils";
 import type { ItopTicketRow } from "@/lib/queries";
 import { foldedStatusLabel, isEscalated } from "./boardAdapter";
 import { ageLabel, slaLabel } from "../ticketPresentation";
@@ -59,7 +60,7 @@ export function TicketCard({
         {canDrag && (
           <KanbanItemHandle
             aria-label="Drag ticket"
-            className="inline-flex shrink-0 touch-none items-center text-on-surface-variant/60"
+            className={`-m-1 inline-flex shrink-0 touch-none items-center rounded-sm p-1 text-on-surface-variant/60 ${FIELD_FOCUS}`}
           >
             <span aria-hidden="true" className="material-symbols-outlined text-[16px]">drag_indicator</span>
           </KanbanItemHandle>

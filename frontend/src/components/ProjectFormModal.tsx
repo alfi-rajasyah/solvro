@@ -18,6 +18,7 @@ import {
   useUsers,
 } from "@/lib/queries";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
+import { selectableUsers } from "@/lib/selectableUsers";
 
 const PROJECT_STATUSES: ProjectStatus[] = [
   "PLANNING",
@@ -146,11 +147,12 @@ export function ProjectFormModal({
     if (!open) cancelStatusChange();
   }, [open, cancelStatusChange]);
 
-  // SA / TAM dropdowns list all users — role names no longer gate who's
-  // eligible to be assigned (admin's choice). Anti-self-clutter not done
-  // here because useUsers() doesn't expose `active`.
-  const sas = users ?? [];
-  const tams = users ?? [];
+  // SA / TAM dropdowns list every active user — role names no longer gate who's
+  // eligible to be assigned (admin's choice). A deactivated account stays
+  // listed only while it is the current value: the backend refuses a newly
+  // assigned inactive user but accepts a re-save of the current one.
+  const sas = selectableUsers(users, [project?.saId]);
+  const tams = selectableUsers(users, [project?.tamId]);
   const canPickTam = user?.permissions?.includes("*") ?? false;
   const showTamPicker = canPickTam && canChangeOwnership;
   const inlineErrorFields: readonly string[] = showTamPicker

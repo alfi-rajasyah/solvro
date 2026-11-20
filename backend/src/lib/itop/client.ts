@@ -8,7 +8,7 @@
 import type { ItopTicketClass } from "./types.js";
 
 /** `code` is iTop's own numeric error code, or one of our transport codes. */
-export type ItopErrorCode = number | "http" | "timeout" | "network" | "parse" | "paging";
+export type ItopErrorCode = number | "http" | "timeout" | "network" | "parse" | "paging" | "redirect";
 
 export class ItopError extends Error {
   code: ItopErrorCode;
@@ -44,6 +44,8 @@ export interface ItopProbeResult {
   name: string;
   ok: boolean;
   message: string;
+  /** A failing informational probe does not fail the overall connection test. */
+  informational?: boolean;
 }
 
 export interface ItopListOperationsResult {
@@ -177,10 +179,23 @@ export function createItopClient(options: ItopClientOptions): ItopClient {
           },
           body,
           signal: controller.signal,
+          // Never follow a 30x: the redirect target would receive the
+          // Auth-Token header, including over plain http (ISS-129).
+          redirect: "manual",
         });
       } catch (err) {
         if (err instanceof Error && err.name === "AbortError") throw timeoutError();
         throw new ItopError({ code: "network", message: toErrorMessage(err) });
+      }
+
+      // `redirect: "manual"` hands back the 30x (or an opaque-redirect
+      // response, status 0) instead of following it.
+      if ((response.status >= 300 && response.status < 400) || response.type === "opaqueredirect") {
+        throw new ItopError({
+          code: "redirect",
+          message: "iTop answered with a redirect; Solvro does not follow redirects. Set the base URL to the final address.",
+          status: response.status || undefined,
+        });
       }
 
       if (!response.ok) {
@@ -251,7 +266,7 @@ export function createItopClient(options: ItopClientOptions): ItopClient {
       if (page > MAX_GETALL_PAGES) {
         throw new ItopError({
           code: "paging",
-          message: `iTop paging exceeded ${MAX_GETALL_PAGES} pages for class '${cls}' — the server may be ignoring limit/page`,
+          message: `iTop paging exceeded ${MAX_GETALL_PAGES} pages for class '${cls}'. The server may be ignoring limit/page.`,
         });
       }
 
@@ -320,12 +335,18 @@ export function createItopClient(options: ItopClientOptions): ItopClient {
             name: cls,
             ok: true,
             message: fieldNames || "ok (no rows to inspect)",
+            informational: true,
           });
         } else {
           results.push({ name: cls, ok: true, message: "ok" });
         }
       } catch (err) {
-        results.push({ name: cls, ok: false, message: toErrorMessage(err) });
+        results.push({
+          name: cls,
+          ok: false,
+          message: toErrorMessage(err),
+          ...(cls === "TimeSpent" ? { informational: true } : {}),
+        });
       }
     }
 

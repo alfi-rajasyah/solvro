@@ -5,9 +5,10 @@ import "./env.js";
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
+import { env } from "../src/env.js";
 import { prisma } from "../src/prisma.js";
 import { publicShareRateLimiter, PUBLIC_SHARE_RATE_LIMIT } from "../src/routes/publicShare.js";
-import { derivePhase, generateShareToken, hashShareToken } from "../src/lib/shareLinks.js";
+import { derivePhase, generateShareToken, hashShareToken, shareUrlFor } from "../src/lib/shareLinks.js";
 import { createUserWithRole, seedRoles } from "./testAuth.js";
 
 const app = createApp();
@@ -615,6 +616,91 @@ describe("guardrail: nothing internal reaches the guest payload", () => {
     });
     for (const key of ["notes", "comments", "risks", "activity", "tasks", "members", "assignee"]) {
       expect(raw).not.toContain(`"${key}"`);
+    }
+  });
+
+  it("no project or task document link (URL or label) appears anywhere", async () => {
+    const { tam, customer, project } = await fixture();
+    const section = await prisma.section.create({
+      data: { projectId: project.id, name: "Phase One", position: 0 },
+    });
+    const task = await makeTask(project.id, {
+      title: "Plain task",
+      sectionId: section.id,
+      status: "IN_PROGRESS",
+      startDate: day("2026-10-01"),
+      dueDate: day("2026-10-31"),
+    });
+    // A milestone is the one task kind the guest sees, so its link is the likeliest to leak.
+    const milestone = await makeTask(project.id, {
+      title: "Public milestone",
+      isMilestone: true,
+      dueDate: day("2026-11-30"),
+    });
+    await prisma.projectLink.create({
+      data: {
+        projectId: project.id,
+        label: "SECRET-PROJECT-LINK-LABEL",
+        url: "https://docs.internal.example/SECRET-PROJECT-LINK-URL",
+      },
+    });
+    for (const [t, tag] of [[task, "TASK"], [milestone, "MILESTONE"]] as const) {
+      await prisma.taskLink.create({
+        data: {
+          taskId: t.id,
+          label: `SECRET-${tag}-LINK-LABEL`,
+          url: `https://docs.internal.example/SECRET-${tag}-LINK-URL`,
+        },
+      });
+    }
+    const link = await createLink(project.id, tam.token);
+
+    const res = await request(app).get(`/public/share/${link.token}`);
+    expect(res.status).toBe(200);
+    const raw = JSON.stringify(res.body);
+    for (const needle of [
+      "SECRET",
+      "docs.internal.example",
+      "https://",
+      "http://",
+      '"links"',
+      '"url"',
+      '"label"',
+    ]) {
+      expect(raw).not.toContain(needle);
+    }
+    // The links exist, so the absence above is the allow-list at work, not an empty fixture.
+    expect(await prisma.projectLink.count({ where: { projectId: project.id } })).toBe(1);
+    expect(await prisma.taskLink.count({ where: { task: { projectId: project.id } } })).toBe(2);
+    expect(res.body).toEqual({
+      project: { name: project.name, customerName: customer.name, status: "ACTIVE" },
+      phases: [{ name: "Phase One", startDate: "2026-10-01", endDate: "2026-10-31", status: "in_progress" }],
+      milestones: [{ title: "Public milestone", date: "2026-11-30", done: false }],
+      generatedAt: expect.any(String),
+    });
+  });
+});
+
+// ISS-142: with PUBLIC_BASE_URL set, the link the owner copies is built from it
+// instead of the address the owner is browsing from.
+describe("guest link base address (PUBLIC_BASE_URL)", () => {
+  it("builds the path alone when unset and prefixes the base when set", () => {
+    expect(shareUrlFor("abc", undefined)).toBe("/share/abc");
+    expect(shareUrlFor("abc", "https://solvro.example.com")).toBe("https://solvro.example.com/share/abc");
+  });
+
+  it("POST returns an absolute link on the configured base, and the token still resolves", async () => {
+    const { tam, project } = await fixture();
+    env.PUBLIC_BASE_URL = "https://solvro.example.com";
+    try {
+      const res = await request(app).post(`/projects/${project.id}/share-links`).set(auth(tam.token)).send({});
+      expect(res.status).toBe(201);
+      const url = (res.body as { url: string }).url;
+      expect(url).toMatch(/^https:\/\/solvro\.example\.com\/share\/[A-Za-z0-9_-]{43}$/);
+      const guest = await request(app).get(`/public/share/${url.split("/share/")[1]}`);
+      expect(guest.status).toBe(200);
+    } finally {
+      env.PUBLIC_BASE_URL = undefined;
     }
   });
 });

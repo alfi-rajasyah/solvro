@@ -2,11 +2,10 @@
   "compilerOptions": {
     "composite": true,
     // Redirect emit out of the project root. `composite` forces emit, and
-    // without this `tsc -b` (run by `npm run build`) wrote tailwind.config.js /
-    // vite.config.js next to the sources — and PostCSS/Tailwind resolve `.js`
-    // before `.ts`, so the stale compiled config silently shadowed the real
-    // `tailwind.config.ts` in dev. Emitting to a cache dir keeps the source
-    // files the single resolution target.
+    // without this `tsc -b` (run by `npm run build`) wrote vite.config.js next
+    // to the source, and a stale compiled `.js` config resolves before the
+    // `.ts` one. Emitting to a cache dir keeps the source file the single
+    // resolution target.
     "outDir": "./node_modules/.cache/tsconfig-node",
     "skipLibCheck": true,
     "module": "ESNext",
@@ -14,5 +13,5 @@
     "allowSyntheticDefaultImports": true,
     "strict": true
   },
-  "include": ["vite.config.ts", "tailwind.config.ts", "postcss.config.js"]
+  "include": ["vite.config.ts"]
 }

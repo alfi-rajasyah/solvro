@@ -1,7 +1,7 @@
 import { test, expect, loginViaUi } from "../fixtures/test";
 
-// Regression cover for the "duplicate-chip mouse race" (docs/ISSUES.md, ReUI
-// Filters phase deferred findings): Base UI's `useMenuItemCommonProps` can
+// Regression cover for the "duplicate-chip mouse race" (docs/archive/ISSUES-2026-11-18-phase-log.md, ReUI
+// Filters phase deferred findings; open follow-up: docs/ISSUES.md ISS-156): Base UI's `useMenuItemCommonProps` can
 // fire a programmatic `itemRef.current.click()` on mouseup once
 // `allowMouseUpTriggerRef` is armed by a press held >=200ms, and
 // `MenuCheckboxItem` (the value-picker rows inside a field's submenu, e.g.
@@ -23,7 +23,7 @@ import { test, expect, loginViaUi } from "../fixtures/test";
 // submenu flow (never the plain field-only `addFilter` path). Both also set
 // `allowMultiple={false}`, which already removes an added field from the
 // root add-filter list before a raced second activation typically lands
-// (docs/ISSUES.md describes this as "incidental" shielding, observed 0/6 on
+// (docs/archive/ISSUES-2026-11-18-phase-log.md describes this as "incidental" shielding, observed 0/6 on
 // repro, not a guaranteed backstop) — so this spec can't force the exact
 // upstream timing deterministically. It drives the closest reproducible
 // approximation (a >=200ms press-hold directly on the value checkbox item,
@@ -73,11 +73,14 @@ test.describe("filters — duplicate-chip guard (desktop)", () => {
       if (!box) throw new Error(`${valueLabel} option not visible`);
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
+      // Long-press gesture: the hold duration is the input, not a wait.
       await page.waitForTimeout(250);
       await page.mouse.up();
     };
 
     await addChipViaLongPress("Status", "To do");
+    // Negative assertion below (never two chips): a wrongly-added duplicate has
+    // no DOM signal, so give it a window to appear.
     await page.waitForTimeout(300);
 
     // Core invariant: exactly one "Status" chip, never two.
@@ -87,10 +90,9 @@ test.describe("filters — duplicate-chip guard (desktop)", () => {
     // equality check doesn't over-trigger and block a legitimate add for a
     // field with no existing chip.
     await addChipViaLongPress("Priority", "High");
-    await page.waitForTimeout(300);
 
-    await expect(chipsFor("Status")).toHaveCount(1);
     await expect(chipsFor("Priority")).toHaveCount(1);
+    await expect(chipsFor("Status")).toHaveCount(1);
 
     // Reset leaves no chips behind (sanity check the toolbar is otherwise
     // unaffected by the guard).

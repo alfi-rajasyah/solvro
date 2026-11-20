@@ -2,7 +2,7 @@ import { test, expect, loginViaUi, apiBase } from "../fixtures/test";
 import type { Page } from "@playwright/test";
 
 // Regression coverage for the sustained Color-by legend
-// (docs/plans/optional-sa-and-gantt-color-legend-plan.md, Task 3): the
+// (docs/archive/plans/optional-sa-and-gantt-color-legend-plan.md, Task 3): the
 // toolbar must expose a "Color by" control, and the legend must be present
 // in ALL three modes — Section mode previously rendered no legend at all.
 // Since 2026-08-31 the control is a menu button (mode radios + the full
@@ -13,7 +13,7 @@ import type { Page } from "@playwright/test";
 
 async function openGantt(page: Page, projectId: number): Promise<void> {
   await page.goto(`/projects/${projectId}/gantt`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
+  await expect(page.locator('[data-slot="gantt-tree-pane"] [data-gantt-row-id]').first()).toBeVisible();
 }
 
 test.describe("gantt color-by legend — desktop", () => {
@@ -80,5 +80,38 @@ test.describe("gantt color-by legend — desktop", () => {
     await page.keyboard.press("Escape");
     await expect(legend).toHaveCount(0);
     await expect(colorBy).toHaveText(/section/i);
+  });
+
+  test("the chosen color-by mode survives a full page reload", async ({ page, seededProject }) => {
+    const { projectId } = seededProject;
+
+    await loginViaUi(page);
+    await openGantt(page, projectId);
+
+    const colorBy = page.getByRole("button", { name: /color by/i });
+    await colorBy.click();
+    await page.getByRole("menuitemradio", { name: "Priority" }).click();
+    const legend = page.getByTestId("gantt-legend");
+    await expect(legend.getByText("Urgent", { exact: true })).toBeVisible();
+    await expect
+      .poll(() => page.evaluate(() => localStorage.getItem("solvro.gantt.colorBy")))
+      .toBe("priority");
+
+    await page.reload({ waitUntil: "networkidle" });
+    await expect(page.locator('[data-slot="gantt-tree-pane"] [data-gantt-row-id]').first()).toBeVisible();
+
+    // The trigger names the restored mode, and reopening the menu shows the
+    // radio checked and the matching legend, not the section default.
+    await expect(colorBy).toHaveText(/priority/i);
+    await colorBy.click();
+    await expect(page.getByRole("menuitemradio", { name: "Priority" })).toHaveAttribute(
+      "aria-checked",
+      "true",
+    );
+    await expect(page.getByRole("menuitemradio", { name: "Section" })).toHaveAttribute(
+      "aria-checked",
+      "false",
+    );
+    await expect(legend.getByText("Urgent", { exact: true })).toBeVisible();
   });
 });

@@ -203,7 +203,7 @@ export function ProjectCard({
       {bodyExpanded && (
         <div id={bodyId}>
           <div className="flex flex-wrap gap-x-6 gap-y-2 border-b border-outline-variant px-4 py-2.5">
-            <Metric label="Phase" value={project.phase} />
+            <Metric label="Phase" value={project.phase ?? "No sections"} />
             <Metric label="Progress" value={`${pct}%`} sub={`${project.progress.done}/${project.progress.total}`} />
           </div>
 

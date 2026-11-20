@@ -218,10 +218,21 @@ export function parseImportRow(
     );
   }
 
-  const winProbParsed = Number.parseInt(String(winProbRaw), 10);
-  const winProbability = Number.isFinite(winProbParsed) ? winProbParsed : 50;
-  if (String(winProbRaw).trim() !== "" && (winProbability < 0 || winProbability > 100)) {
-    errors.push("Win Probability must be between 0 and 100.");
+  // A blank cell keeps the 50 default; a filled cell that is not a whole
+  // number is a row error rather than a silent 50.
+  const winProbCell = String(winProbRaw ?? "").trim();
+  let winProbability = 50;
+  if (winProbCell !== "") {
+    // Whole numbers only, with an optional trailing %: "0.7", "12abc" and
+    // "1e2" are errors, not a silently truncated or rescaled value.
+    const winProbParsed = /^\d{1,3}%?$/.test(winProbCell) ? Number(winProbCell.replace("%", "")) : Number.NaN;
+    if (!Number.isFinite(winProbParsed)) {
+      errors.push("Win Probability must be a number between 0 and 100.");
+    } else if (winProbParsed < 0 || winProbParsed > 100) {
+      errors.push("Win Probability must be between 0 and 100.");
+    } else {
+      winProbability = winProbParsed;
+    }
   }
 
   const deadlineCell = String(deadlineRaw ?? "").trim();

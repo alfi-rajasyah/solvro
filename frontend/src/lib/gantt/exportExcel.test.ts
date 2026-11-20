@@ -98,6 +98,7 @@ describe("buildTasksSheet", () => {
       "Section",
       "Epic",
       "Title",
+      "iTop ticket",
       "Status",
       "Priority",
       "Critical Path",
@@ -121,12 +122,36 @@ describe("buildTasksSheet", () => {
       "Section",
       "Epic",
       "Title",
+      "iTop ticket",
       "Status",
       "Priority",
       "Start",
       "Due",
     ]);
     for (const row of rows) expect(row.criticalPath).toBeUndefined();
+  });
+});
+
+describe("buildTasksSheet — iTop ticket column", () => {
+  it("shows the pinned ticket ref, and an empty cell when none is pinned", () => {
+    const pinned: Row = {
+      ...taskRow("t1"),
+      task: taskFixture({ itopTicketRef: "R-000123" }),
+    };
+    const unpinned: Row = { ...taskRow("t2"), task: taskFixture() };
+    const { rows } = buildTasksSheet([section, pinned, unpinned]);
+    expect(rows[0].itopTicket).toBe("R-000123");
+    expect(rows[1].itopTicket).toBe("");
+  });
+
+  it("emits only the known cell keys and no note or description text", () => {
+    const row: Row = {
+      ...taskRow("t1"),
+      task: taskFixture({ description: "SECRET-DESC", itopTicketRef: "R-000001" }),
+    };
+    const { columns, rows } = buildTasksSheet([section, row]);
+    expect(Object.keys(rows[0]).sort()).toEqual(columns.map((c) => c.key).sort());
+    expect(JSON.stringify(rows)).not.toContain("SECRET-DESC");
   });
 });
 
@@ -181,5 +206,25 @@ describe("buildTasksSheet — Epic column", () => {
     };
     const { rows } = buildTasksSheet([section, parentRow], epics);
     expect(rows[0].epic).toBe("");
+  });
+});
+
+// Guardrail: project and task document links (ProjectLink / TaskLink) are
+// internal and never reach an export. `Task` carries no `links` field today;
+// this pins that the builder emits only its explicit columns, so a task
+// object that did carry `links` could not leak one into the sheet.
+describe("buildTasksSheet — document links never exported", () => {
+  it("emits no link label or URL even when a task object carries links", () => {
+    const withLinks = {
+      ...taskFixture({ id: 1 }),
+      links: [{ id: "l1", label: "SECRET-TASK-LINK-LABEL", url: "https://docs.internal.example/SECRET-TASK-LINK-URL" }],
+    } as unknown as Task;
+    const row: Row = { ...taskRow("task-1"), taskId: 1, task: withLinks };
+    const sheet = buildTasksSheet([section, row]);
+    const raw = JSON.stringify(sheet);
+    expect(raw).not.toContain("SECRET");
+    expect(raw).not.toContain("docs.internal.example");
+    expect(sheet.columns.map((c) => c.header)).not.toContain("Links");
+    expect(Object.keys(sheet.rows[0])).not.toContain("links");
   });
 });

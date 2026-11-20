@@ -1,4 +1,4 @@
-import { test as base, type Page, type Request, type TestInfo } from "@playwright/test";
+import { test as base, expect, type Page, type Request, type TestInfo } from "@playwright/test";
 import { seedFixture, type SeededFixture } from "./seed";
 
 // One seeded project per spec file. Tests in one file share it (several
@@ -61,7 +61,9 @@ export async function loginViaUi(
   await page.goto("/", { waitUntil: "networkidle" });
   await submitLoginForm(page, email, password);
   await page.waitForURL(/overview|projects|\/$/i, { timeout: 10_000 }).catch(() => {});
-  await page.waitForTimeout(1000);
+  // The shell's search trigger exists on every authenticated page (desktop
+  // box or mobile icon), so it marks the end of sign-in.
+  await expect(page.locator('button[aria-label="Open search"]:visible').first()).toBeVisible();
 }
 
 /**
@@ -89,14 +91,37 @@ export async function submitLoginForm(
 /**
  * Route segment for the Kanban board under test — the ReUI-engine board,
  * cut over to the real `/kanban` route at
- * `docs/plans/kanban-reui-swap/plan.md` T11. Single source of truth so specs
+ * `docs/archive/plans/kanban-reui-swap/plan.md` T11. Single source of truth so specs
  * don't hardcode the segment.
  */
 export const KANBAN_ROUTE = "kanban";
 
 export async function openKanban(page: Page, projectId: number): Promise<void> {
   await page.goto(`/projects/${projectId}/${KANBAN_ROUTE}`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
+  const grips = page.locator('[aria-label="Drag to reorder"]:visible');
+  await expect(grips.first()).toBeVisible();
+  // Web fonts (the Material Symbols icon font above all: its ligature text is
+  // wide until the font loads) reflow every card when they swap in. On a cold
+  // CI stack that lands after the first paint, so drag targets measured before
+  // it are stale.
+  await page.evaluate(() => document.fonts.ready.then(() => undefined));
+  // The board keeps laying out after the first grip paints (columns fill and
+  // dnd-kit measures). Drag specs read card boxes next, so wait until the
+  // grip count and the last grip's box hold still across two 100 ms samples.
+  let prev: string | null = null;
+  await expect
+    .poll(
+      async () => {
+        const n = await grips.count();
+        const box = n ? await grips.nth(n - 1).boundingBox() : null;
+        const cur = box ? `${n}:${JSON.stringify(box)}` : null;
+        const stable = cur !== null && cur === prev;
+        prev = cur;
+        return stable;
+      },
+      { intervals: [100] },
+    )
+    .toBe(true);
 }
 
 export interface CapturedTaskRequest {
@@ -137,6 +162,8 @@ export async function captureTaskRequests(
   page.on("request", onRequest);
   try {
     await fn();
+    // Collects outgoing requests: a stray request has no DOM signal to await,
+    // so the window itself is the check.
     await page.waitForTimeout(800);
   } finally {
     page.off("request", onRequest);
@@ -171,6 +198,18 @@ export function center(box: { x: number; y: number; width: number; height: numbe
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 
+/** Resolves when the drop's task write response arrives, or after 1.5 s. A drop
+ * that changes nothing sends no request, and "no request" has no DOM signal,
+ * so the timeout is the negative window for those cases. */
+function waitForTaskWrite(page: Page): Promise<unknown> {
+  return page
+    .waitForResponse(
+      (r) => r.url().includes("/api/tasks") && ["PATCH", "POST"].includes(r.request().method()),
+      { timeout: 1500 },
+    )
+    .catch(() => null);
+}
+
 /** Mouse-based drag with interpolated moves (desktop / dnd-kit PointerSensor). */
 export async function mouseDrag(
   page: Page,
@@ -181,11 +220,12 @@ export async function mouseDrag(
   await page.mouse.down();
   for (let i = 1; i <= 14; i++) {
     await page.mouse.move(from.x + ((to.x - from.x) * i) / 14, from.y + ((to.y - from.y) * i) / 14);
-    await page.waitForTimeout(35);
+    await page.waitForTimeout(35); // gesture pacing: the sensor needs intermediate positions
   }
-  await page.waitForTimeout(150);
+  await page.waitForTimeout(150); // gesture pacing: let the last move register before release
+  const saved = waitForTaskWrite(page);
   await page.mouse.up();
-  await page.waitForTimeout(1400);
+  await saved;
 }
 
 /** Touch-based drag via CDP, respecting dnd-kit's TouchSensor 250ms activation
@@ -204,11 +244,12 @@ export async function touchDrag(
     });
 
   await dispatch("touchStart", from.x, from.y);
-  await page.waitForTimeout(400); // TouchSensor activation delay is 250ms
+  await page.waitForTimeout(400); // gesture pacing: TouchSensor activation delay is 250ms
   for (let i = 1; i <= 12; i++) {
     await dispatch("touchMove", from.x + ((to.x - from.x) * i) / 12, from.y + ((to.y - from.y) * i) / 12);
-    await page.waitForTimeout(50);
+    await page.waitForTimeout(50); // gesture pacing between touch moves
   }
+  const saved = waitForTaskWrite(page);
   await dispatch("touchEnd", 0, 0);
-  await page.waitForTimeout(1500);
+  await saved;
 }

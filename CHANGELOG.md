@@ -15,6 +15,244 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-20 — Hover contrast, secondary text, focus borders, badge variants
+
+- Primary buttons stay readable on hover: a new `primary-hover` utility in `frontend/src/index.css` replaces 27 hand-written hover classes. Light uses the pale green fill with dark text (1.3:1 to 11.4:1); dark uses the primary green at 90% and keeps its dark text (3.7:1 to 4.6:1).
+- Empty-value marks on Admin and the footer text on the sign-in page use the full secondary text colour (3.1:1 to 8.9:1).
+- Vendored form controls (select, input, input group, textarea, checkbox, scroll area, button, badge, calendar, Gantt bar and splitter) no longer change their border on focus; the primary focus ring is the only focus change. A new `design-focus-ring-vendored` check in `.claude/scripts/gates.sh` keeps `components/ui` and `components/reui` on this rule.
+- Removed the unused solid info, success, warning and destructive badge variants in `reui/badge.tsx`, which failed contrast.
+
+### Changed — 2026-11-20 — Loading placeholders, out-of-range iTop durations
+
+- Loading placeholders on Projects, Overview, Executive, customer, iTop ticket, Utilization, Weekly Sync, Daily Review, guest-link and project views use the shared skeleton components inside a `SkeletonRegion` (150 ms delay) instead of bare pulsing blocks or "Loading…" text. The placeholders lose their old border and tint.
+- An iTop time entry with a negative or out-of-range duration is skipped and counted, with one warning per entry, instead of failing the database write on every sync (`upsertTimeEntry` in `backend/src/lib/itop/sync.ts`).
+
+### Changed — 2026-11-20 — End-to-end waits, search spec, colour-by reload test
+
+- End-to-end tests: about 135 fixed-delay waits are now condition-based waits (retrying assertions, polling and response-driven checks) across 23 spec files in `e2e/tests/` and the shared sign-in, Kanban-open and drag helpers in `e2e/fixtures/test.ts`. The 22 remaining fixed delays cover checks that nothing happens, gesture timing and screenshot settles, each with a comment.
+- `e2e/tests/search.spec.ts` waits for the top bar search button before pressing the palette shortcut, checks API responses and anchors the deep-link URL match.
+- `e2e/tests/gantt-legend.spec.ts` checks that the Gantt "Color by" choice survives a full page reload.
+
+### Changed — 2026-11-20 — Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet
+
+- Filter toolbar rows (field, operator, value, add button, menus and popover search) use one 13px text size, matching the older dropdowns (vendored `reui/filters.tsx`).
+- The task comment box is an auto-growing textarea: Enter sends, Shift+Enter starts a new line (`CommentMentions.tsx`). It is hidden for roles without `task:write` or `project:write` (`TaskPanel.tsx`).
+- The top bar search trigger has hover and keyboard-focus styles and reads "Ctrl+K" off macOS and "⌘K" on macOS (`layout/TopBar.tsx`, new `lib/platform.ts`); dead classes were removed from the search palette (`CommandPalette.tsx`).
+- The iTop ticket's "hours this week" figure refetches when the viewer's UTC offset changes, because the offset is now part of the ticket query key (`useItopTicket` in `lib/queries.ts`).
+- The Material Symbols stylesheet is preloaded from `frontend/index.html`, so its request starts with the page instead of after the app stylesheet.
+- The PWA end-to-end spec skips itself against the Vite dev server instead of failing (`e2e/tests/pwa.spec.ts`).
+
+### Changed — 2026-11-20 — Dark primary contrast, Critical Path ring, section colours, stat cards, Excel iTop column
+
+- Dark-theme primary green moved from `#3aae51` to `#3aaf51` (`frontend/src/index.css`, `docs/DESIGN.md`; also the browser theme colour in `frontend/index.html` and the PWA manifest in `frontend/vite.config.ts`) so primary text reaches 4.5:1 on hovered rows and tinted cards; `frontend/src/lib/tokenContrast.test.ts` now pins that surface in both themes.
+- The Gantt Critical Path ring and its legend swatch use the fixed export violet in both themes, so the ring no longer reads as the selection outline in dark mode (`gantt-v2/SolvroBar.tsx`, `gantt-v2/SolvroGantt.tsx`).
+- The Overview KPI tiles use the shared Frame component, with small corners and aligned tops (`pages/Overview.tsx`). The empty-state frame now keeps its small corners too; its radius override lost to the Frame default (`components/EmptyState.tsx`).
+- Gantt Excel export: a new "iTop ticket" column with each task's pinned ticket reference (`lib/gantt/exportExcel.ts`).
+- Sections with no chosen colour now show the same preset colour in the List tab, the task panel, the section reorder dialog and the Executive roll-up as on the Gantt, instead of grey (`resolveSectionColor` in `lib/gantt/palette.ts`).
+- A `section-color-parity` check in `.claude/scripts/gates.sh` fails when the database default for a section colour and the frontend default differ.
+
+### Changed — 2026-11-20 — Task comment access, large offboardings, Velora import retired
+
+- Posting a task comment now needs `task:write` or `project:write` (`backend/src/routes/tasks.ts`). Read-only roles such as stakeholders and Solution Architects still read the thread but get a 403 when they post.
+- Offboarding a user now hands over up to 5000 projects in one request (was 500). The per-project writes (seat changes, task and epic moves, members, notes, activity events, notifications) are batched, so a 500-project handover takes under a second instead of about 10 seconds (`backend/src/lib/offboarding.ts`, `backend/src/lib/notifications.ts`, `backend/src/lib/projectSeats.ts`, `backend/src/routes/admin.ts`). The lock order is unchanged.
+- An iTop sync that runs while a customer's organisation is unmapped no longer re-attaches that organisation's tickets: each ticket page re-reads the mapped customers under a share lock (`backend/src/lib/itop/sync.ts`).
+- Removed the one-time Velora import script `backend/scripts/import-velora.ts` and its test; the standalone Velora tracker is retired. `README.md` and `docs/CONFIGURATION.md` are updated.
+
+### Added — 2026-11-19 — Frontend lint and test cleanups
+
+- Frontend lint: ESLint with the React hooks rules (`rules-of-hooks`, `exhaustive-deps`) via `npm run lint` in `frontend/`, run in CI. New dev dependencies: `eslint` 10.14.0, `typescript-eslint` 8.72.1, `eslint-plugin-react-hooks` 7.1.1.
+- A few effects and memos in the Pipeline, Weekly Sync and Projects pages are explicit about their dependencies, with no behaviour change.
+- Duplicating a task or section now waits only on the task list refresh before finishing; the other cache refreshes run in the background.
+- Duplicating a section also waits for the section list refresh, so its new group appears before the action finishes.
+- The cross-project task ordering test is scoped to its own project, so other rows cannot make it flaky.
+- The Daily Review end-to-end spec deletes the project and customer it creates; two specs use the shared task helper instead of private copies; the vendored filters test moved out of `components/reui/` to `lib/`.
+
+### Fixed — 2026-11-19 — Drag handles, data-grid header alignment, risk cells, autocomplete focus
+
+- Kanban and sortable drag handles are now registered as the drag activator, so focus returns to the handle after a keyboard drop that remounts a card (vendored `reui/kanban.tsx`, `reui/sortable.tsx`).
+- Drag handles on the task, deal and iTop ticket boards now have a 24px hit area, without changing the icon size or card layout.
+- The data-grid column header can center-align sortable headers, and its controls menu now follows right-aligned columns.
+- Risk probability, impact and status cells on the project Risks page use the shared select instead of a native dropdown.
+- The vendored autocomplete no longer changes its border colour on focus; it keeps the primary ring.
+- A comment in the vendored autocomplete no longer contains text that Tailwind read as a class, which produced an invalid CSS rule and a build warning.
+- The Gantt tree-row reorder handler is split into named planning helpers, with no behaviour change.
+
+### Fixed — 2026-11-19 — Guest link address, iTop sync atomicity, cross-tab account switch
+
+- New optional `PUBLIC_BASE_URL` setting (an absolute http or https address with no trailing slash). When set, guest links are built from it instead of the address the owner is browsing from, so a link copied through an SSH tunnel or localhost opens for a guest. `setup.sh` asks for it (blank keeps the old behaviour) and saves it to `.env`; documented in `docs/CONFIGURATION.md`.
+- `setup.sh` accepts a `PUBLIC_BASE_URL` made only of URL-safe characters and writes it to `.env` in single quotes; the backend also refuses one with `user:password@` or a backslash.
+- The iTop ticket sync stores each page of tickets in one transaction, so a sync that fails part-way no longer keeps half a page. A single unreadable ticket is still skipped on its own.
+- A full iTop sync that was already running when an organisation mapping was saved no longer records itself as the latest full sync, so the next sync is full again and picks up the new organisation's older tickets.
+- A tab whose `/auth/me` check names a different user than the one it was running as now treats it as an account switch: cached data is cleared and the app returns to the start page.
+
+### Added — 2026-11-19 — Dark pin spec and tighter tests
+
+- An end-to-end spec confirms the login page and the sidebar stay dark under the light theme.
+- The `/search` tests now cover a literal `_`, the query length limit, result ordering, and that project notes are never searched.
+- The task-assignee backfill test now runs the SELECT read from the migration file instead of a copy.
+- The accessible-name guard now requires a label with text that targets each control's own id.
+
+### Fixed — 2026-11-19 — Task form at phone width, inactive mention chips, autocomplete
+
+- The task form no longer scrolls sideways on narrow screens when the label creator is open; the label row wraps and the Assignee field stays inside the panel.
+- Comment mention chips for deactivated users now render muted with a "Deactivated user" tooltip, instead of looking like an active person.
+- The vendored autocomplete's item icon-size rule and empty-list scroll fix match the upstream registry again.
+
+### Fixed — 2026-11-19 — Task dates on create, stage locks, epic owners, inactive services
+
+- Creating a task with a due date before its start date is now refused with `invalid_date_range`, matching the edit rule.
+- Pipeline stage re-packs lock the stage's deals in id order first, so a re-pack and a deal reassignment on the same deals can no longer deadlock.
+- The offboarding handover of a leaver's open deals now takes the same pipeline stage locks before it locks any deal row, so it queues behind a stage re-pack instead of crossing it.
+- Offboarding takes those stage locks before it locks the leaver's account, so a deal create, import, move or delete that refers to the leaver cannot deadlock with it.
+- In the service picker, an inactive service that cannot be linked shows a not-allowed cursor.
+- The epic owner picker no longer offers deactivated members, TAMs or SAs (the current owner stays listed). Project members and a project's TAM and SA now carry an `active` flag.
+- Inactive services can no longer be newly linked to a project or customer: the service picker disables them, "Add customer's services" skips them, and the services PUT routes refuse them with `service_inactive`. Services already linked stay in place.
+
+### Changed — 2026-11-19 — Section duplicate speed, epic owners, deactivated users, backend messages
+
+- Duplicating a large section now copies its tasks, subtasks, labels, links and activity entries in a few batched writes instead of one write per task, so the project lock is held for much less time.
+- An epic's owner must now be the project's TAM, its SA, or a project member; any other user is refused with `owner_not_in_project`. An epic whose owner is left unchanged can still be edited.
+- Assigning a deactivated user as a project TAM or SA, a customer owner, a task assignee (on create or edit) or an epic owner is now refused with a 400 error. Saving a record with its current, since-deactivated holder still works.
+- Error messages from the iTop integration and the Pipeline import no longer use em dashes, and the Daily Review phase for a project without sections now reads "No sections".
+- Assignee, TAM, SA, customer owner and epic owner pickers no longer offer deactivated users, except when the record already holds that user. The epic owner picker lists only the project's TAM, SA and members.
+- Duplicating a task or a section now leaves a copy unassigned when the source task's assignee has been deactivated.
+- The iTop paging error message no longer uses an em dash.
+
+### Changed — 2026-11-19 — Vendored component record and palette input check
+
+- A new `frontend/src/components/reui/VENDOR.md` lists each vendored ReUI file with its registry source, and records the 5 local patches and the upstream source hash of the autocomplete component.
+- A stale comment about the violet chip token in `frontend/src/index.css` is corrected.
+- An end-to-end test now checks that the command palette input keeps its borderless, transparent styling over the component defaults.
+
+### Changed — 2026-11-19 — Typecheck coverage and icon caching
+
+- The backend typecheck now also covers `backend/scripts/` and `backend/test/` through a new `backend/tsconfig.check.json` (`npm run typecheck`, also used by CI). The type errors it exposed in the demo seed and two tests are fixed. The build configuration is unchanged.
+- The frontend typecheck now also checks `vite.config.ts`, and `frontend/tsconfig.node.json` no longer lists deleted files.
+- nginx now sends `Cache-Control: public, max-age=86400` for `/icons/` and `/favicon.png`, with the usual security headers.
+- The same cache header now also covers `/favicon-dark.png`, and the backend typecheck also covers `backend/prisma/` and `vitest.config.ts`.
+
+### Security — 2026-11-19 — Log redaction, secret tags, and receivers without access
+
+- `backend/src/logger.ts`: the shared logger masks token, Auth-Token, personal iTop token, password, `Authorization`, cookie and webhook-secret fields at the top level of a logged object, in request and response bodies, and in headers.
+- `backend/src/lib/secretBox.ts`: stored integration secrets require a full 16-byte authentication tag when decrypted. Values saved earlier still open.
+- `backend/src/routes/admin.ts`: reassigning a project's TAM from Admin > Project Overrides is refused when the chosen user's role grants no access.
+
+### Fixed — 2026-11-19 — Fixes in exports, users and access, and small UI
+
+- `frontend/src/lib/gantt/exportPdf.ts`: the Gantt PDF export draws bars like the screen: the unfinished part of a bar is hatched, and section summary bars have square end caps.
+- `frontend/src/lib/download.ts`: spreadsheet downloads (the Gantt Excel export and the Pipeline import template) share one helper that releases the temporary link after the download has started.
+- `backend/src/routes/users.ts`, `frontend/src/lib/handover.ts`, `frontend/src/pages/Admin.tsx`: the handover and project-reassign pickers list only active people whose role grants at least one permission, and the server applies the same rule. The user directory returns a `hasAccess` flag for this, and the offboarding check no longer depends on the role name.
+- `frontend/src/pages/Admin.tsx`: the Custom roles count on the Admin > Users tab counts only roles you created; the seeded roles (ADMIN, SA, SALES, TAM, STAKEHOLDER, PENDING) are not counted, and the roles list reports a `seeded` flag.
+- `frontend/src/lib/auth.tsx`: signing out in one browser tab signs out the other open tabs. Signing in as a different account in one tab switches the others to it, on the home page, and clears their cached data. A password change in one tab only updates the session token in the others, with no reload.
+- `frontend/src/pages/Tasks.tsx`, `kanban-v2/cards.tsx`: the Tasks grid and Kanban subtask rows show the Critical Path mark.
+- `frontend/src/components/daily-review/`: a blocked Mid-week or Reflection sync save marks and focuses the card missing its title.
+- `frontend/src/components/ProjectMembers.tsx`: the Members dialog and the button's tooltip explain that the SA is not counted as a member.
+- `frontend/src/pages/Projects.tsx`, `Tasks.tsx`: the Projects and Tasks filters share one set of operator labels.
+
+### Changed — 2026-11-19 — Project status in the task list
+
+- `backend/src/routes/tasks.ts`: `GET /tasks` includes each task's project status, so the Tasks page no longer fetches the full project list to find on-hold projects.
+
+### Fixed — 2026-11-19 — Fixes in the Gantt, the task panel and section dialog, and accessibility
+
+- `frontend/src/components/gantt-v2/`: the task name column follows the tree pane's real width, so the Dates and Status columns no longer clip on narrow windows or while dragging the pane splitter. Milestone dependency arrows meet the diamond. The Dates cell shows its range once while editing. A failed Critical Path toggle or section reorder shows an error instead of failing silently.
+- `frontend/src/components/reui/gantt/`: the drag clone uses the standard overlay shadow, the unused go-to-date picker is removed, and the tree's name-column width accepts a CSS length so the column follows the splitter live (local patches to the vendored Gantt, marked `SOLVRO PATCH`).
+- `frontend/src/components/TaskPanel.tsx`: a failed action, such as Duplicate or Delete from the task menu, shows its error at the top of the panel, not below a long subtask list. When the project's tasks fail to load, the panel shows "Could not load the task." with an inline "Try again" link instead of "Loading task…" forever.
+- `frontend/src/components/SectionReorderModal.tsx`: the Reorder sections dialog checks the project edit permission itself, its close button always works even after an interrupted drag, and after a failed save the list follows the saved order, with an error message, even when another drop follows at once. `Modal` gains an `onCloseButton` prop so a dialog can route its close button separately from Escape and backdrop clicks.
+- `frontend/src/pages/views/ProjectList.tsx`: section actions (Reorder sections, Add section, and each section's rename, duplicate and delete) show only to users with the project edit permission, which the server requires.
+- `frontend/src/hooks/useDialogFocus.ts`: dialogs keep Tab and Shift+Tab inside them when focus sits on a non-tabbable element such as a focused heading.
+- `frontend/src/components/LinksSection.tsx`: the buttons and links in the Links lists show a keyboard focus ring. The drag handles in the section dialog and the task panel's subtask list use the standard focus ring.
+- Modal and drawer titles, a Project List row, the Overview project id and the portfolio calendar year use the design system's type roles instead of off-scale sizes. The portfolio calendar bar uses the standard small radius. The epic colour picker uses larger swatches that do not overlap on touch screens.
+
+### Added — 2026-11-19 — Section reorder test
+
+- `e2e/tests/section-reorder.spec.ts`: a Playwright test that reorders sections by keyboard and checks the saved order. `e2e/tests/gantt-parity.spec.ts` gains a narrow-window check of the Gantt tree columns.
+
+### Fixed — 2026-11-19 — Fixes in offboarding, icon sizing and the app shell, and query hooks
+
+- `backend/src/lib/offboarding.ts`: offboarding and user deletion refuse a new owner who has no access yet (a pending account or a role with no permissions) for tasks, the TAM and SA seats and customer ownership, with a clear error that the handover dialog shows. Customers move with one update per new owner instead of one per customer, and each new owner is checked once.
+- `frontend/src/components/admin/HandoverModal.tsx`: the handover dialog reloads its list of work when the browser window regains focus. If nothing is left to hand over, it stays open with a short notice instead of closing, and a late reload can no longer reopen it after a successful handover.
+- `frontend/src/pages/Admin.tsx`: the Project Overrides reassign column uses a searchable TAM picker instead of a full user list in every row. After a pick the field clears and shows the current TAM.
+- `frontend/src/index.css`: icon size and display classes now apply. The Material Symbols stylesheet loads into a cascade layer below Tailwind's utilities, so icons render at the size their classes set (for example 20px in the sidebar) instead of always at 24px.
+- `frontend/src/components/InstallBanner.tsx`: install and dismiss are separate buttons instead of a button inside a button, and the dismiss button is 32px with a 44px touch area on phones.
+- `frontend/vite.config.ts`, `frontend/index.html`: a 192px maskable app icon and a favicon for dark browser themes.
+- `frontend/src/lib/queries.ts`: creating a task refreshes the Daily Review lists. Ticking a service on a customer or project, or editing its tools, updates at once and rolls back if the save fails. Changing a task's section, by drag or from the task panel, updates the section shown in an open task panel. After a failed section reorder, the sections reload from the server before later queued moves are sent.
+- `frontend/src/pages/CustomerDetail.tsx`: the customer page reads the iTop organisation name from the customer record.
+
+### Added — 2026-11-19 — Component and hook tests
+
+- `frontend/package.json`: jsdom and Testing Library (`@testing-library/react`, `@testing-library/dom`, `@testing-library/user-event`) as development dependencies. Frontend tests named `*.test.tsx` run in a browser-like DOM, with new tests for the handover dialog, the reactivation dialog, the TAM picker, the install banner and the query hooks.
+
+### Fixed — 2026-11-19 — Fixes in project create locks, the iTop integration, and keyboard drag
+
+- `backend/src/routes/projects.ts`: creating a section or an epic reads the next position while holding the project lock, so two simultaneous creates no longer get the same position. Creating a project label now needs the task-write permission, the same as editing or deleting one. In the task panel and task form, "Add label" is hidden for users without it.
+- `backend/src/lib/itop/sync.ts`: the full-sync cleanup of tickets and time entries passes its id list as one array parameter, so large installs no longer hit the database's bind-parameter limit and silently skip removals.
+- `backend/src/lib/itop/client.ts`: the iTop client refuses HTTP redirects instead of forwarding the application token to the redirect target.
+- `backend/src/routes/webhook.ts`: the iTop webhook limits calls per client address (30 a minute), so one flooding client cannot block iTop's own notifications, and its responses are marked `no-store` and `noindex`. `docs/CONFIGURATION.md` lists it under `TRUST_PROXY`.
+- `backend/src/routes/itopAdmin.ts`: mapping a customer to an iTop organisation makes the next sync a full one, so the organisation's older tickets appear without waiting a day. "Test connection" no longer reports failure when only the optional time-tracking check fails; Admin marks that check "(optional)", shows a neutral icon when it is not available, and leaves it out of the passed count.
+- `backend/src/routes/itop.ts`: `GET /itop/status` includes a `lastSyncFailed` flag, with no error text.
+- `frontend/src/components/reui/sortable.tsx`, `reui/kanban.tsx`: on the Kanban boards (tasks, Pipeline deals, iTop tickets) and the sortable section and subtask lists, only the drag handle is focusable and starts a keyboard drag; the Kanban handles gain a visible focus ring. Read-only viewers no longer tab through rows they cannot move. These are local patches to the vendored components, marked `SOLVRO PATCH`.
+- `frontend/src/components/itop/board/TicketBoard.tsx`: the iTop ticket board pauses its 60-second refresh, and its refresh on window focus, while a card is being dragged.
+
+### Fixed — 2026-11-19 — Fixes in task delete, task dates, Pipeline ordering and import, and the task form
+
+- `backend/src/routes/tasks.ts`: deleting a task now closes the gap it leaves, so the remaining tasks and subtasks keep consecutive positions, even when several are deleted at once.
+- `backend/src/routes/tasks.ts`: editing only a task's due date or only its start date can no longer leave the due date before the start date. The API refuses it with `400 invalid_date_range`. The customer filter of the task list now combines with the visibility filter through an explicit AND list.
+- `backend/src/routes/opportunities.ts`: deleting or moving a Pipeline deal re-packs its stage with a single statement under a per-stage lock, so two simultaneous deletes in one stage no longer fail with a deadlock error.
+- `backend/src/routes/opportunities.ts`: creating or importing a Pipeline deal takes the same per-stage lock, so a simultaneous create, import, move or delete in one stage can no longer assign the same position twice. A move or delete that loses the race to another move of the same deal answers `409` and asks the user to refresh.
+- `backend/src/lib/pipelineImport/`: a Win Probability cell that is not a whole number from 0 to 100 (for example `0.7` or `12abc`) is now a row error, not a silent 50; a blank cell still defaults to 50, and `70%` reads as 70. The import preview holds at most 8 waiting files and past that answers `503` with "Other imports are being read right now. Try again in a minute."
+- `frontend/src/components/LabelPicker.tsx`, `TaskFormModal.tsx`: a duplicate label name shows "A label with this name already exists." instead of the raw database error. The parent picker offers only top-level tasks when creating a task. The subtask done checkbox is disabled for users who cannot edit tasks.
+
+### Changed — 2026-11-18 — Code comments cite known issues by ID
+
+- Code and test comments in `frontend/src`, `backend/test`, and `e2e/tests` that referred to known issues by title or line number now cite the issue's ID in `docs/ISSUES.md`, or the archived issue log `docs/archive/ISSUES-2026-11-18-phase-log.md` for entries closed before IDs existed. No behavior change.
+
+### Security — 2026-11-18 — An iTop personal token is saved only when iTop proves it is yours
+
+- `backend/src/routes/itopUser.ts`: `PUT /itop/me/token` now fails closed. Besides matching your email to an iTop person, the token must read that person's iTop login records and its own personal-token record. If iTop does not let it read either one, or the person has no login the token can see, the token is refused with `400 itop_token_unverified` and nothing is stored. A person with several iTop logins (for example local plus LDAP) is accepted, and Solvro stores the login the token belongs to. Before, the token was saved on the email match alone, so a token that was not yours could be accepted on installs with limited read rights.
+- What to check on your iTop install: the TAM profile needs read access to the `User` and `PersonalToken` classes. iTop's stock `Support Agent` profile does not have it. Tokens saved before this change are not re-checked and keep working; a new or replaced token needs the read access.
+- Tests: `backend/test/itop/itopToken.test.ts` covers an unreadable `User` class, an unreadable `PersonalToken` class, a person with no login, a person with two logins, and a failed re-save that keeps the earlier token.
+- Docs: `docs/CONFIGURATION.md` and `docs/reference/itop-integration-guide.md` describe the new rule and the required read access.
+
+### Fixed — 2026-11-18 — The smoke test no longer fails on Google sign-in errors on a local machine
+
+- `e2e/tests/smoke.spec.ts`: the "no console/page errors" check ignores console errors that come from Google's sign-in script (the `accounts.google.com` host, or a `[GSI_LOGGER]` message). Google logs them when a database has Google sign-in configured and the app runs on an origin not registered for that client ID, such as `localhost`. Every error from the app itself still fails the test.
+
+### Fixed — 2026-11-18 — The PR attribution check skips commits already released on main
+
+- `.github/workflows/pr-hygiene.yml`: the `attribution` job checks only the commits a pull request adds that are not already on `main`. A pull request that merges `main`'s history into `develop` brings in older release commits, from before the no-attribution rule existed; those are published history and can no longer be changed, so failing on them would block the merge for good.
+
+### Added — 2026-11-18 — A pull request check that runs on every PR
+
+- `.github/workflows/pr-hygiene.yml` (new): runs on every pull request into `develop` or `main`, docs-only ones included, and again whenever the description is edited. Its `attribution` job fails the PR when the description or any commit message carries an AI attribution line or hidden attribution metadata. `ci.yml` skips docs-only changes and never sees description edits, so this check lives in its own workflow and can be required on both branches.
+
+### Changed — 2026-11-18 — Code comments cite archived plans by their archive path
+
+- 45 files under `backend/`, `frontend/` and `e2e/`: comments that cited a plan at `docs/plans/<name>` now cite `docs/archive/plans/<name>`, where each of those plans now lives. Comments only; no code changed.
+
+### Security — 2026-11-18 — A crafted import file can no longer stall the API
+
+- `backend/src/lib/pipelineImport/offThread.ts`, `importWorker.ts` (new), `routes/opportunities.ts`: the pipeline import preview parses the uploaded workbook in a worker thread. A crafted `.xlsx` of about 40 KB could block the API's event loop for up to about a second; for that file the stall is now a few milliseconds. At most 2 parses run at once, each worker has a 256 MB memory cap, and a parse over 5 seconds is stopped. A request whose client has gone (nginx gives up after 60 seconds) leaves the queue, or has its worker stopped, so it no longer holds a slot. Each user may request 10 previews a minute; past that the route answers 429.
+- `backend/src/lib/pipelineImport/xlsx.ts`, `zip.ts`: the shared strings part of a workbook may expand to at most 4 MiB (a realistic file needs about 1 MB), and the reader stops inflating it at that point. An over-limit file is rejected using about 100 MB of memory instead of up to 1.2 GB. A file that breaks any of these limits gets the existing "Could not read the file" error (400).
+- Tests: `backend/test/pipelineImportOffThread.test.ts` (new) covers the timeout, the out-of-memory mapping, the concurrency cap and requests whose client went away; `backend/test/opportunityImportPreview.test.ts` covers the per-user limit; `backend/test/pipelineImportReader.test.ts` covers the shared strings cap.
+
+### Fixed — 2026-11-18 — An admin can delete or hand over a user who owns more than 500 customers
+
+- `backend/src/routes/admin.ts`: `DELETE /admin/users/:id` and `POST /admin/users/:id/offboard` accept up to 2,000 customer owner choices, shared in one constant (`MAX_CUSTOMER_OWNER_CHOICES`), instead of 500. A user with more customers than the old limit could not be deleted or handed over: the request failed validation. The new limit stays well under the 1 MB body limit, and keeps the per-customer loop inside the 30-second transaction timeout (about 3 ms per customer). Tests in `backend/test/userDeleteCustomerOwner.test.ts` and `backend/test/offboarding.test.ts` send 600 entries.
+
+### Added — 2026-11-18 — Tests for links in guest and export output, the deadlock retry, and a racing user delete
+
+- `backend/test/shareLinks.test.ts`: a project link and two task links (one on a milestone) never appear in the guest payload, and the payload keeps its allow-listed shape.
+- `frontend/src/lib/gantt/exportExcel.test.ts`, `exportPdf.test.ts`: the Gantt Excel and PDF builders emit no link label or URL, even when a task object carries links.
+- `backend/test/withDeadlockRetry.test.ts` (new): the retry policy of `withDeadlockRetry` — which errors it retries, that it stops after two attempts, and which errors it never retries.
+- `backend/test/userDeleteCustomerOwner.test.ts`: a user delete raced against a new customer for the same user ends in a consistent state, with no server error and no orphaned ownership.
+- `e2e/tests/project-lifecycle.spec.ts`: the on-hold project gets a past-due subtask, and the "On hold, past due" list shows as many rows as the Overview link counts.
+
+### Changed — 2026-11-18 — Rollback note for releases that drop columns
+
+- `docs/CONFIGURATION.md` (production deployment): a new "Rolling back an upgrade" note. Releases with migrations that drop columns, such as the removal of note visibility, cannot be rolled back to an earlier image unless the database is restored from a backup taken before the upgrade.
+- `backend/prisma/schema.prisma`: the `TaskLink` comment now says links are copied as new rows when a task is duplicated. It said the opposite. Comment only, no migration.
+
 ### Changed — 2026-11-18 — Agent instructions point at the code that exists
 
 - `CLAUDE.md`: the notes guardrail now names the Gantt exports (`frontend/src/lib/gantt/export*.ts`) as the export code to verify. It named `frontend/src/lib/export/`, which was deleted with the Reports export packet. Two dated notes in the Guardrails block (the old three-branch flow, a rewrite date) are removed. The rules themselves are unchanged.

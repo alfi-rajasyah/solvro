@@ -51,7 +51,7 @@ export function CloseDealDialog({ deal, open, onClose, onClosed }: Props) {
 
   // Reset to the dialog's defaults on the OPEN TRANSITION only — same
   // `[open]`-only-deps convention as AssignPicModal/OpportunityFormModal's
-  // own reset effects (this repo has no exhaustive-deps lint to satisfy).
+  // own reset effects.
   useEffect(() => {
     if (!open) return;
     setOutcome("WON");

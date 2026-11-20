@@ -717,6 +717,8 @@ function GanttView({
       )
     }
     return map
+  // SOLVRO PATCH: the callback is read off `viewConfig` and called as a method; its identity is the real dependency, not the whole config object
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, allEvents, descendantIds, viewConfig.getSummaryProgress])
 
   // Lane memory across layout passes, keyed by getLaneKey (event identity,
@@ -2277,10 +2279,10 @@ function GanttView({
             className={cn(
               "group/gantt-splitter bg-border hover:bg-primary/60 data-resizing:bg-primary relative z-30 w-px shrink-0 cursor-col-resize touch-none outline-none",
               // SOLVRO PATCH (focus-style unification tail) — DESIGN.md §4
-              // canonical focus treatment: `focus-visible:border-primary
-              // focus-visible:ring-2 focus-visible:ring-primary/30`. Replaced
+              // reduced focus treatment: `focus-visible:ring-2
+              // focus-visible:ring-primary/30`, no border change on focus. Replaced
               // `focus-visible:ring-ring/50`.
-              "focus-visible:border-primary focus-visible:ring-2 focus-visible:ring-primary/30",
+              "focus-visible:ring-2 focus-visible:ring-primary/30",
               "after:absolute after:inset-y-0 after:-start-1 after:-end-1"
             )}
             onPointerDown={beginSplit}
@@ -2587,7 +2589,8 @@ const GanttTreeRow = memo(function GanttTreeRow({
   heightRem: number
   bandRem: number
   columns: GanttColumn[]
-  nameWidth: number
+  // SOLVRO PATCH: number | string (CSS length), see GanttTreePanelConfig.nameColumnWidth
+  nameWidth: number | string
   dimmed: boolean
   selected: boolean
   onSelectedChange?: (id: string, checked: boolean) => void

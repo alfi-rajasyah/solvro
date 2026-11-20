@@ -1,3 +1,5 @@
+import { SkeletonRegion } from "@/components/skeletons/SkeletonRegion";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useMemo, useState } from "react";
 import { useProjectContext } from "../ProjectDetail";
 import { AssigneeAvatar } from "@/components/AssigneeAvatar";
@@ -79,7 +81,9 @@ export function ProjectTimeline() {
 
   if (isLoading) {
     return (
-      <div className="h-64 animate-pulse rounded-sm border border-outline-variant bg-surface-container-low" />
+      <SkeletonRegion>
+        <Skeleton className="h-64 rounded-sm" />
+      </SkeletonRegion>
     );
   }
 
@@ -204,8 +208,8 @@ function TaskTimelineItem({
           <AssigneeAvatar user={task.assignedTo} size="xs" />
         </div>
         {task.description && (
-          // Prose-overflow sweep (GH #57 convention, docs/ISSUES.md deferred
-          // finding): this cell had neither wrap-hardening nor a clamp — a
+          // Prose-overflow sweep (GH #57 convention, docs/archive/ISSUES-2026-11-18-phase-log.md
+          // "Unswept prose-overflow surfaces" entry): this cell had neither wrap-hardening nor a clamp — a
           // long unbroken description could stretch the timeline card.
           // `whitespace-pre-wrap` preserves operator-entered line breaks;
           // `wrap-break-word` is Tailwind v4's renamed `break-words` (see

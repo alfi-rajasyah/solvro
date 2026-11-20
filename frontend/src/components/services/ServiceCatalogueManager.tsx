@@ -165,7 +165,7 @@ export function ServiceCatalogueManager() {
                   type="button"
                   onClick={saveEdit}
                   disabled={update.isPending || !editName.trim()}
-                  className="rounded-sm bg-primary px-2 py-1 font-display text-sm text-on-primary hover:bg-primary-container disabled:opacity-50 font-semibold"
+                  className="rounded-sm bg-primary px-2 py-1 font-display text-sm text-on-primary primary-hover disabled:opacity-50 font-semibold"
                 >
                   Save
                 </button>
@@ -211,7 +211,7 @@ export function ServiceCatalogueManager() {
     getRowId: (row) => String(row.id),
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
-    // Pagination stays OFF (pilot verdict — docs/plans/reui-data-grid.md
+    // Pagination stays OFF (pilot verdict — docs/archive/plans/reui-data-grid.md
     // Checkpoint B): no getPaginationRowModel, so the full sorted row model
     // renders. `pageSize` here only sizes the loading-skeleton row count.
     initialState: { pagination: { pageSize: 8 } },

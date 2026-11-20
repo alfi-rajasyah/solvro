@@ -1,6 +1,6 @@
 // Copied from the legacy frontend/src/pages/views/ProjectKanban.tsx (TaskCard
 // lines 874-1021, SubtaskRow lines 1057-1121, the old "N Days" duration,
-// pre-T11 cutover) per Architecture Decision 2 (docs/plans/kanban-reui-swap/
+// pre-T11 cutover) per Architecture Decision 2 (docs/archive/plans/kanban-reui-swap/
 // plan.md): copy, don't extract. The legacy file is gone as of T11 cutover
 // (git history preserves it) — this duplication is now permanent, not
 // temporary.
@@ -22,6 +22,7 @@ import { EpicChip } from "@/components/EpicChip";
 import { LabelChip } from "@/components/LabelChip";
 import { PriorityBadge } from "@/components/PriorityBadge";
 import { KanbanItemHandle } from "@/components/reui/kanban";
+import { FIELD_FOCUS } from "@/lib/utils";
 import { dateToDay } from "@/lib/dateField";
 import { fmtDay, fmtDue } from "@/lib/formatDate";
 import { isTaskShownOverdue, showsPlainDue } from "@/lib/taskOverdue";
@@ -99,7 +100,7 @@ export function TaskCard({
           {canDrag && (
             <KanbanItemHandle
               aria-label="Drag to reorder"
-              className="mt-0.5 inline-flex shrink-0 touch-none items-center text-on-surface-variant/60 transition-opacity md:pointer-fine:opacity-0 md:pointer-fine:group-focus-within/card:opacity-100 md:pointer-fine:group-hover/card:opacity-100 md:pointer-fine:[[data-slot=kanban-item]:focus-visible_&]:opacity-100"
+              className={`-mx-1 -mb-1 -mt-0.5 inline-flex shrink-0 touch-none items-center rounded-sm p-1 text-on-surface-variant/60 transition-opacity ${FIELD_FOCUS} md:pointer-fine:opacity-0 md:pointer-fine:group-focus-within/card:opacity-100 md:pointer-fine:group-hover/card:opacity-100 md:pointer-fine:focus-visible:opacity-100`}
             >
               <span aria-hidden="true" className="material-symbols-outlined text-[16px]">drag_indicator</span>
             </KanbanItemHandle>
@@ -263,6 +264,7 @@ export function SubtaskRow({
       >
         {task.title}
       </span>
+      {task.isCriticalPath && <CriticalPathMark variant="glyph" className="shrink-0" />}
       {task.assignedTo && (
         <span onPointerDown={(e) => e.stopPropagation()}>
           <AssigneeAvatar user={task.assignedTo} size="xs" />

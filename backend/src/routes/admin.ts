@@ -4,11 +4,12 @@ import bcrypt from "bcrypt";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { prisma } from "../prisma.js";
-import { requireAuth, requireAdmin } from "../http/auth.js";
+import { requireAuth, requireAdmin, permissionsOf } from "../http/auth.js";
 import { HttpError } from "../http/errors.js";
 import { validate } from "../http/validate.js";
 import { bustAuthConfigCache } from "../authConfig.js";
 import { normalizeUsername, USERNAME_MAX } from "../lib/username.js";
+import { SEEDED_ROLE_NAMES } from "../lib/seededRoles.js";
 import { permissionsSchema } from "../lib/permissions.js";
 import { diffProjectSeats, projectSeatsSelect, recordProjectUpdate } from "../lib/projectSeats.js";
 import { COUNTED_TASKS_COUNT } from "../lib/taskStatus.js";
@@ -68,7 +69,7 @@ adminRouter.get("/users", async (_req, res) => {
       createdAt: true,
       googleSub: true,
       avatarUrl: true,
-      role: { select: { roleName: true } },
+      role: { select: { roleName: true, permissions: true } },
       _count: { select: { projectsAsTAM: true, projectsAsSA: true } },
     },
   });
@@ -79,6 +80,8 @@ adminRouter.get("/users", async (_req, res) => {
       email: u.email,
       active: u.active,
       role: u.role.roleName,
+      /** The role grants at least one permission: the receiver rule the reassign picker uses. */
+      hasAccess: permissionsOf(u.role.permissions).length > 0,
       createdAt: u.createdAt,
       provider: u.googleSub ? "google" : "password",
       avatarUrl: u.avatarUrl,
@@ -271,6 +274,17 @@ adminRouter.get(
 );
 
 const userIdField = z.number().int().positive();
+// Each entry is two int ids (~51 bytes of JSON), so the 1 MB body limit would
+// allow ~20000; 2000 keeps the customer loop alone (~3 ms per customer measured)
+// well inside the 30 s transaction timeout. Offboard shares that timeout with
+// its project loop.
+const MAX_CUSTOMER_OWNER_CHOICES = 2_000;
+// Measured on the isolated test DB (ISS-031): the batched project loop hands over
+// 500 projects in under a second and 5000 in a few seconds, so 5000 keeps a wide
+// margin inside the 30 s transaction timeout. The cap assumes short per-project
+// notes: 5000 entries with long notes would exceed the 1 MB JSON body limit
+// (app.ts, nginx.conf) before reaching it; do not raise those limits for this.
+const MAX_OFFBOARD_PROJECTS = 5_000;
 const offboardSchema = z
   .object({
     projects: z
@@ -283,12 +297,12 @@ const offboardSchema = z
           note: z.string().max(2000).optional(),
         }),
       )
-      .max(500),
+      .max(MAX_OFFBOARD_PROJECTS),
     customers: z
       // Every owned customer gets a new owner: an unowned customer is claimable
       // by any TAM (docs/archive/plans/offboard-customer-owner.md).
       .array(z.object({ customerId: userIdField, newOwnerId: userIdField }))
-      .max(500),
+      .max(MAX_CUSTOMER_OWNER_CHOICES),
     dealsPicId: userIdField.nullable().optional(),
   })
   .superRefine((v, ctx) => {
@@ -329,7 +343,7 @@ const deleteUserSchema = z
   .object({
     customers: z
       .array(z.object({ customerId: userIdField, newOwnerId: userIdField }))
-      .max(500)
+      .max(MAX_CUSTOMER_OWNER_CHOICES)
       .default([]),
   })
   .default({})
@@ -478,6 +492,8 @@ adminRouter.get("/roles", async (_req, res) => {
       permissions: r.permissions,
       userCount: r._count.users,
       builtIn: PROTECTED_ROLES.has(r.roleName),
+      /** Created by the seed (as opposed to an admin-made custom role). */
+      seeded: SEEDED_ROLE_NAMES.has(r.roleName),
     })),
   );
 });
@@ -743,8 +759,12 @@ adminRouter.put(
     if (!tam.active) {
       throw new HttpError(400, "tam_inactive", "Target user is deactivated");
     }
-    // No role-name requirement: any active user can be a project's TAM
-    // (admin's choice). Role names no longer gate this.
+    // Permission-based, not role-name-based: a receiver whose role grants
+    // nothing (PENDING or a custom empty role) could hold the project but
+    // not open it. Same rule as the offboarding receivers (ISS-191).
+    if (permissionsOf(tam.role.permissions).length === 0) {
+      throw new HttpError(400, "tam_has_no_access", "Target user has no access yet. Give them a role first.");
+    }
 
     // Same lock / diff / activity / notification path as PATCH /projects/:id:
     // the handover shows in the project feed and the new TAM is notified
