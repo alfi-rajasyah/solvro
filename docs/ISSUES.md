@@ -2,7 +2,7 @@
 
 Open issues, sorted by area and then by severity. Each issue has an ID (`ISS-NNN`) that never changes and is never reused. Code comments and plans cite an issue by its ID.
 
-Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kept verbatim at `docs/archive/ISSUES-2026-11-18-phase-log.md`; the mapping from every old entry to its ID, or to the reason it closed, is the ledger in `docs/archive/plans/issues-restructure.md`.
+Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kept verbatim at `docs/archive/ISSUES-2026-11-18-phase-log.md`; the mapping from every old entry to its ID, or to the reason it closed, is the ledger in `docs/archive/plans/issues-restructure.md`.
 
 ## How to use this file
 
@@ -23,29 +23,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Grant PersonalToken read to the TAM profile or add an iTop-side whoami extension; verify the code-100 path against the real install and record it. Also check there: a profile without read rights may get an empty PersonalToken result instead of an error, which shows `itop_token_not_yours` where `itop_token_unverified` would tell the admin what to fix (still fails closed).
 - **Source:** snapshot line 2048, section "iTop integration (personal tokens, ticket actions) — deferred findings (ported 2026-10-04)"; merged duplicates at snapshot lines 2233
 
-### ISS-003 · P2 · GET /itop/services returns every organisation's services, unscoped
+### ISS-005 · P2 · Block task comments for STAKEHOLDER and SA; built-in roles stay admin-editable
 
-- **Type:** decision · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** itopRouter.get('/services') in backend/src/routes/itop.ts (line ~987)
-- **Problem:** Question for the user: scope services to the target customer's organisation (lnkCustomerContractToService), or accept and document org-wide visibility? Today any signed-in user can read every iTop organisation name via providerName.
-- **Why deferred / fix direction:** Filter by the target customer's org once a customerId is known, or document the accepted visibility before the endpoint is reused.
-- **Source:** snapshot line 2117, section "iTop integration (board, new tickets) — deferred findings (ported 2026-10-04)"
-
-### ISS-005 · P2 · Product decisions: STAKEHOLDER/SA task comments; built-in role policy
-
-- **Type:** decision · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-10-22 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** task comment routes in backend/src/routes/tasks.ts; built-in roles in backend/prisma/seed.ts
 - **Problem:** Two product questions are unanswered: may STAKEHOLDER (project:read) and the SA role (pipeline:view) post task comments, and should built-in roles stay admin-editable (policy A) or become code-owned and read-only in the Roles UI (policy B).
-- **Why deferred / fix direction:** Needs a user ruling. Until then comments stay open to both roles and built-ins stay editable.
+- **Why deferred / fix direction:** User decision 2026-11-20. Comment routes need task:write (or project:write); STAKEHOLDER (project:read) and SA (pipeline:view) are refused. Built-in roles stay editable (policy A), no change there.
 - **Source:** snapshot line 2368, section "Application review 2026-10-22 — remaining open items"
-
-### ISS-008 · P3 · Rate limiter is in-process only
-
-- **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** createRateLimiter in backend/src/http/rateLimit.ts
-- **Problem:** Counters live in memory per backend instance and reset on restart, so with more than one instance the effective limit multiplies.
-- **Why deferred / fix direction:** Fine for the single-instance deployment; needs a shared store if the backend is ever scaled out.
-- **Source:** snapshot line 2285, section "Collaboration & sharing — guest links — deferred findings (2026-09-30, ported 2026-10-05)"
 
 ### ISS-009 · P3 · Secrets at rest: no AAD, no key rotation
 
@@ -61,13 +45,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Minimising further needs a picker-specific response shape. Low priority.
 - **Source:** snapshot line 2352, section "Penetration-test remediation (September 2026 report) — follow-ups (2026-10-06)"
 
-### ISS-011 · P3 · Sign-in failure counters share the client address with the guest-link limiter
+### ISS-011 · P3 · Rate limits and client address depend on the proxy topology
 
-- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** assertSignInAllowed in backend/src/routes/auth.ts (line ~56)
-- **Problem:** Behind a CDN with public edge addresses and a hop-count TRUST_PROXY that does not cover it, all users share one address bucket, so 50 failures from anyone block password sign-in for everyone for up to 15 minutes.
-- **Why deferred / fix direction:** Only matters if that topology is used (documented in docs/CONFIGURATION.md 2.13). Fix then: per-account-only fallback when the address is a known proxy.
-- **Source:** snapshot line 2380, section "Application review 2026-10-22 — remaining open items"
+- **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-20 @ `cdac38f`
+- **Where:** createRateLimiter in backend/src/http/rateLimit.ts; assertSignInAllowed in routes/auth.ts (line ~56); TRUST_PROXY default written by setup.sh (docs/CONFIGURATION.md §2.13)
+- **Problem:** Counters are in memory per instance. Behind a public CDN with a hop count that misses it, all users share one address bucket (50 failures block sign-in for 15 min). The private-address TRUST_PROXY default lets a LAN/VPN client forge its address for the guest-link bucket and logged clientIp.
+- **Why deferred / fix direction:** Fine for the single-instance tunnel to nginx to backend deploy. Trigger: scale-out or a public CDN. Then add a shared store, a per-account fallback, and CIDR trust. Merged ISS-008, 173.
 
 ## Open — Data & performance
 
@@ -187,20 +170,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Delete dead classes, add hover/focus styles, show Ctrl K off macOS.
 - **Source:** snapshot line 708, section "Global search & ⌘K command palette — deferred findings (2026-07-27)"
 
-### ISS-053 · P3 · dropdown-menu SubContent shares popover's z-index-on-Popup gap
+### ISS-054 · P3 · Move Overview and Executive KPI stat cards into the vendored Frame
 
-- **Type:** debt · **Found:** 2026-07-28 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** DropdownMenuSubContent in frontend/src/components/ui/dropdown-menu.tsx (line ~264)
-- **Problem:** A submenu cannot outrank a z-100+ Modal/Drawer host; latent because none is mounted there today.
-- **Why deferred / fix direction:** Port positionerClassName to SubContent when a real collision appears.
-- **Source:** snapshot line 788, section "ReUI DateField swap — deferred findings (2026-07-28)"
-
-### ISS-054 · P3 · Stat-card Frame evaluation for Overview and Executive deferred
-
-- **Type:** decision · **Found:** 2026-07-31 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-07-31 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** KPI stat cards in pages/Overview.tsx and pages/Executive.tsx
 - **Problem:** Whether the KPI stat cards should adopt the vendored Frame was never decided. Question for the user: adopt Frame for stat cards, or close this as not needed?
-- **Why deferred / fix direction:** Decide, then either migrate or drop the entry.
+- **Why deferred / fix direction:** User decision 2026-11-20. Migrate both pages' stat cards to Frame. Visible change: Delivery Gate.
 - **Source:** snapshot line 1161, section "ReUI Presentation Set — deferred findings (2026-07-31)"
 
 ### ISS-055 · P3 · Pointer-dependent initial submenu highlight
@@ -211,29 +186,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Not worth a vendored patch; revisit only if reported.
 - **Source:** snapshot line 1231, section "ReUI Filters phase — deferred findings (2026-07-31)"
 
-### ISS-056 · P3 · Toolbar text-size drift in migrated filter rows
+### ISS-056 · P3 · Filter toolbar rows: align text to the uniform 12-13px density
 
-- **Type:** decision · **Found:** 2026-07-31 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-07-31 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** filter toolbar rows in frontend/src/components/reui/filters.tsx
 - **Problem:** Migrated filter rows mix 15px, 13px and 12px text where the old dropdowns used a uniform 12-13px. Question for the user: match the old uniform density or keep the mixed scale?
-- **Why deferred / fix direction:** Decide the density, then align or close.
+- **Why deferred / fix direction:** User decision 2026-11-20. Align every migrated filter row to the old uniform 12-13px scale.
 - **Source:** snapshot line 1255, section "ReUI Filters phase — deferred findings (2026-07-31)"
-
-### ISS-057 · P3 · Duplicate-chip guard uses === and misses object-valued options
-
-- **Type:** watch · **Found:** 2026-08-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** findFilterMatch in frontend/src/components/reui/filters.tsx (line ~2329)
-- **Problem:** Correct for every current string-valued filter field, but a future object-valued field would not be deduplicated.
-- **Why deferred / fix direction:** Deepen the equality check when such a field is added.
-- **Source:** snapshot line 1412, section "Issues Sweep #1 — residuals (2026-08-02)"
-
-### ISS-059 · P3 · CriticalPathMark chip padding coupled to Chip's DOM shape
-
-- **Type:** debt · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** CriticalPathMark in frontend/src/components/CriticalPathMark.tsx (line ~56)
-- **Problem:** The compact variant reaches into Chip's root span via `[&>span]:px-1.5`; padding breaks silently if Chip gains a wrapper element.
-- **Why deferred / fix direction:** If Chip's markup changes, grep `[&>span]:px-1.5` and move the override to the new root.
-- **Source:** snapshot line 1709, section "Critical Path mark — deferred findings (2026-09-02)"
 
 ### ISS-065 · P3 · useItopTicket utcOffsetMinutes isn't part of its query key
 
@@ -267,14 +226,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Presentation-only; wrap each in SkeletonRegion in one pass.
 - **Source:** snapshot line 2339, section "Customer-edition port — deferred findings (2026-10-05)"
 
-### ISS-073 · P3 · A lazy page chunk that fails twice stays failed
-
-- **Type:** debt · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** lazyPage in frontend/src/lib/lazyPage.ts (line ~25)
-- **Problem:** If a page chunk fails both attempts, 'Try again' on the page boundary re-throws the cached rejection until the user reloads.
-- **Why deferred / fix direction:** Accepted limitation; a fix would remount with a fresh lazy() per retry.
-- **Source:** snapshot line 2383, section "Application review 2026-10-22 — remaining open items"
-
 ### ISS-193 · P3 · The icon stylesheet now loads after the app stylesheet
 
 - **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `be6a448`
@@ -285,7 +236,7 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 ### ISS-200 · P3 · Vendored select trigger changes its border on focus
 
 - **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `8fd10ee`
-- **Where:** SelectTrigger classes in frontend/src/components/ui/select.tsx (line ~59); also ui/input.tsx and ui/textarea.tsx
+- **Where:** SelectTrigger classes in frontend/src/components/ui/select.tsx (line ~59); also ui/input.tsx, ui/textarea.tsx and the other vendored ui/* and reui/* files with the fuller focus form (merged ISS-087)
 - **Problem:** `focus-visible:border-primary` breaks DESIGN.md §4's reduced focus form (border never changes on focus). Daily Review ProjectCard.tsx (~247) tries to override it and does not.
 - **Why deferred / fix direction:** Predates this work; the ring stays visible. Drop the border change from the vendored classes, keep the primary ring, and re-check every consumer.
 
@@ -315,14 +266,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Use the full text-on-surface-variant token.
 - **Source:** snapshot line 2419, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
-### ISS-085 · P3 · IconTile outline variant invisible by default in dark theme on lowest surface
-
-- **Type:** debt · **Found:** 2026-07-31 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** outline variant in frontend/src/components/reui/icon-tile.tsx (line ~37)
-- **Problem:** The variant's base fill equals surface-container-lowest in dark theme, so the tile only shows through its dark:bg-input/32 layer. Reusing it on another surface may read inconsistently.
-- **Why deferred / fix direction:** Verify contrast before reusing the variant on a differently toned surface.
-- **Source:** snapshot line 1165, section "ReUI Presentation Set — deferred findings (2026-07-31)"
-
 ### ISS-086 · P3 · Badge solid-tone variants not for use until chip rebase
 
 - **Type:** debt · **Found:** 2026-08-01 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -331,31 +274,15 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Fix contrast or delete the variants before anyone wires one up; chips stay bespoke per standing decision.
 - **Source:** snapshot line 1272, section "ReUI Data Grid phase — deferred findings (2026-08-01)"
 
-### ISS-087 · P3 · Vendored ui/* and reui/* still carry the fuller focus form
+### ISS-090 · P3 · Dark primary contrast 4.4986:1: nudge the dark token to 4.5:1
 
-- **Type:** debt · **Found:** 2026-08-29 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** focus classes in frontend/src/components/ui/*.tsx and reui/*.tsx (listed files)
-- **Problem:** DESIGN.md states the reduced focus form, but vendored primitives still change the border on focus. The design-focus-ring gate excludes vendored files.
-- **Why deferred / fix direction:** Align opportunistically when each file is next touched, with SOLVRO PATCH markers.
-- **Source:** snapshot line 1652, section "Daily Review v2 — deferred findings (2026-08-29)"
-
-### ISS-090 · P3 · Dark primary on dark surface-container-high is 4.4986:1
-
-- **Type:** decision · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** dark tokens in frontend/src/index.css (lines ~251, ~259)
 - **Problem:** Dark brand green falls 0.0014 short of 4.5:1 on hovered rows and tinted cards. Question: may the brand green be adjusted, or is the gap accepted?
-- **Why deferred / fix direction:** Brand value deliberately untouched; needs a user ruling.
+- **Why deferred / fix direction:** User decision 2026-11-20. Lighten the dark primary token by the minimum that reaches 4.5:1; sync docs/DESIGN.md.
 - **Source:** snapshot line 2420, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
 ## Open — Gantt
-
-### ISS-094 · P3 · Gantt tree pane narrowed below 356px clips fixed columns (accepted)
-
-- **Type:** watch · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** TREE_FIXED_COLUMNS_WIDTH / TREE_NAME_COLUMN_MIN_WIDTH in frontend/src/components/gantt-v2/SolvroGantt.tsx (line ~244)
-- **Problem:** Deliberately narrowing the tree pane below 356px (256 fixed columns + 100 name floor) clips the fixed columns; the row scrolls horizontally.
-- **Why deferred / fix direction:** Accepted behavior, no fix planned; revisit only if users report it.
-- **Source:** snapshot line 31, section "Known bugs / inconsistencies"
 
 ### ISS-096 · P3 · #94a3b8 section-color sentinel duplicated between schema and frontend
 
@@ -373,12 +300,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Trigger: a project rendering low hundreds of bars at once. Then share a single observer.
 - **Source:** snapshot line 519, section "Plan B Task 9 deferred findings — ReUI Gantt swap (2026-07-25)"
 
-### ISS-105 · P3 · Dark-theme Gantt bar ring contrast for the Critical Path mark
+### ISS-105 · P3 · Gantt Critical Path ring: fixed violet in both themes
 
-- **Type:** decision · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-09-02 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** critical-path ring in frontend/src/components/gantt-v2/SolvroBar.tsx (line ~328)
 - **Problem:** Question for the user: keep `chip-violet-text` (near-white `#ddd6fe` in dark mode, close to the selection outline) or use a fixed violet in both themes for the Gantt ring only?
-- **Why deferred / fix direction:** Awaiting the user's call; option (b) mirrors CRITICAL_PATH_HEX used by the exports.
+- **Why deferred / fix direction:** User decision 2026-11-20. Use CRITICAL_PATH_HEX (the export colour) for the bar ring in both themes; chips keep chip-violet-text.
 - **Source:** snapshot line 1738, section "Critical Path mark — deferred findings (2026-09-02)"
 
 ## Open — Boards & drag
@@ -411,53 +338,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — iTop
 
-### ISS-120 · P2 · TimeSpent duration unit assumed to be seconds
+### ISS-120 · P2 · iTop go-live checks: TimeSpent, User class, lifecycle stimuli
 
-- **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** ITOP_TIME_SPENT_DURATION_IN_SECONDS in backend/src/lib/itop/types.ts (line ~177), used by syncTimeEntries
-- **Problem:** Durations are divided by 60 assuming seconds; if the real install reports minutes, every imported time entry is wrong by 60x.
-- **Why deferred / fix direction:** Verify with the probe's TimeSpent field dump against the real install before go-live; flip the one constant if needed.
-- **Source:** snapshot line 1940, section "iTop integration (Utilization) — deferred findings (ported 2026-10-04)"
-
-### ISS-121 · P2 · TimeSpent.ticket_ref attribute name unverified on the real install
-
-- **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** ITOP_TIME_SPENT_TICKET_REF_FIELD in backend/src/lib/itop/types.ts (line ~163)
-- **Problem:** If the real attribute differs or is not writable, logged entries still count in Utilization but never link to the ticket, so the panel's weekly-on-ticket figure stays 0.
-- **Why deferred / fix direction:** Before go-live the iTop admin confirms the attribute name and REST writability (same probe discipline as the duration unit).
-- **Source:** snapshot line 2191, section "iTop integration (time tracking, task-to-ticket) — deferred findings (ported 2026-10-04)"
-
-### ISS-122 · P2 · Application/personal token cannot read iTop's User class
-
-- **Type:** watch · **Found:** 2026-09-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** user matching / time logging in backend/src/lib/itop/ and routes/itopUser.ts
-- **Problem:** User matching sets the Person link but never User.itopUserId, so time logging answers 'Your iTop user account is not linked yet'.
-- **Why deferred / fix direction:** Once Time Tracking is installed: check whether TimeSpent.user_id can be omitted, or grant the application token a profile that can read User.
-- **Source:** snapshot line 2232, section "iTop integration — real-install findings (2026-09-24, ported 2026-10-04)"
-
-### ISS-123 · P3 · Personal-token expiry is best-effort, not guaranteed
-
-- **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** PUT /itop/me/token in backend/src/routes/itopUser.ts (line ~204)
-- **Problem:** On installs where PersonalToken is unreadable to the TAM profile, expiresAt is always null so Settings cannot warn before expiry.
-- **Why deferred / fix direction:** No code change proposed; revisit if an install exposes PersonalToken or a warning UX is wanted.
-- **Source:** snapshot line 2022, section "iTop integration (personal tokens, ticket actions) — deferred findings (ported 2026-10-04)"
-
-### ISS-124 · P3 · A token's write capability can't be verified up front
-
-- **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** write-capability probe in backend/src/routes/itopUser.ts (line ~168)
-- **Problem:** A TAM can save a token lacking a write profile and only learns at the first action (403 itop_token_invalid / 409 itop_refused).
-- **Why deferred / fix direction:** Working as designed; consider a trial apply_stimulus dry run only if iTop ever supports one.
-- **Source:** snapshot line 2035, section "iTop integration (personal tokens, ticket actions) — deferred findings (ported 2026-10-04)"
-
-### ISS-125 · P3 · Drop lifecycle graph assumes iTop's default stimuli
-
-- **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** TRANSITIONS in frontend/src/components/itop/board/dropMapper.ts (line ~40)
-- **Problem:** A custom or narrower iTop state machine will reject drags the admin expects, or accept ones iTop then refuses (409 itop_refused with iTop's text).
-- **Why deferred / fix direction:** Verify decision 10 against the real install before relying on Board drag-and-drop there; make the graph configurable only if an install differs.
-- **Source:** snapshot line 2090, section "iTop integration (board, new tickets) — deferred findings (ported 2026-10-04)"
+- **Type:** watch · **Found:** 2026-09-24 · **Verified:** 2026-11-20 @ `cdac38f`
+- **Where:** ITOP_TIME_SPENT_* in backend/src/lib/itop/types.ts; syncTimeEntries / upsertTimeEntry in lib/itop/sync.ts; user matching in routes/itopUser.ts; TRANSITIONS in frontend/src/components/itop/board/dropMapper.ts
+- **Problem:** Six assumptions are unverified on the real install: TimeSpent duration in seconds (wrong by 60x if minutes); the TimeSpent.ticket_ref name and writability; the application token cannot read User, so User.itopUserId stays unset and time logging refuses; the drop graph assumes default stimuli; Time Tracking is not bundled with iTop Community; blank-duration entries are skipped every tick.
+- **Why deferred / fix direction:** Blocks go-live, not code. Install Time Tracking from iTop Hub, run the TimeSpent probes, check User read rights and the state machine, then flip the constants or adjust the graph. Merged ISS-121, 122, 125, 127, 135.
 
 ### ISS-126 · P3 · Mobile iTop board is a single stacked column with touch drag
 
@@ -467,22 +353,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Evaluate on a real phone before treating it as the phone-usable Board.
 - **Source:** snapshot line 2101, section "iTop integration (board, new tickets) — deferred findings (ported 2026-10-04)"
 
-### ISS-127 · P3 · Time Tracking extension is not bundled with iTop Community
-
-- **Type:** watch · **Found:** 2026-09-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** backend/src/lib/itop/sync.ts syncTimeEntries and routes/itop.ts time logging
-- **Problem:** The TimeSpent class is absent until the extension is installed from iTop Hub, blocking the verification of the two TimeSpent assumptions.
-- **Why deferred / fix direction:** Install the extension on the iTop side, then run the TimeSpent probes.
-- **Source:** snapshot line 2235, section "iTop integration — real-install findings (2026-09-24, ported 2026-10-04)"
-
-### ISS-128 · P3 · pending_reason assumed to be free text
-
-- **Type:** watch · **Found:** 2026-09-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** pending action schema in backend/src/routes/itop.ts (line ~762)
-- **Problem:** An install that turns pending_reason into a list of values will refuse free text; the user sees iTop's message.
-- **Why deferred / fix direction:** No action until an install differs.
-- **Source:** snapshot line 2236, section "iTop integration — real-install findings (2026-09-24, ported 2026-10-04)"
-
 ### ISS-134 · P3 · Deployment note: itopUserId matching needs REST read rights on iTop's User class
 
 - **Type:** watch · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -490,14 +360,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** Without read rights on User, time logging fails with 'Your iTop user account is not linked yet'. A setup requirement, not a code bug.
 - **Why deferred / fix direction:** Document the required profile rights in docs/CONFIGURATION.md; otherwise nothing to fix in code.
 - **Source:** snapshot line 2303, section "Customer-edition port — deferred findings (2026-10-05)"
-
-### ISS-135 · P3 · iTop time entries with blank duration are skipped every sync tick
-
-- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** upsertTimeEntry in backend/src/lib/itop/sync.ts (line ~523)
-- **Problem:** Time entries with a blank duration (likely still-running entries) are skipped and re-evaluated every tick.
-- **Why deferred / fix direction:** Confirm on a real iTop install that blank durations are transient; if they persist, decide how to store them.
-- **Source:** snapshot line 2385, section "Application review 2026-10-22 — remaining open items"
 
 ### ISS-202 · P3 · Unmapping an iTop org during a running sync can re-attach its tickets
 
@@ -516,12 +378,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Not fixable by changing format. Options: reach app via localhost forward/reverse proxy, HTTPS with internal CA (declined), or PDF View -> Save as PDF. Last observed 2026-07-31.
 - **Source:** snapshot line 70, section "Known bugs / inconsistencies"; merged duplicates at snapshot lines 77, 86, 92
 
-### ISS-140 · P3 · Gantt Excel export has no iTop ticket column
+### ISS-140 · P3 · Gantt Excel export: add an iTop ticket column
 
-- **Type:** decision · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** buildTasksSheet in frontend/src/lib/gantt/exportExcel.ts (line ~87)
 - **Problem:** Question for the user: should the Gantt Excel export show a task's pinned itopTicketRef? It needs the field threaded through the Gantt row adapter; the ref is customer-safe but exports are customer-facing.
-- **Why deferred / fix direction:** Add a column and thread t.itopTicketRef onto Row if approved (spine: Gantt exports).
+- **Why deferred / fix direction:** User decision 2026-11-20. Thread t.itopTicketRef onto Row and add the column in buildTasksSheet (spine: Gantt exports).
 - **Source:** snapshot line 2006, section "iTop integration (webhook, task ticket links) — deferred findings (ported 2026-10-04)"
 
 ### ISS-141 · P3 · Guest page still loads Google Fonts from Google
@@ -534,13 +396,12 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — Tests & CI
 
-### ISS-145 · P2 · e2e drag-reorder first-attempt flakes (list-dnd/kanban-dnd/gantt-parity)
+### ISS-145 · P2 · Flaky e2e drag specs and backend concurrency test
 
-- **Type:** watch · **Found:** 2026-07-28 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** list-dnd.spec.ts, kanban-dnd.spec.ts, gantt-parity.spec.ts
-- **Problem:** Four-case first-attempt flake class absorbed by retries: 1; likely much reduced by the per-file seededProject change.
-- **Why deferred / fix direction:** Trigger: a fifth case joins or any case fails through its retry. Re-count flakes over the next CI runs.
-- **Source:** snapshot line 869, section "ReUI DateField swap — deferred findings (2026-07-28)"; merged duplicates at snapshot lines 518
+- **Type:** watch · **Found:** 2026-07-28 · **Verified:** 2026-11-20 @ `cdac38f`
+- **Where:** list-dnd.spec.ts, kanban-dnd.spec.ts (R3 parity, mobile touch-reorder), gantt-parity.spec.ts (connector-hover case c); backend/test/taskReorderConcurrency.test.ts (line ~114)
+- **Problem:** First-attempt flakes absorbed by retries; one 30 s backend timeout in a loaded gates run.
+- **Why deferred / fix direction:** Trigger: a case fails through its retry, or a new case joins. Then tighten the wait or fixture isolation; for the backend test capture pg_locks joined to pg_stat_activity during the stall. Merged ISS-160, 167.
 
 ### ISS-149 · P3 · pwa.spec.ts fails against the Vite dev server
 
@@ -574,30 +435,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Why deferred / fix direction:** Assert the TopBar trigger is visible before pressing the shortcut; check res.ok; anchor the regex; fix the comment pointer.
 - **Source:** snapshot line 759, section "Global search & ⌘K command palette — deferred findings (2026-07-27)"
 
-### ISS-156 · P3 · filters-duplicate-chip e2e spec is an invariant net, not a discriminating test
-
-- **Type:** watch · **Found:** 2026-08-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** e2e/tests/filters-duplicate-chip.spec.ts (header comment)
-- **Problem:** The spec cannot reproduce the upstream Base UI double-fire; it only asserts no more than one chip per field survives.
-- **Why deferred / fix direction:** Accept as is unless the upstream race becomes reproducible.
-- **Source:** snapshot line 1403, section "Issues Sweep #1 — residuals (2026-08-02)"
-
-### ISS-160 · P3 · Three pre-existing flaky e2e tests retried clean (gantt-parity, kanban-dnd)
-
-- **Type:** watch · **Found:** 2026-09-02 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** gantt-parity.spec.ts connector-hover case (c); kanban-dnd.spec.ts R3 cross-view parity and mobile touch-reorder (lines ~1073, ~1110-1200)
-- **Problem:** Three e2e tests passed only on retry in one gate run; the mobile touch-reorder depends on the seeded project's task count staying contiguous.
-- **Why deferred / fix direction:** No action until one fails consistently; then tighten the wait (case c) or fixture isolation (the other two).
-- **Source:** snapshot line 1698, section "Critical Path mark — deferred findings (2026-09-02)"; merged duplicates at snapshot lines 2253
-
-### ISS-167 · P3 · taskReorderConcurrency.test.ts:114 timed out once in a loaded gates run
-
-- **Type:** watch · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** backend/test/taskReorderConcurrency.test.ts (line ~114)
-- **Problem:** One 30 s timeout during a full gates run on a loaded shared host.
-- **Why deferred / fix direction:** If it recurs, capture pg_locks joined to pg_stat_activity during the stall.
-- **Source:** snapshot line 2412, section "Project lifecycle and handover — deferred findings (2026-11-10)"
-
 ### ISS-168 · P3 · Verification gap: /pipeline/:id, /share/:token and PWA banner not exercised
 
 - **Type:** watch · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -608,45 +445,13 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 
 ## Open — Dev env & ops
 
-### ISS-170 · P3 · Backend tsx watch inotify staleness observed once
+### ISS-171 · P3 · Delete backend/scripts/import-velora.ts; Velora stack retired
 
-- **Type:** watch · **Found:** 2026-08-15 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** backend dev script in backend/package.json (line 8)
-- **Problem:** File edits were once silently not picked up until the backend container restarted.
-- **Why deferred / fix direction:** Restart the backend container before debugging deeper; record a last-observed date if it recurs.
-- **Source:** snapshot line 1530, section "Pipeline native port — accepted risks & deferred items (2026-08-15)"
-
-### ISS-171 · P3 · Pipeline cutover checklist: retire standalone Velora stack
-
-- **Type:** watch · **Found:** 2026-08-15 · **Verified:** 2026-11-18 @ `4bb01a4`
+- **Type:** debt · **Found:** 2026-08-15 · **Verified:** 2026-11-20 @ `cdac38f`
 - **Where:** external /opt/velora deploy (not in repo); backend/scripts/import-velora.ts still present
 - **Problem:** The remaining cutover step is retiring the standalone Velora production stack, which cannot be verified from code.
-- **Why deferred / fix direction:** Confirm with the user that the standalone stack is retired, then close; delete import-velora.ts if never needed.
+- **Why deferred / fix direction:** User decision 2026-11-20. The standalone Velora stack is retired (user confirmation 2026-11-20). Delete the one-time import script and any package.json script entry.
 - **Source:** snapshot line 1539, section "Pipeline native port — accepted risks & deferred items (2026-08-15)"
-
-### ISS-172 · P3 · Dev backend container can serve stale routes/tasks.ts after an edit (tsx watch)
-
-- **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** dev backend container (`tsx watch src/index.ts`, backend/package.json)
-- **Problem:** Once, after an edit, tsx watch did not reload and the container served the old file until restart.
-- **Why deferred / fix direction:** Observed once, cause unknown. Restart backend before trusting a change; revisit if it recurs.
-- **Source:** snapshot line 2270, section "Collaboration & sharing — stale-edit warning — deferred findings (2026-09-30, ported 2026-10-05)"
-
-### ISS-173 · P3 · setup.sh TRUST_PROXY default trusts every private address
-
-- **Type:** watch · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** TRUST_PROXY default in the compose file written by setup.sh (docs/CONFIGURATION.md §2.13)
-- **Problem:** A LAN/VPN client, or a hop rewriting the source to a private address without X-Forwarded-For, can forge its address; the effect is limited to the guest-link rate-limit bucket and logged clientIp.
-- **Why deferred / fix direction:** Documented trade-off for the tunnel to nginx to backend topology; use a hop count or CIDRs behind a public CDN.
-- **Source:** snapshot line 2329, section "Customer-edition port — deferred findings (2026-10-05)"
-
-### ISS-174 · P3 · Dev stack: client reaching :5173 directly can forge clientIp
-
-- **Type:** watch · **Found:** 2026-10-05 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** dev stack TRUST_PROXY=1 (docker-compose.yml, untracked; docs/CONFIGURATION.md §2.13)
-- **Problem:** In the dev stack a client that reaches the Vite port directly can forge clientIp. Dev only.
-- **Why deferred / fix direction:** Accept; no production exposure.
-- **Source:** snapshot line 2330, section "Customer-edition port — deferred findings (2026-10-05)"
 
 ### ISS-175 · P3 · Bundle budget headroom is about 43 kB
 
@@ -655,14 +460,6 @@ Last full triage: 2026-11-18 @ `4bb01a4`. The file before the restructure is kep
 - **Problem:** The entry chunk sits close to the 1 MB budget enforced by check:bundle-size; Overview, Projects and ProjectDetail are still eager.
 - **Why deferred / fix direction:** Watch trigger: the budget check fails. Then lazy-load more pages.
 - **Source:** snapshot line 2384, section "Application review 2026-10-22 — remaining open items"
-
-### ISS-177 · P3 · CI stack could not be built locally (disk space)
-
-- **Type:** watch · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** ci/docker-compose.ci.yml; e2e/tests/pwa.spec.ts; e2e/tests/security-headers.spec.ts
-- **Problem:** Those two specs fail against a vite dev server and were not run locally.
-- **Why deferred / fix direction:** Rely on CI or free disk space.
-- **Source:** snapshot line 2410, section "Project lifecycle and handover — deferred findings (2026-11-10)"
 
 ### ISS-201 · P3 · Frontend lint dev tools add moderate audit advisories
 
@@ -799,3 +596,28 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-161 · Resolved 2026-11-19 · CHANGELOG "Frontend lint and test cleanups" · Flaky backend test: taskOrdering 'orders GET /tasks (cross-project)'
 - ISS-022 · Resolved 2026-11-19 · CHANGELOG "Frontend lint and test cleanups" · useDuplicateTask/Section isPending includes inactive-query refetches
 - ISS-164 · Resolved 2026-11-19 · Cause (shared seeded project state across spec files) already fixed by per-file seeding; closed 2026-11-19 · list-dnd 'cross-status reorder in one section sticks' failed locally
+- ISS-073 · Resolved 2026-11-20 · Accepted as is in triage 2026-11-20 (reload clears it), no change · A lazy page chunk that fails twice stays failed
+- ISS-094 · Resolved 2026-11-20 · Accepted as is in triage 2026-11-20, no change · Gantt tree pane narrowed below 356px clips fixed columns (accepted)
+- ISS-124 · Resolved 2026-11-20 · Working as designed (iTop has no dry-run stimulus), closed in triage 2026-11-20 · A token's write capability can't be verified up front
+- ISS-128 · Resolved 2026-11-20 · No install differs; iTop shows its own message if one does, closed in triage 2026-11-20 · pending_reason assumed to be free text
+- ISS-156 · Resolved 2026-11-20 · Accepted as is in triage 2026-11-20, no change · filters-duplicate-chip e2e spec is an invariant net, not a discriminating test
+- ISS-174 · Resolved 2026-11-20 · Dev stack only, no production exposure, closed in triage 2026-11-20 · Dev stack: client reaching :5173 directly can forge clientIp
+- ISS-053 · Resolved 2026-11-20 · No defect today; fix when a submenu sits in a z-100+ host, closed in triage 2026-11-20 · dropdown-menu SubContent shares popover's z-index-on-Popup gap
+- ISS-057 · Resolved 2026-11-20 · No defect today; every filter field is string-valued, closed in triage 2026-11-20 · Duplicate-chip guard uses === and misses object-valued options
+- ISS-059 · Resolved 2026-11-20 · No defect today; the override follows Chip markup, closed in triage 2026-11-20 · CriticalPathMark chip padding coupled to Chip's DOM shape
+- ISS-085 · Resolved 2026-11-20 · No defect today; the variant is used on one surface only, closed in triage 2026-11-20 · IconTile outline variant invisible by default in dark theme on lowest surface
+- ISS-123 · Resolved 2026-11-20 · No defect today; expiry stays null where iTop hides PersonalToken, closed in triage 2026-11-20 · Personal-token expiry is best-effort, not guaranteed
+- ISS-170 · Resolved 2026-11-20 · Observed once (2026-08-15), not recurred, closed in triage 2026-11-20 · Backend tsx watch inotify staleness observed once
+- ISS-172 · Resolved 2026-11-20 · Observed once (2026-09-30), not recurred, closed in triage 2026-11-20 · Dev backend container can serve stale routes/tasks.ts after an edit (tsx watch)
+- ISS-177 · Resolved 2026-11-20 · CI runs both specs on every PR, closed in triage 2026-11-20 · CI stack could not be built locally (disk space)
+- ISS-087 · Resolved 2026-11-20 · Merged into ISS-200 in triage 2026-11-20 · Vendored ui/* and reui/* still carry the fuller focus form
+- ISS-121 · Resolved 2026-11-20 · Merged into ISS-120 in triage 2026-11-20 · TimeSpent.ticket_ref attribute name unverified on the real install
+- ISS-122 · Resolved 2026-11-20 · Merged into ISS-120 in triage 2026-11-20 · Application/personal token cannot read iTop's User class
+- ISS-125 · Resolved 2026-11-20 · Merged into ISS-120 in triage 2026-11-20 · Drop lifecycle graph assumes iTop's default stimuli
+- ISS-127 · Resolved 2026-11-20 · Merged into ISS-120 in triage 2026-11-20 · Time Tracking extension is not bundled with iTop Community
+- ISS-135 · Resolved 2026-11-20 · Merged into ISS-120 in triage 2026-11-20 · iTop time entries with blank duration are skipped every sync tick
+- ISS-160 · Resolved 2026-11-20 · Merged into ISS-145 in triage 2026-11-20 · Three pre-existing flaky e2e tests retried clean (gantt-parity, kanban-dnd)
+- ISS-167 · Resolved 2026-11-20 · Merged into ISS-145 in triage 2026-11-20 · taskReorderConcurrency.test.ts:114 timed out once in a loaded gates run
+- ISS-008 · Resolved 2026-11-20 · Merged into ISS-011 in triage 2026-11-20 · Rate limiter is in-process only
+- ISS-173 · Resolved 2026-11-20 · Merged into ISS-011 in triage 2026-11-20 · setup.sh TRUST_PROXY default trusts every private address
+- ISS-003 · Resolved 2026-11-20 · Accepted as is by user decision 2026-11-20, documented in docs/CONFIGURATION.md §2.17 · GET /itop/services returns every organisation's services, unscoped
