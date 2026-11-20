@@ -1,6 +1,6 @@
 # Issues wave 10: contrast, focus, loading states, e2e waits
 
-Status: in progress, branch `fix/issues-wave-10`. Archive path: `docs/archive/plans/issues-wave-10.md`.
+Status: shipped 2026-11-20, branch `fix/issues-wave-10`. Archive path: `docs/archive/plans/issues-wave-10.md`.
 
 Lane P. One PR into `develop`; each group is one task and one commit. Scope: every open issue that is a plain fix and needs no user decision (triage 2026-11-20).
 
@@ -27,4 +27,11 @@ AI and AJ may touch the same frontend file (for example `Admin.tsx`) on differen
 
 ## Delivery Gate
 
-Pending.
+PASS, 2026-11-20, light and dark at 375px and 1280px.
+- Projects, Overview and project List render with the new skeleton look and `primary-hover`; hover contrast is computed (light 11.38:1, dark 4.57-4.62:1).
+- ISS-168: `/pipeline/:id`, `/share/:token` (a temporary guest link, revoked after) and the install banner (synthetic `beforeinstallprompt`) render correctly at 375px in both themes.
+
+## Review and gates
+
+- Opus phase review: 1 blocker (dark hover 3.66:1), 3 should-fix, 5 nits; all fixed. ISS-205 filed for faint placeholder text outside ISS-080's scope.
+- `gates.sh --performed-review=opus`: all gates pass except `e2e-touched-specs`, whose 5 failures are all in `auth.spec.ts`: the dev database has Google sign-in configured (`auth_config` since 2026-11-01), which the spec assumes is off; CI's seeded stack has it off.

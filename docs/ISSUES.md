@@ -244,14 +244,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Problem:** First-attempt flakes absorbed by retries; one 30 s backend timeout in a loaded gates run.
 - **Why deferred / fix direction:** Trigger: a case fails through its retry, or a new case joins. Then tighten the wait or fixture isolation; for the backend test capture pg_locks joined to pg_stat_activity during the stall. Merged ISS-160, 167.
 
-### ISS-168 · P3 · Verification gap: /pipeline/:id, /share/:token and PWA banner not exercised
-
-- **Type:** watch · **Found:** 2026-11-10 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** /pipeline/:id, /share/:token, InstallBanner
-- **Problem:** The audit's live run skipped these three surfaces.
-- **Why deferred / fix direction:** Check them in a browser at 375px in both themes.
-- **Source:** snapshot line 2425, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
-
 ## Open — Dev env & ops
 
 ### ISS-175 · P3 · Bundle budget headroom is about 43 kB
@@ -450,3 +442,4 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-150 · Resolved 2026-11-20 · CHANGELOG "End-to-end waits, search spec, colour-by reload test" · No e2e coverage for colorBy persistence across page reload
 - ISS-151 · Resolved 2026-11-20 · CHANGELOG "End-to-end waits, search spec, colour-by reload test" · E2E fixed-timeout (waitForTimeout) convention
 - ISS-154 · Resolved 2026-11-20 · CHANGELOG "End-to-end waits, search spec, colour-by reload test" · search.spec.ts polish and listener-ready guard
+- ISS-168 · Resolved 2026-11-20 · Checked at the wave 10 Delivery Gate (docs/archive/plans/issues-wave-10.md) · Verification gap: /pipeline/:id, /share/:token and PWA banner not exercised
