@@ -1,6 +1,6 @@
 /**
  * True on Apple platforms, where the search shortcut reads ⌘K. Elsewhere it
- * is Ctrl K. Reads `userAgentData` when the browser has it, else the legacy
+ * is Ctrl+K. Reads `userAgentData` when the browser has it, else the legacy
  * platform string, and is false outside a browser.
  */
 export function isMacPlatform(): boolean {
@@ -12,5 +12,5 @@ export function isMacPlatform(): boolean {
 
 /** Label for the app-wide search shortcut, matching the host platform. */
 export function searchShortcutLabel(): string {
-  return isMacPlatform() ? "⌘K" : "Ctrl K";
+  return isMacPlatform() ? "⌘K" : "Ctrl+K";
 }

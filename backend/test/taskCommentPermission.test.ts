@@ -4,6 +4,7 @@ import "./env.js";
 import { beforeAll, describe, expect, it } from "vitest";
 import request from "supertest";
 import { createApp } from "../src/app.js";
+import { signToken } from "../src/http/auth.js";
 import { prisma } from "../src/prisma.js";
 import { createUserWithRole, seedRoles } from "./testAuth.js";
 
@@ -34,6 +35,30 @@ async function fixture() {
 }
 
 describe("task comment permission", () => {
+  it("lets a custom role with project:write but no task:write comment", async () => {
+    const { task } = await fixture();
+    const role = await prisma.role.upsert({
+      where: { roleName: "PROJECT_WRITER_ONLY" },
+      update: { permissions: ["project:read", "project:write"] },
+      create: { roleName: "PROJECT_WRITER_ONLY", permissions: ["project:read", "project:write"] },
+    });
+    const user = await prisma.user.create({
+      data: {
+        username: `pw-${Date.now()}-${Math.random()}`,
+        email: `pw-${Date.now()}-${Math.random()}@example.com`,
+        passwordHash: null,
+        roleId: role.id,
+        active: true,
+      },
+    });
+    await prisma.project.update({ where: { id: task.projectId }, data: { tamId: user.id } });
+    const res = await request(app)
+      .post(`/tasks/${task.id}/comments`)
+      .set(auth(signToken({ sub: user.id, ver: 0 })))
+      .send({ body: "ok" });
+    expect(res.status).toBe(201);
+  });
+
   it("refuses STAKEHOLDER and SA with 403 and stores nothing; TAM may comment", async () => {
     const { tam, stakeholder, sa, task } = await fixture();
     for (const user of [stakeholder, sa]) {

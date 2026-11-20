@@ -7,7 +7,6 @@ import {
   sortPortfolioRows,
 } from "@/components/portfolio/PortfolioCalendar";
 import { PipelineAnalyticsSection } from "@/components/pipeline/PipelineAnalyticsSection";
-import { Frame, FramePanel } from "@/components/reui/frame";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import { ProjectStatusChip } from "@/components/StatusChip";
 import { EMPTY_VALUE } from "@/lib/emptyValue";
@@ -79,43 +78,18 @@ function ExecutiveBody({
 
   return (
     <div className="space-y-8">
-      <Frame spacing="sm" className="grid sm:grid-cols-3">
-        <PortfolioStat label="Projects" value={String(projects.length)} />
-        <PortfolioStat
-          label="Overdue"
-          value={String(overdue.length)}
-          valueClassName={overdue.length > 0 ? "text-error" : undefined}
-        />
-        <PortfolioStat label="Updated" value={fmtDateTime(generatedAt)} compact />
-      </Frame>
+      <p className="rounded-sm border border-outline-variant bg-surface-container-low px-4 py-3 text-sm text-on-surface">
+        {projects.length} project{projects.length === 1 ? "" : "s"} ·{" "}
+        <span className={overdue.length > 0 ? "font-semibold text-error" : ""}>
+          {overdue.length} overdue
+        </span>{" "}
+        · Updated {fmtDateTime(generatedAt)}
+      </p>
 
       <OverdueProjectsSection projects={overdue} />
       <PortfolioTimelinesSection projects={projects} />
       {canViewPipeline && <PipelineAnalyticsSection />}
     </div>
-  );
-}
-
-function PortfolioStat({
-  label,
-  value,
-  valueClassName,
-  compact,
-}: {
-  label: string;
-  value: string;
-  valueClassName?: string;
-  compact?: boolean;
-}) {
-  return (
-    <FramePanel>
-      <div className="text-label-caps uppercase text-on-surface-variant">{label}</div>
-      <div
-        className={`mt-2 font-bold tabular-nums ${compact ? "text-sm" : "text-3xl"} ${valueClassName ?? "text-on-surface"}`}
-      >
-        {value}
-      </div>
-    </FramePanel>
   );
 }
 

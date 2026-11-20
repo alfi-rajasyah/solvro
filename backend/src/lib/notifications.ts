@@ -113,38 +113,66 @@ export async function filterActiveUsersWhoCanSeeProject(
 ): Promise<Set<number>> {
   const ids = [...new Set(userIds)];
   if (ids.length === 0) return new Set();
-  const [users, project] = await Promise.all([
+  const canSee = await loadProjectVisibility(tx, [projectId], ids);
+  return new Set(ids.filter((id) => canSee(projectId, id)));
+}
+
+/**
+ * The one place that turns users and projects into `canUserSeeProject` calls,
+ * shared by the single-project and the batched notification paths: two queries
+ * (active users with their roles; the projects' TAM / SA / customer owner /
+ * candidate members) however many ids are passed. The returned predicate is
+ * false for an inactive or unknown user and for an unknown project.
+ */
+async function loadProjectVisibility(
+  tx: Tx,
+  projectIds: readonly number[],
+  userIds: readonly number[],
+): Promise<(projectId: number, userId: number) => boolean> {
+  const [users, projects] = await Promise.all([
     tx.user.findMany({
-      where: { id: { in: ids }, active: true },
+      where: { id: { in: [...userIds] }, active: true },
       select: { id: true, role: { select: { roleName: true, permissions: true } } },
     }),
-    tx.project.findUnique({
-      where: { id: projectId },
+    tx.project.findMany({
+      where: { id: { in: [...projectIds] } },
       select: {
+        id: true,
         tamId: true,
         saId: true,
         customer: { select: { tamId: true } },
-        members: { where: { userId: { in: ids } }, select: { userId: true } },
+        members: { where: { userId: { in: [...userIds] } }, select: { userId: true } },
       },
     }),
   ]);
-  const visible = new Set<number>();
-  if (!project) return visible;
-  const facts: ProjectVisibilityFacts = {
-    tamId: project.tamId,
-    saId: project.saId,
-    customerTamId: project.customer?.tamId ?? null,
-    memberIds: new Set(project.members.map((m) => m.userId)),
+  const userById = new Map(
+    users.map((u) => [
+      u.id,
+      {
+        sub: u.id,
+        role: u.role.roleName,
+        permissions: Array.isArray(u.role.permissions)
+          ? u.role.permissions.filter((p): p is string => typeof p === "string")
+          : [],
+      },
+    ]),
+  );
+  const factsByProject = new Map<number, ProjectVisibilityFacts>(
+    projects.map((p) => [
+      p.id,
+      {
+        tamId: p.tamId,
+        saId: p.saId,
+        customerTamId: p.customer?.tamId ?? null,
+        memberIds: new Set(p.members.map((m) => m.userId)),
+      },
+    ]),
+  );
+  return (projectId, userId) => {
+    const user = userById.get(userId);
+    const facts = factsByProject.get(projectId);
+    return user !== undefined && facts !== undefined && canUserSeeProject(user, facts);
   };
-  for (const u of users) {
-    const permissions = Array.isArray(u.role.permissions)
-      ? u.role.permissions.filter((p): p is string => typeof p === "string")
-      : [];
-    if (canUserSeeProject({ sub: u.id, role: u.role.roleName, permissions }, facts)) {
-      visible.add(u.id);
-    }
-  }
-  return visible;
 }
 
 /**
@@ -282,41 +310,11 @@ export async function notifyForProjectEvents(
   if (planned.length === 0) return 0;
   const userIds = [...new Set(planned.flatMap((p) => [...p.reasons.keys()]))];
   const projectIds = [...new Set(planned.map((p) => p.event.projectId as number))];
-  const [users, projects] = await Promise.all([
-    tx.user.findMany({
-      where: { id: { in: userIds }, active: true },
-      select: { id: true, role: { select: { roleName: true, permissions: true } } },
-    }),
-    tx.project.findMany({
-      where: { id: { in: projectIds } },
-      select: {
-        id: true,
-        tamId: true,
-        saId: true,
-        customer: { select: { tamId: true } },
-        members: { where: { userId: { in: userIds } }, select: { userId: true } },
-      },
-    }),
-  ]);
-  const userById = new Map(users.map((u) => [u.id, u]));
-  const projectById = new Map(projects.map((p) => [p.id, p]));
+  const canSee = await loadProjectVisibility(tx, projectIds, userIds);
   const rows: Prisma.NotificationCreateManyInput[] = [];
   for (const { event, reasons } of planned) {
-    const project = projectById.get(event.projectId as number);
-    if (!project) continue;
-    const facts: ProjectVisibilityFacts = {
-      tamId: project.tamId,
-      saId: project.saId,
-      customerTamId: project.customer?.tamId ?? null,
-      memberIds: new Set(project.members.map((m) => m.userId)),
-    };
     for (const [userId, reason] of reasons) {
-      const u = userById.get(userId);
-      if (!u) continue;
-      const permissions = Array.isArray(u.role.permissions)
-        ? u.role.permissions.filter((p): p is string => typeof p === "string")
-        : [];
-      if (canUserSeeProject({ sub: u.id, role: u.role.roleName, permissions }, facts)) {
+      if (canSee(event.projectId as number, userId)) {
         rows.push({ userId, activityEventId: event.id, reason });
       }
     }

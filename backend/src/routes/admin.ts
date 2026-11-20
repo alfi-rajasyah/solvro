@@ -281,7 +281,9 @@ const userIdField = z.number().int().positive();
 const MAX_CUSTOMER_OWNER_CHOICES = 2_000;
 // Measured on the isolated test DB (ISS-031): the batched project loop hands over
 // 500 projects in under a second and 5000 in a few seconds, so 5000 keeps a wide
-// margin inside the 30 s transaction timeout.
+// margin inside the 30 s transaction timeout. The cap assumes short per-project
+// notes: 5000 entries with long notes would exceed the 1 MB JSON body limit
+// (app.ts, nginx.conf) before reaching it; do not raise those limits for this.
 const MAX_OFFBOARD_PROJECTS = 5_000;
 const offboardSchema = z
   .object({

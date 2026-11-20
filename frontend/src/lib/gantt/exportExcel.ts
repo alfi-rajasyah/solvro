@@ -60,7 +60,7 @@ function argb(hex: string, alpha = "FF"): string {
  *
  * Critical Path column (plan §3, empty-project rule): added only when at
  * least one row in `rows` carries the mark — a project with no marked task
- * gets the exact same 6-column sheet as before the mark shipped.
+ * gets the exact same 7-column sheet as before the mark shipped.
  *
  * iTop ticket column: the task's pinned `itopTicketRef` (an id like
  * "R-000123", customer-safe). Only that one field is read from `Row.task` —

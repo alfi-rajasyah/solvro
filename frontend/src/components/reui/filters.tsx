@@ -1061,7 +1061,8 @@ function SelectOptionsPopover<T = unknown>({
               field.label || ""
             )}
             className={cn(
-              "border-input h-8 rounded-none border-0 bg-transparent! px-2 text-xs shadow-none",
+              "border-input h-8 rounded-none border-0 bg-transparent! px-2 shadow-none",
+              FILTER_TEXT,
               "focus-visible:border-border focus-visible:ring-0 focus-visible:ring-offset-0",
               open && "placeholder:text-foreground"
             )}
@@ -1128,16 +1129,16 @@ function SelectOptionsPopover<T = unknown>({
           id={`${baseId}-listbox`}
         >
           {isAsync && loading && allFilteredOptions.length === 0 ? (
-            <div className="text-muted-foreground py-2 text-center text-xs">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {context.i18n.loadingOptions ?? DEFAULT_I18N.loadingOptions}
             </div>
           ) : isAsync && error ? (
-            <div className="text-muted-foreground py-2 text-center text-xs">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {context.i18n.errorLoadingOptions ??
                 DEFAULT_I18N.errorLoadingOptions}
             </div>
           ) : allFilteredOptions.length === 0 ? (
-            <div className="text-muted-foreground py-2 text-center text-xs">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {context.i18n.noResultsFound}
             </div>
           ) : field.renderOptionList ? (
@@ -1551,7 +1552,8 @@ function FilterSubmenuContent<T = unknown>({
             }
             placeholder={i18n.placeholders.searchField(field.label || "")}
             className={cn(
-              "h-8 rounded-none border-0 bg-transparent! px-2 text-xs shadow-none",
+              "h-8 rounded-none border-0 bg-transparent! px-2 shadow-none",
+              FILTER_TEXT,
               "focus-visible:border-border focus-visible:ring-0 focus-visible:ring-offset-0",
               isActive && "placeholder:text-foreground"
             )}
@@ -1660,15 +1662,15 @@ function FilterSubmenuContent<T = unknown>({
           }}
         >
           {isAsync && loading && filteredOptions.length === 0 ? (
-            <div className="text-muted-foreground py-2 text-center text-xs">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {i18n.loadingOptions ?? DEFAULT_I18N.loadingOptions}
             </div>
           ) : isAsync && error ? (
-            <div className="text-muted-foreground py-2 text-center text-xs">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {i18n.errorLoadingOptions ?? DEFAULT_I18N.errorLoadingOptions}
             </div>
           ) : filteredOptions.length === 0 ? (
-            <div className="text-muted-foreground py-2 text-center text-xs">
+            <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
               {i18n.noResultsFound}
             </div>
           ) : field.renderOptionList ? (
@@ -2008,7 +2010,8 @@ export function Filters<T = unknown>({
                       }
                       placeholder={mergedI18n.searchFields}
                       className={cn(
-                        "h-8 rounded-none border-0 bg-transparent! px-2 text-xs shadow-none",
+                        "h-8 rounded-none border-0 bg-transparent! px-2 shadow-none",
+                        FILTER_TEXT,
                         "focus-visible:border-border focus-visible:ring-0 focus-visible:ring-offset-0",
                         activeMenu === "root" && "placeholder:text-foreground"
                       )}
@@ -2104,7 +2107,7 @@ export function Filters<T = unknown>({
                     {(() => {
                       if (filteredFields.length === 0) {
                         return (
-                          <div className="text-muted-foreground py-2 text-center text-xs">
+                          <div className={cn(FILTER_TEXT, "text-muted-foreground py-2 text-center")}>
                             {mergedI18n.noFieldsFound}
                           </div>
                         )

@@ -18,7 +18,7 @@ export function EmptyState({
 }: EmptyStateProps) {
   return (
     <Frame
-      className="[--frame-radius:var(--radius-sm)] [--frame-gap:0px] [--frame-px:--spacing(12)] [--frame-py:--spacing(12)] items-center border-dashed border-outline-variant bg-surface-container-lowest text-center"
+      className="[--frame-radius:var(--radius-sm)]! [--frame-gap:0px] [--frame-px:--spacing(12)] [--frame-py:--spacing(12)] items-center border-dashed border-outline-variant bg-surface-container-lowest text-center"
     >
       <IconTile
         aria-hidden="true"

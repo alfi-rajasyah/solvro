@@ -80,7 +80,7 @@ function OverviewBody({ data }: { data: OverviewResponse }) {
   return (
     <>
       {/* Work tiles — each is a link to the list it counts */}
-      <Frame spacing="sm" className="grid sm:grid-cols-3">
+      <Frame spacing="sm" className="grid [--frame-radius:var(--radius-sm)]! [--frame-panel-radius:var(--radius-sm)] sm:grid-cols-3">
         <Kpi
           label="Overdue"
           value={overdue}
@@ -245,7 +245,7 @@ function Kpi({ label, value, hint, icon, tone, to, ariaLabel }: KpiProps) {
   const iconColor =
     tone === "primary" ? "text-primary" : tone === "error" ? "text-error" : "text-on-surface-variant";
   return (
-    <FramePanel className="p-0 transition-colors hover:border-primary">
+    <FramePanel className="mt-0! p-0 transition-colors hover:border-primary">
       <Link
         to={to}
         aria-label={ariaLabel}
@@ -353,9 +353,9 @@ function EmptyHint({ label }: { label: string }) {
 function SkeletonGrid() {
   return (
     <>
-      <Frame spacing="sm" className="grid sm:grid-cols-3">
+      <Frame spacing="sm" className="grid [--frame-radius:var(--radius-sm)]! [--frame-panel-radius:var(--radius-sm)] sm:grid-cols-3">
         {Array.from({ length: 3 }).map((_, i) => (
-          <FramePanel key={i} className="h-24 animate-pulse" />
+          <FramePanel key={i} className="mt-0! h-24 animate-pulse" />
         ))}
       </Frame>
       <div className="h-40 animate-pulse rounded-sm bg-surface-container-low" />

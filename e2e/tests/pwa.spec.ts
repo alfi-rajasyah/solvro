@@ -56,6 +56,6 @@ test.describe("pwa", () => {
       .locator('meta[name="theme-color"]')
       .first()
       .getAttribute("content");
-    expect(themeColor).toBe("#3aae51");
+    expect(themeColor).toBe("#3aaf51");
   });
 });

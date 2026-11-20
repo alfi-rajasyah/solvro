@@ -23,14 +23,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Grant PersonalToken read to the TAM profile or add an iTop-side whoami extension; verify the code-100 path against the real install and record it. Also check there: a profile without read rights may get an empty PersonalToken result instead of an error, which shows `itop_token_not_yours` where `itop_token_unverified` would tell the admin what to fix (still fails closed).
 - **Source:** snapshot line 2048, section "iTop integration (personal tokens, ticket actions) — deferred findings (ported 2026-10-04)"; merged duplicates at snapshot lines 2233
 
-### ISS-005 · P2 · Block task comments for STAKEHOLDER and SA; built-in roles stay admin-editable
-
-- **Type:** debt · **Found:** 2026-10-22 · **Verified:** 2026-11-20 @ `cdac38f`
-- **Where:** task comment routes in backend/src/routes/tasks.ts; built-in roles in backend/prisma/seed.ts
-- **Problem:** Two product questions are unanswered: may STAKEHOLDER (project:read) and the SA role (pipeline:view) post task comments, and should built-in roles stay admin-editable (policy A) or become code-owned and read-only in the Roles UI (policy B).
-- **Why deferred / fix direction:** User decision 2026-11-20. Comment routes need task:write (or project:write); STAKEHOLDER (project:read) and SA (pipeline:view) are refused. Built-in roles stay editable (policy A), no change there.
-- **Source:** snapshot line 2368, section "Application review 2026-10-22 — remaining open items"
-
 ### ISS-009 · P3 · Secrets at rest: no AAD, no key rotation
 
 - **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-19 @ `bfae8f7`
@@ -104,13 +96,12 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 
 ## Open — Backend/API
 
-### ISS-031 · P3 · Offboarding a TAM with more than 500 projects is refused
+### ISS-203 · P3 · Offboarding cap of 5000 projects meets the 1 MB request body limit
 
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** offboardSchema in backend/src/routes/admin.ts (line ~291); project loop in backend/src/lib/offboarding.ts
-- **Problem:** The project list is capped at 500 because the per-project writes (activity events, notifications) are heavy and share the 30 s transaction timeout.
-- **Why deferred / fix direction:** Needs a measurement first: time a large handover, batch per-project writes, then raise the cap.
-- **Source:** snapshot line 293, section "Tech debt / follow-ups from recent work"
+- **Type:** watch · **Found:** 2026-11-20 · **Verified:** 2026-11-20 @ wave 9
+- **Where:** MAX_OFFBOARD_PROJECTS in backend/src/routes/admin.ts; express.json limit in backend/src/app.ts (line ~83); client_max_body_size in frontend/nginx.conf
+- **Problem:** A 5000-project handover body leaves about 140 characters of note per project on average; a larger body gets a 413.
+- **Why deferred / fix direction:** Notes are typed by hand per project, so a full-cap handover with long notes is unrealistic. Trigger: a 413 on offboarding. Then raise the JSON limit for that route only.
 
 ### ISS-033 · P3 · Three narrow task selects omit isCriticalPath
 
@@ -130,22 +121,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 
 ## Open — Frontend UI
 
-### ISS-045 · P3 · Section-color parity gap on non-Gantt surfaces (no fallback resolver)
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** section.color uses in ProjectList.tsx (line ~727), Executive.tsx (~329), TaskPanel.tsx (~728)
-- **Problem:** Uncustomized sections render vivid presets on the Gantt but legacy slate #94a3b8 in the List tab, Executive roll-up chips and the task-panel dot.
-- **Why deferred / fix direction:** Export a shared resolver from lib/gantt/palette.ts or centralize the fallback server-side in the Section query.
-- **Source:** snapshot line 383, section "Tech debt / follow-ups from recent work"
-
-### ISS-047 · P3 · Comment composer is a single-line input
-
-- **Type:** debt · **Found:** 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** CommentComposer in frontend/src/components/CommentMentions.tsx (line ~196)
-- **Problem:** Task comments are typed into a single-line input that scrolls horizontally for long text (max 5000 chars).
-- **Why deferred / fix direction:** Switch the non-note variant to an auto-growing textarea.
-- **Source:** snapshot line 506, section "Gantt GH #58 deferred findings (2026-07-24)"
-
 ### ISS-048 · P3 · Popovers can clip near scroll container bottoms
 
 - **Type:** watch · **Found:** 2026-07-25 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -162,22 +137,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Revisit if usage shows the modal is friction (Promote to task row-menu action).
 - **Source:** snapshot line 586, section "Kanban → ReUI swap — deferred findings (2026-07-27)"
 
-### ISS-052 · P3 · Palette visual polish
-
-- **Type:** debt · **Found:** 2026-07-27 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** CommandPalette.tsx (lines ~201, ~247); layout/TopBar.tsx (lines ~164, ~175)
-- **Problem:** Dead classes, a search trigger with no hover/focus affordance, and a Mac-only shortcut glyph.
-- **Why deferred / fix direction:** Delete dead classes, add hover/focus styles, show Ctrl K off macOS.
-- **Source:** snapshot line 708, section "Global search & ⌘K command palette — deferred findings (2026-07-27)"
-
-### ISS-054 · P3 · Move Overview and Executive KPI stat cards into the vendored Frame
-
-- **Type:** debt · **Found:** 2026-07-31 · **Verified:** 2026-11-20 @ `cdac38f`
-- **Where:** KPI stat cards in pages/Overview.tsx and pages/Executive.tsx
-- **Problem:** Whether the KPI stat cards should adopt the vendored Frame was never decided. Question for the user: adopt Frame for stat cards, or close this as not needed?
-- **Why deferred / fix direction:** User decision 2026-11-20. Migrate both pages' stat cards to Frame. Visible change: Delivery Gate.
-- **Source:** snapshot line 1161, section "ReUI Presentation Set — deferred findings (2026-07-31)"
-
 ### ISS-055 · P3 · Pointer-dependent initial submenu highlight
 
 - **Type:** watch · **Found:** 2026-07-31 · **Verified:** 2026-11-18 @ `4bb01a4`
@@ -185,22 +144,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Problem:** Whichever row lands under the cursor when a submenu opens wins the highlight, so a blind Enter can pick another row. Upstream hover-follows-highlight behavior.
 - **Why deferred / fix direction:** Not worth a vendored patch; revisit only if reported.
 - **Source:** snapshot line 1231, section "ReUI Filters phase — deferred findings (2026-07-31)"
-
-### ISS-056 · P3 · Filter toolbar rows: align text to the uniform 12-13px density
-
-- **Type:** debt · **Found:** 2026-07-31 · **Verified:** 2026-11-20 @ `cdac38f`
-- **Where:** filter toolbar rows in frontend/src/components/reui/filters.tsx
-- **Problem:** Migrated filter rows mix 15px, 13px and 12px text where the old dropdowns used a uniform 12-13px. Question for the user: match the old uniform density or keep the mixed scale?
-- **Why deferred / fix direction:** User decision 2026-11-20. Align every migrated filter row to the old uniform 12-13px scale.
-- **Source:** snapshot line 1255, section "ReUI Filters phase — deferred findings (2026-07-31)"
-
-### ISS-065 · P3 · useItopTicket utcOffsetMinutes isn't part of its query key
-
-- **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** useItopTicket in frontend/src/lib/queries.ts (line ~3663)
-- **Problem:** The 'x h this week' figure can read stale-by-timezone after a DST change or timezone switch until staleTime elapses.
-- **Why deferred / fix direction:** Fold utcOffsetMinutes into the key only if the shared setQueryData/invalidate sites are updated; the in-code comment accepts the staleness today.
-- **Source:** snapshot line 2180, section "iTop integration (time tracking, task-to-ticket) — deferred findings (ported 2026-10-04)"
 
 ### ISS-066 · P3 · Legacy exceptions to the binding UI-pass rules (animate-pulse, text sizes)
 
@@ -225,13 +168,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Problem:** These loading states use bare Skeletons or 'Loading…' text instead of SkeletonRegion with its 150 ms delay (DESIGN.md §2).
 - **Why deferred / fix direction:** Presentation-only; wrap each in SkeletonRegion in one pass.
 - **Source:** snapshot line 2339, section "Customer-edition port — deferred findings (2026-10-05)"
-
-### ISS-193 · P3 · The icon stylesheet now loads after the app stylesheet
-
-- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `be6a448`
-- **Where:** `@import url(...Material+Symbols...)` in frontend/src/index.css (line ~8)
-- **Problem:** Moving the icon stylesheet from a `<link>` in index.html to a CSS `@import` chains the requests (app CSS, then the Google CSS, then the font) and holds the app stylesheet on a third-party fetch on a first visit (antislop R-40; not measured). Repeat visits hit the Workbox cache.
-- **Why deferred / fix direction:** Measure first. If it matters, load the font CSS with a `<link>` again and keep the class rules in `@layer base` (they hold without the layer).
 
 ### ISS-200 · P3 · Vendored select trigger changes its border on focus
 
@@ -274,23 +210,7 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Fix contrast or delete the variants before anyone wires one up; chips stay bespoke per standing decision.
 - **Source:** snapshot line 1272, section "ReUI Data Grid phase — deferred findings (2026-08-01)"
 
-### ISS-090 · P3 · Dark primary contrast 4.4986:1: nudge the dark token to 4.5:1
-
-- **Type:** debt · **Found:** 2026-11-10 · **Verified:** 2026-11-20 @ `cdac38f`
-- **Where:** dark tokens in frontend/src/index.css (lines ~251, ~259)
-- **Problem:** Dark brand green falls 0.0014 short of 4.5:1 on hovered rows and tinted cards. Question: may the brand green be adjusted, or is the gap accepted?
-- **Why deferred / fix direction:** User decision 2026-11-20. Lighten the dark primary token by the minimum that reaches 4.5:1; sync docs/DESIGN.md.
-- **Source:** snapshot line 2420, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
-
 ## Open — Gantt
-
-### ISS-096 · P3 · #94a3b8 section-color sentinel duplicated between schema and frontend
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** DEFAULT_SECTION_COLOR in frontend/src/lib/gantt/palette.ts (line ~33); Section.color default in backend/prisma/schema.prisma (line ~561)
-- **Problem:** The frontend constants are now one, but the Prisma default must still match it byte-for-byte or legacy uncustomized sections stop being recognized as unset and render the new default.
-- **Why deferred / fix direction:** Narrowed to frontend/backend duplication. Fix: migrate to an isCustom boolean on Section or share the constant via an API field.
-- **Source:** snapshot line 392, section "Tech debt / follow-ups from recent work"
 
 ### ISS-099 · P3 · Per-bar ResizeObserver in SolvroBar
 
@@ -299,14 +219,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Problem:** One ResizeObserver per rendered bar; fine at current scale.
 - **Why deferred / fix direction:** Trigger: a project rendering low hundreds of bars at once. Then share a single observer.
 - **Source:** snapshot line 519, section "Plan B Task 9 deferred findings — ReUI Gantt swap (2026-07-25)"
-
-### ISS-105 · P3 · Gantt Critical Path ring: fixed violet in both themes
-
-- **Type:** debt · **Found:** 2026-09-02 · **Verified:** 2026-11-20 @ `cdac38f`
-- **Where:** critical-path ring in frontend/src/components/gantt-v2/SolvroBar.tsx (line ~328)
-- **Problem:** Question for the user: keep `chip-violet-text` (near-white `#ddd6fe` in dark mode, close to the selection outline) or use a fixed violet in both themes for the Gantt ring only?
-- **Why deferred / fix direction:** User decision 2026-11-20. Use CRITICAL_PATH_HEX (the export colour) for the bar ring in both themes; chips keep chip-violet-text.
-- **Source:** snapshot line 1738, section "Critical Path mark — deferred findings (2026-09-02)"
 
 ## Open — Boards & drag
 
@@ -338,6 +250,13 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 
 ## Open — iTop
 
+### ISS-204 · P3 · iTop time entry with a very large duration fails the INT4 column and is skipped
+
+- **Type:** debt · **Found:** 2026-11-20 · **Verified:** 2026-11-20 @ wave 9
+- **Where:** upsertTimeEntry in backend/src/lib/itop/sync.ts (line ~576); the itop_time_entries duration column in backend/prisma/schema.prisma
+- **Problem:** A duration that does not fit a 32-bit integer (seen in a test fixture: 166666666667) makes the upsert fail; the entry is skipped and counted every tick.
+- **Why deferred / fix direction:** No real entry is that long. Clamp or reject out-of-range durations before the upsert and log once, or widen the column if ISS-120 shows minutes vs seconds matters.
+
 ### ISS-120 · P2 · iTop go-live checks: TimeSpent, User class, lifecycle stimuli
 
 - **Type:** watch · **Found:** 2026-09-24 · **Verified:** 2026-11-20 @ `cdac38f`
@@ -361,13 +280,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Why deferred / fix direction:** Document the required profile rights in docs/CONFIGURATION.md; otherwise nothing to fix in code.
 - **Source:** snapshot line 2303, section "Customer-edition port — deferred findings (2026-10-05)"
 
-### ISS-202 · P3 · Unmapping an iTop org during a running sync can re-attach its tickets
-
-- **Type:** bug · **Found:** 2026-11-19 · **Verified:** 2026-11-19 @ `8fd10ee`
-- **Where:** setCustomerOrgMapping (clears lastFullSyncAt only when a mapping is set) and the sync's orgIdToCustomerId snapshot in backend/src/lib/itop/sync.ts
-- **Problem:** A running sync can set customerId again on tickets just detached from an unmapped customer. The next sync corrects them; no ticket moves to a wrong customer.
-- **Why deferred / fix direction:** Predates this work and self-heals. Apply the same updatedAt compare-and-set to the ticket writes, or re-read the mapping per page.
-
 ## Open — Exports & sharing
 
 ### ISS-137 · P3 · Gantt Excel/PDF downloads blocked by Chromium on http prod origin
@@ -377,14 +289,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Problem:** Chromium-family browsers show 'blocked this download' for files from a non-secure origin; the user can keep the file from the download overflow menu, so it is friction not data loss.
 - **Why deferred / fix direction:** Not fixable by changing format. Options: reach app via localhost forward/reverse proxy, HTTPS with internal CA (declined), or PDF View -> Save as PDF. Last observed 2026-07-31.
 - **Source:** snapshot line 70, section "Known bugs / inconsistencies"; merged duplicates at snapshot lines 77, 86, 92
-
-### ISS-140 · P3 · Gantt Excel export: add an iTop ticket column
-
-- **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-20 @ `cdac38f`
-- **Where:** buildTasksSheet in frontend/src/lib/gantt/exportExcel.ts (line ~87)
-- **Problem:** Question for the user: should the Gantt Excel export show a task's pinned itopTicketRef? It needs the field threaded through the Gantt row adapter; the ref is customer-safe but exports are customer-facing.
-- **Why deferred / fix direction:** User decision 2026-11-20. Thread t.itopTicketRef onto Row and add the column in buildTasksSheet (spine: Gantt exports).
-- **Source:** snapshot line 2006, section "iTop integration (webhook, task ticket links) — deferred findings (ported 2026-10-04)"
 
 ### ISS-141 · P3 · Guest page still loads Google Fonts from Google
 
@@ -402,14 +306,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Where:** list-dnd.spec.ts, kanban-dnd.spec.ts (R3 parity, mobile touch-reorder), gantt-parity.spec.ts (connector-hover case c); backend/test/taskReorderConcurrency.test.ts (line ~114)
 - **Problem:** First-attempt flakes absorbed by retries; one 30 s backend timeout in a loaded gates run.
 - **Why deferred / fix direction:** Trigger: a case fails through its retry, or a new case joins. Then tighten the wait or fixture isolation; for the backend test capture pg_locks joined to pg_stat_activity during the stall. Merged ISS-160, 167.
-
-### ISS-149 · P3 · pwa.spec.ts fails against the Vite dev server
-
-- **Type:** debt · **Found:** before 2026-07-24 · **Verified:** 2026-11-18 @ `4bb01a4`
-- **Where:** e2e/tests/pwa.spec.ts (manifest and service worker tests); frontend/vite.config.ts (vite-plugin-pwa devOptions)
-- **Problem:** vite-plugin-pwa emits the manifest link and service worker only in build mode, so pwa.spec.ts fails at BASE_URL=http://localhost:5173 and passes on the CI stack at :8080.
-- **Why deferred / fix direction:** Accepted and documented in e2e/CLAUDE.md. Fix: gate the spec on a build-mode BASE_URL or set devOptions: true.
-- **Source:** snapshot line 161, section "Known bugs / inconsistencies"
 
 ### ISS-150 · P3 · No e2e coverage for colorBy persistence across page reload
 
@@ -444,14 +340,6 @@ Last full triage: 2026-11-20 @ `cdac38f`. The file before the restructure is kep
 - **Source:** snapshot line 2425, section "Antislop audit 001 fixes — deferred findings (2026-11-10)"
 
 ## Open — Dev env & ops
-
-### ISS-171 · P3 · Delete backend/scripts/import-velora.ts; Velora stack retired
-
-- **Type:** debt · **Found:** 2026-08-15 · **Verified:** 2026-11-20 @ `cdac38f`
-- **Where:** external /opt/velora deploy (not in repo); backend/scripts/import-velora.ts still present
-- **Problem:** The remaining cutover step is retiring the standalone Velora production stack, which cannot be verified from code.
-- **Why deferred / fix direction:** User decision 2026-11-20. The standalone Velora stack is retired (user confirmation 2026-11-20). Delete the one-time import script and any package.json script entry.
-- **Source:** snapshot line 1539, section "Pipeline native port — accepted risks & deferred items (2026-08-15)"
 
 ### ISS-175 · P3 · Bundle budget headroom is about 43 kB
 
@@ -621,3 +509,19 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-008 · Resolved 2026-11-20 · Merged into ISS-011 in triage 2026-11-20 · Rate limiter is in-process only
 - ISS-173 · Resolved 2026-11-20 · Merged into ISS-011 in triage 2026-11-20 · setup.sh TRUST_PROXY default trusts every private address
 - ISS-003 · Resolved 2026-11-20 · Accepted as is by user decision 2026-11-20, documented in docs/CONFIGURATION.md §2.17 · GET /itop/services returns every organisation's services, unscoped
+- ISS-005 · Resolved 2026-11-20 · CHANGELOG "Task comment access, large offboardings, Velora import retired" · Block task comments for STAKEHOLDER and SA; built-in roles stay admin-editable
+- ISS-202 · Resolved 2026-11-20 · CHANGELOG "Task comment access, large offboardings, Velora import retired" · Unmapping an iTop org during a running sync can re-attach its tickets
+- ISS-031 · Resolved 2026-11-20 · CHANGELOG "Task comment access, large offboardings, Velora import retired" · Offboarding a TAM with more than 500 projects is refused
+- ISS-171 · Resolved 2026-11-20 · CHANGELOG "Task comment access, large offboardings, Velora import retired" · Delete backend/scripts/import-velora.ts; Velora stack retired
+- ISS-090 · Resolved 2026-11-20 · CHANGELOG "Dark primary contrast, Critical Path ring, section colours, stat cards, Excel iTop column" · Dark primary contrast 4.4986:1: nudge the dark token to 4.5:1
+- ISS-105 · Resolved 2026-11-20 · CHANGELOG "Dark primary contrast, Critical Path ring, section colours, stat cards, Excel iTop column" · Gantt Critical Path ring: fixed violet in both themes
+- ISS-140 · Resolved 2026-11-20 · CHANGELOG "Dark primary contrast, Critical Path ring, section colours, stat cards, Excel iTop column" · Gantt Excel export: add an iTop ticket column
+- ISS-045 · Resolved 2026-11-20 · CHANGELOG "Dark primary contrast, Critical Path ring, section colours, stat cards, Excel iTop column" · Section-color parity gap on non-Gantt surfaces (no fallback resolver)
+- ISS-096 · Resolved 2026-11-20 · CHANGELOG "Dark primary contrast, Critical Path ring, section colours, stat cards, Excel iTop column" · #94a3b8 section-color sentinel duplicated between schema and frontend
+- ISS-054 · Resolved 2026-11-20 · CHANGELOG "Dark primary contrast, Critical Path ring, section colours, stat cards, Excel iTop column" (Overview only; Executive has no stat cards) · Move Overview and Executive KPI stat cards into the vendored Frame
+- ISS-056 · Resolved 2026-11-20 · CHANGELOG "Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet" · Filter toolbar rows: align text to the uniform 12-13px density
+- ISS-047 · Resolved 2026-11-20 · CHANGELOG "Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet" · Comment composer is a single-line input
+- ISS-052 · Resolved 2026-11-20 · CHANGELOG "Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet" · Palette visual polish
+- ISS-065 · Resolved 2026-11-20 · CHANGELOG "Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet" · useItopTicket utcOffsetMinutes isn't part of its query key
+- ISS-149 · Resolved 2026-11-20 · CHANGELOG "Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet" · pwa.spec.ts fails against the Vite dev server
+- ISS-193 · Resolved 2026-11-20 · CHANGELOG "Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet" (preload keeps the icons layer, see frontend/index.html) · The icon stylesheet now loads after the app stylesheet

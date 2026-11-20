@@ -96,7 +96,7 @@ const THEME_HEX = {
   outline: "#9a9a97",
   outlineVariant: "#d0d0cc",
   // index.css :root --primary: 31 117 51 (light theme) — DESIGN.md's
-  // Behavioral Rules table: "Primary is Elitery Green — never blue: #3aae51
+  // Behavioral Rules table: "Primary is Elitery Green — never blue: #3aaf51
   // dark / #1f7533 light." PDF is light-background, so the light value wins.
   primary: "#1f7533",
 } as const;
