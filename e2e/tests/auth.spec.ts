@@ -192,7 +192,8 @@ test.describe("auth — sign-out clears the previous account's cached data", () 
     // cache of the tab the first account used.
     await page.getByRole("link", { name: "Projects" }).first().click();
     await expect(page).toHaveURL(/\/projects$/);
-    // Give a stale cache every chance to paint before asserting.
+    // Give a stale cache every chance to paint before asserting. Negative
+    // assertion: the absence check would pass vacuously without the window.
     await page.waitForTimeout(1000);
     await expect(page.getByText(projectName)).toHaveCount(0);
   });

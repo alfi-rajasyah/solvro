@@ -317,6 +317,8 @@ test.describe("task panel title save ordering", () => {
     await expect(dialog).toBeVisible();
     await expect(dialog.getByTestId("conflict-row")).toHaveCount(1);
     await expect(dialog.getByTestId("conflict-yours")).toHaveText(`First ${id}`);
+    // Negative assertion: proves the "yours" value is stable (and no extra PATCH
+    // fires) over a window; there is no DOM signal for "nothing happened".
     await page.waitForTimeout(1200);
     await expect(dialog.getByTestId("conflict-yours")).toHaveText(`First ${id}`);
     expect(patches.filter((p) => p.includes("First") || p.includes("Second"))).toHaveLength(1);

@@ -37,7 +37,7 @@ function stamp(): string {
 async function gotoGantt(page: Page, projectId: number, taskId?: number): Promise<void> {
   const url = taskId ? `/projects/${projectId}/gantt?task=${taskId}` : `/projects/${projectId}/gantt`;
   await page.goto(url, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
+  await expect(page.locator('[data-slot="gantt-tree-pane"] [data-gantt-row-id]').first()).toBeVisible();
 }
 
 test.describe("critical path mark — Gantt + task panel (desktop)", () => {

@@ -150,9 +150,7 @@ async function mockTicketDetail(
 
 async function openTicketPanel(page: Page, customerId: number, ref: string) {
   await page.goto(`/customers/${customerId}`, { waitUntil: "networkidle" });
-  await page.waitForTimeout(500);
   await page.getByRole("button", { name: "Tickets" }).click();
-  await page.waitForTimeout(500);
   await page.locator(`[data-testid="itop-ticket-row"]:visible[data-ref="${ref}"]`).click();
   const panel = page.getByRole("dialog", { name: "Ticket details" });
   await expect(panel).toBeVisible();
@@ -227,8 +225,7 @@ test.describe("Ticket timer", () => {
     const elapsed = panel.getByTestId("itop-timer-elapsed");
     await expect(elapsed).toBeVisible();
     await expect(elapsed).toHaveText("00:00:00");
-    await page.waitForTimeout(2200);
-    await expect(elapsed).not.toHaveText("00:00:00");
+    await expect(elapsed).not.toHaveText("00:00:00", { timeout: 10_000 });
 
     // Only ~2s really elapsed — under the backend's 1-minute floor.
     // Backdating past it (rather than waiting out a real minute) is what
@@ -308,10 +305,8 @@ test.describe("Ticket timer", () => {
     await panel.getByRole("button", { name: "Stop" }).click();
     await expect(panel.getByText("Less than a minute. Discard instead?")).toBeVisible();
     await panel.getByRole("button", { name: "Discard" }).click();
-    await page.waitForTimeout(300);
-
-    expect(postUrls, `expected no POST /time under 60s, got ${JSON.stringify(postUrls)}`).toHaveLength(0);
     await expect(panel.getByRole("button", { name: "Start timer" })).toBeVisible();
+    expect(postUrls, `expected no POST /time under 60s, got ${JSON.stringify(postUrls)}`).toHaveLength(0);
   });
 
   test("a timer past the 24h ceiling shows as expired, offering only Discard", async ({
@@ -382,11 +377,9 @@ test.describe("Ticket timer", () => {
     await loginViaUi(page);
     const panel = await openTicketPanel(page, customerId, TICKET_REF);
     await panel.getByRole("button", { name: "Start timer" }).click();
-    await expect(panel.getByTestId("itop-timer-elapsed")).toBeVisible();
-    await page.waitForTimeout(1500);
+    await expect(panel.getByTestId("itop-timer-elapsed")).not.toHaveText("00:00:00", { timeout: 10_000 });
 
     await page.reload({ waitUntil: "networkidle" });
-    await page.waitForTimeout(800);
 
     const reloadedPanel = page.getByRole("dialog", { name: "Ticket details" });
     await expect(reloadedPanel).toBeVisible();

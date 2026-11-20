@@ -73,11 +73,14 @@ test.describe("filters — duplicate-chip guard (desktop)", () => {
       if (!box) throw new Error(`${valueLabel} option not visible`);
       await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
       await page.mouse.down();
+      // Long-press gesture: the hold duration is the input, not a wait.
       await page.waitForTimeout(250);
       await page.mouse.up();
     };
 
     await addChipViaLongPress("Status", "To do");
+    // Negative assertion below (never two chips): a wrongly-added duplicate has
+    // no DOM signal, so give it a window to appear.
     await page.waitForTimeout(300);
 
     // Core invariant: exactly one "Status" chip, never two.
@@ -87,7 +90,6 @@ test.describe("filters — duplicate-chip guard (desktop)", () => {
     // equality check doesn't over-trigger and block a legitimate add for a
     // field with no existing chip.
     await addChipViaLongPress("Priority", "High");
-    await page.waitForTimeout(300);
 
     await expect(chipsFor("Status")).toHaveCount(1);
     await expect(chipsFor("Priority")).toHaveCount(1);

@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-20 — End-to-end waits, search spec, colour-by reload test
+
+- End-to-end tests: about 125 fixed-delay waits are now condition-based waits (retrying assertions, polling and response-driven checks) across 23 spec files in `e2e/tests/`. The 17 remaining fixed delays cover checks that nothing happens, gesture timing and screenshot settles, each with a comment.
+- `e2e/tests/search.spec.ts` waits for the top bar search button before pressing the palette shortcut, checks API responses and anchors the deep-link URL match.
+- `e2e/tests/gantt-legend.spec.ts` checks that the Gantt "Color by" choice survives a full page reload.
+
 ### Changed — 2026-11-20 — Filter toolbar text, comment box, search trigger, iTop ticket hours, icon stylesheet
 
 - Filter toolbar rows (field, operator, value, add button, menus and popover search) use one 13px text size, matching the older dropdowns (vendored `reui/filters.tsx`).
