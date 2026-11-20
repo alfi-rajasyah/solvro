@@ -53,7 +53,7 @@ function argb(hex: string, alpha = "FF"): string {
 
 /**
  * Builds the Tasks sheet's column defs + per-row cell values — "Section /
- * Epic / Title / Status / Priority / [Critical Path] / Start / Due". Pure
+ * Epic / Title / iTop ticket / Status / Priority / [Critical Path] / Start / Due". Pure
  * and synchronous (no ExcelJS workbook needed) so exportExcel.test.ts can
  * assert on the sheet's actual input directly — mirrors exportPdf.ts's
  * `buildTaskTable`.
@@ -61,6 +61,11 @@ function argb(hex: string, alpha = "FF"): string {
  * Critical Path column (plan §3, empty-project rule): added only when at
  * least one row in `rows` carries the mark — a project with no marked task
  * gets the exact same 6-column sheet as before the mark shipped.
+ *
+ * iTop ticket column: the task's pinned `itopTicketRef` (an id like
+ * "R-000123", customer-safe). Only that one field is read from `Row.task` —
+ * no note, comment or description text enters this sheet (Guardrails: notes
+ * never reach an export).
  *
  * Epic column (docs/archive/plans/epics-spec.md §6 last bullet, §7 T7): always
  * present, right after Section. `Task.epicId` is only ever set on a
@@ -89,6 +94,7 @@ export function buildTasksSheet(rows: Row[], epics: Epic[] = []): {
     { header: "Section", key: "section", width: 24 },
     { header: "Epic", key: "epic", width: 20 },
     { header: "Title", key: "title", width: 48 },
+    { header: "iTop ticket", key: "itopTicket", width: 14 },
     { header: "Status", key: "status", width: 14 },
     { header: "Priority", key: "priority", width: 12 },
     ...(hasCriticalPath
@@ -110,6 +116,7 @@ export function buildTasksSheet(rows: Row[], epics: Epic[] = []): {
       section: sectionName,
       epic: epicTitle,
       title: `${indent}${r.name}`,
+      itopTicket: t?.itopTicketRef ?? "",
       status: t ? TASK_STATUS_LABEL[t.status] ?? t.status : "",
       priority: t ? PRIORITY_LABEL[t.priority] ?? t.priority : "",
       ...(hasCriticalPath ? { criticalPath: r.isCriticalPath ? "Yes" : "" } : {}),

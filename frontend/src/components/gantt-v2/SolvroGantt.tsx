@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { parseISO } from "date-fns";
 import { Alert, AlertDescription } from "@/components/reui/alert";
 import {
@@ -14,6 +14,7 @@ import { fmtDateTime } from "@/lib/formatDate";
 import { useGanttExport } from "@/lib/gantt/exportContext";
 import { addDays, buildRows, rowsDateRange, startOfDay, type Row } from "@/lib/gantt/geometry";
 import {
+  CRITICAL_PATH_HEX,
   DEFAULT_SECTION_COLOR,
   legendEntries,
   resolveSectionColors,
@@ -1385,7 +1386,8 @@ export function SolvroGantt(props: SolvroGanttProps) {
                         transparent center, and the 8px box keeps the label
                         column aligned with the mode swatches above. */}
                     <span
-                      className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-inset ring-chip-violet-text"
+                      className="h-2 w-2 shrink-0 rounded-[2px] ring-1 ring-inset"
+                      style={{ "--tw-ring-color": CRITICAL_PATH_HEX } as CSSProperties}
                       aria-hidden="true"
                     />
                     <span className="truncate">{CRITICAL_PATH_LABEL}</span>

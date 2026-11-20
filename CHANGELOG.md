@@ -15,6 +15,15 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-20 — Dark primary contrast, Critical Path ring, section colours, stat cards, Excel iTop column
+
+- Dark-theme primary green moved from `#3aae51` to `#3aaf51` (`frontend/src/index.css`, `docs/DESIGN.md`) so primary text reaches 4.5:1 on hovered rows and tinted cards; `frontend/src/lib/tokenContrast.test.ts` now pins that surface in both themes.
+- The Gantt Critical Path ring and its legend swatch use the fixed export violet in both themes, so the ring no longer reads as the selection outline in dark mode (`gantt-v2/SolvroBar.tsx`, `gantt-v2/SolvroGantt.tsx`).
+- The Overview KPI tiles and the Executive summary stats use the shared Frame component (`pages/Overview.tsx`, `pages/Executive.tsx`).
+- Gantt Excel export: a new "iTop ticket" column with each task's pinned ticket reference (`lib/gantt/exportExcel.ts`).
+- Sections with no chosen colour now show the same preset colour in the List tab, the task panel and the Executive roll-up as on the Gantt, instead of grey (`resolveSectionColor` in `lib/gantt/palette.ts`).
+- A `section-color-parity` check in `.claude/scripts/gates.sh` fails when the database default for a section colour and the frontend default differ.
+
 ### Changed — 2026-11-20 — Task comment access, large offboardings, Velora import retired
 
 - Posting a task comment now needs `task:write` or `project:write` (`backend/src/routes/tasks.ts`). Read-only roles such as stakeholders and Solution Architects still read the thread but get a 403 when they post.

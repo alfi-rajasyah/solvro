@@ -21,7 +21,7 @@ colors:
     inverse-on-surface: '#232321'
     outline: '#4a4a47'
     outline-variant: '#3a3a37'
-    primary: '#3aae51'
+    primary: '#3aaf51'
     on-primary: '#0f2b16'
     primary-container: '#2d9042'
     on-primary-container: '#e8f7eb'
@@ -59,7 +59,7 @@ colors:
     on-primary: '#ffffff'
     primary-container: '#c8e6cf'
     on-primary-container: '#0f2b16'
-    inverse-primary: '#3aae51'
+    inverse-primary: '#3aaf51'
     secondary: '#5f5e57'
     on-secondary: '#ffffff'
     secondary-container: '#e0dfd8'
@@ -168,11 +168,11 @@ Every token is a CSS custom property in `index.css` (`--token-name`, space-separ
 | `inverse-on-surface` | `#232321` | `#f0ede8` | |
 | `outline` | `#4a4a47` | `#9a9a97` | emphasis borders |
 | `outline-variant` | `#3a3a37` | `#d0d0cc` | default 1px borders — the elevation primitive |
-| `primary` | `#3aae51` | `#1f7533` | Elitery Green — the only accent color. The light value holds WCAG AA (4.5:1) as text on every surface up to `surface-container-high` (hovered rows, tinted cards), pinned by `frontend/src/lib/tokenContrast.test.ts`. Dark `primary` on dark `surface-container-high` is 4.4986:1 and is deliberately not pinned (the brand green is not moved for it) |
+| `primary` | `#3aaf51` | `#1f7533` | Elitery Green — the only accent color. Both values hold WCAG AA (4.5:1) as text on every surface up to `surface-container-high` (hovered rows, tinted cards), pinned by `frontend/src/lib/tokenContrast.test.ts`. The dark value was `#3aae51` (4.4986:1 on dark `surface-container-high`) until 2026-11-20, when its green channel moved up one step to reach 4.5460:1 |
 | `on-primary` | `#0f2b16` | `#ffffff` | |
 | `primary-container` | `#2d9042` | `#c8e6cf` | |
 | `on-primary-container` | `#e8f7eb` | `#0f2b16` | |
-| `inverse-primary` | `#2d9042` | `#3aae51` | |
+| `inverse-primary` | `#2d9042` | `#3aaf51` | |
 | `secondary` | `#888780` | `#5f5e57` | inactive sidebar icons |
 | `on-secondary` | `#1a1a18` | `#ffffff` | |
 | `secondary-container` | `#323230` | `#e0dfd8` | |
@@ -188,7 +188,7 @@ Every token is a CSS custom property in `index.css` (`--token-name`, space-separ
 | `background` | `#1a1a18` | `#f9f9f7` | page-level, below `surface` |
 | `on-background` | `#f0ede8` | `#1a1a18` | |
 
-> **Contrast guard.** The light chip text tones, `primary`/`on-primary` and `warning-solid`/`on-warning` are held to WCAG AA (≥ 4.5:1) on their own background and on white by `frontend/src/lib/tokenContrast.test.ts`. `primary` as text is also pinned against `background`, `surface`, `surface-container-lowest`, `surface-container-low` and `surface-container` in both themes, and against `surface-container-high` in light only. Changing a value in `index.css` that breaks a pair fails that test.
+> **Contrast guard.** The light chip text tones, `primary`/`on-primary` and `warning-solid`/`on-warning` are held to WCAG AA (≥ 4.5:1) on their own background and on white by `frontend/src/lib/tokenContrast.test.ts`. `primary` as text is also pinned against `background`, `surface`, `surface-container-lowest`, `surface-container-low`, `surface-container` and `surface-container-high` in both themes. Changing a value in `index.css` that breaks a pair fails that test.
 
 > `tertiary-container` / `on-tertiary-container` are **not defined** as CSS variables in either theme and are **not wired** in the `@theme` block of `index.css` — do not use `bg-tertiary-container` etc.; the class will not resolve to a theme-aware color. (The pre-2026-07-21 DESIGN.md listed them; that was stale.)
 
@@ -336,7 +336,7 @@ Nothing else gets a shadow. No card shadows, no hover-lift shadows, no focus-rin
 |---|---|
 | **Sidebar is fixed-dark** | `bg-sidebar` (`#232321`) in **both** themes — a literal hex (`--color-sidebar: #232321;`) in the `@theme` block of `index.css`, not a CSS-var-routed token. The rail never flips to light, even in light mode. Its text uses `text-on-surface` / `text-on-surface-variant` resolved through a subtree `dark` pin on `Sidebar.tsx` — never slate or other palette classes. |
 | **Login always renders dark** | `Login.tsx` hard-pins the `dark` class on its root `main` regardless of the user's theme preference. Two panels from `md:` up, both resolved through the forced `.dark` scope: a left brand panel on `bg-background` (`#1a1a18`) and a right form panel on `bg-surface` (`#232321`). The brand panel keeps its original look by owner decision (2026-11-10, recorded against the antislop filter's findings on it): the "Project Operations" eyebrow, the two-line headline with one green word, three outlined uppercase pills and three decorative rings. These are sanctioned on this one screen only; don't copy them elsewhere and don't strip them here. Its copy must stay true to the product (no feature that does not exist, no version or build number that is not read from the build). The page's one `h1` is "Sign in"; the headline is a styled paragraph. Below `md:` the brand panel is hidden and the mark with a one-line description sits above the form. |
-| **Primary is Elitery Green — never blue** | `#3aae51` dark / `#1f7533` light. This is the only accent color in the app: CTAs, active nav state, focus rings, links. Blue never appears as a primary/CTA color. |
+| **Primary is Elitery Green — never blue** | `#3aaf51` dark / `#1f7533` light. This is the only accent color in the app: CTAs, active nav state, focus rings, links. Blue never appears as a primary/CTA color. |
 | **`IN_PROGRESS` chip tone is misleadingly named "blue"** | `TaskStatusChip`'s `blue` tone renders `bg-primary/10 text-primary dark:bg-primary/20` — it is **green-tinted**, not literal blue. Same for `ProjectStatusChip`'s `PLANNING`/`COMPLETED` tones, which also use the `blue` tone class. Don't "fix" this by pointing it at an actual blue token — it's intentional, per `StatusChip.tsx`. |
 | **`.ai-glow` is retired, not reserved** | Amber (`#f59e0b`) inner-border + outer glow was reserved exclusively for blueprint-generated (AI Breakdown) task cards; that concept is cancelled along with the Secure Ingestion Port. `.ai-glow` does not exist anywhere in `frontend/src/` — do not introduce it for other status highlights without a new design decision. |
 | **Icons are Material Symbols Outlined** | Loaded from Google Fonts by an `@import` in `index.css` (`opsz,wght,FILL,GRAD@24,400,0,0`), rendered with the `.material-symbols-outlined` class (its base rules restated in `@layer base` and its variation settings pinned in `index.css`). Size and display utilities on an icon apply; an icon with no size class is 24px. Design/mockup tooling that can't render icon-font ligatures (e.g. Paper canvases) must substitute inline SVGs — this does not change the in-app convention. |

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { resolveSectionColor, resolveSectionColors } from "@/lib/gantt/palette";
 import { AssigneeAvatar } from "./AssigneeAvatar";
 import { ConfirmModal } from "./ConfirmModal";
 import { CopyLinkButton } from "./CopyLinkButton";
@@ -110,6 +111,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
 
   const { data: tasks, isError: tasksFailed, refetch: refetchTasks } = useProjectTasks(projectId);
   const { data: sections } = useProjectSections(projectId);
+  const sectionColors = useMemo(() => resolveSectionColors(sections ?? []), [sections]);
   const { data: epics, isLoading: epicsLoading } = useProjectEpics(projectId);
   const { data: users } = useUsers();
   const { data: labels } = useProjectLabels(projectId);
@@ -746,7 +748,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                   {task.section && (
                     <span
                       className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: task.section.color }}
+                      style={{ backgroundColor: resolveSectionColor(sectionColors, task.section) }}
                     />
                   )}
                   <span className="text-on-surface">{sectionName}</span>
