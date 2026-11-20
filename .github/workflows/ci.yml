@@ -4,7 +4,7 @@ name: CI
 # limit that matters is the 20 jobs GitHub runs at once, and every path
 # below stays at or under 20 jobs.
 # - PR into develop: typecheck, frontend tests (two time zones), backend
-#   tests (2 shards), desktop e2e (12 shards). This is the merge gate.
+#   tests (2 shards), desktop e2e (15 shards). This is the merge gate.
 # - PR into main (the release PR from develop), push to main, manual run:
 #   the same checks, plus mobile e2e, with desktop in 8 shards and mobile in
 #   6. These runs build both images from their Dockerfiles, so the release
@@ -122,16 +122,12 @@ jobs:
   # The second run is east of UTC: the date-contract invariant (dateField.ts,
   # UTC-midnight serialization) is invisible under a UTC clock — Asia/Jakarta
   # is the zone that exposed the original walk-back bug and the only run that
-  # can catch a regression. The two runs are separate jobs so they overlap.
+  # can catch a regression. The two runs share one job and run side by side,
+  # which keeps the PR path at GitHub's 20-concurrent-job limit.
   frontend-tests:
-    name: frontend-tests (${{ matrix.tz }})
     if: github.event_name != 'pull_request' || !github.event.pull_request.draft
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        tz: [UTC, Asia/Jakarta]
     steps:
       - uses: actions/checkout@v4
 
@@ -152,11 +148,19 @@ jobs:
         run: |
           npm ci || (echo "npm ci failed, retrying once after ${NPM_CI_RETRY_SLEEP}s..." && sleep "$NPM_CI_RETRY_SLEEP" && npm ci)
 
-      - name: Run frontend test suite
+      - name: Run frontend test suite (UTC and Asia/Jakarta, side by side)
         working-directory: frontend
-        run: npm test
-        env:
-          TZ: ${{ matrix.tz }}
+        run: |
+          TZ=UTC npm test > /tmp/fe-utc.log 2>&1 &
+          utc=$!
+          TZ=Asia/Jakarta npm test > /tmp/fe-jakarta.log 2>&1 &
+          jakarta=$!
+          status=0
+          wait $utc || status=1
+          wait $jakarta || status=1
+          echo "::group::TZ=UTC"; cat /tmp/fe-utc.log; echo "::endgroup::"
+          echo "::group::TZ=Asia/Jakarta"; cat /tmp/fe-jakarta.log; echo "::endgroup::"
+          exit $status
 
   # Two shards, each with its own Postgres service, so the suite keeps its
   # one-file-at-a-time rule (vitest.config.ts, fileParallelism: false) inside
@@ -269,12 +273,13 @@ jobs:
   # One job per shard, each on its own stack and database. Each job keeps
   # Playwright's single worker: the specs share one database and assert
   # deltas against it, which two workers on one stack would race.
-  # Playwright splits the suite by spec file (fullyParallel is off), so a
-  # spec file never shares a stack with a file it was not tested beside.
-  # Splitting by test (`--fully-parallel`) was measured faster (140 s) but
-  # broke kanban-dnd.spec.ts G1/G2, which depend on the state earlier tests
-  # in the same file leave behind; it stays off until those tests are
-  # independent.
+  # `--fully-parallel` makes Playwright split the suite by test, not by spec
+  # file, so no single long file sets a floor under every shard. Inside a
+  # shard, tests still run one at a time. A spec file whose tests depend on
+  # each other's state opts out with `test.describe.configure({ mode:
+  # "default" })`, which keeps that file whole, in order, on one shard
+  # (kanban-dnd.spec.ts does: its G1/G2 cases fail when split from the
+  # tests before them).
   # Image builds:
   # - PR into develop: the frontend is built on the runner (`vite build`) and
   #   copied into an nginx image with the production nginx.conf and security
@@ -290,7 +295,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref == 'develop' && '[{"project":"desktop","shard":1,"total":12},{"project":"desktop","shard":2,"total":12},{"project":"desktop","shard":3,"total":12},{"project":"desktop","shard":4,"total":12},{"project":"desktop","shard":5,"total":12},{"project":"desktop","shard":6,"total":12},{"project":"desktop","shard":7,"total":12},{"project":"desktop","shard":8,"total":12},{"project":"desktop","shard":9,"total":12},{"project":"desktop","shard":10,"total":12},{"project":"desktop","shard":11,"total":12},{"project":"desktop","shard":12,"total":12}]' || '[{"project":"desktop","shard":1,"total":8},{"project":"desktop","shard":2,"total":8},{"project":"desktop","shard":3,"total":8},{"project":"desktop","shard":4,"total":8},{"project":"desktop","shard":5,"total":8},{"project":"desktop","shard":6,"total":8},{"project":"desktop","shard":7,"total":8},{"project":"desktop","shard":8,"total":8},{"project":"mobile","shard":1,"total":6},{"project":"mobile","shard":2,"total":6},{"project":"mobile","shard":3,"total":6},{"project":"mobile","shard":4,"total":6},{"project":"mobile","shard":5,"total":6},{"project":"mobile","shard":6,"total":6}]') }}
+        include: ${{ fromJSON(github.event_name == 'pull_request' && github.base_ref == 'develop' && '[{"project":"desktop","shard":1,"total":15},{"project":"desktop","shard":2,"total":15},{"project":"desktop","shard":3,"total":15},{"project":"desktop","shard":4,"total":15},{"project":"desktop","shard":5,"total":15},{"project":"desktop","shard":6,"total":15},{"project":"desktop","shard":7,"total":15},{"project":"desktop","shard":8,"total":15},{"project":"desktop","shard":9,"total":15},{"project":"desktop","shard":10,"total":15},{"project":"desktop","shard":11,"total":15},{"project":"desktop","shard":12,"total":15},{"project":"desktop","shard":13,"total":15},{"project":"desktop","shard":14,"total":15},{"project":"desktop","shard":15,"total":15}]' || '[{"project":"desktop","shard":1,"total":8},{"project":"desktop","shard":2,"total":8},{"project":"desktop","shard":3,"total":8},{"project":"desktop","shard":4,"total":8},{"project":"desktop","shard":5,"total":8},{"project":"desktop","shard":6,"total":8},{"project":"desktop","shard":7,"total":8},{"project":"desktop","shard":8,"total":8},{"project":"mobile","shard":1,"total":6},{"project":"mobile","shard":2,"total":6},{"project":"mobile","shard":3,"total":6},{"project":"mobile","shard":4,"total":6},{"project":"mobile","shard":5,"total":6},{"project":"mobile","shard":6,"total":6}]') }}
     env:
       ADMIN_EMAIL: qa@solvro.test
       RELEASE_PATH: ${{ !(github.event_name == 'pull_request' && github.base_ref == 'develop') }}
@@ -426,7 +431,7 @@ jobs:
         env:
           BASE_URL: http://localhost:8080
           CI: "true"
-        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }}
+        run: npx playwright test --project=${{ matrix.project }} --shard=${{ matrix.shard }}/${{ matrix.total }} --fully-parallel
 
       - name: Dump container logs on failure
         if: failure()

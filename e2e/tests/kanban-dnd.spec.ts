@@ -186,6 +186,11 @@ function cardBoxFor(page: Page, title: string) {
     .boundingBox();
 }
 
+// CI splits the suite by test (`--fully-parallel`). Several cases here (G1,
+// G2) depend on the board state the tests before them leave behind, so this
+// file opts out: its tests stay together, in order, on one shard.
+test.describe.configure({ mode: "default" });
+
 test.describe("kanban drag & drop — desktop (mouse)", () => {
   test.beforeEach(async ({ page }) => {
     test.skip(test.info().project.name !== "desktop", "mouse drag cases run on the desktop project only");
