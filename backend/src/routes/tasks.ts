@@ -749,6 +749,7 @@ tasksRouter.get(
 
 tasksRouter.post(
   "/:id/comments",
+  requireAnyPermission("task:write", "project:write"),
   validate("params", idParamSchema),
   validate("body", createCommentSchema),
   async (req, res) => {

@@ -15,6 +15,13 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-20 — Task comment access, large offboardings, Velora import retired
+
+- Posting a task comment now needs `task:write` or `project:write` (`backend/src/routes/tasks.ts`). Read-only roles such as stakeholders and Solution Architects still read the thread but get a 403 when they post.
+- Offboarding a user now hands over up to 5000 projects in one request (was 500). The per-project writes (seat changes, task and epic moves, members, notes, activity events, notifications) are batched, so a 500-project handover takes under a second instead of about 10 seconds (`backend/src/lib/offboarding.ts`, `backend/src/lib/notifications.ts`, `backend/src/lib/projectSeats.ts`, `backend/src/routes/admin.ts`). The lock order is unchanged.
+- An iTop sync that runs while a customer's organisation is unmapped no longer re-attaches that organisation's tickets: each ticket page re-reads the mapped customers under a share lock (`backend/src/lib/itop/sync.ts`).
+- Removed the one-time Velora import script `backend/scripts/import-velora.ts` and its test; the standalone Velora tracker is retired. `README.md` and `docs/CONFIGURATION.md` are updated.
+
 ### Added — 2026-11-19 — Frontend lint and test cleanups
 
 - Frontend lint: ESLint with the React hooks rules (`rules-of-hooks`, `exhaustive-deps`) via `npm run lint` in `frontend/`, run in CI. New dev dependencies: `eslint` 10.14.0, `typescript-eslint` 8.72.1, `eslint-plugin-react-hooks` 7.1.1.

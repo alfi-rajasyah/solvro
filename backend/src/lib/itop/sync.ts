@@ -934,7 +934,21 @@ export async function syncTickets(opts: { full?: boolean } = {}): Promise<SyncSu
             }
             await prisma.$transaction(
               async (tx) => {
-                for (const { key, write } of writes) {
+                // Re-read the mapping under a share lock on the mapped customer
+                // rows (ISS-202): an org unmapped since the run's snapshot must
+                // not get its tickets re-attached, and an unmap racing this page
+                // waits for the page to commit, then detaches what it wrote.
+                const live = await tx.$queryRaw<{ id: number; org: number }[]>`
+                  SELECT id, itop_org_id AS org FROM customers
+                  WHERE itop_org_id IS NOT NULL ORDER BY id FOR SHARE`;
+                const liveOrgToCustomer = new Map(live.map((c) => [c.org, c.id]));
+                for (const { key, write: prepared } of writes) {
+                  const customerId = liveOrgToCustomer.get(prepared.create.orgId) ?? null;
+                  const write = {
+                    ...prepared,
+                    create: { ...prepared.create, customerId },
+                    update: { ...prepared.update, customerId },
+                  };
                   await tx.$executeRaw`SAVEPOINT ticket_row`;
                   try {
                     await tx.itopTicket.upsert(write);

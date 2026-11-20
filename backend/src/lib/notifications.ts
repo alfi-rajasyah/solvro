@@ -180,32 +180,8 @@ export async function filterActiveUsersWhoCanSeeOpportunity(
   return visible;
 }
 
-/**
- * Creates the notifications an event triggers.
- *
- * Project-scoped events:
- *  - `assigned`: a task created or updated with an assignee (`changes.assignee.to`);
- *    a project event naming a new TAM / SA (a handoff-created project, a TAM
- *    or SA change);
- *  - `commented`: a comment on a task that has an assignee (`opts.taskAssigneeId`);
- *  - `mentioned`: `opts.mentionedUserIds` (C5c).
- * Deal-scoped events (Pipeline):
- *  - `assigned`: a deal created / updated / assigned with a PIC other than the actor;
- *  - `commented`: a note on the deal, to the PIC (`opts.picId`);
- *  - `deal_closed`: the deal closed, to the PIC;
- *  - `handed_off`: the deal handed off to a project, to the PIC;
- *  - `mentioned`: `opts.mentionedUserIds` (deal notes).
- * One notification per user per event (mention > assigned > the rest), never
- * the actor, never an inactive user or one who cannot see the project / the
- * Pipeline. Events recorded without calling this (task duplicates, bulk
- * imports, everything else) never notify. Returns the number of rows created.
- */
-export async function notifyForEvent(
-  tx: Tx,
-  event: ActivityEvent | null,
-  opts: NotifyOptions = {},
-): Promise<number> {
-  if (!event) return 0;
+/** The recipients an event notifies and why, before the actor / active / can-see filters. */
+function reasonsForEvent(event: ActivityEvent, opts: NotifyOptions): Map<number, NotificationReason> {
   const reasons = new Map<number, NotificationReason>();
   const add = (userId: number | null | undefined, reason: NotificationReason) => {
     if (userId == null || (userId === event.actorId && !opts.includeActor) || reasons.has(userId)) return;
@@ -240,7 +216,36 @@ export async function notifyForEvent(
       add(opts.taskAssigneeId, "commented");
     }
   }
+  return reasons;
+}
 
+/**
+ * Creates the notifications an event triggers.
+ *
+ * Project-scoped events:
+ *  - `assigned`: a task created or updated with an assignee (`changes.assignee.to`);
+ *    a project event naming a new TAM / SA (a handoff-created project, a TAM
+ *    or SA change);
+ *  - `commented`: a comment on a task that has an assignee (`opts.taskAssigneeId`);
+ *  - `mentioned`: `opts.mentionedUserIds` (C5c).
+ * Deal-scoped events (Pipeline):
+ *  - `assigned`: a deal created / updated / assigned with a PIC other than the actor;
+ *  - `commented`: a note on the deal, to the PIC (`opts.picId`);
+ *  - `deal_closed`: the deal closed, to the PIC;
+ *  - `handed_off`: the deal handed off to a project, to the PIC;
+ *  - `mentioned`: `opts.mentionedUserIds` (deal notes).
+ * One notification per user per event (mention > assigned > the rest), never
+ * the actor, never an inactive user or one who cannot see the project / the
+ * Pipeline. Events recorded without calling this (task duplicates, bulk
+ * imports, everything else) never notify. Returns the number of rows created.
+ */
+export async function notifyForEvent(
+  tx: Tx,
+  event: ActivityEvent | null,
+  opts: NotifyOptions = {},
+): Promise<number> {
+  if (!event) return 0;
+  const reasons = reasonsForEvent(event, opts);
   if (reasons.size === 0) return 0;
   const recipientIds = [...reasons.keys()];
   const eligible =
@@ -250,6 +255,71 @@ export async function notifyForEvent(
   const rows: Prisma.NotificationCreateManyInput[] = [];
   for (const [userId, reason] of reasons) {
     if (eligible.has(userId)) rows.push({ userId, activityEventId: event.id, reason });
+  }
+  if (rows.length === 0) return 0;
+  const { count } = await tx.notification.createMany({ data: rows });
+  return count;
+}
+
+/**
+ * `notifyForEvent` for many project-scoped events at once, in a fixed number
+ * of queries however many events there are (the offboarding handover writes one
+ * event per project). The rules are the same: reasons come from
+ * `reasonsForEvent`, and a recipient is kept only if they are an active user
+ * who can see that event's project (`canUserSeeProject`). Events without a
+ * project are ignored; use `notifyForEvent` for those.
+ */
+export async function notifyForProjectEvents(
+  tx: Tx,
+  items: { event: ActivityEvent | null; opts?: NotifyOptions }[],
+): Promise<number> {
+  const planned: { event: ActivityEvent; reasons: Map<number, NotificationReason> }[] = [];
+  for (const { event, opts } of items) {
+    if (!event || event.projectId === null) continue;
+    const reasons = reasonsForEvent(event, opts ?? {});
+    if (reasons.size > 0) planned.push({ event, reasons });
+  }
+  if (planned.length === 0) return 0;
+  const userIds = [...new Set(planned.flatMap((p) => [...p.reasons.keys()]))];
+  const projectIds = [...new Set(planned.map((p) => p.event.projectId as number))];
+  const [users, projects] = await Promise.all([
+    tx.user.findMany({
+      where: { id: { in: userIds }, active: true },
+      select: { id: true, role: { select: { roleName: true, permissions: true } } },
+    }),
+    tx.project.findMany({
+      where: { id: { in: projectIds } },
+      select: {
+        id: true,
+        tamId: true,
+        saId: true,
+        customer: { select: { tamId: true } },
+        members: { where: { userId: { in: userIds } }, select: { userId: true } },
+      },
+    }),
+  ]);
+  const userById = new Map(users.map((u) => [u.id, u]));
+  const projectById = new Map(projects.map((p) => [p.id, p]));
+  const rows: Prisma.NotificationCreateManyInput[] = [];
+  for (const { event, reasons } of planned) {
+    const project = projectById.get(event.projectId as number);
+    if (!project) continue;
+    const facts: ProjectVisibilityFacts = {
+      tamId: project.tamId,
+      saId: project.saId,
+      customerTamId: project.customer?.tamId ?? null,
+      memberIds: new Set(project.members.map((m) => m.userId)),
+    };
+    for (const [userId, reason] of reasons) {
+      const u = userById.get(userId);
+      if (!u) continue;
+      const permissions = Array.isArray(u.role.permissions)
+        ? u.role.permissions.filter((p): p is string => typeof p === "string")
+        : [];
+      if (canUserSeeProject({ sub: u.id, role: u.role.roleName, permissions }, facts)) {
+        rows.push({ userId, activityEventId: event.id, reason });
+      }
+    }
   }
   if (rows.length === 0) return 0;
   const { count } = await tx.notification.createMany({ data: rows });
