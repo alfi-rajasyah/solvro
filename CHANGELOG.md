@@ -15,6 +15,18 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-20 — Faster CI
+
+- `.github/workflows/ci.yml` finishes in about 2.5 to 3 minutes, down from a median of 11 minutes. Measured on test runs of the same pipeline before this change.
+- Each job restores `node_modules` from a cache keyed on the lock file hash and runs `npm ci` only on a miss.
+- The two frontend test runs (UTC and Asia/Jakarta) move out of `typecheck` into their own parallel `frontend-tests` jobs. The backend tests run in two shards, each with its own Postgres.
+- e2e splits the suite by test (`--fully-parallel`) instead of by spec file, in 12 desktop shards on PRs into `develop`, and 8 desktop plus 6 mobile shards on the release path. Tests inside a shard still run one at a time.
+- e2e no longer runs `playwright install-deps`. The runner image already has Chromium's libraries, and the apt step took up to 5 minutes. A launch check runs the apt step only if Chromium fails to start.
+- On PRs into `develop`, e2e builds the frontend on the runner and serves it from an nginx image with the production `nginx.conf` and security headers. The release path still builds both images from their Dockerfiles. The two image builds run in parallel.
+- A new `image-cache` job writes the Docker layer cache beside the gate. The cache export no longer slows the first e2e shard.
+- The required status checks for `main` must use the new job names, for example `e2e (desktop 1/8)`, `backend-tests (1/2)` and `frontend-tests (UTC)`.
+- `e2e/CLAUDE.md` and `e2e/fixtures/lifecycle.ts`: the sharding note now says that tests are split by test, so no test may depend on data that another test created.
+
 ### Fixed — 2026-11-20 — Hover contrast, secondary text, focus borders, badge variants
 
 - Primary buttons stay readable on hover: a new `primary-hover` utility in `frontend/src/index.css` replaces 27 hand-written hover classes. Light uses the pale green fill with dark text (1.3:1 to 11.4:1); dark uses the primary green at 90% and keeps its dark text (3.7:1 to 4.6:1).
