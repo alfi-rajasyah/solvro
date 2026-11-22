@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+## [1.0.0] - 2026-11-21
+
+The first tagged release. It contains every change below, as released to `main` in #264.
+
 ### Changed — 2026-11-20 — Faster CI
 
 - `.github/workflows/ci.yml` finishes in about 2 to 3.5 minutes, down from a median of 11 minutes (681 s over the last 200 successful runs; 132 s on a warm-cache run of this pipeline).
