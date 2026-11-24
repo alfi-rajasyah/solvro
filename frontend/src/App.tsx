@@ -10,14 +10,15 @@ import { Login } from "@/pages/Login";
 import { NotFound } from "@/pages/NotFound";
 import { Overview } from "@/pages/Overview";
 import { ProjectDetail } from "@/pages/ProjectDetail";
-import { Projects } from "@/pages/Projects";
 import { PublicShare } from "@/pages/PublicShare";
 
 // Route-level code splitting: everything except the pages a session always
-// opens first (Login, Overview, Projects, ProjectDetail's frame) loads on
-// demand, so the entry chunk stays small. The Suspense boundary lives in
-// Shell.tsx, inside the page error boundary, so a failed chunk is still caught
-// (docs/archive/plans/application-review-2026-10-22.md, F-16).
+// opens first (Login, Overview, ProjectDetail's frame) loads on demand, so the
+// entry chunk stays small. Projects went lazy when React Router 7 pushed the
+// entry chunk over its 1 MB budget (docs/ISSUES.md ISS-175). The Suspense
+// boundary lives in Shell.tsx, inside the page error boundary, so a failed
+// chunk is still caught (docs/archive/plans/application-review-2026-10-22.md,
+// F-16).
 // `lazyPage` (lib/lazyPage.ts) retries a failed chunk import once.
 const Admin = lazyPage(() => import("@/pages/Admin"), "Admin");
 const CustomerDetail = lazyPage(() => import("@/pages/CustomerDetail"), "CustomerDetail");
@@ -27,6 +28,7 @@ const Executive = lazyPage(() => import("@/pages/Executive"), "Executive");
 const Help = lazyPage(() => import("@/pages/Help"), "Help");
 const OpportunityDetail = lazyPage(() => import("@/pages/OpportunityDetail"), "OpportunityDetail");
 const Pipeline = lazyPage(() => import("@/pages/Pipeline"), "Pipeline");
+const Projects = lazyPage(() => import("@/pages/Projects"), "Projects");
 const Settings = lazyPage(() => import("@/pages/Settings"), "Settings");
 const Tasks = lazyPage(() => import("@/pages/Tasks"), "Tasks");
 const Utilization = lazyPage(() => import("@/pages/Utilization"), "Utilization");

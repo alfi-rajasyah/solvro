@@ -45,12 +45,12 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 - **Problem:** Counters are in memory per instance. Behind a public CDN with a hop count that misses it, all users share one address bucket (50 failures block sign-in for 15 min). The private-address TRUST_PROXY default lets a LAN/VPN client forge its address for the guest-link bucket and logged clientIp.
 - **Why deferred / fix direction:** Fine for the single-instance tunnel to nginx to backend deploy. Trigger: scale-out or a public CDN. Then add a shared store, a per-account fallback, and CIDR trust. Merged ISS-008, 173.
 
-### ISS-206 · P3 · Shipped frontend dependencies: 4 advisories need a major upgrade
+### ISS-206 · P3 · Shipped frontend dependency: `exceljs` carries a `uuid` advisory
 
-- **Type:** decision · **Found:** 2026-11-24 · **Verified:** 2026-11-24 @ `34aa9e3` + dependency updates
-- **Where:** `react-router-dom` 6.30.6 (frontend/package.json); `uuid` under `exceljs` 4.4.0
-- **Problem:** `npm audit --omit=dev` reports 4 moderate (was 9, 2 high, before the in-range updates of 2026-11-24). React Router's open-redirect fixes exist only in 7.18+. The only redirect from user input, Login's `from`, goes through safeRedirectPath (frontend/src/lib/safeRedirect.ts), which rejects `//`, backslashes and other origins.
-- **Question:** Upgrade to React Router 7 (a major, touches every route) now, or wait? For `exceljs`, npm offers only a downgrade to 3.4.0; wait for an upstream release.
+- **Type:** watch · **Found:** 2026-11-24 · **Verified:** 2026-11-24 @ `e279592` + dependency-majors
+- **Where:** `uuid` under `exceljs` 4.4.0 (frontend/package-lock.json)
+- **Problem:** `npm audit --omit=dev` reports 2 moderate (`exceljs`, `uuid`: missing buffer bounds check in v3/v5/v6 when a buffer is passed). Solvro calls no `uuid` API; `exceljs` uses it to name parts of the workbook it writes. React Router's advisories closed with the 7.18.6 upgrade (2026-11-24).
+- **Why deferred / fix direction:** npm offers only a downgrade to `exceljs` 3.4.0. Trigger: an `exceljs` release that moves to a fixed `uuid`. Then update in the container.
 
 ### ISS-207 · P3 · Backend zod 3 has a high memory-exhaustion advisory
 
@@ -254,20 +254,20 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ## Open — Dev env & ops
 
-### ISS-175 · P3 · Bundle budget headroom is about 20 kB
+### ISS-175 · P3 · Bundle budget headroom is about 37 kB
 
-- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-24 @ `e279592` + dependency-majors
 - **Where:** LIMIT_BYTES in frontend/scripts/check-bundle-size.mjs (line ~12)
-- **Problem:** The entry chunk is 980.44 kB against the 1000 kB budget enforced by check:bundle-size (CI run on `8774028`); headroom fell from about 43 kB to about 20 kB since 2026-10-22. Overview, Projects and ProjectDetail are still eager.
+- **Problem:** The trigger fired on 2026-11-24: React Router 7 took the entry chunk to 1001.03 kB, over the 1000 kB budget enforced by check:bundle-size. Projects went lazy, which brought it to 963.11 kB (about 37 kB headroom). Overview and ProjectDetail are still eager.
 - **Why deferred / fix direction:** Watch trigger: the budget check fails, or headroom drops under 10 kB. Then lazy-load more pages.
 - **Source:** snapshot line 2384, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-201 · P3 · Frontend dev tools: the remaining advisories need a Vite major upgrade
+### ISS-201 · P3 · PWA build plugin carries 4 moderate audit advisories with no forward fix
 
-- **Type:** decision · **Found:** 2026-11-19 · **Verified:** 2026-11-24 @ `34aa9e3` + dependency updates
-- **Where:** `vite` ^5.4.10, `vitest` ^4.1.10, `vite-plugin-pwa` ^1.3.0 in frontend/package.json
-- **Problem:** `npm audit` reports 12 (1 high, 11 moderate; was 31, 7 high, before the in-range updates of 2026-11-24). The high is `vite` 5.4.21 (path traversal in the dev server); its fix and the `esbuild` fix need Vite 6.4.4+. `vitest`/`@vitest/mocker` 4.1.12 fixes are blocked by the same upgrade: vitest 4 already declares a `vite` ^6.4 peer, and npm 10.9 crashes resolving it against Vite 5. `glob`/`minimatch`/`workbox-build` sit under `vite-plugin-pwa`, with no fix forward. All are dev or build tools and do not ship.
-- **Question:** Upgrade Vite to 6 or later (plus vitest 4.1.12) as its own change? It touches the build, the dev server, the PWA plugin and the test runner.
+- **Type:** watch · **Found:** 2026-11-19 · **Verified:** 2026-11-24 @ `e279592` + dependency-majors
+- **Where:** `glob`, `minimatch`, `workbox-build` under `vite-plugin-pwa` 1.3.0 (frontend/package-lock.json)
+- **Problem:** `npm audit` reports 4 moderate advisories in the PWA plugin's build chain (glob AbortSignal bypass, minimatch ReDoS). They run at build time only and do not ship. The high advisories (Vite 5, `esbuild`, `@vitest/mocker`) closed with the Vite 6.4.6 and vitest 4.1.12 upgrade (2026-11-24).
+- **Why deferred / fix direction:** npm offers only a downgrade to `vite-plugin-pwa` 1.1.0. Trigger: a `vite-plugin-pwa` or `workbox-build` release on fixed `glob`, or a high advisory. Then update in the container.
 
 ## Open — Docs & process
 
