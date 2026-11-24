@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-24 — Vite 6 and vitest 4.1.12
+
+- `frontend/package.json`: `vite` ^5.4.10 to ^6.4.6 and `vitest` ^4.1.10 to ^4.1.12. Vite 5 carried a high advisory (path traversal in the dev server) and an `esbuild` advisory; vitest 4.1.10 carried two `@vitest/mocker` advisories. vitest 4 already declared a `vite` ^6.4 peer, so it ran its own nested copy of Vite 8 and rolldown; it now shares the root Vite 6.
+- `frontend/package-lock.json`: npm 10.9 crashes resolving vitest's optional peer chain, so vitest was added with `--legacy-peer-deps` for that one install. `npm ci` without the flag accepts the lock file.
+- `npm audit` in `frontend/` reports no high advisory. The entry chunk grows from 980.44 kB to 984.16 kB (budget 1000 kB).
+
 ### Fixed — 2026-11-24 — Placeholder and handle contrast
 
 - Input placeholders in the comment box (`CommentMentions.tsx`), the epic panel (`EpicPanel.tsx`), the subtask input (`TaskPanel.tsx`) and the task form title and description (`TaskFormModal.tsx`) now use the full `text-on-surface-variant` token instead of 60% or 40% opacity. At 60% they read about 3.1:1 or lower, under the 4.5:1 text minimum; they now match the Login placeholders.
