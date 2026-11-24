@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-24 — Placeholder and handle contrast
+
+- Input placeholders in the comment box (`CommentMentions.tsx`), the epic panel (`EpicPanel.tsx`), the subtask input (`TaskPanel.tsx`) and the task form title and description (`TaskFormModal.tsx`) now use the full `text-on-surface-variant` token instead of 60% or 40% opacity. At 60% they read about 3.1:1 or lower, under the 4.5:1 text minimum; they now match the Login placeholders.
+- Drag handles and row icon buttons in `TaskPanel.tsx`, `SectionReorderModal.tsx`, `ProjectEpics.tsx`, `ProjectList.tsx`, `kanban-v2/cards.tsx`, `pipeline/OpportunityCard.tsx` and `itop/board/TicketCard.tsx` use the full token too. At 60% they fell to 2.8:1 on the light container surfaces, and the `ProjectList` subtask handle at 40% to about 1.9:1, under the 3:1 minimum for controls.
+
 ### Changed — 2026-11-24 — Frontend dependency updates for audit advisories
 
 - `frontend/package-lock.json`: in-range updates of `react-router-dom` (6.30.6), `dompurify` and `fflate` (under `jspdf`), `tmp` and `brace-expansion` (under `exceljs`), and the build tools `source-map-js`, `nanoid`, `browserslist`, `fast-uri`, `serialize-javascript` and `@babel/core`.

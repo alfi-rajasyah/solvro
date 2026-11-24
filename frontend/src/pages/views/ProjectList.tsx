@@ -1100,7 +1100,7 @@ function SubtaskRow({
         {...listeners}
         onClick={(e) => e.stopPropagation()}
         className={[
-          "material-symbols-outlined text-[14px] text-on-surface-variant/40",
+          "material-symbols-outlined text-[14px] text-on-surface-variant",
           canEdit ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-default",
         ].join(" ")}
         aria-label="Drag to reorder subtask"

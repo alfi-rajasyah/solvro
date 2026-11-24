@@ -325,7 +325,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
             rows={4}
             maxLength={2000}
             placeholder="What does this epic cover?"
-            className={`w-full resize-none rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-xs text-on-surface placeholder:text-on-surface-variant/60 ${FIELD_FOCUS} disabled:cursor-default`}
+            className={`w-full resize-none rounded-sm border border-outline-variant bg-surface-container-lowest px-2 py-1.5 text-xs text-on-surface placeholder:text-on-surface-variant ${FIELD_FOCUS} disabled:cursor-default`}
           />
         </div>
 
@@ -371,7 +371,7 @@ export function EpicPanel({ projectId, epicId, onClose }: EpicPanelProps) {
                 placeholder="Add story…"
                 maxLength={200}
                 aria-label="Add story"
-                className={`flex-1 border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden ${FIELD_FOCUS}`}
+                className={`flex-1 border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant focus:outline-hidden ${FIELD_FOCUS}`}
               />
             </form>
           )}

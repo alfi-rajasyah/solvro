@@ -170,13 +170,6 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ## Open — Accessibility & tokens
 
-### ISS-205 · P3 · Faint /60 and /40 secondary text on placeholders and row marks
-
-- **Type:** bug · **Found:** 2026-11-20 · **Verified:** 2026-11-24 @ `8cc44b8`
-- **Where:** `text-on-surface-variant/60` placeholders in EpicPanel.tsx (~328, ~374), TaskPanel.tsx (~1002), CommentMentions.tsx (~225); icon marks in TaskPanel.tsx, kanban-v2/cards.tsx, OpportunityCard.tsx, TicketCard.tsx, ProjectEpics.tsx, SectionReorderModal.tsx; `/40` in TaskFormModal.tsx (~437, ~634) and ProjectList.tsx (~1103)
-- **Problem:** Placeholder text at 60% (or 40%) opacity reads about 3.1:1 or lower, under 4.5:1; Login now uses the full token, so placeholders differ across the app.
-- **Why deferred / fix direction:** Outside ISS-080's named sites. Use the full `text-on-surface-variant` token for text placeholders; icons need 3:1 non-text contrast only.
-
 ## Open — Gantt
 
 ### ISS-099 · P3 · Per-bar ResizeObserver in SolvroBar
@@ -458,3 +451,4 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-151 · Resolved 2026-11-20 · CHANGELOG "End-to-end waits, search spec, colour-by reload test" · E2E fixed-timeout (waitForTimeout) convention
 - ISS-154 · Resolved 2026-11-20 · CHANGELOG "End-to-end waits, search spec, colour-by reload test" · search.spec.ts polish and listener-ready guard
 - ISS-168 · Resolved 2026-11-20 · Checked at the wave 10 Delivery Gate (docs/archive/plans/issues-wave-10.md) · Verification gap: /pipeline/:id, /share/:token and PWA banner not exercised
+- ISS-205 · Resolved 2026-11-24 · CHANGELOG "Placeholder and handle contrast" · Faint /60 and /40 secondary text on placeholders and row marks
