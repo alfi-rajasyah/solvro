@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-24 — Frontend dependency updates for audit advisories
+
+- `frontend/package-lock.json`: in-range updates of `react-router-dom` (6.30.6), `dompurify` and `fflate` (under `jspdf`), `tmp` and `brace-expansion` (under `exceljs`), and the build tools `source-map-js`, `nanoid`, `browserslist`, `fast-uri`, `serialize-javascript` and `@babel/core`.
+- `frontend/package.json`: `eslint` 10.14.0 to 10.15.0 and `typescript-eslint` 8.72.1 to 8.74.0, which carry the `minimatch` fix.
+- `npm audit` in `frontend/` now reports 12 advisories (1 high), down from 31 (7 high). For shipped code (`--omit=dev`) it reports 4 moderate, down from 9 (2 high). The rest need a major upgrade of Vite or React Router, or an upstream `exceljs` release.
+
 ## [1.0.0] - 2026-11-21
 
 The first tagged release. It contains every change below, as released to `main` in #264.
