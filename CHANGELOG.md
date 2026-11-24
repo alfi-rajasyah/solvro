@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-24 — React Router 7
+
+- `frontend/package.json`: `react-router-dom` ^6.28.0 to ^7.18.6. React Router 6 carried open-redirect and constructor-injection advisories that are fixed only in 7.18. The app uses declarative routing (`BrowserRouter`, `Routes`), which needs no code change for v7; the v6 future-flag warnings are gone from the test output.
+- `frontend/src/App.tsx`: the Projects page now loads on demand, like the other pages. React Router 7 took the entry chunk to 1001.03 kB, over its 1000 kB budget; with Projects split out it is 963.11 kB.
+- `npm audit --omit=dev` in `frontend/` now reports only the `exceljs`/`uuid` advisory (2 moderate).
+
 ### Changed — 2026-11-24 — Vite 6 and vitest 4.1.12
 
 - `frontend/package.json`: `vite` ^5.4.10 to ^6.4.6 and `vitest` ^4.1.10 to ^4.1.12. Vite 5 carried a high advisory (path traversal in the dev server) and an `esbuild` advisory; vitest 4.1.10 carried two `@vitest/mocker` advisories. vitest 4 already declared a `vite` ^6.4 peer, so it ran its own nested copy of Vite 8 and rolldown; it now shares the root Vite 6.
