@@ -45,12 +45,12 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 - **Problem:** Counters are in memory per instance. Behind a public CDN with a hop count that misses it, all users share one address bucket (50 failures block sign-in for 15 min). The private-address TRUST_PROXY default lets a LAN/VPN client forge its address for the guest-link bucket and logged clientIp.
 - **Why deferred / fix direction:** Fine for the single-instance tunnel to nginx to backend deploy. Trigger: scale-out or a public CDN. Then add a shared store, a per-account fallback, and CIDR trust. Merged ISS-008, 173.
 
-### ISS-206 · P3 · Shipped frontend dependencies carry 9 audit advisories
+### ISS-206 · P3 · Shipped frontend dependencies: 4 advisories need a major upgrade
 
-- **Type:** debt · **Found:** 2026-11-24 · **Verified:** 2026-11-24 @ `8cc44b8`
-- **Where:** `react-router-dom` (frontend/package.json); `dompurify`, `fflate` under `jspdf`; `uuid`, `tmp`, `brace-expansion` under `exceljs` (frontend/package-lock.json)
-- **Problem:** `npm audit --omit=dev` reports 9 (2 high, 7 moderate). React Router has open-redirect advisories; the only redirect from user input, Login's `from`, goes through safeRedirectPath (frontend/src/lib/safeRedirect.ts), which rejects `//`, backslashes and other origins. The rest sit in export libraries on paths Solvro does not feed with untrusted input.
-- **Why deferred / fix direction:** No exploit path found. React Router, `dompurify` and `fflate` have in-range fixes: `npm update` in the container. For `exceljs`, npm offers only a major downgrade to 3.4.0; wait for an upstream release.
+- **Type:** decision · **Found:** 2026-11-24 · **Verified:** 2026-11-24 @ `34aa9e3` + dependency updates
+- **Where:** `react-router-dom` 6.30.6 (frontend/package.json); `uuid` under `exceljs` 4.4.0
+- **Problem:** `npm audit --omit=dev` reports 4 moderate (was 9, 2 high, before the in-range updates of 2026-11-24). React Router's open-redirect fixes exist only in 7.18+. The only redirect from user input, Login's `from`, goes through safeRedirectPath (frontend/src/lib/safeRedirect.ts), which rejects `//`, backslashes and other origins.
+- **Question:** Upgrade to React Router 7 (a major, touches every route) now, or wait? For `exceljs`, npm offers only a downgrade to 3.4.0; wait for an upstream release.
 
 ### ISS-207 · P3 · Backend zod 3 has a high memory-exhaustion advisory
 
@@ -269,12 +269,12 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 - **Why deferred / fix direction:** Watch trigger: the budget check fails, or headroom drops under 10 kB. Then lazy-load more pages.
 - **Source:** snapshot line 2384, section "Application review 2026-10-22 — remaining open items"
 
-### ISS-201 · P3 · Frontend dev tools carry high audit advisories; the trigger has fired
+### ISS-201 · P3 · Frontend dev tools: the remaining advisories need a Vite major upgrade
 
-- **Type:** debt · **Found:** 2026-11-19 · **Verified:** 2026-11-24 @ `8cc44b8`
-- **Where:** `brace-expansion` under `minimatch` (eslint, typescript-eslint); `vite`, `source-map-js`, `nanoid`, `browserslist`, `fast-uri` in frontend/package-lock.json
-- **Problem:** `npm audit` in the frontend container reports 31 advisories (7 high, 22 moderate, 2 low). The watch trigger "a high advisory" fired: `brace-expansion` (DoS) is now high in the `minimatch` chain. All are dev or build tools and do not ship.
-- **Why deferred / fix direction:** Every one has an in-range fix. Run `npm update <pkg>` in the container (lock-file trap in the root CLAUDE.md; `npm audit fix` crashes in npm 10.9), then a committed lock. The `vite`/`vitest` bump touches the test runner, so give it its own commit.
+- **Type:** decision · **Found:** 2026-11-19 · **Verified:** 2026-11-24 @ `34aa9e3` + dependency updates
+- **Where:** `vite` ^5.4.10, `vitest` ^4.1.10, `vite-plugin-pwa` ^1.3.0 in frontend/package.json
+- **Problem:** `npm audit` reports 12 (1 high, 11 moderate; was 31, 7 high, before the in-range updates of 2026-11-24). The high is `vite` 5.4.21 (path traversal in the dev server); its fix and the `esbuild` fix need Vite 6.4.4+. `vitest`/`@vitest/mocker` 4.1.12 fixes are blocked by the same upgrade: vitest 4 already declares a `vite` ^6.4 peer, and npm 10.9 crashes resolving it against Vite 5. `glob`/`minimatch`/`workbox-build` sit under `vite-plugin-pwa`, with no fix forward. All are dev or build tools and do not ship.
+- **Question:** Upgrade Vite to 6 or later (plus vitest 4.1.12) as its own change? It touches the build, the dev server, the PWA plugin and the test runner.
 
 ## Open — Docs & process
 
