@@ -434,7 +434,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
               placeholder="Task title"
               aria-label="Task title"
               {...invalidProps("title")}
-              className={`flex-1 border-none bg-transparent text-lg font-bold text-on-surface outline-hidden placeholder:text-on-surface-variant/40 focus:outline-hidden ${FIELD_FOCUS}`}
+              className={`flex-1 border-none bg-transparent text-lg font-bold text-on-surface outline-hidden placeholder:text-on-surface-variant focus:outline-hidden ${FIELD_FOCUS}`}
             />
           </div>
           <FieldError id={errorId("title")} message={fieldErrors.title} />
@@ -631,7 +631,7 @@ export function TaskFormModal(props: TaskFormModalProps) {
             aria-label="Description"
             disabled={!canEdit}
             {...invalidProps("description")}
-            className={`w-full resize-y rounded-sm border bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant/40 ${FIELD_FOCUS} disabled:cursor-default ${
+            className={`w-full resize-y rounded-sm border bg-surface-container-lowest px-3 py-2 text-sm text-on-surface placeholder:text-on-surface-variant ${FIELD_FOCUS} disabled:cursor-default ${
               fieldErrors.description ? "border-error" : "border-outline-variant"
             }`}
           />

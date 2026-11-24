@@ -485,7 +485,7 @@ function TitleCell({
             onStartRename();
           }}
           aria-label={`Rename ${epic.title}`}
-          className="tap-target material-symbols-outlined shrink-0 rounded-sm p-1 text-[15px] text-on-surface-variant/60 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
+          className="tap-target material-symbols-outlined shrink-0 rounded-sm p-1 text-[15px] text-on-surface-variant hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30"
         >
           edit
         </button>
@@ -522,7 +522,7 @@ function EpicRow(props: RowProps) {
             type="button"
             onClick={onDelete}
             aria-label={`Delete ${epic.title}`}
-            className="tap-target material-symbols-outlined rounded-sm p-1 text-[17px] text-on-surface-variant/60 hover:bg-error-container hover:text-error"
+            className="tap-target material-symbols-outlined rounded-sm p-1 text-[17px] text-on-surface-variant hover:bg-error-container hover:text-error"
           >
             delete
           </button>
@@ -545,7 +545,7 @@ function EpicCard(props: RowProps) {
             type="button"
             onClick={onDelete}
             aria-label={`Delete ${epic.title}`}
-            className="tap-target material-symbols-outlined shrink-0 rounded-sm p-1 text-[17px] text-on-surface-variant/60 hover:bg-error-container hover:text-error"
+            className="tap-target material-symbols-outlined shrink-0 rounded-sm p-1 text-[17px] text-on-surface-variant hover:bg-error-container hover:text-error"
           >
             delete
           </button>

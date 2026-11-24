@@ -170,7 +170,7 @@ export function SectionReorderModal({ projectId, open, onClose }: SectionReorder
                   <button
                     type="button"
                     aria-label="Reorder section"
-                    className={`material-symbols-outlined touch-none rounded-sm p-1 text-[17px] text-on-surface-variant/60 transition-colors hover:bg-surface-container hover:text-on-surface ${FIELD_FOCUS}`}
+                    className={`material-symbols-outlined touch-none rounded-sm p-1 text-[17px] text-on-surface-variant transition-colors hover:bg-surface-container hover:text-on-surface ${FIELD_FOCUS}`}
                   />
                 }
               >

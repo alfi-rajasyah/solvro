@@ -222,7 +222,7 @@ export function CommentComposer({
             rows={1}
             maxLength={5000}
             placeholder="Write a comment…"
-            className="max-h-40 min-w-0 flex-1 resize-none border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant/60 focus:outline-hidden"
+            className="max-h-40 min-w-0 flex-1 resize-none border-none bg-transparent text-xs text-on-surface outline-hidden placeholder:text-on-surface-variant focus:outline-hidden"
           />
         )}
         {isNote ? (

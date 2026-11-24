@@ -134,7 +134,7 @@ export function OpportunityCard({
           {canDrag && (
             <KanbanItemHandle
               aria-label="Drag to reorder"
-              className={`-mx-1 -mb-1 -mt-0.5 inline-flex shrink-0 touch-none items-center rounded-sm p-1 text-on-surface-variant/60 ${FIELD_FOCUS}`}
+              className={`-mx-1 -mb-1 -mt-0.5 inline-flex shrink-0 touch-none items-center rounded-sm p-1 text-on-surface-variant ${FIELD_FOCUS}`}
             >
               <span aria-hidden="true" className="material-symbols-outlined text-[16px]">drag_indicator</span>
             </KanbanItemHandle>
