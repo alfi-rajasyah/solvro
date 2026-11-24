@@ -256,7 +256,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-175 · P3 · Bundle budget headroom is about 37 kB
 
-- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-24 @ `e279592` + dependency-majors
 - **Where:** LIMIT_BYTES in frontend/scripts/check-bundle-size.mjs (line ~12)
 - **Problem:** The trigger fired on 2026-11-24: React Router 7 took the entry chunk to 1001.03 kB, over the 1000 kB budget enforced by check:bundle-size. Projects went lazy, which brought it to 963.11 kB (about 37 kB headroom). Overview and ProjectDetail are still eager.
 - **Why deferred / fix direction:** Watch trigger: the budget check fails, or headroom drops under 10 kB. Then lazy-load more pages.
