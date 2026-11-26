@@ -15,6 +15,10 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-26 — Daily Review week navigation test
+
+- `e2e/tests/daily-review.spec.ts`: after "Previous week", the test read the week label once and could get the old value, because the URL changes before the label re-renders. It failed on its first attempt in CI on 2026-11-24 and passed on retry. The check now waits with a retrying assertion until the label differs from the current week.
+
 ### Changed — 2026-11-24 — React Router 7
 
 - `frontend/package.json`: `react-router-dom` ^6.28.0 to ^7.18.6. React Router 6 carried open-redirect and constructor-injection advisories that are fixed only in 7.18. The app uses declarative routing (`BrowserRouter`, `Routes`), which needs no code change for v7; the v6 future-flag warnings are gone from the test output.
