@@ -2,7 +2,7 @@
 
 Open issues, sorted by area and then by severity. Each issue has an ID (`ISS-NNN`) that never changes and is never reused. Code comments and plans cite an issue by its ID.
 
-Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kept verbatim at `docs/archive/ISSUES-2026-11-18-phase-log.md`; the mapping from every old entry to its ID, or to the reason it closed, is the ledger in `docs/archive/plans/issues-restructure.md`.
+Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kept verbatim at `docs/archive/ISSUES-2026-11-18-phase-log.md`; the mapping from every old entry to its ID, or to the reason it closed, is the ledger in `docs/archive/plans/issues-restructure.md`.
 
 ## How to use this file
 
@@ -17,7 +17,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-002 · P2 · Token-ownership check: residual risk on some iTop installs
 
-- **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** PUT /itop/me/token ownership check in backend/src/routes/itopUser.ts (PersonalToken read, line ~215)
 - **Problem:** On installs where a profile can read other users' PersonalToken rows (over-readable), a foreign token that can read Persons still passes the ownership check (impersonation with a stolen credential, not escalation). An unreadable PersonalToken class is refused since ISS-004 closed (fail closed).
 - **Why deferred / fix direction:** Grant PersonalToken read to the TAM profile or add an iTop-side whoami extension; verify the code-100 path against the real install and record it. Also check there: a profile without read rights may get an empty PersonalToken result instead of an error, which shows `itop_token_not_yours` where `itop_token_unverified` would tell the admin what to fix (still fails closed).
@@ -25,14 +25,14 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-009 · P3 · Secrets at rest: no AAD, no key rotation
 
-- **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** debt · **Found:** 2026-10-04 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** seal/open in backend/src/lib/secretBox.ts
 - **Problem:** No additional data binds a sealed value to its column, and rotating SECRETS_KEY makes every sealed value unreadable until re-entered. Both need DB write access to exploit. The tag-length half was fixed on 2026-11-19 (16-byte tags required).
 - **Why deferred / fix direction:** Bind AAD per column and add a key id for rotation; both need a read-old/write-new migration of stored secrets.
 
 ### ISS-010 · P3 · GET /users still returns email to every project:read / pipeline:view caller
 
-- **Type:** debt · **Found:** 2026-10-06 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** debt · **Found:** 2026-10-06 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** GET /users in backend/src/routes/users.ts (lines ~12-45)
 - **Problem:** Pickers need the email to tell people apart, so it goes to every caller with those permissions. The PENDING exposure (M2) is closed by the gate.
 - **Why deferred / fix direction:** Minimising further needs a picker-specific response shape. Low priority.
@@ -40,21 +40,21 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-011 · P3 · Rate limits and client address depend on the proxy topology
 
-- **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** createRateLimiter in backend/src/http/rateLimit.ts; assertSignInAllowed in routes/auth.ts (line ~56); TRUST_PROXY default written by setup.sh (docs/CONFIGURATION.md §2.13)
 - **Problem:** Counters are in memory per instance. Behind a public CDN with a hop count that misses it, all users share one address bucket (50 failures block sign-in for 15 min). The private-address TRUST_PROXY default lets a LAN/VPN client forge its address for the guest-link bucket and logged clientIp.
 - **Why deferred / fix direction:** Fine for the single-instance tunnel to nginx to backend deploy. Trigger: scale-out or a public CDN. Then add a shared store, a per-account fallback, and CIDR trust. Merged ISS-008, 173.
 
 ### ISS-206 · P3 · Shipped frontend dependency: `exceljs` carries a `uuid` advisory
 
-- **Type:** watch · **Found:** 2026-11-24 · **Verified:** 2026-11-24 @ `e279592` + dependency-majors
+- **Type:** watch · **Found:** 2026-11-24 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** `uuid` under `exceljs` 4.4.0 (frontend/package-lock.json)
 - **Problem:** `npm audit --omit=dev` reports 2 moderate (`exceljs`, `uuid`: missing buffer bounds check in v3/v5/v6 when a buffer is passed). Solvro calls no `uuid` API; `exceljs` uses it to name parts of the workbook it writes. React Router's advisories closed with the 7.18.6 upgrade (2026-11-24).
 - **Why deferred / fix direction:** npm offers only a downgrade to `exceljs` 3.4.0. Trigger: an `exceljs` release that moves to a fixed `uuid`. Then update in the container.
 
 ### ISS-207 · P3 · Backend zod 3 has a high memory-exhaustion advisory
 
-- **Type:** debt · **Found:** 2026-11-24 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** debt · **Found:** 2026-11-24 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** `zod` ^3.23.8 in backend/package.json; express.json limit in backend/src/app.ts (line ~83)
 - **Problem:** `npm audit --omit=dev` in backend reports 1 high: validation of oversized constrained collections can exhaust memory. The 1 MB body limit (app and nginx) caps the input size, so the exposure is bounded.
 - **Why deferred / fix direction:** The fix is zod 4, a major upgrade that touches every route schema. Plan it as its own change; until then keep the 1 MB limit.
@@ -63,7 +63,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-013 · P2 · GET /users is unpaginated
 
-- **Type:** debt · **Found:** 2026-07-27 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** debt · **Found:** 2026-07-27 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** GET / handler in backend/src/routes/users.ts (line ~15)
 - **Problem:** Every user is returned and rendered as an <option> in the assignee select.
 - **Why deferred / fix direction:** Paginate or add search-filter/cap to the endpoint and pickers.
@@ -71,7 +71,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-014 · P2 · GET /tasks has a 200-row window
 
-- **Type:** bug · **Found:** 2026-07-27 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** bug · **Found:** 2026-07-27 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** GET / handler in backend/src/routes/tasks.ts (line ~328)
 - **Problem:** On a large DB the /tasks page silently shows only the first 200 rows; only the count line tells the user.
 - **Why deferred / fix direction:** Add project/customer/date filters or real pagination.
@@ -79,7 +79,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-018 · P3 · ensureTaskVisible adds a second DB round-trip per task mutation
 
-- **Type:** watch · **Found:** before 2026-07-24 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** before 2026-07-24 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** ensureTaskVisible in backend/src/lib/visibility.ts (line ~129)
 - **Problem:** Visibility check then write costs two round-trips; Prisma update accepts only a unique where so the filter cannot be folded in.
 - **Why deferred / fix direction:** Trigger: profiling against the sub-200ms NFR. Then use updateMany with a visibility filter and inspect the count.
@@ -87,7 +87,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-019 · P3 · pg_trgm GIN index for /search
 
-- **Type:** watch · **Found:** 2026-07-27 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-07-27 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** ILIKE queries in backend/src/routes/search.ts
 - **Problem:** Seq scans are fine today (0.6-2.6ms at 4k tasks) but grow linearly.
 - **Why deferred / fix direction:** Trigger: task rows near 50k or /search p95 above 100ms. Schema change is ask-first.
@@ -95,7 +95,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-020 · P3 · GET /notes/recent has no index leading with noteDate
 
-- **Type:** watch · **Found:** 2026-08-31 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-08-31 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** GET /recent in backend/src/routes/notes.ts (line ~61)
 - **Problem:** The route range-scans project and customer notes by noteDate with no index leading on it, so it plans a seq scan. Fast at dev volume.
 - **Why deferred / fix direction:** Add @@index([noteDate]) on both models via migration when volume grows (about 10k notes a year is the stated horizon).
@@ -103,7 +103,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-023 · P3 · Activity feed orders by id while the index is (project_id, created_at desc)
 
-- **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** activity list query in backend/src/lib/activity.ts (line ~278); ActivityEvent indexes in backend/prisma/schema.prisma (line ~360)
 - **Problem:** Ordering by id does not match the created_at index; measured under 1 ms at 200k rows so no action needed now.
 - **Why deferred / fix direction:** Add a (project_id, id desc) index only if feed latency ever matters (trigger: slow feed query at larger row counts).
@@ -113,14 +113,14 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-203 · P3 · Offboarding cap of 5000 projects meets the 1 MB request body limit
 
-- **Type:** watch · **Found:** 2026-11-20 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-11-20 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** MAX_OFFBOARD_PROJECTS in backend/src/routes/admin.ts; express.json limit in backend/src/app.ts (line ~83); client_max_body_size in frontend/nginx.conf
 - **Problem:** A 5000-project handover body leaves about 140 characters of note per project on average; a larger body gets a 413.
 - **Why deferred / fix direction:** Notes are typed by hand per project, so a full-cap handover with long notes is unrealistic. Trigger: a 413 on offboarding. Then raise the JSON limit for that route only.
 
 ### ISS-033 · P3 · Three narrow task selects omit isCriticalPath
 
-- **Type:** watch · **Found:** 2026-09-02 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-09-02 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** task selects in backend/src/routes/dailyReview.ts (~237), routes/search.ts (~58), lib/portfolio.ts (~34)
 - **Problem:** Daily Review, global search and the portfolio roll-up select tasks without isCriticalPath, so the mark cannot be shown there.
 - **Why deferred / fix direction:** Not needed today; widen the three selects only if the mark is ever surfaced on those surfaces.
@@ -128,7 +128,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-036 · P3 · CORS config has no exposedHeaders (X-Total-Count)
 
-- **Type:** watch · **Found:** 2026-09-29 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-09-29 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** cors() in backend/src/app.ts (line ~62)
 - **Problem:** Cross-origin callers cannot read X-Total-Count; the same-origin /api proxy is unaffected.
 - **Why deferred / fix direction:** Add exposedHeaders: ['X-Total-Count'] only if the API is ever called cross-origin.
@@ -138,7 +138,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-048 · P3 · Popovers can clip near scroll container bottoms
 
-- **Type:** watch · **Found:** 2026-07-25 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-07-25 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** absolute-positioned dropdowns in List rows, Kanban column menu, Risks selects
 - **Problem:** Absolute-positioned popovers near the bottom of internally scrolling containers can be clipped instead of flipping.
 - **Why deferred / fix direction:** Revisit if a user reports it; fix by portalling the popovers.
@@ -146,7 +146,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-050 · P3 · No board-adjacent subtask promote/re-parent
 
-- **Type:** watch · **Found:** 2026-07-27 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-07-27 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** TaskPanel.tsx; TaskFormModal Parent field (line ~589)
 - **Problem:** Promoting or re-parenting a subtask requires the modal round-trip.
 - **Why deferred / fix direction:** Revisit if usage shows the modal is friction (Promote to task row-menu action).
@@ -154,7 +154,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-055 · P3 · Pointer-dependent initial submenu highlight
 
-- **Type:** watch · **Found:** 2026-07-31 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-07-31 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** submenu highlight in frontend/src/components/reui/filters.tsx (lines ~1496, 1521)
 - **Problem:** Whichever row lands under the cursor when a submenu opens wins the highlight, so a blind Enter can pick another row. Upstream hover-follows-highlight behavior.
 - **Why deferred / fix direction:** Not worth a vendored patch; revisit only if reported.
@@ -162,7 +162,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-068 · P3 · Filters popover keeps stealing focus after a filter is chosen
 
-- **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-09-30 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** Filters popover (vendored filters component) on /tasks; workaround in e2e/tests/task-conflict.spec.ts (openEditForm, line ~326)
 - **Problem:** After picking a filter and pressing Escape, the popover's focus manager pulls focus back into its search input for a short time, so quick typing into a task form can land in the wrong field.
 - **Why deferred / fix direction:** Not reproduced in code review; investigate the popover close/focus-return path if users report it.
@@ -174,7 +174,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-099 · P3 · Per-bar ResizeObserver in SolvroBar
 
-- **Type:** watch · **Found:** 2026-07-25 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-07-25 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** useLabelFits in frontend/src/components/gantt-v2/SolvroBar.tsx (line ~105)
 - **Problem:** One ResizeObserver per rendered bar; fine at current scale.
 - **Why deferred / fix direction:** Trigger: a project rendering low hundreds of bars at once. Then share a single observer.
@@ -184,7 +184,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-109 · P3 · Vendored Kanban: drop on displaced card can cancel a one-slot move
 
-- **Type:** watch · **Found:** 2026-07-27 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-07-27 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** same-container branch in frontend/src/components/reui/kanban.tsx (lines ~403, ~527)
 - **Problem:** handleDragEnd recomputes indexes against the already-previewed order, so a precise drop can undo the preview move. Not reproduced under a fixed e2e assertion.
 - **Why deferred / fix direction:** Dogfood watch only; revisit if a user reports a lost reorder.
@@ -192,7 +192,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-110 · P3 · TaskPanel subtask drag may flicker back before reorder commits
 
-- **Type:** watch · **Found:** 2026-07-30 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-07-30 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** onValueChange no-op in components/TaskPanel.tsx (line ~856)
 - **Problem:** Subtask list is derived from the tasks query, so the DOM keeps the pre-drop order until the optimistic update lands. A snap-back flicker is possible in that window.
 - **Why deferred / fix direction:** Only act if the flicker is seen in practice; direction is a local order mirror like SectionReorderModal.
@@ -202,7 +202,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-118 · P3 · DealCard reads the full deal list client-side
 
-- **Type:** watch · **Found:** 2026-08-15 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-08-15 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** DealCardInner in frontend/src/components/DealCard.tsx (line ~82)
 - **Problem:** Every project Overview tab loads the whole opportunity list to find one deal. Fine at hundreds of deals.
 - **Why deferred / fix direction:** Revisit at the PRD's ~2k-deal trigger, e.g. with a by-project endpoint.
@@ -212,14 +212,14 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-120 · P2 · iTop go-live checks: TimeSpent, User class, lifecycle stimuli
 
-- **Type:** watch · **Found:** 2026-09-24 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-09-24 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** ITOP_TIME_SPENT_* in backend/src/lib/itop/types.ts; syncTimeEntries / upsertTimeEntry in lib/itop/sync.ts; user matching in routes/itopUser.ts; TRANSITIONS in frontend/src/components/itop/board/dropMapper.ts
 - **Problem:** Six assumptions are unverified on the real install: TimeSpent duration in seconds (wrong by 60x if minutes); the TimeSpent.ticket_ref name and writability; the application token cannot read User, so User.itopUserId stays unset and time logging refuses; the drop graph assumes default stimuli; Time Tracking is not bundled with iTop Community; blank-duration entries are skipped every tick.
 - **Why deferred / fix direction:** Blocks go-live, not code. Install Time Tracking from iTop Hub, run the TimeSpent probes, check User read rights and the state machine, then flip the constants or adjust the graph. Merged ISS-121, 122, 125, 127, 135.
 
 ### ISS-126 · P3 · Mobile iTop board is a single stacked column with touch drag
 
-- **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** 2026-10-04 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** KanbanBoard grid in frontend/src/components/itop/board/TicketBoard.tsx (line ~263)
 - **Problem:** Below md the five columns stack vertically with touch drag; long scroll to a distant column and touch precision are unevaluated.
 - **Why deferred / fix direction:** Evaluate on a real phone before treating it as the phone-usable Board.
@@ -229,7 +229,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-137 · P3 · Gantt Excel/PDF downloads blocked by Chromium on http prod origin
 
-- **Type:** watch · **Found:** before 2026-07-24 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** watch · **Found:** before 2026-07-24 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** deployment origin (http://solvro.elitery.local), download helpers in frontend/src/lib/gantt/exportExcel.ts and exportPdf.ts
 - **Problem:** Chromium-family browsers show 'blocked this download' for files from a non-secure origin; the user can keep the file from the download overflow menu, so it is friction not data loss.
 - **Why deferred / fix direction:** Not fixable by changing format. Options: reach app via localhost forward/reverse proxy, HTTPS with internal CA (declined), or PDF View -> Save as PDF. Last observed 2026-07-31.
@@ -237,7 +237,7 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-141 · P3 · Guest page still loads Google Fonts from Google
 
-- **Type:** debt · **Found:** 2026-09-30 · **Verified:** 2026-11-24 @ `8cc44b8`
+- **Type:** debt · **Found:** 2026-09-30 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** frontend/index.html (lines 13-20), served at /share/<token> via frontend/nginx.conf
 - **Problem:** A guest opening a share link makes their browser contact Google; Referrer-Policy: no-referrer keeps the token out of those requests.
 - **Why deferred / fix direction:** Self-host the fonts; deferred because it changes the whole app shell.
@@ -247,16 +247,16 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-145 · P2 · Flaky e2e drag specs and backend concurrency test
 
-- **Type:** watch · **Found:** 2026-07-28 · **Verified:** 2026-11-24 @ `8cc44b8`
-- **Where:** list-dnd.spec.ts, kanban-dnd.spec.ts (R3 parity, mobile touch-reorder), gantt-parity.spec.ts (connector-hover case c); backend/test/taskReorderConcurrency.test.ts (line ~114)
-- **Problem:** First-attempt flakes absorbed by retries; one 30 s backend timeout in a loaded gates run.
-- **Why deferred / fix direction:** Trigger: a case fails through its retry, or a new case joins. Then tighten the wait or fixture isolation; for the backend test capture pg_locks joined to pg_stat_activity during the stall. Merged ISS-160, 167.
+- **Type:** debt · **Found:** 2026-07-28 · **Verified:** 2026-11-26 @ `0195722`
+- **Where:** list-dnd.spec.ts, kanban-dnd.spec.ts (R3 parity, mobile touch-reorder), gantt-parity.spec.ts (connector-hover case c), daily-review.spec.ts (week navigation, line ~367); backend/test/taskReorderConcurrency.test.ts (line ~114)
+- **Problem:** First-attempt flakes absorbed by retries; one 30 s backend timeout in a loaded gates run. The new-case trigger fired on 2026-11-24 (CI run 45373567210): after "Previous week" the spec reads the `Week N` label once with `textContent()` and gets the old "Week 48", because the URL updates before the label re-renders.
+- **Why deferred / fix direction:** Daily Review: replace the one-shot read with a retrying `expect(locator).not.toHaveText(currentWeekLabel)`. Others: tighten the wait or fixture isolation when a case fails through its retry; for the backend test capture pg_locks joined to pg_stat_activity during the stall. Merged ISS-160, 167.
 
 ## Open — Dev env & ops
 
 ### ISS-175 · P3 · Bundle budget headroom is about 37 kB
 
-- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-24 @ `e279592` + dependency-majors
+- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** LIMIT_BYTES in frontend/scripts/check-bundle-size.mjs (line ~12)
 - **Problem:** The trigger fired on 2026-11-24: React Router 7 took the entry chunk to 1001.03 kB, over the 1000 kB budget enforced by check:bundle-size. Projects went lazy, which brought it to 963.11 kB (about 37 kB headroom). Overview and ProjectDetail are still eager.
 - **Why deferred / fix direction:** Watch trigger: the budget check fails, or headroom drops under 10 kB. Then lazy-load more pages.
@@ -264,10 +264,17 @@ Last full triage: 2026-11-24 @ `8cc44b8`. The file before the restructure is kep
 
 ### ISS-201 · P3 · PWA build plugin carries 4 moderate audit advisories with no forward fix
 
-- **Type:** watch · **Found:** 2026-11-19 · **Verified:** 2026-11-24 @ `e279592` + dependency-majors
+- **Type:** watch · **Found:** 2026-11-19 · **Verified:** 2026-11-26 @ `0195722`
 - **Where:** `glob`, `minimatch`, `workbox-build` under `vite-plugin-pwa` 1.3.0 (frontend/package-lock.json)
 - **Problem:** `npm audit` reports 4 moderate advisories in the PWA plugin's build chain (glob AbortSignal bypass, minimatch ReDoS). They run at build time only and do not ship. The high advisories (Vite 5, `esbuild`, `@vitest/mocker`) closed with the Vite 6.4.6 and vitest 4.1.12 upgrade (2026-11-24).
 - **Why deferred / fix direction:** npm offers only a downgrade to `vite-plugin-pwa` 1.1.0. Trigger: a `vite-plugin-pwa` or `workbox-build` release on fixed `glob`, or a high advisory. Then update in the container.
+
+### ISS-208 · P3 · Backend test toolchain carries 6 dev-only audit advisories with in-range fixes
+
+- **Type:** debt · **Found:** 2026-11-26 · **Verified:** 2026-11-26 @ `0195722`
+- **Where:** `vitest` ^4.1.10 in backend/package.json (installed 4.1.10, with `vite` 8.1.3, `postcss`, `nanoid`, `source-map-js` under it; backend/package-lock.json)
+- **Problem:** `npm audit` in backend reports 4 high (`vite` 8.1.3 dev-server file serving and `launch-editor`, `postcss` source-map read, `nanoid`, `source-map-js`) and 2 moderate (`vitest`, `@vitest/mocker` mock-registration path traversal and code injection). All are test-time only and do not ship; `--omit=dev` shows only ISS-207. The frontend took vitest 4.1.12 on 2026-11-24; the backend did not.
+- **Why deferred / fix direction:** npm reports fixes inside the current ranges. Update `vitest` to 4.1.12 or later in the backend container, one package at a time (root trap: npm 10.9 `edgesOut` crash), then confirm with `npm ci --dry-run`.
 
 ## Open — Docs & process
 
