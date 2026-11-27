@@ -183,14 +183,6 @@ Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kep
 - **Why deferred / fix direction:** Dogfood watch only; revisit if a user reports a lost reorder.
 - **Source:** snapshot line 610, section "Kanban → ReUI swap — deferred findings (2026-07-27)"
 
-### ISS-110 · P3 · TaskPanel subtask drag may flicker back before reorder commits
-
-- **Type:** watch · **Found:** 2026-07-30 · **Verified:** 2026-11-26 @ `0195722`
-- **Where:** onValueChange no-op in components/TaskPanel.tsx (line ~856)
-- **Problem:** Subtask list is derived from the tasks query, so the DOM keeps the pre-drop order until the optimistic update lands. A snap-back flicker is possible in that window.
-- **Why deferred / fix direction:** Only act if the flicker is seen in practice; direction is a local order mirror like SectionReorderModal.
-- **Source:** snapshot line 1064, section "Sortable reorder (sections + subtasks) — deferred findings (2026-07-30)"
-
 ## Open — Pipeline
 
 ### ISS-118 · P3 · DealCard reads the full deal list client-side
@@ -442,3 +434,4 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-209 · Resolved 2026-11-27 · CHANGELOG "Holidays default year" · GET /holidays default year is fixed when the server starts
 - ISS-210 · Resolved 2026-11-27 · CHANGELOG "Current zod 4 APIs in the backend" · Backend schemas still use APIs that zod 4 deprecates
 - ISS-175 · Resolved 2026-11-27 · CHANGELOG "Smaller first download of the web app" · Bundle budget headroom is about 37 kB
+- ISS-110 · Resolved 2026-11-27 · CHANGELOG "Subtask reorder in the task panel" · TaskPanel subtask drag may flicker back before reorder commits

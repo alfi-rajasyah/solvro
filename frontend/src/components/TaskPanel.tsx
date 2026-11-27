@@ -131,6 +131,20 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
     // global (position asc, id asc) sort surviving the filter() above.
     .sort((a, b) => a.position - b.position || a.id - b.id);
   const { done: subtasksDone, total: subtasksTotal } = countTasks(subtasks);
+  // The order a subtask drop asked for, held until its PATCH settles
+  // (docs/ISSUES.md ISS-110). `useUpdateTask`'s onMutate awaits cancelQueries
+  // before it writes the re-packed order to the cache, so without this the list
+  // renders the pre-drop order for at least one frame after the drop. Ids the
+  // drop did not know (a subtask added meanwhile) keep their cache order at the
+  // end; a failed PATCH clears it, so the list falls back to the restored cache.
+  const [dropOrder, setDropOrder] = useState<number[] | null>(null);
+  const displaySubtasks = useMemo(() => {
+    if (dropOrder === null) return subtasks;
+    const rank = new Map(dropOrder.map((id, i) => [id, i]));
+    return [...subtasks].sort(
+      (a, b) => (rank.get(a.id) ?? dropOrder.length) - (rank.get(b.id) ?? dropOrder.length),
+    );
+  }, [subtasks, dropOrder]);
 
   // Max depth is 1 (backend/src/lib/taskOrdering.ts's assertValidParent), so a
   // task with a parent can never have subtasks of its own — `isSubtask` is what
@@ -215,6 +229,7 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
     setEditingSection(false);
     setEditingEpic(false);
     setEditingSubtaskId(null);
+    setDropOrder(null);
     setMenuOpen(false);
     setStatusMenuOpen(false);
     setError(null);
@@ -847,22 +862,26 @@ export function TaskPanel({ projectId, taskId, onOpenTask, onClose }: TaskPanelP
                 Subtasks {subtasks.length > 0 && `${subtasksDone}/${subtasksTotal}`}
               </p>
               <Sortable
-                value={subtasks}
-                // No-op: `subtasks` is derived from the tasks query, not local
-                // state. `onValueCommit` below fires the single PATCH, and
-                // `useUpdateTask`'s onMutate optimistically re-packs the query
-                // cache (reorderTasksLocally) — the derived array picks up the
-                // new order on the resulting re-render, no local mirror needed.
-                onValueChange={() => {}}
+                value={displaySubtasks}
+                // `onValueChange` fires in the same drop handler as the commit,
+                // so the drop order shows on the first render after the drop.
+                // `onValueCommit` fires the single PATCH; `useUpdateTask`'s
+                // onMutate then re-packs the query cache (reorderTasksLocally).
+                onValueChange={(next) => setDropOrder(next.map((s) => s.id))}
                 getItemValue={(s) => String(s.id)}
                 onValueCommit={(_value, meta) => {
                   const moved = meta.previousValue[meta.activeIndex];
                   if (!moved) return;
-                  updateTask.mutate({ id: moved.id, patch: { position: meta.overIndex } });
+                  // Mutate-level callbacks fire for the latest call only, which
+                  // is the one whose order `dropOrder` holds.
+                  updateTask.mutate(
+                    { id: moved.id, patch: { position: meta.overIndex } },
+                    { onSettled: () => setDropOrder(null) },
+                  );
                 }}
                 render={<div className="space-y-0.5" />}
               >
-                {subtasks.map((s) => (
+                {displaySubtasks.map((s) => (
                   <SortableItem
                     key={s.id}
                     value={String(s.id)}

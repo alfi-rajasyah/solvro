@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-27 — Subtask reorder in the task panel
+
+- `frontend/src/components/TaskPanel.tsx`: after a subtask is dragged to a new place in the task panel, the list now keeps the new order until the save finishes. Before, the list could show the old order for a moment, because the saved order reaches the task list only after a short wait. If the save fails, the list goes back to the saved order.
+- `e2e/tests/kanban-dnd.spec.ts`: a new case holds the save, checks that the list shows the new order, then fails the save and checks that the list goes back.
+
 ### Changed — 2026-11-27 — Smaller first download of the web app
 
 - `frontend/src/App.tsx`: the Overview page and the project page frame (`ProjectDetail`) now load on demand, like the other pages. The main script that every visit downloads drops from 963 kB to 667 kB, and the 1 MB budget checked by `npm run check:bundle-size` has about 333 kB of headroom again. Opening Overview or a project now fetches one extra small file (12 kB and 65 kB).
