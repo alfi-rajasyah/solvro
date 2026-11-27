@@ -363,8 +363,9 @@ test.describe("Daily Review v2", () => {
     } else {
       await expect(page).not.toHaveURL(new RegExp(`week=${currentWeekKey}(?:&|$)`));
     }
-    const prevWeekLabel = (await page.getByText(/^Week \d+$/).textContent())?.trim();
-    expect(prevWeekLabel).not.toBe(currentWeekLabel);
+    // The URL updates before the label re-renders, so assert with a retrying
+    // matcher; a one-shot textContent() read can still see the old week.
+    await expect(page.getByText(/^Week \d+$/)).not.toHaveText(currentWeekLabel ?? "");
 
     await page.getByRole("button", { name: "Next week" }).click();
     await expect(page).toHaveURL(new RegExp(`week=${currentWeekKey}(?:&|$)`));
