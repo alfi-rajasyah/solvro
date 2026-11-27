@@ -8,17 +8,15 @@ import { Shell } from "@/components/layout/Shell";
 import { lazyPage } from "@/lib/lazyPage";
 import { Login } from "@/pages/Login";
 import { NotFound } from "@/pages/NotFound";
-import { Overview } from "@/pages/Overview";
-import { ProjectDetail } from "@/pages/ProjectDetail";
 import { PublicShare } from "@/pages/PublicShare";
 
-// Route-level code splitting: everything except the pages a session always
-// opens first (Login, Overview, ProjectDetail's frame) loads on demand, so the
-// entry chunk stays small. Projects went lazy when React Router 7 pushed the
-// entry chunk over its 1 MB budget (docs/ISSUES.md ISS-175). The Suspense
-// boundary lives in Shell.tsx, inside the page error boundary, so a failed
-// chunk is still caught (docs/archive/plans/application-review-2026-10-22.md,
-// F-16).
+// Route-level code splitting: every page except Login, NotFound and the guest
+// view loads on demand, so the entry chunk stays small. Projects went lazy when
+// React Router 7 pushed the entry chunk over its 1 MB budget; Overview and
+// ProjectDetail's frame followed to restore headroom (docs/ISSUES.md ISS-175).
+// The Suspense boundary lives in Shell.tsx, inside the page error boundary, so
+// a failed chunk is still caught
+// (docs/archive/plans/application-review-2026-10-22.md, F-16).
 // `lazyPage` (lib/lazyPage.ts) retries a failed chunk import once.
 const Admin = lazyPage(() => import("@/pages/Admin"), "Admin");
 const CustomerDetail = lazyPage(() => import("@/pages/CustomerDetail"), "CustomerDetail");
@@ -27,7 +25,9 @@ const DailyReview = lazyPage(() => import("@/pages/DailyReview"), "DailyReview")
 const Executive = lazyPage(() => import("@/pages/Executive"), "Executive");
 const Help = lazyPage(() => import("@/pages/Help"), "Help");
 const OpportunityDetail = lazyPage(() => import("@/pages/OpportunityDetail"), "OpportunityDetail");
+const Overview = lazyPage(() => import("@/pages/Overview"), "Overview");
 const Pipeline = lazyPage(() => import("@/pages/Pipeline"), "Pipeline");
+const ProjectDetail = lazyPage(() => import("@/pages/ProjectDetail"), "ProjectDetail");
 const Projects = lazyPage(() => import("@/pages/Projects"), "Projects");
 const Settings = lazyPage(() => import("@/pages/Settings"), "Settings");
 const Tasks = lazyPage(() => import("@/pages/Tasks"), "Tasks");
