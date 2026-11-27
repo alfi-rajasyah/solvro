@@ -137,7 +137,7 @@ Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kep
 ### ISS-210 · P3 · Backend schemas still use APIs that zod 4 deprecates
 
 - **Type:** debt · **Found:** 2026-11-27 · **Verified:** 2026-11-27 @ `9e571e1`
-- **Where:** backend/src route and lib schemas: `message` param (117), `z.nativeEnum` (22), `.strict()` (16), `.superRefine` (2), `.passthrough()` (1), `.email()` (2), `.url()` (1), `z.ZodIssueCode` (1), `ZodTypeAny` (1)
+- **Where:** backend/src route and lib schemas: `message` param (117), `z.nativeEnum` (22), `.strict()` (14), `.superRefine` (2), `.passthrough()` (1), `.email()` (2), `.url()` (1), `z.ZodIssueCode` (1), `ZodTypeAny` (1)
 - **Problem:** zod 4 still runs all of these, so nothing is broken. A later major can remove them.
 - **Why deferred / fix direction:** Deferred by user decision 2026-11-27 so that the zod 4 upgrade diff held only the real fixes (docs/archive/plans/zod-4-upgrade.md). Fix mechanically: `error` for `message`, `z.enum` for `z.nativeEnum`, `z.strictObject`/`z.looseObject`, `.check`, `z.email()`/`z.url()`, `z.ZodType`. `validationContract.test.ts` guards the wording.
 

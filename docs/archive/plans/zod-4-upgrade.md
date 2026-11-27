@@ -68,9 +68,10 @@ Lock file: install in the backend container only. If npm 10.9 crashes with `edge
 ## Outcome
 
 - T1 passed on zod 3.25.76 (14 tests). The same tests passed unchanged on zod 4.6.7.
-- T2 found one more break that the side-by-side run did not: `permissionSchema` in `backend/src/lib/permissions.ts` passed a function as the second argument of `.refine()`, which zod 4 does not accept (`tsc` error). It now uses the `error` callback, with the same text. `validationContract.test.ts` gained 23 message cases (zod 3 strings captured 2026-11-27) and an unknown-permission case: 37 tests in all.
+- T2 found one more break that the side-by-side run did not: `permissionSchema` in `backend/src/lib/permissions.ts` passed a function as the second argument of `.refine()`, which zod 4 does not accept (`tsc` error). It now uses the `error` callback, with the same text. `validationContract.test.ts` gained 23 message cases (zod 3 strings captured 2026-11-27) and an unknown-permission case: 37 tests at that point.
 - npm 10.9 installed zod 4.6.7 with no `edgesOut` crash; `npm ci --dry-run` accepts the lock file.
 - `npm audit` in `backend/`: 0 advisories, with and without `--omit=dev`.
-- Full backend suite: 1538 passed, 18 skipped.
+- Phase review (opus, covers the `admin.ts` spine touch): nothing blocking. It found that the wording map gave the wrong text for an enum field that is missing, null or not a string (zod 3: "Required" / "Expected 'a' | 'b', received null"), overwrote the discriminated-union text, and called `Infinity` on an int field "Number must be finite" (zod 3: "Expected integer, received float"). All three are fixed and pinned: `validationContract.test.ts` now has 48 tests. A remaining difference is accepted: when an array field with `.default([])` fails `.max()`, zod 4 skips the parent `superRefine`, so the offboard and delete-user bodies drop the duplicate-customer message in that case (still a 400).
+- Full backend suite: 1538 passed, 18 skipped (before the review fixes; rerun by `gates.sh` at close).
 - Q2 debt filed as ISS-210. ISS-207 closed.
 - Delivery Gate: not applicable, no visible change (Q1 = A keeps the wording).

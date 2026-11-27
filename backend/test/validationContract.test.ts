@@ -166,6 +166,27 @@ describe("default messages keep the zod 3 wording", () => {
     ["invalid date", z.coerce.date(), "x", "Invalid date"],
     ["refine without message", z.string().refine(() => false), "x", "Invalid input"],
     ["schema message wins", z.string().min(3, "Too short"), "a", "Too short"],
+    ["enum missing", z.object({ f: z.enum(["a", "b"]) }), {}, "Required"],
+    ["enum null", z.enum(["a", "b"]), null, "Expected 'a' | 'b', received null"],
+    ["enum boolean", z.enum(["a", "b"]), true, "Expected 'a' | 'b', received boolean"],
+    ["nativeEnum missing", z.object({ f: z.nativeEnum({ A: "A", B: "B" }) }), {}, "Required"],
+    ["nativeEnum null", z.nativeEnum({ A: "A", B: "B" }), null, "Expected 'A' | 'B', received null"],
+    ["nativeEnum number", z.nativeEnum({ A: "A", B: "B" }), 5, "Invalid enum value. Expected 'A' | 'B', received '5'"],
+    ["nativeEnum string", z.nativeEnum({ A: "A", B: "B" }), "C", "Invalid enum value. Expected 'A' | 'B', received 'C'"],
+    ["numeric nativeEnum", z.nativeEnum({ X: 1, Y: 2 }), 3, "Invalid enum value. Expected 1 | 2, received '3'"],
+    [
+      "bad discriminator",
+      z.discriminatedUnion("kind", [z.object({ kind: z.literal("a") }), z.object({ kind: z.literal("b") })]),
+      { kind: "c" },
+      "Invalid discriminator value. Expected 'a' | 'b'",
+    ],
+    [
+      "missing discriminator",
+      z.discriminatedUnion("kind", [z.object({ kind: z.literal("a") }), z.object({ kind: z.literal("b") })]),
+      {},
+      "Invalid discriminator value. Expected 'a' | 'b'",
+    ],
+    ["Infinity on an int", z.coerce.number().int(), "Infinity", "Expected integer, received float"],
   ];
 
   it.each(cases)("%s", (_name, schema, input, message) => {

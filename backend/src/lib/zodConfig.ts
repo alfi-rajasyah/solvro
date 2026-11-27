@@ -63,6 +63,20 @@ function sizeMessage(
   return undefined;
 }
 
+/** zod 3's option list: strings quoted, numbers bare ("'a' | 'b'", "1 | 2"). */
+function joinOptions(values: readonly unknown[]): string {
+  return values.map((v) => (typeof v === "string" ? `'${v}'` : String(v))).join(" | ");
+}
+
+/** True when the failing schema carries an `.int()` check. */
+function isIntSchema(issue: z.core.$ZodRawIssue): boolean {
+  type Check = { _zod?: { def?: { check?: unknown; format?: unknown } } };
+  const inst = issue.inst as { _zod?: { def?: { checks?: Check[] } } } | undefined;
+  return (inst?._zod?.def?.checks ?? []).some(
+    (c) => c._zod?.def?.check === "number_format" && c._zod.def.format === "safeint",
+  );
+}
+
 const FORMAT_MESSAGES: Record<string, string> = {
   email: "Invalid email",
   url: "Invalid url",
@@ -80,7 +94,8 @@ export function zod3Message(issue: z.core.$ZodRawIssue): string | undefined {
       if (issue.expected === "int") return "Expected integer, received float";
       if (issue.expected === "date") return "Invalid date";
       if (issue.expected === "number" && typeof issue.input === "number" && !Number.isNaN(issue.input)) {
-        return "Number must be finite";
+        // Infinity: zod 3 accepted it on a plain number and called it a float on an int.
+        return isIntSchema(issue) ? "Expected integer, received float" : "Number must be finite";
       }
       return `Expected ${issue.expected}, received ${receivedType(issue.input)}`;
     }
@@ -90,7 +105,17 @@ export function zod3Message(issue: z.core.$ZodRawIssue): string | undefined {
       return sizeMessage(issue.origin, issue.maximum, "max", issue.inclusive ?? true, issue.exact ?? false);
     case "invalid_value": {
       if (issue.values.length === 1) return `Invalid literal value, expected ${JSON.stringify(issue.values[0])}`;
-      const options = issue.values.map((v) => `'${String(v)}'`).join(" | ");
+      // zod 3 checked an enum's input type first: a missing value was "Required"
+      // and a value that is neither a string nor a number named its type.
+      // zod 4 reports both as invalid_value. A number on a string z.enum also
+      // named its type in zod 3, but on z.nativeEnum it got the enum text; zod 4
+      // cannot tell the two apart, so a number gets the nativeEnum text (Prisma
+      // enums are the common case here).
+      if (issue.input === undefined) return "Required";
+      const options = joinOptions(issue.values);
+      if (typeof issue.input !== "string" && typeof issue.input !== "number") {
+        return `Expected ${options}, received ${receivedType(issue.input)}`;
+      }
       return `Invalid enum value. Expected ${options}, received '${String(issue.input)}'`;
     }
     case "invalid_format": {
@@ -103,7 +128,13 @@ export function zod3Message(issue: z.core.$ZodRawIssue): string | undefined {
       return `Unrecognized key(s) in object: ${issue.keys.map((k) => `'${k}'`).join(", ")}`;
     case "not_multiple_of":
       return `Number must be a multiple of ${String(issue.divisor)}`;
-    case "invalid_union":
+    case "invalid_union": {
+      const { discriminator, options } = issue as { discriminator?: unknown; options?: unknown };
+      if (discriminator !== undefined && Array.isArray(options)) {
+        return `Invalid discriminator value. Expected ${joinOptions(options)}`;
+      }
+      return "Invalid input";
+    }
     case "custom":
       return "Invalid input";
     default:
