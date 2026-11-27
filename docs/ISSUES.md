@@ -52,13 +52,6 @@ Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kep
 - **Problem:** `npm audit --omit=dev` reports 2 moderate (`exceljs`, `uuid`: missing buffer bounds check in v3/v5/v6 when a buffer is passed). Solvro calls no `uuid` API; `exceljs` uses it to name parts of the workbook it writes. React Router's advisories closed with the 7.18.6 upgrade (2026-11-24).
 - **Why deferred / fix direction:** npm offers only a downgrade to `exceljs` 3.4.0. Trigger: an `exceljs` release that moves to a fixed `uuid`. Then update in the container.
 
-### ISS-207 · P3 · Backend zod 3 has a high memory-exhaustion advisory
-
-- **Type:** debt · **Found:** 2026-11-24 · **Verified:** 2026-11-26 @ `0195722`
-- **Where:** `zod` ^3.23.8 in backend/package.json; express.json limit in backend/src/app.ts (line ~83)
-- **Problem:** `npm audit --omit=dev` in backend reports 1 high: validation of oversized constrained collections can exhaust memory. The 1 MB body limit (app and nginx) caps the input size, so the exposure is bounded.
-- **Why deferred / fix direction:** The fix is zod 4, a major upgrade that touches every route schema. Plan it as its own change; until then keep the 1 MB limit.
-
 ## Open — Data & performance
 
 ### ISS-013 · P2 · GET /users is unpaginated
@@ -133,6 +126,20 @@ Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kep
 - **Problem:** Cross-origin callers cannot read X-Total-Count; the same-origin /api proxy is unaffected.
 - **Why deferred / fix direction:** Add exposedHeaders: ['X-Total-Count'] only if the API is ever called cross-origin.
 - **Source:** snapshot line 2256, section "Professional UI pass — deferred findings (2026-09-29, ported 2026-10-05)"
+
+### ISS-209 · P3 · GET /holidays default year is fixed when the server starts
+
+- **Type:** bug · **Found:** 2026-11-27 · **Verified:** 2026-11-27 @ `ed1770a`
+- **Where:** querySchema in backend/src/routes/holidays.ts (line ~18)
+- **Problem:** `.default(new Date().getFullYear())` runs once, when the module loads. A backend that keeps running past 1 January answers `GET /holidays` without `?year=` with the old year's holidays until it restarts. No user sees it today: the frontend always sends `?year=` (`frontend/src/lib/queries.ts`, line ~4874).
+- **Why deferred / fix direction:** Found while planning the zod 4 upgrade and kept out of its scope. Fix: `.default(() => new Date().getFullYear())`, plus a test with a faked clock.
+
+### ISS-210 · P3 · Backend schemas still use APIs that zod 4 deprecates
+
+- **Type:** debt · **Found:** 2026-11-27 · **Verified:** 2026-11-27 @ `9e571e1`
+- **Where:** backend/src route and lib schemas: `message` param (117), `z.nativeEnum` (22), `.strict()` (14), `.superRefine` (2), `.passthrough()` (1), `.email()` (2), `.url()` (1), `z.ZodIssueCode` (1), `ZodTypeAny` (1)
+- **Problem:** zod 4 still runs all of these, so nothing is broken. A later major can remove them.
+- **Why deferred / fix direction:** Deferred by user decision 2026-11-27 so that the zod 4 upgrade diff held only the real fixes (docs/archive/plans/zod-4-upgrade.md). Fix mechanically: `error` for `message`, `z.enum` for `z.nativeEnum`, `z.strictObject`/`z.looseObject`, `.check`, `z.email()`/`z.url()`, `z.ZodType`. `validationContract.test.ts` guards the wording.
 
 ## Open — Frontend UI
 
@@ -453,3 +460,4 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-168 · Resolved 2026-11-20 · Checked at the wave 10 Delivery Gate (docs/archive/plans/issues-wave-10.md) · Verification gap: /pipeline/:id, /share/:token and PWA banner not exercised
 - ISS-205 · Resolved 2026-11-24 · CHANGELOG "Placeholder and handle contrast" · Faint /60 and /40 secondary text on placeholders and row marks
 - ISS-208 · Resolved 2026-11-27 · CHANGELOG "Backend vitest 4.1.12" · Backend test toolchain carries 6 dev-only audit advisories with in-range fixes
+- ISS-207 · Resolved 2026-11-27 · CHANGELOG "Backend zod 4" · Backend zod 3 has a high memory-exhaustion advisory

@@ -15,6 +15,17 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-27 — Backend zod 4
+
+- `backend/package.json`: `zod` ^3.23.8 to ^4.6.7. zod 3 carried a high advisory: validating oversized constrained collections could exhaust memory. `npm audit` in `backend/` now reports 0 advisories.
+- `backend/src/lib/zodConfig.ts` (new): a global zod error map that keeps zod 3's default messages ("Required", "String must contain at most 100 character(s)", …). Forms show these messages under their fields, so the upgrade changes no text users see. `src/env.ts` and `src/http/validate.ts` load it before any schema parses.
+- `backend/src/routes/admin.ts`: the delete-user body schema uses `.prefault({})`. zod 4's `.default({})` would return `{}` without filling `customers`, and a delete with an undefined body would answer 500.
+- UUID path params in `routes/opportunities.ts`, `opportunityItems.ts`, `taskLinks.ts`, `projectLinks.ts` and `customerLinks.ts` use `z.guid()`. zod 4's `uuid()` rejects IDs whose version or variant digits are not RFC 9562 values; `z.guid()` accepts the same IDs as zod 3, so those requests still get 404, not 400.
+- `backend/src/http/errors.ts`, `src/env.ts`: `z.flattenError()` replaces the deprecated `ZodError.flatten()`. The 400 body keeps its `{ formErrors, fieldErrors }` shape.
+- `backend/src/lib/permissions.ts`: the unknown-permission message uses zod 4's `error` callback; the text is unchanged.
+- Integers above `Number.MAX_SAFE_INTEGER` now fail validation on every `.int()` field. zod 3 accepted them.
+- `backend/test/validationContract.test.ts` (new): pins the 400 body, the default message wording, UUID path params and env defaults. It passed on zod 3 before the upgrade and passes unchanged on zod 4.
+
 ### Changed — 2026-11-26 — Backend vitest 4.1.12
 
 - `backend/package.json`: `vitest` ^4.1.10 to ^4.1.12. vitest 4.1.10 carried two `@vitest/mocker` advisories (path traversal and code injection through mock registration); the frontend took the same update on 2026-11-24.

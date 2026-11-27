@@ -17,7 +17,7 @@ import { createLinkSchema, updateLinkSchema } from "../lib/linkSchemas.js";
 // event carries the link's label only — never the URL (same rule as deal links).
 
 const projectParamsSchema = z.object({ id: z.coerce.number().int().positive() });
-const linkParamsSchema = projectParamsSchema.extend({ linkId: z.string().uuid() });
+const linkParamsSchema = projectParamsSchema.extend({ linkId: z.guid() });
 
 // Visibility 404 before any body validation, so a hidden project cannot be
 // told apart from a missing one by a 400.

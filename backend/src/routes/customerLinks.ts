@@ -14,7 +14,7 @@ import { createLinkSchema, updateLinkSchema } from "../lib/linkSchemas.js";
 // Mounted on /customers next to customersRouter.
 
 const customerParamsSchema = z.object({ id: z.coerce.number().int().positive() });
-const linkParamsSchema = customerParamsSchema.extend({ linkId: z.string().uuid() });
+const linkParamsSchema = customerParamsSchema.extend({ linkId: z.guid() });
 
 // Visibility 404 before any body validation, so a hidden customer cannot be
 // told apart from a missing one by a 400.

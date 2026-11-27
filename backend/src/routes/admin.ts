@@ -346,7 +346,9 @@ const deleteUserSchema = z
       .max(MAX_CUSTOMER_OWNER_CHOICES)
       .default([]),
   })
-  .default({})
+  // prefault, not default: zod 4's default returns `{}` as-is and skips the
+  // inner `customers` default (docs/archive/plans/zod-4-upgrade.md).
+  .prefault({})
   .superRefine((v, ctx) => {
     if (new Set(v.customers.map((c) => c.customerId)).size !== v.customers.length) {
       ctx.addIssue({ code: "custom", path: ["customers"], message: "Each customer may appear once" });

@@ -14,8 +14,8 @@ import { MAX_DEAL_ACTIVITIES } from "../lib/limits.js";
 
 // Mounted at "/opportunities" in src/app.ts — paths below are relative to that.
 
-const opportunityIdParamSchema = z.object({ opportunityId: z.string().uuid() });
-const linkParamSchema = opportunityIdParamSchema.extend({ linkId: z.string().uuid() });
+const opportunityIdParamSchema = z.object({ opportunityId: z.guid() });
+const linkParamSchema = opportunityIdParamSchema.extend({ linkId: z.guid() });
 
 const MAX_MENTIONS = 20;
 
