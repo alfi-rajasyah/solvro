@@ -127,13 +127,6 @@ Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kep
 - **Why deferred / fix direction:** Add exposedHeaders: ['X-Total-Count'] only if the API is ever called cross-origin.
 - **Source:** snapshot line 2256, section "Professional UI pass — deferred findings (2026-09-29, ported 2026-10-05)"
 
-### ISS-209 · P3 · GET /holidays default year is fixed when the server starts
-
-- **Type:** bug · **Found:** 2026-11-27 · **Verified:** 2026-11-27 @ `ed1770a`
-- **Where:** querySchema in backend/src/routes/holidays.ts (line ~18)
-- **Problem:** `.default(new Date().getFullYear())` runs once, when the module loads. A backend that keeps running past 1 January answers `GET /holidays` without `?year=` with the old year's holidays until it restarts. No user sees it today: the frontend always sends `?year=` (`frontend/src/lib/queries.ts`, line ~4874).
-- **Why deferred / fix direction:** Found while planning the zod 4 upgrade and kept out of its scope. Fix: `.default(() => new Date().getFullYear())`, plus a test with a faked clock.
-
 ### ISS-210 · P3 · Backend schemas still use APIs that zod 4 deprecates
 
 - **Type:** debt · **Found:** 2026-11-27 · **Verified:** 2026-11-27 @ `9e571e1`
@@ -461,3 +454,4 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-205 · Resolved 2026-11-24 · CHANGELOG "Placeholder and handle contrast" · Faint /60 and /40 secondary text on placeholders and row marks
 - ISS-208 · Resolved 2026-11-27 · CHANGELOG "Backend vitest 4.1.12" · Backend test toolchain carries 6 dev-only audit advisories with in-range fixes
 - ISS-207 · Resolved 2026-11-27 · CHANGELOG "Backend zod 4" · Backend zod 3 has a high memory-exhaustion advisory
+- ISS-209 · Resolved 2026-11-27 · CHANGELOG "Holidays default year" · GET /holidays default year is fixed when the server starts

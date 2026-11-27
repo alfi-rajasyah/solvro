@@ -15,7 +15,9 @@ const querySchema = z.object({
     .int()
     .min(1970)
     .max(2100)
-    .default(new Date().getFullYear()),
+    // A function, so the year is read per request, not once at module load
+    // (docs/ISSUES.md ISS-209).
+    .default(() => new Date().getFullYear()),
 });
 
 export const holidaysRouter = Router();
