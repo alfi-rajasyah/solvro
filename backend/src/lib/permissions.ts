@@ -29,9 +29,10 @@ const KNOWN_SET: ReadonlySet<string> = new Set(KNOWN_PERMISSIONS);
 export const permissionSchema = z
   .string()
   .max(100)
-  .refine((value) => KNOWN_SET.has(value), (value) => ({
-    message: `Unknown permission "${value.slice(0, 100)}"; expected one of: ${KNOWN_PERMISSIONS.join(", ")}`,
-  }));
+  .refine((value) => KNOWN_SET.has(value), {
+    error: (issue) =>
+      `Unknown permission "${String(issue.input).slice(0, 100)}"; expected one of: ${KNOWN_PERMISSIONS.join(", ")}`,
+  });
 
 /** A role's permission list: known values only. */
 export const permissionsSchema = z.array(permissionSchema).max(KNOWN_PERMISSIONS.length);

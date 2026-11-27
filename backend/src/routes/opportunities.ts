@@ -39,7 +39,7 @@ import { assertActiveUser } from "../lib/users.js";
 // scoping, unlike projects/visibility.ts. Ownership (`picId`) gates writes
 // only, via the edit_own/edit_all and delete_own/delete_all permission pairs.
 
-const idParamSchema = z.object({ id: z.string().uuid() });
+const idParamSchema = z.object({ id: z.guid() });
 
 // Plain calendar day ("yyyy-MM-dd", no time/zone) — the `deadline` column is
 // `@db.Date` precisely so it never carries instant semantics. Validated with

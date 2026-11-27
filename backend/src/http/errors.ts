@@ -1,6 +1,6 @@
 import type { ErrorRequestHandler, RequestHandler } from "express";
 import { Prisma } from "@prisma/client";
-import { ZodError } from "zod";
+import { ZodError, z } from "zod";
 import { logger } from "../logger.js";
 
 export class HttpError extends Error {
@@ -46,7 +46,7 @@ export const errorHandler: ErrorRequestHandler = (err, _req, res, _next) => {
     res.status(400).json({
       error: "Invalid request",
       code: "validation_error",
-      details: err.flatten(),
+      details: z.flattenError(err),
     });
     return;
   }

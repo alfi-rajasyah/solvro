@@ -20,7 +20,7 @@ import { createLinkSchema, updateLinkSchema } from "../lib/linkSchemas.js";
 // entityLabel is the task title (same as a comment event).
 
 const taskParamsSchema = z.object({ id: z.coerce.number().int().positive() });
-const linkParamsSchema = taskParamsSchema.extend({ linkId: z.string().uuid() });
+const linkParamsSchema = taskParamsSchema.extend({ linkId: z.guid() });
 
 // Visibility 404 before any body validation, so a hidden task cannot be told
 // apart from a missing one by a 400.

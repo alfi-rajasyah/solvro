@@ -1,5 +1,6 @@
 import type { RequestHandler } from "express";
 import { ZodError, type ZodTypeAny } from "zod";
+import "../lib/zodConfig.js";
 
 type Source = "body" | "query" | "params";
 
