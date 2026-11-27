@@ -247,10 +247,10 @@ Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kep
 
 ### ISS-145 · P2 · Flaky e2e drag specs and backend concurrency test
 
-- **Type:** debt · **Found:** 2026-07-28 · **Verified:** 2026-11-26 @ `0195722`
-- **Where:** list-dnd.spec.ts, kanban-dnd.spec.ts (R3 parity, mobile touch-reorder), gantt-parity.spec.ts (connector-hover case c), daily-review.spec.ts (week navigation, line ~367); backend/test/taskReorderConcurrency.test.ts (line ~114)
-- **Problem:** First-attempt flakes absorbed by retries; one 30 s backend timeout in a loaded gates run. The new-case trigger fired on 2026-11-24 (CI run 45373567210): after "Previous week" the spec reads the `Week N` label once with `textContent()` and gets the old "Week 48", because the URL updates before the label re-renders.
-- **Why deferred / fix direction:** Daily Review: replace the one-shot read with a retrying `expect(locator).not.toHaveText(currentWeekLabel)`. Others: tighten the wait or fixture isolation when a case fails through its retry; for the backend test capture pg_locks joined to pg_stat_activity during the stall. Merged ISS-160, 167.
+- **Type:** watch · **Found:** 2026-07-28 · **Verified:** 2026-11-27 @ `941f49e`
+- **Where:** list-dnd.spec.ts, kanban-dnd.spec.ts (R3 parity, mobile touch-reorder), gantt-parity.spec.ts (connector-hover case c); backend/test/taskReorderConcurrency.test.ts (line ~114)
+- **Problem:** First-attempt flakes absorbed by retries; one 30 s backend timeout in a loaded gates run. The Daily Review week-navigation flake that fired the new-case trigger on 2026-11-24 is fixed (CHANGELOG "Daily Review week navigation test").
+- **Why deferred / fix direction:** Trigger: a case fails through its retry, or a new case joins. Then tighten the wait or fixture isolation; for the backend test capture pg_locks joined to pg_stat_activity during the stall. Merged ISS-160, 167.
 
 ## Open — Dev env & ops
 
@@ -268,13 +268,6 @@ Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kep
 - **Where:** `glob`, `minimatch`, `workbox-build` under `vite-plugin-pwa` 1.3.0 (frontend/package-lock.json)
 - **Problem:** `npm audit` reports 4 moderate advisories in the PWA plugin's build chain (glob AbortSignal bypass, minimatch ReDoS). They run at build time only and do not ship. The high advisories (Vite 5, `esbuild`, `@vitest/mocker`) closed with the Vite 6.4.6 and vitest 4.1.12 upgrade (2026-11-24).
 - **Why deferred / fix direction:** npm offers only a downgrade to `vite-plugin-pwa` 1.1.0. Trigger: a `vite-plugin-pwa` or `workbox-build` release on fixed `glob`, or a high advisory. Then update in the container.
-
-### ISS-208 · P3 · Backend test toolchain carries 6 dev-only audit advisories with in-range fixes
-
-- **Type:** debt · **Found:** 2026-11-26 · **Verified:** 2026-11-26 @ `0195722`
-- **Where:** `vitest` ^4.1.10 in backend/package.json (installed 4.1.10, with `vite` 8.1.3, `postcss`, `nanoid`, `source-map-js` under it; backend/package-lock.json)
-- **Problem:** `npm audit` in backend reports 4 high (`vite` 8.1.3 dev-server file serving and `launch-editor`, `postcss` source-map read, `nanoid`, `source-map-js`) and 2 moderate (`vitest`, `@vitest/mocker` mock-registration path traversal and code injection). All are test-time only and do not ship; `--omit=dev` shows only ISS-207. The frontend took vitest 4.1.12 on 2026-11-24; the backend did not.
-- **Why deferred / fix direction:** npm reports fixes inside the current ranges. Update `vitest` to 4.1.12 or later in the backend container, one package at a time (root trap: npm 10.9 `edgesOut` crash), then confirm with `npm ci --dry-run`.
 
 ## Open — Docs & process
 
@@ -459,3 +452,4 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-154 · Resolved 2026-11-20 · CHANGELOG "End-to-end waits, search spec, colour-by reload test" · search.spec.ts polish and listener-ready guard
 - ISS-168 · Resolved 2026-11-20 · Checked at the wave 10 Delivery Gate (docs/archive/plans/issues-wave-10.md) · Verification gap: /pipeline/:id, /share/:token and PWA banner not exercised
 - ISS-205 · Resolved 2026-11-24 · CHANGELOG "Placeholder and handle contrast" · Faint /60 and /40 secondary text on placeholders and row marks
+- ISS-208 · Resolved 2026-11-27 · CHANGELOG "Backend vitest 4.1.12" · Backend test toolchain carries 6 dev-only audit advisories with in-range fixes
