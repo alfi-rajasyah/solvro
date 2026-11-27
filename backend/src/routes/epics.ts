@@ -35,7 +35,7 @@ const updateEpicSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).nullable().optional(),
   // Epics share the TaskStatus enum but only tasks can be cancelled.
-  status: z.nativeEnum(TaskStatus).refine((s) => s !== "CANCELLED", "Epics cannot be cancelled").optional(),
+  status: z.enum(TaskStatus).refine((s) => s !== "CANCELLED", "Epics cannot be cancelled").optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   ownerId: z.number().int().positive().nullable().optional(),
   startDate: z.coerce.date().nullable().optional(),

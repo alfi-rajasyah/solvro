@@ -15,7 +15,7 @@ const executiveQuerySchema = z.object({
   // Falls back to the server's UTC day when absent.
   today: z
     .string()
-    .refine(isValidDayString, { message: "today must be a valid yyyy-MM-dd date" })
+    .refine(isValidDayString, { error: "today must be a valid yyyy-MM-dd date" })
     .optional(),
 });
 

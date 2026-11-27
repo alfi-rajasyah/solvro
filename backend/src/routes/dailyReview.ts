@@ -25,9 +25,9 @@ const WEEK_KEY_FORMAT = /^\d{4}-W\d{2}$/;
 const dailyReviewQuerySchema = z.object({
   week: z
     .string()
-    .refine((w) => WEEK_KEY_FORMAT.test(w), { message: "invalid_week" })
-    .refine((w) => parseWeekKey(w) !== null, { message: "invalid_week" }),
-  today: z.string().refine(isValidDayString, { message: "invalid_today" }),
+    .refine((w) => WEEK_KEY_FORMAT.test(w), { error: "invalid_week" })
+    .refine((w) => parseWeekKey(w) !== null, { error: "invalid_week" }),
+  today: z.string().refine(isValidDayString, { error: "invalid_today" }),
 });
 
 function groupBy<T, K>(items: T[], keyFn: (item: T) => K): Map<K, T[]> {

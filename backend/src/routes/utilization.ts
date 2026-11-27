@@ -38,7 +38,7 @@ const MAX_TICKET_REFS_PER_ROW = 6;
 const MAX_ENTRIES = 10_000;
 
 const utilizationQuerySchema = z.object({
-  week: z.string().refine((w) => parseWeekKey(w) !== null, { message: "invalid_week" }),
+  week: z.string().refine((w) => parseWeekKey(w) !== null, { error: "invalid_week" }),
   scope: z.enum(["me", "tam", "customer"]).default("me"),
   // Local minus UTC, e.g. UTC+7 sends 420 — same contract and bound as
   // routes/itop.ts GET /daily's own utcOffsetMinutes.

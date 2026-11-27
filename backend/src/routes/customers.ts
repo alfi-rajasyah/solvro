@@ -58,7 +58,7 @@ const updateCustomerSchema = z.object({
 
 const dayStringSchema = z
   .string()
-  .refine(isValidDayString, { message: "Invalid date (expected yyyy-MM-dd)" });
+  .refine(isValidDayString, { error: "Invalid date (expected yyyy-MM-dd)" });
 
 const customerNoteListQuerySchema = z.object({
   from: dayStringSchema.optional(),
@@ -115,9 +115,9 @@ const highlightInputSchema = z.object({
         .string()
         .min(1, "title is required")
         .refine((s) => [...s].length <= 200, {
-          message: "title must be 200 characters or fewer",
+          error: "title must be 200 characters or fewer",
         })
-        .refine((s) => !/[\r\n]/.test(s), { message: "title must be one line" }),
+        .refine((s) => !/[\r\n]/.test(s), { error: "title must be one line" }),
     ),
   detail: z.string().max(8000).nullable().optional(),
   risk: z.string().max(8000).nullable().optional(),
@@ -136,9 +136,9 @@ const achievementInputSchema = z.object({
         .string()
         .min(1, "title is required")
         .refine((s) => [...s].length <= 200, {
-          message: "title must be 200 characters or fewer",
+          error: "title must be 200 characters or fewer",
         })
-        .refine((s) => !/[\r\n]/.test(s), { message: "title must be one line" }),
+        .refine((s) => !/[\r\n]/.test(s), { error: "title must be one line" }),
     ),
   detail: z.string().max(8000).nullable().optional(),
   outstandingIssue: z.string().max(8000).nullable().optional(),
@@ -148,8 +148,8 @@ const achievementInputSchema = z.object({
 });
 
 const saveWeeklyUpdateSchema = z.object({
-  health: z.nativeEnum(WeeklyHealth).nullable().optional(),
-  status: z.nativeEnum(WeeklyStatus).optional(),
+  health: z.enum(WeeklyHealth).nullable().optional(),
+  status: z.enum(WeeklyStatus).optional(),
   // Trim before the length check so a value that's exactly 120 characters
   // after trimming isn't rejected for padding that normalizeText would
   // have stripped anyway.
@@ -186,7 +186,7 @@ customersRouter.use(requireAuth);
 const customersListQuerySchema = z.object({
   today: z
     .string()
-    .refine(isValidDayString, { message: "today must be a valid yyyy-MM-dd date" })
+    .refine(isValidDayString, { error: "today must be a valid yyyy-MM-dd date" })
     .optional(),
 });
 
@@ -319,7 +319,7 @@ function customerInclude(user: JwtPayload) {
 const customerDetailQuerySchema = z.object({
   today: z
     .string()
-    .refine(isValidDayString, { message: "today must be a valid yyyy-MM-dd date" })
+    .refine(isValidDayString, { error: "today must be a valid yyyy-MM-dd date" })
     .optional(),
 });
 

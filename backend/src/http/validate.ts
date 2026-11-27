@@ -1,10 +1,10 @@
 import type { RequestHandler } from "express";
-import { ZodError, type ZodTypeAny } from "zod";
+import { ZodError, type ZodType } from "zod";
 import "../lib/zodConfig.js";
 
 type Source = "body" | "query" | "params";
 
-export function validate(source: Source, schema: ZodTypeAny): RequestHandler {
+export function validate(source: Source, schema: ZodType): RequestHandler {
   return (req, _res, next) => {
     try {
       const parsed = schema.parse(req[source]);

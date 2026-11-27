@@ -6,7 +6,7 @@ import { parseTrustProxy } from "./http/trustProxy.js";
 const schema = z.object({
   NODE_ENV: z.enum(["development", "production", "test"]).default("development"),
   PORT: z.coerce.number().int().positive().default(3000),
-  DATABASE_URL: z.string().url(),
+  DATABASE_URL: z.url(),
   JWT_SECRET: z.string().min(32, "JWT_SECRET must be at least 32 characters"),
   JWT_EXPIRES_IN: z.string().default("8h"),
   SECRETS_KEY: z
@@ -16,7 +16,7 @@ const schema = z.object({
       (value) =>
         /^[A-Za-z0-9+/]{43}=$/.test(value) && Buffer.from(value, "base64").length === 32,
       {
-        message:
+        error:
           "SECRETS_KEY must be a base64 string that decodes to exactly 32 bytes (generate with: openssl rand -base64 32)",
       },
     ),
@@ -40,7 +40,7 @@ const schema = z.object({
         }
       },
       {
-        message:
+        error:
           'PUBLIC_BASE_URL must be an absolute http(s) URL without a trailing slash, query or fragment (e.g. "https://solvro.example.com")',
       },
     )
@@ -58,7 +58,7 @@ const schema = z.object({
       const parsed = parseTrustProxy(value);
       if (parsed === null) {
         ctx.addIssue({
-          code: z.ZodIssueCode.custom,
+          code: "custom",
           message:
             'TRUST_PROXY must be a hop count (0-10) or a comma-separated list of loopback, linklocal, uniquelocal, IP addresses or CIDR subnets (e.g. "1" or "loopback, uniquelocal")',
         });

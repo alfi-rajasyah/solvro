@@ -32,7 +32,7 @@ const recentNotesQuerySchema = z.object({
   // a caller that omits it gets the server's UTC day.
   today: z
     .string()
-    .refine(isValidDayString, { message: "today must be a valid yyyy-MM-dd date" })
+    .refine(isValidDayString, { error: "today must be a valid yyyy-MM-dd date" })
     .optional(),
 });
 

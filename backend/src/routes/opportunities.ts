@@ -47,7 +47,7 @@ const idParamSchema = z.object({ id: z.guid() });
 // query param (`lib/dateBoundary.ts`), and converted to storage the same way.
 const dayStringSchema = z
   .string()
-  .refine(isValidDayString, { message: "Must be a valid yyyy-MM-dd date" });
+  .refine(isValidDayString, { error: "Must be a valid yyyy-MM-dd date" });
 
 const picIdField = z.number().int().positive().nullable();
 
@@ -70,7 +70,7 @@ const createOpportunitySchema = z
     productSolution: z.string().max(500).optional(),
     leadSource: z.string().max(200).nullable().optional(),
     winProbability: z.number().int().min(0).max(100).optional(),
-    stage: z.nativeEnum(PipelineStage).optional(),
+    stage: z.enum(PipelineStage).optional(),
   })
   .strict();
 
@@ -104,7 +104,7 @@ const updateOpportunitySchema = z
 // transition may carry a reason too; it's simply not surfaced in the
 // activity note.
 const moveOpportunitySchema = z.object({
-  stage: z.nativeEnum(PipelineStage),
+  stage: z.enum(PipelineStage),
   stageOrder: z.number().int().min(0),
   reason: z.string().min(1).max(500).optional(),
 });
@@ -116,8 +116,8 @@ const moveOpportunitySchema = z.object({
 // can't express "valid values depend on another field" cleanly here).
 const closeOpportunitySchema = z
   .object({
-    outcome: z.nativeEnum(PipelineOutcome),
-    reasonCategory: z.nativeEnum(PipelineOutcomeReason).optional(),
+    outcome: z.enum(PipelineOutcome),
+    reasonCategory: z.enum(PipelineOutcomeReason).optional(),
     // `.min(1)` (N7 fix, phase review): without it an empty string passed
     // the schema and would have been stored/appended to the activity note
     // as a "given" note — `undefined` (the field omitted) is still the only
@@ -228,7 +228,7 @@ const importRowSchema = z
     leadSource: z.string().max(200).optional().nullable(),
     activityLog: z.string().max(2000).optional().nullable(),
   })
-  .passthrough();
+  .loose();
 
 // Human-readable labels for the length-bounded fields above, keyed by the
 // zod issue's single-segment path — used to turn a `too_big` failure into
