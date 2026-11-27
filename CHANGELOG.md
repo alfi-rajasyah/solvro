@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Fixed — 2026-11-27 — Holidays default year
+
+- `backend/src/routes/holidays.ts`: `GET /holidays` without `?year=` now reads the current year on each request. Before, the default was set once when the server started, so a backend that kept running past 1 January kept answering with the previous year's holidays until it restarted. The web app always sends `?year=`, so its holiday markers were not affected.
+- `backend/test/holidaysRoute.test.ts` (new): moves a faked clock across a year boundary and checks that the default follows it.
+
 ### Changed — 2026-11-27 — Backend zod 4
 
 - `backend/package.json`: `zod` ^3.23.8 to ^4.6.7. zod 3 carried a high advisory: validating oversized constrained collections could exhaust memory. `npm audit` in `backend/` now reports 0 advisories.
