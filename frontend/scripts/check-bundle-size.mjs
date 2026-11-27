@@ -7,7 +7,8 @@ import { readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
-// Budget is 1 MB; the entry chunk is ~957 kB today, so ~43 kB of headroom.
+// Budget is 1 MB; the entry chunk is ~667 kB since Overview and ProjectDetail
+// went lazy (docs/ISSUES.md ISS-175), so ~333 kB of headroom.
 const LIMIT_BYTES = 1_000_000; // 1 MB raw (what Vite prints as kB)
 const dist = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "dist");
 

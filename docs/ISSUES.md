@@ -247,14 +247,6 @@ Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kep
 
 ## Open — Dev env & ops
 
-### ISS-175 · P3 · Bundle budget headroom is about 37 kB
-
-- **Type:** watch · **Found:** 2026-10-22 · **Verified:** 2026-11-26 @ `0195722`
-- **Where:** LIMIT_BYTES in frontend/scripts/check-bundle-size.mjs (line ~12)
-- **Problem:** The trigger fired on 2026-11-24: React Router 7 took the entry chunk to 1001.03 kB, over the 1000 kB budget enforced by check:bundle-size. Projects went lazy, which brought it to 963.11 kB (about 37 kB headroom). Overview and ProjectDetail are still eager.
-- **Why deferred / fix direction:** Watch trigger: the budget check fails, or headroom drops under 10 kB. Then lazy-load more pages.
-- **Source:** snapshot line 2384, section "Application review 2026-10-22 — remaining open items"
-
 ### ISS-201 · P3 · PWA build plugin carries 4 moderate audit advisories with no forward fix
 
 - **Type:** watch · **Found:** 2026-11-19 · **Verified:** 2026-11-26 @ `0195722`
@@ -449,3 +441,4 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-207 · Resolved 2026-11-27 · CHANGELOG "Backend zod 4" · Backend zod 3 has a high memory-exhaustion advisory
 - ISS-209 · Resolved 2026-11-27 · CHANGELOG "Holidays default year" · GET /holidays default year is fixed when the server starts
 - ISS-210 · Resolved 2026-11-27 · CHANGELOG "Current zod 4 APIs in the backend" · Backend schemas still use APIs that zod 4 deprecates
+- ISS-175 · Resolved 2026-11-27 · CHANGELOG "Smaller first download of the web app" · Bundle budget headroom is about 37 kB

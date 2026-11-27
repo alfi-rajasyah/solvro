@@ -15,6 +15,11 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-27 — Smaller first download of the web app
+
+- `frontend/src/App.tsx`: the Overview page and the project page frame (`ProjectDetail`) now load on demand, like the other pages. The main script that every visit downloads drops from 963 kB to 667 kB, and the 1 MB budget checked by `npm run check:bundle-size` has about 333 kB of headroom again. Opening Overview or a project now fetches one extra small file (12 kB and 65 kB).
+- `frontend/scripts/check-bundle-size.mjs`: the comment states the new size.
+
 ### Changed — 2026-11-27 — Current zod 4 APIs in the backend
 
 - `backend/src`: the 60 uses of APIs that zod 4.6.7 marks `@deprecated` now use their replacements: the `error` parameter in place of `message` on schemas and refinements (32), `z.enum` in place of `z.nativeEnum` for Prisma enums (22), `z.string().trim().toLowerCase().pipe(z.email())` in place of `.email()` in `routes/auth.ts` and `routes/admin.ts` (so the address is still trimmed before it is checked), `z.url()` for `DATABASE_URL` in `env.ts`, the `"custom"` issue code in place of `z.ZodIssueCode.custom`, `z.ZodType` in place of `ZodTypeAny` in `http/validate.ts`, and `.loose()` in place of `.passthrough()` in `routes/opportunities.ts`. No validation rule or message changes.
