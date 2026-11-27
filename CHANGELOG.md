@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-26 — Backend vitest 4.1.12
+
+- `backend/package.json`: `vitest` ^4.1.10 to ^4.1.12. vitest 4.1.10 carried two `@vitest/mocker` advisories (path traversal and code injection through mock registration); the frontend took the same update on 2026-11-24.
+- `backend/package-lock.json`: the test toolchain's `vite` moves from 8.1.3 to 8.4.0, and `postcss`, `nanoid` and `source-map-js` to their fixed releases, which closes 4 high advisories (dev-server file serving, `launch-editor`, source-map reads, generator loops). npm 10.9 crashes on these installs, so `vitest` and `vite` were updated with `--legacy-peer-deps`; `npm ci` without the flag accepts the lock file. All of this is test-time only and does not ship.
+- `npm audit` in `backend/` now reports only the `zod` 3 advisory (1 high), which needs the zod 4 upgrade.
+
 ### Fixed — 2026-11-26 — Daily Review week navigation test
 
 - `e2e/tests/daily-review.spec.ts`: after "Previous week", the test read the week label once and could get the old value, because the URL changes before the label re-renders. It failed on its first attempt in CI on 2026-11-24 and passed on retry. The check now waits with a retrying assertion until the label differs from the current week.
