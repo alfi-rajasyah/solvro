@@ -351,6 +351,57 @@ test.describe("kanban drag & drop — desktop (mouse)", () => {
     expect(byTitle(tasks, "Sub two")?.parentTaskId).toBe(seededProject.alpha.id);
   });
 
+  // ISS-110: the panel holds the dropped order while the PATCH is in flight,
+  // and falls back to the server order when the PATCH fails. Runs after the
+  // case above, so Alpha's subtasks start as Sub two (0), Sub one (1).
+  test("subtask reorder (TaskPanel path): dropped order holds while the PATCH is pending, reverts on failure", async ({
+    page,
+    seededProject,
+  }) => {
+    const base = apiBase(test.info());
+    const subOne = byTitle(await getTasks(base, seededProject.token, seededProject.projectId), "Sub one");
+    expect(subOne?.position).toBe(1);
+
+    await openKanban(page, seededProject.projectId);
+    await page.getByText("Alpha", { exact: true }).first().click();
+    const panel = page.getByRole("dialog", { name: "Task details" });
+    const rows = panel.locator('[data-slot="sortable-item"]');
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(0)).toContainText("Sub two");
+
+    // Hold Sub one's PATCH until the test releases it, then fail it.
+    let release: () => void = () => {};
+    const released = new Promise<void>((resolve) => (release = resolve));
+    await page.route(`**/tasks/${subOne!.id}`, async (route) => {
+      if (route.request().method() !== "PATCH") return route.fallback();
+      await released;
+      await route.fulfill({ status: 500, json: { error: "boom", code: "internal_error" } });
+    });
+
+    const status = panel.locator('[id^="DndLiveRegion"]');
+    const handles = panel.getByRole("button", { name: "Reorder subtask", exact: true });
+    await handles.nth(1).focus();
+    await page.keyboard.press("Space");
+    await expect(status).not.toBeEmpty();
+    const subTwoRow = panel.locator('[data-slot="sortable-item"]', { hasText: "Sub two" });
+    await expect(async () => {
+      await page.keyboard.press("ArrowUp");
+      await expect(subTwoRow).toHaveCSS("transform", /matrix\(1, 0, 0, 1, 0, -?[1-9]/, { timeout: 500 });
+    }).toPass({ timeout: 10_000 });
+    await page.keyboard.press("Space");
+
+    // PATCH still pending: the list shows the dropped order.
+    await expect(rows.nth(0)).toContainText("Sub one");
+    await expect(rows.nth(1)).toContainText("Sub two");
+
+    release();
+    // PATCH failed: the list goes back to the server order.
+    await expect(rows.nth(0)).toContainText("Sub two");
+    await expect(rows.nth(1)).toContainText("Sub one");
+    await page.unroute(`**/tasks/${subOne!.id}`);
+    expect(byTitle(await getTasks(base, seededProject.token, seededProject.projectId), "Sub one")?.position).toBe(1);
+  });
+
   test("WIP badge shows over-limit count in TODO column", async ({ page, seededProject }) => {
     const base = apiBase(test.info());
     await setWipLimits(base, seededProject.token, seededProject.projectId, {
