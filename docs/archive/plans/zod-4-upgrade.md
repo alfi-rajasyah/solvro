@@ -1,6 +1,6 @@
 # Backend zod 3 to zod 4
 
-Status: in progress 2026-11-27, branch `chore/zod-4`. Archive path: `docs/archive/plans/zod-4-upgrade.md`.
+Status: shipped 2026-11-27, branch `chore/zod-4`. Archive path: `docs/archive/plans/zod-4-upgrade.md`.
 
 Lane P. Fixes ISS-207: `zod` 3.25.76 carries a high advisory (memory exhaustion on oversized constrained collections, fixed in 4.6.6). The target is `zod` ^4.6.7, the current latest. One PR into `develop`; each task is one commit. The tasks depend on each other in order (T1 pins behaviour, T2 changes it, T3 records it), so they run in sequence with one writer, not in a wave.
 
@@ -64,3 +64,13 @@ Lock file: install in the backend container only. If npm 10.9 crashes with `edge
 
 - The deprecated-API cleanup (Q2).
 - `holidays.ts` builds its default year once, when the module loads (ISS-209). It is a separate bug, older than this plan.
+
+## Outcome
+
+- T1 passed on zod 3.25.76 (14 tests). The same tests passed unchanged on zod 4.6.7.
+- T2 found one more break that the side-by-side run did not: `permissionSchema` in `backend/src/lib/permissions.ts` passed a function as the second argument of `.refine()`, which zod 4 does not accept (`tsc` error). It now uses the `error` callback, with the same text. `validationContract.test.ts` gained 23 message cases (zod 3 strings captured 2026-11-27) and an unknown-permission case: 37 tests in all.
+- npm 10.9 installed zod 4.6.7 with no `edgesOut` crash; `npm ci --dry-run` accepts the lock file.
+- `npm audit` in `backend/`: 0 advisories, with and without `--omit=dev`.
+- Full backend suite: 1538 passed, 18 skipped.
+- Q2 debt filed as ISS-210. ISS-207 closed.
+- Delivery Gate: not applicable, no visible change (Q1 = A keeps the wording).
