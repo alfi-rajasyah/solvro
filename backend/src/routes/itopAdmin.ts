@@ -208,13 +208,13 @@ const updateItopSettingsSchema = z.object({
       return v.trim().replace(/\/+$/, "");
     })
     .refine((v) => v === undefined || v === null || HTTPS_URL_PATTERN.test(v), {
-      message: "baseUrl must be an https:// URL",
+      error: "baseUrl must be an https:// URL",
     }),
   appToken: z
     .union([z.string(), z.null()])
     .optional()
     .refine((v) => v === undefined || v === null || v.length >= 8, {
-      message: "appToken must be at least 8 characters",
+      error: "appToken must be at least 8 characters",
     }),
   // Just non-empty here — the actual IANA-name check (isValidTimeZone) runs
   // in the handler below so a bad zone name answers the distinct
@@ -454,7 +454,7 @@ const testConnectionSchema = z.object({
     .optional()
     .transform((v) => (v === undefined ? undefined : v.trim().replace(/\/+$/, "")))
     .refine((v) => v === undefined || HTTPS_URL_PATTERN.test(v), {
-      message: "baseUrl must be an https:// URL",
+      error: "baseUrl must be an https:// URL",
     }),
   appToken: z.string().min(1).optional(),
 });

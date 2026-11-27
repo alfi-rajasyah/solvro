@@ -127,13 +127,6 @@ Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kep
 - **Why deferred / fix direction:** Add exposedHeaders: ['X-Total-Count'] only if the API is ever called cross-origin.
 - **Source:** snapshot line 2256, section "Professional UI pass — deferred findings (2026-09-29, ported 2026-10-05)"
 
-### ISS-210 · P3 · Backend schemas still use APIs that zod 4 deprecates
-
-- **Type:** debt · **Found:** 2026-11-27 · **Verified:** 2026-11-27 @ `9e571e1`
-- **Where:** backend/src route and lib schemas: `message` param (117), `z.nativeEnum` (22), `.strict()` (14), `.superRefine` (2), `.passthrough()` (1), `.email()` (2), `.url()` (1), `z.ZodIssueCode` (1), `ZodTypeAny` (1)
-- **Problem:** zod 4 still runs all of these, so nothing is broken. A later major can remove them.
-- **Why deferred / fix direction:** Deferred by user decision 2026-11-27 so that the zod 4 upgrade diff held only the real fixes (docs/archive/plans/zod-4-upgrade.md). Fix mechanically: `error` for `message`, `z.enum` for `z.nativeEnum`, `z.strictObject`/`z.looseObject`, `.check`, `z.email()`/`z.url()`, `z.ZodType`. `validationContract.test.ts` guards the wording.
-
 ## Open — Frontend UI
 
 ### ISS-048 · P3 · Popovers can clip near scroll container bottoms
@@ -455,3 +448,4 @@ Entries closed during the 2026-11-18 restructure are in the ledger in `docs/arch
 - ISS-208 · Resolved 2026-11-27 · CHANGELOG "Backend vitest 4.1.12" · Backend test toolchain carries 6 dev-only audit advisories with in-range fixes
 - ISS-207 · Resolved 2026-11-27 · CHANGELOG "Backend zod 4" · Backend zod 3 has a high memory-exhaustion advisory
 - ISS-209 · Resolved 2026-11-27 · CHANGELOG "Holidays default year" · GET /holidays default year is fixed when the server starts
+- ISS-210 · Resolved 2026-11-27 · CHANGELOG "Current zod 4 APIs in the backend" · Backend schemas still use APIs that zod 4 deprecates

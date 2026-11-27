@@ -74,7 +74,7 @@ export const createProjectSchema = z.object({
   saId: z.number().int().positive().optional(),
   tamId: z.number().int().positive().optional(),
   customerId: z.number().int().positive(),
-  status: z.nativeEnum(ProjectStatus).optional(),
+  status: z.enum(ProjectStatus).optional(),
   wipLimits: wipLimitsSchema.optional(),
   excludeFromPortfolio: z.boolean().optional(),
 });
@@ -82,7 +82,7 @@ export const createProjectSchema = z.object({
 const updateProjectSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).nullable().optional(),
-  status: z.nativeEnum(ProjectStatus).optional(),
+  status: z.enum(ProjectStatus).optional(),
   saId: z.number().int().positive().nullable().optional(),
   tamId: z.number().int().positive().optional(),
   customerId: z.number().int().positive().optional(),
@@ -96,7 +96,7 @@ const updateProjectSchema = z.object({
 // `health` block (lib/dateBoundary.ts). Optional; falls back to the UTC day.
 const healthTodaySchema = z
   .string()
-  .refine(isValidDayString, { message: "today must be a valid yyyy-MM-dd date" })
+  .refine(isValidDayString, { error: "today must be a valid yyyy-MM-dd date" })
   .optional();
 
 const projectListQuerySchema = z.object({
@@ -131,8 +131,8 @@ const createTaskSchema = z
   .object({
     title: z.string().min(1).max(200),
     description: z.string().max(2000).optional(),
-    status: z.nativeEnum(TaskStatus).optional(),
-    priority: z.nativeEnum(Priority).optional(),
+    status: z.enum(TaskStatus).optional(),
+    priority: z.enum(Priority).optional(),
     startDate: z.coerce.date().nullable().optional(),
     dueDate: z.coerce.date().nullable().optional(),
     isMilestone: z.boolean().optional(),
@@ -144,7 +144,7 @@ const createTaskSchema = z
     epicId: z.number().int().positive().nullable().optional(),
   })
   .refine((b) => !b.isMilestone || b.dueDate != null, {
-    message: "A milestone requires a due date",
+    error: "A milestone requires a due date",
     path: ["dueDate"],
   });
 
@@ -164,7 +164,7 @@ const createEpicSchema = z.object({
 });
 
 const taskListQuerySchema = z.object({
-  status: z.nativeEnum(TaskStatus).optional(),
+  status: z.enum(TaskStatus).optional(),
   parentTaskId: z
     .union([z.literal("null"), z.coerce.number().int().positive()])
     .optional(),
@@ -859,10 +859,10 @@ projectsRouter.post(
 // Project-scoped risks
 const createRiskSchema = z.object({
   description: z.string().min(1).max(2000),
-  category: z.nativeEnum(RiskCategory).optional(),
+  category: z.enum(RiskCategory).optional(),
   probability: z.number().int().min(1).max(5).optional(),
   impact: z.number().int().min(1).max(5).optional(),
-  status: z.nativeEnum(RiskStatus).optional(),
+  status: z.enum(RiskStatus).optional(),
   mitigationPlan: z.string().max(4000).nullable().optional(),
   contingencyPlan: z.string().max(4000).nullable().optional(),
 });
@@ -927,7 +927,7 @@ projectsRouter.post(
 // routes/tasks.ts and routes/opportunities.ts use (lib/dateBoundary.ts).
 const dayStringSchema = z
   .string()
-  .refine(isValidDayString, { message: "Must be a valid yyyy-MM-dd date" });
+  .refine(isValidDayString, { error: "Must be a valid yyyy-MM-dd date" });
 
 const noteListQuerySchema = z.object({
   limit: z.coerce.number().int().min(1).max(100).optional(),

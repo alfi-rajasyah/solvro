@@ -40,8 +40,8 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 const expectedTaskSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   description: z.string().max(2000).nullable().optional(),
-  status: z.nativeEnum(TaskStatus).optional(),
-  priority: z.nativeEnum(Priority).optional(),
+  status: z.enum(TaskStatus).optional(),
+  priority: z.enum(Priority).optional(),
   startDate: z.coerce.date().nullable().optional(),
   dueDate: z.coerce.date().nullable().optional(),
   assignedToId: z.number().int().positive().nullable().optional(),
@@ -67,8 +67,8 @@ const updateTaskSchema = z
   .object({
     title: z.string().min(1).max(200).optional(),
     description: z.string().max(2000).nullable().optional(),
-    status: z.nativeEnum(TaskStatus).optional(),
-    priority: z.nativeEnum(Priority).optional(),
+    status: z.enum(TaskStatus).optional(),
+    priority: z.enum(Priority).optional(),
     startDate: z.coerce.date().nullable().optional(),
     dueDate: z.coerce.date().nullable().optional(),
     isMilestone: z.boolean().optional(),
@@ -99,18 +99,18 @@ const updateTaskSchema = z
     expected: expectedTaskSchema.optional(),
   })
   .refine((b) => !(b.isMilestone === true && b.dueDate === null), {
-    message: "A milestone requires a due date",
+    error: "A milestone requires a due date",
     path: ["dueDate"],
   });
 
 const dayString = z
   .string()
-  .refine(isValidDayString, { message: "must be a valid yyyy-MM-dd date" });
+  .refine(isValidDayString, { error: "must be a valid yyyy-MM-dd date" });
 
 const tasksListQuerySchema = z
   .object({
-    status: z.nativeEnum(TaskStatus).optional(),
-    priority: z.nativeEnum(Priority).optional(),
+    status: z.enum(TaskStatus).optional(),
+    priority: z.enum(Priority).optional(),
     assignedToId: z.coerce.number().int().positive().optional(),
     labelId: z.coerce.number().int().positive().optional(),
     customerId: z.coerce.number().int().positive().optional(),
@@ -152,11 +152,11 @@ const tasksListQuerySchema = z
     // — see lib/dateBoundary.ts for the full contract. Ignored otherwise.
     today: z
       .string()
-      .refine(isValidDayString, { message: "today must be a valid yyyy-MM-dd date" })
+      .refine(isValidDayString, { error: "today must be a valid yyyy-MM-dd date" })
       .optional(),
   })
   .refine((q) => !(q.dueFrom && q.dueTo) || q.dueFrom <= q.dueTo, {
-    message: "dueFrom must not be after dueTo",
+    error: "dueFrom must not be after dueTo",
     path: ["dueFrom"],
   });
 

@@ -12,10 +12,10 @@ const idParamSchema = z.object({ id: z.coerce.number().int().positive() });
 
 const updateRiskSchema = z.object({
   description: z.string().min(1).max(2000).optional(),
-  category: z.nativeEnum(RiskCategory).optional(),
+  category: z.enum(RiskCategory).optional(),
   probability: z.number().int().min(1).max(5).optional(),
   impact: z.number().int().min(1).max(5).optional(),
-  status: z.nativeEnum(RiskStatus).optional(),
+  status: z.enum(RiskStatus).optional(),
   mitigationPlan: z.string().max(4000).nullable().optional(),
   contingencyPlan: z.string().max(4000).nullable().optional(),
 });

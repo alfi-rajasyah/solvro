@@ -442,7 +442,7 @@ itopRouter.post(
 // date contract's own boundary function is still the single source of the
 // UTC-midnight instant; only the window's position relative to it moves.
 const dailyQuerySchema = z.object({
-  date: z.string().refine(isValidDayString, { message: "invalid_date" }),
+  date: z.string().refine(isValidDayString, { error: "invalid_date" }),
   // Local minus UTC, e.g. UTC+7 sends 420, UTC-5 sends -300. Bounded to the
   // real range of UTC offsets in use (UTC-12 to UTC+14, in minutes) so a
   // garbage value 400s instead of silently producing a nonsense window.

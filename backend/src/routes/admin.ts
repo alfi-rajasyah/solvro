@@ -94,7 +94,7 @@ adminRouter.get("/users", async (_req, res) => {
 const createUserSchema = z.object({
   // Stored lower-case (docs/archive/plans/application-review-2026-10-22.md, F-13) so the password and
   // Google sign-in paths resolve the same row whatever case was typed.
-  email: z.string().trim().toLowerCase().email(),
+  email: z.string().trim().toLowerCase().pipe(z.email()),
   // Length only here; the character rule and the case-insensitive clash
   // check run in the handler (lib/username.ts, pentest finding L1).
   username: z.string().min(1).max(USERNAME_MAX * 2),
@@ -676,7 +676,7 @@ const updateAuthSettingsSchema = z.object({
     .refine(
       (v) => v === undefined || v === null || GOOGLE_CLIENT_ID_PATTERN.test(v),
       {
-        message:
+        error:
           "Client ID must look like 123456789-abc.apps.googleusercontent.com",
       },
     ),
@@ -688,7 +688,7 @@ const updateAuthSettingsSchema = z.object({
         .max(253)
         .transform((s) => s.trim().toLowerCase())
         .refine((s) => DOMAIN_PATTERN.test(s), {
-          message: "Each entry must be a valid hostname (e.g. example.com)",
+          error: "Each entry must be a valid hostname (e.g. example.com)",
         }),
     )
     .max(32, "At most 32 domains")

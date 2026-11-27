@@ -16,7 +16,7 @@ import { createRateLimiter, rateLimitKey } from "../http/rateLimit.js";
 // `alice@corp.com` are one account on every sign-in path, as the Google
 // path already did.
 const loginSchema = z.object({
-  email: z.string().trim().toLowerCase().email(),
+  email: z.string().trim().toLowerCase().pipe(z.email()),
   password: z.string().min(1),
 });
 
@@ -353,7 +353,7 @@ const changePasswordSchema = z
     newPassword: z.string().min(8).max(200),
   })
   .refine((data) => data.currentPassword !== data.newPassword, {
-    message: "New password must differ from the current one",
+    error: "New password must differ from the current one",
     path: ["newPassword"],
   });
 

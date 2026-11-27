@@ -15,6 +15,12 @@ Entries are reverse-chronological. Each entry should record **what changed**, **
 
 ## [Unreleased]
 
+### Changed — 2026-11-27 — Current zod 4 APIs in the backend
+
+- `backend/src`: the 60 uses of APIs that zod 4.6.7 marks `@deprecated` now use their replacements: the `error` parameter in place of `message` on schemas and refinements (32), `z.enum` in place of `z.nativeEnum` for Prisma enums (22), `z.string().trim().toLowerCase().pipe(z.email())` in place of `.email()` in `routes/auth.ts` and `routes/admin.ts` (so the address is still trimmed before it is checked), `z.url()` for `DATABASE_URL` in `env.ts`, the `"custom"` issue code in place of `z.ZodIssueCode.custom`, `z.ZodType` in place of `ZodTypeAny` in `http/validate.ts`, and `.loose()` in place of `.passthrough()` in `routes/opportunities.ts`. No validation rule or message changes.
+- `.strict()`, `.superRefine()` and `message` inside `ctx.addIssue()` stay: zod 4.6.7 does not deprecate them.
+- `backend/test/validationContract.test.ts`: the message cases use the new APIs, plus cases for the piped email check and the `error` parameter on a refinement.
+
 ### Fixed — 2026-11-27 — Holidays default year
 
 - `backend/src/routes/holidays.ts`: `GET /holidays` without `?year=` now reads the current year on each request. Before, the default was set once when the server started, so a backend that kept running past 1 January kept answering with the previous year's holidays until it restarted. The web app always sends `?year=`, so its holiday markers were not affected.
