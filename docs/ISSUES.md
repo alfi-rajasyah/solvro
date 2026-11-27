@@ -134,6 +134,13 @@ Last full triage: 2026-11-26 @ `0195722`. The file before the restructure is kep
 - **Why deferred / fix direction:** Add exposedHeaders: ['X-Total-Count'] only if the API is ever called cross-origin.
 - **Source:** snapshot line 2256, section "Professional UI pass — deferred findings (2026-09-29, ported 2026-10-05)"
 
+### ISS-209 · P3 · GET /holidays default year is fixed when the server starts
+
+- **Type:** bug · **Found:** 2026-11-27 · **Verified:** 2026-11-27 @ `ed1770a`
+- **Where:** querySchema in backend/src/routes/holidays.ts (line ~18)
+- **Problem:** `.default(new Date().getFullYear())` runs once, when the module loads. A backend that keeps running past 1 January answers `GET /holidays` without `?year=` with the old year's holidays until it restarts. No user sees it today: the frontend always sends `?year=` (`frontend/src/lib/queries.ts`, line ~4874).
+- **Why deferred / fix direction:** Found while planning the zod 4 upgrade and kept out of its scope. Fix: `.default(() => new Date().getFullYear())`, plus a test with a faked clock.
+
 ## Open — Frontend UI
 
 ### ISS-048 · P3 · Popovers can clip near scroll container bottoms
